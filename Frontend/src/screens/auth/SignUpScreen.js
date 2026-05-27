@@ -1,28 +1,86 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
+} from 'react-native';
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPressed, setIsPressed] = useState(false);
 
+  // SIGN UP FUNCTION
+  const handleSignUp = async () => {
+    try {
+      const response = await fetch(
+        "http://192.168.254.133:8000/signup",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            email,
+            password
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      console.log("Response:", data);
+
+      if (response.ok) {
+        onSignUpSuccess();
+      } else {
+        alert(data.detail || "Signup failed");
+      }
+
+    } catch(error) {
+      console.log(error);
+      alert("Could not connect to backend");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-          
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>Create Account</Text>
-            <Text style={styles.brandSubtitle}>Build your custom nutrition profile today.</Text>
+            <Text style={styles.brandTitle}>
+              Create Account
+            </Text>
+
+            <Text style={styles.brandSubtitle}>
+              Build your custom nutrition profile today.
+            </Text>
           </View>
 
-          {/* Neumorphic Form Container */}
           <View style={[styles.neumorphicOuter, styles.formSection]}>
-            
-            <Text style={styles.inputLabel}>Full Name</Text>
+
+            <Text style={styles.inputLabel}>
+              Full Name
+            </Text>
+
             <View style={styles.neumorphicInner}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Enter your full name"
                 placeholderTextColor="#A0AAB8"
@@ -31,9 +89,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               />
             </View>
 
-            <Text style={styles.inputLabel}>Email Address</Text>
+            <Text style={styles.inputLabel}>
+              Email Address
+            </Text>
+
             <View style={styles.neumorphicInner}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
                 placeholderTextColor="#A0AAB8"
@@ -44,9 +105,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               />
             </View>
 
-            <Text style={styles.inputLabel}>Password</Text>
+            <Text style={styles.inputLabel}>
+              Password
+            </Text>
+
             <View style={styles.neumorphicInner}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Create a password"
                 placeholderTextColor="#A0AAB8"
@@ -57,23 +121,43 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               />
             </View>
 
-            {/* Interactive Tactile Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onSignUpSuccess}
-              style={[isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, { marginTop: 10 }]}
+              onPress={handleSignUp}
+              style={[
+                isPressed
+                  ? styles.neumorphicInnerBtn
+                  : styles.neumorphicOuterBtn,
+                { marginTop: 10 }
+              ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Get Started</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  isPressed && styles.buttonTextPressed
+                ]}
+              >
+                Get Started
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Already have an account? </Text>
-              <TouchableOpacity onPress={onNavigateToLogin}>
-                <Text style={styles.linkText}>Sign In</Text>
+              <Text style={styles.footerText}>
+                Already have an account?
+              </Text>
+
+              <TouchableOpacity
+                onPress={onNavigateToLogin}
+              >
+                <Text style={styles.linkText}>
+                  Sign In
+                </Text>
               </TouchableOpacity>
+
             </View>
+
           </View>
 
         </ScrollView>
@@ -81,138 +165,108 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     </SafeAreaView>
   );
 }
-
-// Light White Neumorphic Color Constants
-const baseColor = '#E0E5EC'; 
-const lightShadow = '#FFFFFF'; 
-const darkShadow = '#B8C4D2'; 
-const accentColor = '#00a3cc';
-
+// Add this at the very bottom of your file, outside of the SignUpScreen function!
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: '#E0E8F6', // Neumorphic background color
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    padding: 24,
   },
   headerSection: {
-    marginBottom: 35,
+    marginBottom: 30,
     alignItems: 'center',
   },
   brandTitle: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#2D3748',
-    letterSpacing: 0.5,
+    color: '#2C3E50',
+    marginBottom: 8,
   },
   brandSubtitle: {
-    fontSize: 15,
-    color: '#718096',
-    marginTop: 8,
+    fontSize: 14,
+    color: '#7F8C8D',
     textAlign: 'center',
   },
   formSection: {
-    padding: 24,
-    borderRadius: 28,
+    borderRadius: 20,
+    padding: 20,
+    backgroundColor: '#E0E8F6',
   },
   inputLabel: {
-    color: '#4A5568',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5A6B7C',
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginLeft: 4,
+    marginTop: 12,
   },
   input: {
-    color: '#2D3748',
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    height: 50,
+    paddingHorizontal: 15,
+    color: '#2C3E50',
     fontSize: 16,
+  },
+  neumorphicOuter: {
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: -6, height: -6 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  neumorphicInner: {
+    backgroundColor: '#E0E8F6',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D9E6',
+    marginBottom: 10,
+  },
+  neumorphicOuterBtn: {
+    backgroundColor: '#E0E8F6',
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#EBF2FF',
+    // Neumorphic shadow styling
+    shadowColor: '#A3B1C6',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  neumorphicInnerBtn: {
+    backgroundColor: '#D1D9E6',
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#B8C4D9',
   },
   buttonText: {
-    color: '#2D3748',
-    fontSize: 16,
+    color: '#34495E',
     fontWeight: 'bold',
-    letterSpacing: 0.5,
+    fontSize: 16,
   },
   buttonTextPressed: {
-    color: '#718096',
+    color: '#7F8C8D',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: 25,
   },
   footerText: {
-    color: '#718096',
-    fontSize: 14,
+    color: '#7F8C8D',
+    marginRight: 5,
   },
   linkText: {
-    color: accentColor,
-    fontSize: 14,
+    color: '#3498DB',
     fontWeight: 'bold',
   },
-
-  /* --- LIGHT WHITE NEUMORPHIC STYLES --- */
-  
-  neumorphicOuter: {
-    backgroundColor: baseColor,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 4,
-  },
-  neumorphicInner: {
-    backgroundColor: baseColor,
-    borderRadius: 14,
-    marginBottom: 20,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
-  },
-  neumorphicOuterBtn: {
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 2,
-  },
-  neumorphicInnerBtn: {
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
-    transform: [{ translateY: 1.5 }],
-  },
 });
+
