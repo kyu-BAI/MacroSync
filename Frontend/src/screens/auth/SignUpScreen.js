@@ -22,7 +22,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const handleSignUp = async () => {
     try {
       const response = await fetch(
-        "http://192.168.254.133:8000/signup",
+        `${process.env.EXPO_PUBLIC_API_URL}/signup`,
         {
           method: "POST",
           headers: {

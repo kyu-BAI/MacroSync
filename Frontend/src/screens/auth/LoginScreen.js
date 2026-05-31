@@ -26,7 +26,7 @@ export default function LoginScreen({
     try {
 
       const response = await fetch(
-        "http://192.168.254.133:8000/signin",
+        `${process.env.EXPO_PUBLIC_API_URL}/signin`,
         {
           method: "POST",
           headers: {
