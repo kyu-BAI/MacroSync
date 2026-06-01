@@ -14,60 +14,81 @@ export default function LoginScreen({ onNavigateToSignUp, onLoginSuccess, onForg
           <View style={styles.headerSection}>
             <Text style={styles.brandTitle}>MacroSync</Text>
             <Text style={styles.brandSubtitle}>
-              Welcome back, Kaizer. Lock in na man!{"\n"}hanag pasundayag nimo oi
+              Welcome back, Kaizer. Ready to lock in your targets today?
             </Text>
           </View>
 
-          {/* Neumorphic Form Container */}
-          <View style={[styles.neumorphicOuter, styles.formSection]}>
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.neumorphicInner}>
-              <TextInput 
-                style={styles.input}
-                placeholder="Enter your email"
-                placeholderTextColor="#A0AAB8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+          {/* --- HIGH VISIBILITY NEUMORPHIC FORM CONTAINER --- */}
+          <View style={styles.formSectionShadowWhite}>
+            <View style={[styles.formSectionShadowDark, styles.formSection]}>
+              
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={styles.inputContainer}>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#A4B0BE" 
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.neumorphicInner}>
-              <TextInput 
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#A0AAB8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={styles.inputContainer}>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#A4B0BE"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
 
-            {/* Now wired to transition to your recovery workflow */}
-            <TouchableOpacity style={styles.forgotPassword} onPress={onForgotPassword}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            {/* Interactive Tactile Button */}
-            <TouchableOpacity 
-              activeOpacity={1}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
-              onPress={onLoginSuccess}
-              style={isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn}
-            >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Sign In</Text>
-            </TouchableOpacity>
-
-            <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={onNavigateToSignUp}>
-                <Text style={styles.linkText}>Sign Up</Text>
+              <TouchableOpacity style={styles.forgotPassword} onPress={onForgotPassword}>
+                <Text style={styles.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
+
+              {/* --- HIGH-CONTRAST VIBRANT TEAL NEUMORPHIC BUTTON --- */}
+              {isPressed ? (
+                <View style={styles.buttonPressed}>
+                  <TouchableOpacity 
+                    activeOpacity={1}
+                    onPressIn={() => setIsPressed(true)}
+                    onPressOut={() => setIsPressed(false)}
+                    onPress={onLoginSuccess}
+                    style={styles.buttonTextWrapper}
+                  >
+                    <Text style={styles.buttonTextPressed}>Login</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.btnShadowWhite}>
+                  <View style={styles.btnShadowDark}>
+                    <TouchableOpacity 
+                      activeOpacity={1}
+                      onPressIn={() => setIsPressed(true)}
+                      onPressOut={() => setIsPressed(false)}
+                      onPress={onLoginSuccess}
+                      style={styles.buttonInner}
+                    >
+                      <Text style={styles.buttonText}>Login</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
             </View>
+          </View>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={onNavigateToSignUp}>
+              <Text style={styles.linkText}>Sign Up</Text>
+            </TouchableOpacity>
           </View>
 
         </ScrollView>
@@ -76,11 +97,11 @@ export default function LoginScreen({ onNavigateToSignUp, onLoginSuccess, onForg
   );
 }
 
-// Light White Neumorphic Color Constants
-const baseColor = '#E0E5EC';    
+const baseColor = '#E4E9F0';    
 const lightShadow = '#FFFFFF';  
-const darkShadow = '#B8C4D2';   
-const accentColor = '#00a3cc';  
+const darkShadow = '#A6B4C5';   
+const accentColor = '#148F77'; // Consistent Logo Teal
+const darkTextBlue = '#1A2332'; 
 
 const styles = StyleSheet.create({
   container: {
@@ -90,135 +111,145 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 24, 
   },
   headerSection: {
     marginBottom: 40,
     alignItems: 'center',
     width: '100%',
-    paddingHorizontal: 10,
   },
   brandTitle: {
-    fontSize: 38,
-    fontWeight: 'bold',
-    color: '#2D3748', 
-    letterSpacing: 1,
+    fontSize: 40,
+    fontWeight: '800',
+    color: darkTextBlue, 
+    letterSpacing: -0.5,
   },
   brandSubtitle: {
-    fontSize: 15,
-    color: '#718096',
-    marginTop: 8,
+    fontSize: 14,
+    color: '#657786',
+    marginTop: 12,
     textAlign: 'center',
     lineHeight: 22,
+    fontWeight: '500',
+    paddingHorizontal: 20,
   },
   formSection: {
-    padding: 24,
-    borderRadius: 28,
+    padding: 26, 
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  formSectionShadowWhite: {
+    borderRadius: 36,
+    backgroundColor: baseColor,
+    shadowColor: lightShadow,
+    shadowOffset: { width: -7, height: -7 }, 
+    shadowOpacity: 1.0,                      
+    shadowRadius: 8,                         
+    margin: 10, 
+  },
+  formSectionShadowDark: {
+    backgroundColor: baseColor,
+    shadowColor: darkShadow,
+    shadowOffset: { width: 7, height: 7 },   
+    shadowOpacity: 1.0,                      
+    shadowRadius: 10,                        
+    borderRadius: 36,
+    elevation: 8,                            
   },
   inputLabel: {
-    color: '#4A5568',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    color: '#657786',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginLeft: 4,
+    letterSpacing: 1.5,
+    marginLeft: 6,
+  },
+  inputContainer: {
+    backgroundColor: '#D9E1EC', 
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   input: {
-    color: '#2D3748',
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    fontSize: 16,
+    color: darkTextBlue,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    fontSize: 15,
+    fontWeight: '500',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
-    marginTop: 8,
+    marginBottom: 32,
+    marginTop: 4,
+    marginRight: 4,
   },
   forgotText: {
     color: accentColor,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-  },
-  buttonText: {
-    color: '#2D3748',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  buttonTextPressed: {
-    color: '#718096',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: 32, 
+    marginBottom: 16,
   },
   footerText: {
-    color: '#718096',
+    color: '#657786',
     fontSize: 14,
   },
   linkText: {
     color: accentColor,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
-
-  /* --- LIGHT WHITE NEUMORPHIC STYLES --- */
-  
-  neumorphicOuter: {
+  btnShadowWhite: {
+    borderRadius: 16,
     backgroundColor: baseColor,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 4, 
+    shadowColor: lightShadow,
+    shadowOffset: { width: -4, height: -4 },
+    shadowOpacity: 0.9,
+    shadowRadius: 5,
   },
-  neumorphicInner: {
+  btnShadowDark: {
+    borderRadius: 16,
     backgroundColor: baseColor,
-    borderRadius: 14,
-    marginBottom: 20,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
+    shadowColor: darkShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  neumorphicOuterBtn: {
-    backgroundColor: baseColor,
+  buttonInner: {
+    backgroundColor: accentColor, 
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 2,
+    width: '100%',
   },
-  neumorphicInnerBtn: {
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
+  buttonText: {
+    color: '#FFFFFF', 
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  buttonPressed: {
+    backgroundColor: '#0E6655', 
+    borderRadius: 16,
     transform: [{ translateY: 1.5 }],
   },
+  buttonTextPressed: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  buttonTextWrapper: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+  }
 });

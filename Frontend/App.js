@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, SafeAreaView, StatusBar, TouchableOpacity, Text, Image, Animated } from 'react-native';
+
+// Clean, minimal black vector icons matching the new dashboard system
+import { Home, ClipboardList, Dumbbell, Settings as SettingsIcon } from 'lucide-react-native';
 
 // Onboarding & Auth Imports
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -18,11 +21,43 @@ import WorkoutScreen from './src/screens/main/WorkoutScreen';
 import SettingsScreen from './src/screens/main/SettingsScreen';
 
 export default function App() {
-  // Navigation states: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
+  const [isLoading, setIsLoading] = useState(true); // Control flag for custom loading visibility
   const [currentScreen, setCurrentScreen] = useState('LOGIN');
-  const [activeTab, setActiveTab] = useState('DASHBOARD');
+  const [activeTab, setActiveTab] = useState('Home'); 
+  
+  // Animated value initialization for a premium opacity fade transition
+  const [fadeAnim] = useState(new Animated.Value(1));
 
-  // AUTH STATE MACHINE ROUTING
+  // ⏱️ TIMER HOOK FOR RUNTIME ENGINE INJECTION
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500, // Smooth 500ms exit fade animation
+        useNativeDriver: true,
+      }).start(() => {
+        setIsLoading(false); // Drop splash from component tree upon animation close
+      });
+    }, 3000); // Displays for 3000ms (3 seconds)
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 🎬 INTERCEPT WITH CUSTOM RUNTIME ANIMATED SPLASH ELEMENT
+  if (isLoading) {
+    return (
+      <Animated.View style={[styles.splashContainer, { opacity: fadeAnim }]}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FAFAFA" />
+        <Image 
+          source={require('./assets/splash-icon.png')} 
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    );
+  }
+
+  // 🔐 AUTH STATE MACHINE ROUTING
   if (currentScreen === 'LOGIN') {
     return (
       <LoginScreen 
@@ -45,7 +80,7 @@ export default function App() {
     return <ResetPasswordScreen onResetSuccess={() => setCurrentScreen('LOGIN')} />;
   }
   
-  // ONBOARDING SCREEN INTERCHANGES
+  // 📋 ONBOARDING SCREEN INTERCHANGES
   if (currentScreen === 'STEP_ONE') {
     return <StepOneScreen onNext={() => setCurrentScreen('STEP_TWO')} />;
   }
@@ -56,45 +91,127 @@ export default function App() {
     return <StepThreeScreen onComplete={() => setCurrentScreen('DASHBOARD')} />;
   }
 
-  // CORE APPLICATION DASHBOARD PANELS
+  // 🥗 NAVIGATION DEFINITION WITH LUCIDE COMPONENT REFERENCES
+  const navItems = [
+    { id: 'Home', label: 'Home', IconComponent: Home },
+    { id: 'Diet', label: 'Diet & Recipes', IconComponent: ClipboardList }, 
+    { id: 'Workout', label: 'Workout', IconComponent: Dumbbell },
+    { id: 'Settings', label: 'Settings', IconComponent: SettingsIcon },
+  ];
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#E0E5EC" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      <View style={styles.header}>
-        <Text style={styles.appName}>MacroSync</Text>
-        <Text style={styles.activeTabIndicator}>{activeTab}</Text>
-      </View>
-
+      {/* Dynamic Main Viewport Display Layer */}
       <View style={styles.mainContent}>
-        {activeTab === 'DASHBOARD' && <DashboardScreen />}
-        {activeTab === 'DIET' && <DietRecipesScreen />}
-        {activeTab === 'WORKOUT' && <WorkoutScreen />}
-        {activeTab === 'SETTINGS' && <SettingsScreen onLogout={() => setCurrentScreen('LOGIN')} />}
+        {activeTab === 'Home' && <DashboardScreen />}
+        {activeTab === 'Diet' && <DietRecipesScreen />}
+        {activeTab === 'Workout' && <WorkoutScreen />}
+        {activeTab === 'Settings' && <SettingsScreen onLogout={() => {
+          setCurrentScreen('LOGIN');
+          setActiveTab('Home'); 
+        }} />}
       </View>
 
-      <View style={styles.bottomTabBar}>
-        {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].map((tab) => (
-          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => setActiveTab(tab)}>
-            <Text style={[styles.tabItemText, activeTab === tab ? styles.tabTextActive : styles.tabTextInactive]}>
-              {tab.substring(0, 4)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* SINGLE UNIFIED FLOATING LIGHT GLASS NAVIGATION BAR */}
+      <View style={styles.navBarWrapper}>
+        <View style={styles.glassNavBar}>
+          {navItems.map((item) => {
+            const isSelected = activeTab === item.id;
+            const Icon = item.IconComponent;
+            
+            return (
+              <TouchableOpacity 
+                key={item.id} 
+                style={[styles.navItem, isSelected && styles.activeNavItem]}
+                onPress={() => setActiveTab(item.id)}
+                activeOpacity={0.7}
+              >
+                <Icon 
+                  size={20} 
+                  color={isSelected ? '#18181B' : '#A1A1AA'} 
+                  strokeWidth={isSelected ? 2.5 : 1.75} 
+                />
+                <Text style={[styles.navLabel, isSelected && styles.activeNavLabelText]} numberOfLines={1}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E0E5EC' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 15 },
-  appName: { fontSize: 24, fontWeight: 'bold', color: '#2D3748' },
-  activeTabIndicator: { fontSize: 12, color: '#00a3cc', fontWeight: 'bold', textTransform: 'uppercase', backgroundColor: '#d1d9e6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  mainContent: { flex: 1, paddingHorizontal: 24, paddingTop: 10 },
-  bottomTabBar: { flexDirection: 'row', height: 70, backgroundColor: '#E0E5EC', borderTopWidth: 1, borderTopColor: '#d1d9e6', alignItems: 'center', paddingBottom: Platform.OS === 'ios' ? 15 : 0 },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabItemText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  tabTextActive: { color: '#00a3cc' },
-  tabTextInactive: { color: '#718096' }
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF', 
+  },
+  mainContent: {
+    flex: 1,
+  },
+  // 🎨 STYLING FOR THE NEW INTEGRATED EMBEDDED SPLASH CONTROLLER
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#FAFAFA', // Soft layout background perfectly matching MacroSync Logo.png margins
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashLogo: {
+    width: '80%', // Safely contains logo scale boundary away from dynamic notches
+    height: '80%',
+  },
+  navBarWrapper: {
+    position: 'absolute',
+    bottom: 28, 
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  glassNavBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FAFAFA', 
+    width: '100%',
+    height: 74,
+    borderRadius: 36,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E4E4E7', 
+    shadowColor: '#18181B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 3, 
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: 28,
+    marginHorizontal: 2,
+  },
+  activeNavItem: {
+    backgroundColor: '#F4F4F5', 
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+  },
+  navLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#A1A1AA',
+    marginTop: 4,
+  },
+  activeNavLabelText: {
+    color: '#18181B', 
+    fontWeight: '800',
+  },
 });
