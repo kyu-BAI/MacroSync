@@ -89,7 +89,7 @@ def signin(user: UserLogin):
 
 
 class UpdatePasswordRequest(BaseModel):
-    access_token: str
+    email: str
     password: str
 
 
@@ -200,7 +200,7 @@ async def update_password(
         user.id,
         {
             "password":
-            data.new_password
+            data.password
         }
     )
 
@@ -213,4 +213,40 @@ async def update_password(
 
     return {
         "success": True
+    }
+
+# SAVING USER DATA
+
+
+class OnboardingData(BaseModel):
+    user_id: str
+    age: int
+    gender: str
+    height_cm: float
+    weight_kg: float
+    activity_level: str
+    goal: str
+
+
+@app.post("/save-onboarding")
+async def save_onboarding(data: OnboardingData):
+
+    response = (
+        supabase
+        .table("UserInformation")
+        .update({
+            "age": data.age,
+            "gender": data.gender,
+            "height_cm": data.height_cm,
+            "weight_kg": data.weight_kg,
+            "activity_level": data.activity_level,
+            "goal": data.goal
+        })
+        .eq("id", data.user_id)
+        .execute()
+    )
+
+    return {
+        "success": True,
+        "data": response.data
     }

@@ -62,10 +62,13 @@ export default function App() {
     );
   }
   if (currentScreen === "RESET_PASS") {
-    return (
-      <ResetPasswordScreen onResetSuccess={() => setCurrentScreen("LOGIN")} />
-    );
-  }
+  return (
+    <ResetPasswordScreen
+      email={resetEmail}
+      onResetSuccess={() => setCurrentScreen("LOGIN")}
+    />
+  );
+}
   if (currentScreen === "OTP_ENTRY") {
     return (
       <OtpScreen
