@@ -56,13 +56,13 @@ export default function App() {
     );
   }
   if (currentScreen === "RESET_PASS") {
-  return (
-    <ResetPasswordScreen
-      email={resetEmail}
-      onResetSuccess={() => setCurrentScreen("LOGIN")}
-    />
-  );
-}
+    return (
+      <ResetPasswordScreen
+        email={resetEmail}
+        onResetSuccess={() => setCurrentScreen("LOGIN")}
+      />
+    );
+  }
   if (currentScreen === "OTP_ENTRY") {
     return (
       <OtpScreen
@@ -121,7 +121,6 @@ export default function App() {
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#E0E5EC' },

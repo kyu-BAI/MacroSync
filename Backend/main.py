@@ -105,12 +105,17 @@ async def signup(user: UserAuth):
 
 @app.post("/signin")
 def signin(user: UserLogin):
-    response = supabase.auth.sign_in_with_password({
-        "email": user.email,
-        "password": user.password
-    })
+    print("SIGNIN PAYLOAD:", user)
 
-    return response
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": user.email,
+            "password": user.password
+        })
+        return response
+    except Exception as e:
+        print("SIGNIN ERROR:", repr(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 # FORGOT PASSWORD FUNCTION
 
