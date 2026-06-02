@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; 
 
-export default function StepTwoScreen({ onNext, currentWeight = 66, height = 175 }) {
+export default function StepTwoScreen({ onNext, currentWeight,height }) {
   const [selectedGoal, setSelectedGoal] = useState('muscle');
   const [goalWeight, setGoalWeight] = useState('');
   const [targetDate, setTargetDate] = useState('');
@@ -49,7 +49,11 @@ export default function StepTwoScreen({ onNext, currentWeight = 66, height = 175
       return;
     }
 
-    onNext();
+    onNext({
+  goal_type: selectedGoal,
+  goal_weight: goalWeight,
+  target_date: targetDate
+});
   };
 
   // --- Premium Calendar UI Logic ---

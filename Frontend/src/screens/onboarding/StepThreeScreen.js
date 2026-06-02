@@ -1,8 +1,37 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 
-export default function StepThreeScreen({ onComplete }) {
+export default function StepThreeScreen({ onComplete,ProfileData,userId }) {
   const [isPressed, setIsPressed] = useState(false);
+
+  const handleFinish = async () => {
+
+  try {
+
+    const response = await fetch(
+      `${process.env.EXPO_PUBLIC_API_URL}/save-profile`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          ...profileData
+        })
+      }
+    );
+
+    if (response.ok) {
+      onComplete();
+    }
+
+  } catch (error) {
+
+    console.log(error);
+
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -25,7 +54,7 @@ export default function StepThreeScreen({ onComplete }) {
             activeOpacity={1}
             onPressIn={() => setIsPressed(true)}
             onPressOut={() => setIsPressed(false)}
-            onPress={onComplete}
+            onPress={handleFinish}
             style={[isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, { marginTop: 40 }]}
           >
             <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Enter Dashboard</Text>

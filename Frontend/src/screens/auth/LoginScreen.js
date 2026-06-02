@@ -45,6 +45,7 @@ export default function LoginScreen({
 
       if(response.ok){
         onLoginSuccess();
+        setCurrentUserId(response.user_id);
       } else {
         alert(data.detail || "Login failed");
       }

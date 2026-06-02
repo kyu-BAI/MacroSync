@@ -42,8 +42,35 @@ class VerifyOTPRequest(BaseModel):
     email: str
     otp: str
 
+class UserProfile(BaseModel):
+    user_id: str
+    age: int
+    weight: float
+    height: float
+    bmi: float
+    goal_type: str
+    goal_weight: float
+    target_date: str
 
-@app.post("/signup")
+@app.post("/save-profile")
+def save_profile(profile: UserProfile):
+
+    response = supabase.table("UserProfile").insert({
+        "user_id": profile.user_id,
+        "age": profile.age,
+        "weight": profile.weight,
+        "height": profile.height,
+        "bmi": profile.bmi,
+        "goal_type": profile.goal_type,
+        "goal_weight": profile.goal_weight,
+        "target_date": profile.target_date
+    }).execute()
+
+    return {
+        "message": "Profile saved successfully"
+    }
+
+
 @app.post("/signup")
 async def signup(user: UserAuth):
     try:
@@ -63,8 +90,8 @@ async def signup(user: UserAuth):
         }).execute()
 
         return {
-            "success": True,
-            "data": db_response.data
+            "message": "User created Successfully",
+            "user_id": new_user_id
         }
 
     except Exception as e:

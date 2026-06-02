@@ -29,7 +29,11 @@ export default function App() {
   // Navigation states: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState("LOGIN");
   const [activeTab, setActiveTab] = useState("DASHBOARD");
+  const [userId, setUserId] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [resetEmail, setResetEmail] = useState("");
+  const [profileData, setProfileData] = useState({});
+
 
   // AUTH STATE MACHINE ROUTING
   if (currentScreen === "LOGIN") {
@@ -45,7 +49,10 @@ export default function App() {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={() => setCurrentScreen("STEP_ONE")}
+        onSignUpSuccess={(userId) => {
+          setUserId(userId);
+          setCurrentScreen("STEP_ONE");
+        }}
       />
     );
   }
@@ -81,14 +88,48 @@ export default function App() {
 
   // ONBOARDING SCREEN INTERCHANGES
   if (currentScreen === "STEP_ONE") {
-    return <StepOneScreen onNext={() => setCurrentScreen("STEP_TWO")} />;
-  }
+  return (
+    <StepOneScreen
+      onNext={(data) => {
+        setProfileData(data);
+        setCurrentScreen("STEP_TWO");
+      }}
+    />
+  );
+}
   if (currentScreen === "STEP_TWO") {
-    return <StepTwoScreen onNext={() => setCurrentScreen("STEP_THREE")} />;
-  }
+  return (
+    <StepTwoScreen
+      currentWeight={profileData.weight}
+      height={profileData.height}
+      onNext={(data) => {
+        setProfileData(prev => ({
+          ...prev,
+          ...data
+        }));
+
+        setCurrentScreen("STEP_THREE");
+      }}
+    />
+  );
+}
   if (currentScreen === "STEP_THREE") {
-    return <StepThreeScreen onComplete={() => setCurrentScreen("DASHBOARD")} />;
-  }
+  return (
+    <StepThreeScreen
+      profileData={profileData}
+      userId={currentUserId}
+      onComplete={() => setCurrentScreen("DASHBOARD")}
+    />
+  );
+}
+  const [onBoardingData, setOnboardingData] = useState({
+    age: "",
+    currentWeight: "",
+    targetWeight: "",
+    height: "",
+    
+  
+});
 
   // CORE APPLICATION DASHBOARD PANELS
   return (
@@ -132,6 +173,7 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#E0E5EC" },

@@ -103,7 +103,23 @@ export default function StepOneScreen({ onNext }) {
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onNext}
+              onPress={() => {
+
+  const weightNum = parseFloat(weight);
+  const heightNum = parseFloat(height) / 100;
+
+  const bmi =
+    weightNum /
+    (heightNum * heightNum);
+
+  onNext({
+    age,
+    weight,
+    height,
+    bmi: bmi.toFixed(1)
+  });
+
+}}
               style={[isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, { marginTop: 10 }]}
             >
               <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Continue →</Text>

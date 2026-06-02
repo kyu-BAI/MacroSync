@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,14 +8,13 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
-} from 'react-native';
+  ScrollView,
+} from "react-native";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
-
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
 
   // SIGN UP FUNCTION
@@ -31,9 +30,9 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           body: JSON.stringify({
             name,
             email,
-            password
+            password,
           }),
-        }
+        },
       );
 
       const data = await response.json();
@@ -41,12 +40,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       console.log("Response:", data);
 
       if (response.ok) {
-        onSignUpSuccess();
+        onSignUpSuccess(data.user_id);
+        setCurrentUserId(response.user_id);
       } else {
         alert(data.detail || "Signup failed");
       }
-
-    } catch(error) {
+    } catch (error) {
       console.log(error);
       alert("Could not connect to backend");
     }
@@ -55,18 +54,15 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>
-              Create Account
-            </Text>
+            <Text style={styles.brandTitle}>Create Account</Text>
 
             <Text style={styles.brandSubtitle}>
               Build your custom nutrition profile today.
@@ -74,10 +70,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           </View>
 
           <View style={[styles.neumorphicOuter, styles.formSection]}>
-
-            <Text style={styles.inputLabel}>
-              Full Name
-            </Text>
+            <Text style={styles.inputLabel}>Full Name</Text>
 
             <View style={styles.neumorphicInner}>
               <TextInput
@@ -89,9 +82,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               />
             </View>
 
-            <Text style={styles.inputLabel}>
-              Email Address
-            </Text>
+            <Text style={styles.inputLabel}>Email Address</Text>
 
             <View style={styles.neumorphicInner}>
               <TextInput
@@ -105,9 +96,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               />
             </View>
 
-            <Text style={styles.inputLabel}>
-              Password
-            </Text>
+            <Text style={styles.inputLabel}>Password</Text>
 
             <View style={styles.neumorphicInner}>
               <TextInput
@@ -130,13 +119,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 isPressed
                   ? styles.neumorphicInnerBtn
                   : styles.neumorphicOuterBtn,
-                { marginTop: 10 }
+                { marginTop: 10 },
               ]}
             >
               <Text
                 style={[
                   styles.buttonText,
-                  isPressed && styles.buttonTextPressed
+                  isPressed && styles.buttonTextPressed,
                 ]}
               >
                 Get Started
@@ -144,22 +133,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>
-                Already have an account?
-              </Text>
+              <Text style={styles.footerText}>Already have an account?</Text>
 
-              <TouchableOpacity
-                onPress={onNavigateToLogin}
-              >
-                <Text style={styles.linkText}>
-                  Sign In
-                </Text>
+              <TouchableOpacity onPress={onNavigateToLogin}>
+                <Text style={styles.linkText}>Sign In</Text>
               </TouchableOpacity>
-
             </View>
-
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -169,104 +149,103 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0E8F6', // Neumorphic background color
+    backgroundColor: "#E0E8F6", // Neumorphic background color
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 24,
   },
   headerSection: {
     marginBottom: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   brandTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2C3E50',
+    fontWeight: "bold",
+    color: "#2C3E50",
     marginBottom: 8,
   },
   brandSubtitle: {
     fontSize: 14,
-    color: '#7F8C8D',
-    textAlign: 'center',
+    color: "#7F8C8D",
+    textAlign: "center",
   },
   formSection: {
     borderRadius: 20,
     padding: 20,
-    backgroundColor: '#E0E8F6',
+    backgroundColor: "#E0E8F6",
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#5A6B7C',
+    fontWeight: "600",
+    color: "#5A6B7C",
     marginBottom: 8,
     marginTop: 12,
   },
   input: {
     height: 50,
     paddingHorizontal: 15,
-    color: '#2C3E50',
+    color: "#2C3E50",
     fontSize: 16,
   },
   neumorphicOuter: {
-    shadowColor: '#FFFFFF',
+    shadowColor: "#FFFFFF",
     shadowOffset: { width: -6, height: -6 },
     shadowOpacity: 1,
     shadowRadius: 6,
     elevation: 5,
   },
   neumorphicInner: {
-    backgroundColor: '#E0E8F6',
+    backgroundColor: "#E0E8F6",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D1D9E6',
+    borderColor: "#D1D9E6",
     marginBottom: 10,
   },
   neumorphicOuterBtn: {
-    backgroundColor: '#E0E8F6',
+    backgroundColor: "#E0E8F6",
     borderRadius: 12,
     paddingVertical: 15,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 20,
     borderWidth: 1,
-    borderColor: '#EBF2FF',
+    borderColor: "#EBF2FF",
     // Neumorphic shadow styling
-    shadowColor: '#A3B1C6',
+    shadowColor: "#A3B1C6",
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 1,
     shadowRadius: 6,
     elevation: 4,
   },
   neumorphicInnerBtn: {
-    backgroundColor: '#D1D9E6',
+    backgroundColor: "#D1D9E6",
     borderRadius: 12,
     paddingVertical: 15,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 20,
     borderWidth: 1,
-    borderColor: '#B8C4D9',
+    borderColor: "#B8C4D9",
   },
   buttonText: {
-    color: '#34495E',
-    fontWeight: 'bold',
+    color: "#34495E",
+    fontWeight: "bold",
     fontSize: 16,
   },
   buttonTextPressed: {
-    color: '#7F8C8D',
+    color: "#7F8C8D",
   },
   footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 25,
   },
   footerText: {
-    color: '#7F8C8D',
+    color: "#7F8C8D",
     marginRight: 5,
   },
   linkText: {
-    color: '#3498DB',
-    fontWeight: 'bold',
+    color: "#3498DB",
+    fontWeight: "bold",
   },
 });
-
