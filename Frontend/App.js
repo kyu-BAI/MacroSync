@@ -1,13 +1,5 @@
-import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  Platform,
-} from "react-native";
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Platform } from 'react-native';
 
 // Onboarding & Auth Imports
 import LoginScreen from "./src/screens/auth/LoginScreen";
@@ -27,16 +19,11 @@ import SettingsScreen from "./src/screens/main/SettingsScreen";
 
 export default function App() {
   // Navigation states: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
-  const [currentScreen, setCurrentScreen] = useState("LOGIN");
-  const [activeTab, setActiveTab] = useState("DASHBOARD");
-  const [userId, setUserId] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [resetEmail, setResetEmail] = useState("");
-  const [profileData, setProfileData] = useState({});
-
+  const [currentScreen, setCurrentScreen] = useState('LOGIN');
+  const [activeTab, setActiveTab] = useState('DASHBOARD');
 
   // AUTH STATE MACHINE ROUTING
-  if (currentScreen === "LOGIN") {
+  if (currentScreen === 'LOGIN') {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
@@ -85,129 +72,66 @@ export default function App() {
       />
     );
   }
-
-  // ONBOARDING SCREEN INTERCHANGES
-  if (currentScreen === "STEP_ONE") {
-  return (
-    <StepOneScreen
-      onNext={(data) => {
-        setProfileData(data);
-        setCurrentScreen("STEP_TWO");
-      }}
-    />
-  );
-}
-  if (currentScreen === "STEP_TWO") {
-  return (
-    <StepTwoScreen
-      currentWeight={profileData.weight}
-      height={profileData.height}
-      onNext={(data) => {
-        setProfileData(prev => ({
-          ...prev,
-          ...data
-        }));
-
-        setCurrentScreen("STEP_THREE");
-      }}
-    />
-  );
-}
-  if (currentScreen === "STEP_THREE") {
-  return (
-    <StepThreeScreen
-      profileData={profileData}
-      userId={currentUserId}
-      onComplete={() => setCurrentScreen("DASHBOARD")}
-    />
-  );
-}
-  const [onBoardingData, setOnboardingData] = useState({
-    age: "",
-    currentWeight: "",
-    targetWeight: "",
-    height: "",
-    
   
-});
+  // ONBOARDING SCREEN INTERCHANGES
+  if (currentScreen === 'STEP_ONE') {
+    return <StepOneScreen onNext={() => setCurrentScreen('STEP_TWO')} />;
+  }
+  if (currentScreen === 'STEP_TWO') {
+    return <StepTwoScreen onNext={() => setCurrentScreen('STEP_THREE')} />;
+  }
+  if (currentScreen === 'STEP_THREE') {
+    return <StepThreeScreen onComplete={() => setCurrentScreen('DASHBOARD')} />;
+  }
 
-  // CORE APPLICATION DASHBOARD PANELS
+  // 🥗 NAVIGATION DEFINITION WITH LUCIDE COMPONENT REFERENCES
+  const navItems = [
+    { id: 'Home', label: 'Home', IconComponent: Home },
+    { id: 'Diet', label: 'Diet & Recipes', IconComponent: ClipboardList }, 
+    { id: 'Workout', label: 'Workout', IconComponent: Dumbbell },
+    { id: 'Settings', label: 'Settings', IconComponent: SettingsIcon },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#E0E5EC" />
-
+      
       <View style={styles.header}>
         <Text style={styles.appName}>MacroSync</Text>
         <Text style={styles.activeTabIndicator}>{activeTab}</Text>
       </View>
 
       <View style={styles.mainContent}>
-        {activeTab === "DASHBOARD" && <DashboardScreen />}
-        {activeTab === "DIET" && <DietRecipesScreen />}
-        {activeTab === "WORKOUT" && <WorkoutScreen />}
-        {activeTab === "SETTINGS" && (
-          <SettingsScreen onLogout={() => setCurrentScreen("LOGIN")} />
-        )}
+        {activeTab === 'DASHBOARD' && <DashboardScreen />}
+        {activeTab === 'DIET' && <DietRecipesScreen />}
+        {activeTab === 'WORKOUT' && <WorkoutScreen />}
+        {activeTab === 'SETTINGS' && <SettingsScreen onLogout={() => setCurrentScreen('LOGIN')} />}
       </View>
 
       <View style={styles.bottomTabBar}>
-        {["DASHBOARD", "DIET", "WORKOUT", "SETTINGS"].map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={styles.tabItem}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabItemText,
-                activeTab === tab
-                  ? styles.tabTextActive
-                  : styles.tabTextInactive,
-              ]}
-            >
+        {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].map((tab) => (
+          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => setActiveTab(tab)}>
+            <Text style={[styles.tabItemText, activeTab === tab ? styles.tabTextActive : styles.tabTextInactive]}>
               {tab.substring(0, 4)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
     </SafeAreaView>
   );
 }
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#E0E5EC" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 15,
-  },
-  appName: { fontSize: 24, fontWeight: "bold", color: "#2D3748" },
-  activeTabIndicator: {
-    fontSize: 12,
-    color: "#00a3cc",
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    backgroundColor: "#d1d9e6",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
+  container: { flex: 1, backgroundColor: '#E0E5EC' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 15 },
+  appName: { fontSize: 24, fontWeight: 'bold', color: '#2D3748' },
+  activeTabIndicator: { fontSize: 12, color: '#00a3cc', fontWeight: 'bold', textTransform: 'uppercase', backgroundColor: '#d1d9e6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   mainContent: { flex: 1, paddingHorizontal: 24, paddingTop: 10 },
-  bottomTabBar: {
-    flexDirection: "row",
-    height: 70,
-    backgroundColor: "#E0E5EC",
-    borderTopWidth: 1,
-    borderTopColor: "#d1d9e6",
-    alignItems: "center",
-    paddingBottom: Platform.OS === "ios" ? 15 : 0,
-  },
-  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
-  tabItemText: { fontSize: 11, fontWeight: "bold", letterSpacing: 0.5 },
-  tabTextActive: { color: "#00a3cc" },
-  tabTextInactive: { color: "#718096" },
+  bottomTabBar: { flexDirection: 'row', height: 70, backgroundColor: '#E0E5EC', borderTopWidth: 1, borderTopColor: '#d1d9e6', alignItems: 'center', paddingBottom: Platform.OS === 'ios' ? 15 : 0 },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabItemText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
+  tabTextActive: { color: '#00a3cc' },
+  tabTextInactive: { color: '#718096' }
 });

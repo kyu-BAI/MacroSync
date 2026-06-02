@@ -73,19 +73,15 @@ export default function LoginScreen({
             </Text>
 
             <Text style={styles.brandSubtitle}>
-              Welcome back, Kaizer. Lock in na man!{"\n"}
-              hanag pasundayag nimo oi
+              Welcome back, Kaizer. Lock in na man!{"\n"}hanag pasundayag nimo oi
             </Text>
           </View>
 
+          {/* Neumorphic Form Container */}
           <View style={[styles.neumorphicOuter, styles.formSection]}>
-
-            <Text style={styles.inputLabel}>
-              Email Address
-            </Text>
-
+            <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.neumorphicInner}>
-              <TextInput
+              <TextInput 
                 style={styles.input}
                 placeholder="Enter your email"
                 placeholderTextColor="#A0AAB8"
@@ -96,12 +92,9 @@ export default function LoginScreen({
               />
             </View>
 
-            <Text style={styles.inputLabel}>
-              Password
-            </Text>
-
+            <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.neumorphicInner}>
-              <TextInput
+              <TextInput 
                 style={styles.input}
                 placeholder="Enter your password"
                 placeholderTextColor="#A0AAB8"
@@ -112,51 +105,28 @@ export default function LoginScreen({
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={onForgotPassword}
-            >
-              <Text style={styles.forgotText}>
-                Forgot Password?
-              </Text>
+            {/* Now wired to transition to your recovery workflow */}
+            <TouchableOpacity style={styles.forgotPassword} onPress={onForgotPassword}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* Interactive Tactile Button */}
+            <TouchableOpacity 
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={handleLogin}
-              style={
-                isPressed
-                  ? styles.neumorphicInnerBtn
-                  : styles.neumorphicOuterBtn
-              }
+              onPress={onLoginSuccess}
+              style={isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn}
             >
-              <Text
-                style={[
-                  styles.buttonText,
-                  isPressed && styles.buttonTextPressed
-                ]}
-              >
-                Sign In
-              </Text>
+              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Sign In</Text>
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>
-                Don't have an account?
-              </Text>
-
-              <TouchableOpacity
-                onPress={onNavigateToSignUp}
-              >
-                <Text style={styles.linkText}>
-                  Sign Up
-                </Text>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={onNavigateToSignUp}>
+                <Text style={styles.linkText}>Sign Up</Text>
               </TouchableOpacity>
-
             </View>
-
           </View>
 
         </ScrollView>
@@ -164,7 +134,13 @@ export default function LoginScreen({
     </SafeAreaView>
   );
 }
-// Add this at the very bottom of your file, outside of the SignUpScreen function!
+
+// Light White Neumorphic Color Constants
+const baseColor = '#E0E5EC';    
+const lightShadow = '#FFFFFF';  
+const darkShadow = '#B8C4D2';   
+const accentColor = '#00a3cc';  
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -173,98 +149,135 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
   },
   headerSection: {
     marginBottom: 30,
     alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 10,
   },
   brandTitle: {
-    fontSize: 28,
+    fontSize: 38,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 8,
+    color: '#2D3748', 
+    letterSpacing: 1,
   },
   brandSubtitle: {
-    fontSize: 14,
-    color: '#7F8C8D',
+    fontSize: 15,
+    color: '#718096',
+    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 22,
   },
   formSection: {
-    borderRadius: 20,
-    padding: 20,
-    backgroundColor: '#E0E8F6',
+    padding: 24,
+    borderRadius: 28,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#5A6B7C',
+    color: '#4A5568',
+    fontSize: 12,
+    fontWeight: 'bold',
     marginBottom: 8,
-    marginTop: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginLeft: 4,
   },
   input: {
-    height: 50,
-    paddingHorizontal: 15,
-    color: '#2C3E50',
+    color: '#2D3748',
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     fontSize: 16,
   },
-  neumorphicOuter: {
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: -6, height: -6 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+    marginTop: 8,
   },
-  neumorphicInner: {
-    backgroundColor: '#E0E8F6',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D1D9E6',
-    marginBottom: 10,
-  },
-  neumorphicOuterBtn: {
-    backgroundColor: '#E0E8F6',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#EBF2FF',
-    // Neumorphic shadow styling
-    shadowColor: '#A3B1C6',
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  neumorphicInnerBtn: {
-    backgroundColor: '#D1D9E6',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#B8C4D9',
+  forgotText: {
+    color: accentColor,
+    fontSize: 14,
+    fontWeight: '600',
   },
   buttonText: {
-    color: '#34495E',
-    fontWeight: 'bold',
+    color: '#2D3748',
     fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   buttonTextPressed: {
-    color: '#7F8C8D',
+    color: '#718096',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 25,
+    marginTop: 30,
   },
   footerText: {
-    color: '#7F8C8D',
-    marginRight: 5,
+    color: '#718096',
+    fontSize: 14,
   },
   linkText: {
-    color: '#3498DB',
+    color: accentColor,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+
+  /* --- LIGHT WHITE NEUMORPHIC STYLES --- */
+  
+  neumorphicOuter: {
+    backgroundColor: baseColor,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderTopColor: lightShadow,
+    borderLeftColor: lightShadow,
+    borderBottomColor: darkShadow,
+    borderRightColor: darkShadow,
+    elevation: 4, 
+  },
+  neumorphicInner: {
+    backgroundColor: baseColor,
+    borderRadius: 14,
+    marginBottom: 20,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: darkShadow,
+    borderLeftColor: darkShadow,
+    borderBottomColor: lightShadow,
+    borderRightColor: lightShadow,
+  },
+  neumorphicOuterBtn: {
+    backgroundColor: baseColor,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderTopColor: lightShadow,
+    borderLeftColor: lightShadow,
+    borderBottomColor: darkShadow,
+    borderRightColor: darkShadow,
+    elevation: 2,
+  },
+  neumorphicInnerBtn: {
+    backgroundColor: baseColor,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: darkShadow,
+    borderLeftColor: darkShadow,
+    borderBottomColor: lightShadow,
+    borderRightColor: lightShadow,
+    transform: [{ translateY: 1.5 }],
   },
 });

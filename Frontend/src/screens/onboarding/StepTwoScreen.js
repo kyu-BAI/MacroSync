@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; 
 
 export default function StepTwoScreen({ onNext, currentWeight,height }) {
@@ -7,6 +7,7 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
   const [goalWeight, setGoalWeight] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [isPressed, setIsPressed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Manages safe submission lifecycle state
   
   const [showCalendar, setShowCalendar] = useState(false);
   const [navDate, setNavDate] = useState(new Date());
@@ -18,7 +19,9 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
   ];
 
   // --- Health Guard Validation Engine ---
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isLoading) return; // Secure double-submit intercept guard
+
     if (!goalWeight || !targetDate) {
       Alert.alert("Missing Fields", "Please specify your goal weight and a target date before continuing.");
       return;
@@ -49,11 +52,7 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
       return;
     }
 
-    onNext({
-  goal_type: selectedGoal,
-  goal_weight: goalWeight,
-  target_date: targetDate
-});
+    onNext();
   };
 
   // --- Premium Calendar UI Logic ---
@@ -86,6 +85,7 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
         <TouchableOpacity
           key={`day-${day}`}
           style={[styles.calendarDayButton, isSelected && styles.calendarDaySelected]}
+          disabled={isLoading}
           onPress={() => {
             setTargetDate(formattedDate);
             setShowCalendar(false);
@@ -110,104 +110,132 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
             <Text style={styles.brandSubtitle}>What is your main objective? We will tailor your MacroSync plans around this.</Text>
           </View>
 
-          <View style={[styles.neumorphicOuter, styles.formSection]}>
-            
-            {goals.map((goal) => {
-              const isActive = selectedGoal === goal.id;
-              return (
-                <TouchableOpacity 
-                  key={goal.id}
-                  activeOpacity={0.9}
-                  onPress={() => setSelectedGoal(goal.id)}
-                  style={[
-                    isActive ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, 
-                    { marginBottom: 16, paddingVertical: 20, alignItems: 'flex-start', paddingHorizontal: 20 }
-                  ]}
-                >
-                  <Text style={[styles.goalTitle, isActive && { color: '#00a3cc' }]}>{goal.title}</Text>
-                  <Text style={styles.goalDesc}>{goal.desc}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* --- MAIN FORM CONTAINER CARD --- */}
+          <View style={styles.formSectionShadowWhite}>
+            <View style={[styles.formSectionShadowDark, styles.formSection]}>
+              
+              {/* Interactive Dynamic Goal Selection Cards */}
+              {goals.map((goal) => {
+                const isActive = selectedGoal === goal.id;
+                return (
+                  <View key={goal.id} style={isActive ? styles.goalCardActiveWrap : styles.goalCardInactiveWrap}>
+                    <TouchableOpacity 
+                      activeOpacity={0.9}
+                      disabled={isLoading}
+                      onPress={() => setSelectedGoal(goal.id)}
+                      style={[styles.goalCardInner, isActive && styles.goalCardInnerActive]}
+                    >
+                      <Text style={[styles.goalTitle, isActive && { color: accentColor }]}>{goal.title}</Text>
+                      <Text style={styles.goalDesc}>{goal.desc}</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
 
-            <View style={styles.targetSection}>
-              <Text style={styles.inputLabel}>Target Goal Weight (kg)</Text>
-              <View style={styles.neumorphicInner}>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. 70"
-                  placeholderTextColor="#A0AAB8"
-                  value={goalWeight}
-                  onChangeText={setGoalWeight}
-                  keyboardType="numeric"
-                />
+              <View style={styles.targetSection}>
+                <Text style={styles.inputLabel}>Target Goal Weight (kg)</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput 
+                    style={styles.input}
+                    placeholder="e.g. 70"
+                    placeholderTextColor="#A4B0BE"
+                    value={goalWeight}
+                    onChangeText={setGoalWeight}
+                    keyboardType="numeric"
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <Text style={styles.inputLabel}>Target Date</Text>
+                <View style={[styles.inputContainer, styles.dateInputWrapper]}>
+                  <TextInput 
+                    style={styles.dateInputText}
+                    placeholder="MM/DD/YYYY"
+                    placeholderTextColor="#A4B0BE"
+                    value={targetDate}
+                    onChangeText={setTargetDate}
+                    keyboardType="numeric"
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity 
+                    style={styles.calendarIconBtn} 
+                    disabled={isLoading}
+                    onPress={() => setShowCalendar(true)}
+                  >
+                    <Ionicons name="calendar-outline" size={22} color={accentColor} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <Text style={styles.inputLabel}>Target Date</Text>
-              <View style={[styles.neumorphicInner, styles.dateInputWrapper]}>
-                <TextInput 
-                  style={styles.dateInputText}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor="#A0AAB8"
-                  value={targetDate}
-                  onChangeText={setTargetDate}
-                  keyboardType="numeric"
-                />
-                <TouchableOpacity 
-                  style={styles.calendarIconBtn} 
-                  onPress={() => setShowCalendar(true)}
-                >
-                  <Ionicons name="calendar-outline" size={24} color="#00a3cc" />
-                </TouchableOpacity>
+              {/* --- UNIFIED SINGLE-TAP NEUMORPHIC PROGRESS BUTTON --- */}
+              <View style={isPressed || isLoading ? styles.buttonPressedContainer : styles.btnShadowWhite}>
+                <View style={isPressed || isLoading ? null : styles.btnShadowDark}>
+                  <TouchableOpacity 
+                    activeOpacity={1}
+                    disabled={isLoading}
+                    onPressIn={() => setIsPressed(true)}
+                    onPressOut={() => setIsPressed(false)}
+                    onPress={handleContinue}
+                    style={[
+                      styles.buttonBaseLayout, 
+                      isPressed || isLoading ? styles.buttonInnerPressed : styles.buttonInnerUnpressed
+                    ]}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={isPressed ? styles.buttonTextPressed : styles.buttonText}>
+                        Continue →
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
 
             </View>
-
-            <TouchableOpacity 
-              activeOpacity={1}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
-              onPress={handleContinue}
-              style={[isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, { marginTop: 10, alignItems: 'center' }]}
-            >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Continue →</Text>
-            </TouchableOpacity>
           </View>
 
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* --- PREMIUM CALENDAR MODAL --- */}
       <Modal visible={showCalendar} transparent={true} animationType="fade" onRequestClose={() => setShowCalendar(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.neumorphicOuter, styles.calendarCard]}>
-            
-            <View style={styles.calendarHeaderRow}>
-              <TouchableOpacity style={styles.arrowButton} onPress={() => changeMonth(-1)}>
-                <Ionicons name="chevron-back" size={24} color="#00a3cc" />
-              </TouchableOpacity>
-              <Text style={styles.calendarMonthTitle}>{months[navDate.getMonth()]} {navDate.getFullYear()}</Text>
-              <TouchableOpacity style={styles.arrowButton} onPress={() => changeMonth(1)}>
-                <Ionicons name="chevron-forward" size={24} color="#00a3cc" />
-              </TouchableOpacity>
+          <View style={styles.modalCardShadowWhite}>
+            <View style={[styles.modalCardShadowDark, styles.calendarCard]}>
+              
+              <View style={styles.calendarHeaderRow}>
+                <TouchableOpacity style={styles.arrowButton} onPress={() => changeMonth(-1)}>
+                  <Ionicons name="chevron-back" size={20} color={accentColor} />
+                </TouchableOpacity>
+                <Text style={styles.calendarMonthTitle}>{months[navDate.getMonth()]} {navDate.getFullYear()}</Text>
+                <TouchableOpacity style={styles.arrowButton} onPress={() => changeMonth(1)}>
+                  <Ionicons name="chevron-forward" size={20} color={accentColor} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.weekHeaderRow}>
+                {daysOfWeek.map((day) => (
+                  <Text key={day} style={styles.weekDayLabel}>{day}</Text>
+                ))}
+              </View>
+
+              <View style={styles.calendarGrid}>
+                {renderCalendarDays()}
+              </View>
+
+              <View style={styles.btnShadowWhite}>
+                <View style={styles.btnShadowDark}>
+                  <TouchableOpacity 
+                    style={styles.buttonInner} 
+                    onPress={() => setShowCalendar(false)}
+                  >
+                    <Text style={styles.buttonText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
             </View>
-
-            <View style={styles.weekHeaderRow}>
-              {daysOfWeek.map((day) => (
-                <Text key={day} style={styles.weekDayLabel}>{day}</Text>
-              ))}
-            </View>
-
-            <View style={styles.calendarGrid}>
-              {renderCalendarDays()}
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.neumorphicOuterBtn, styles.closeCalendarBtn]} 
-              onPress={() => setShowCalendar(false)}
-            >
-              <Text style={styles.closeBtnText}>Done</Text>
-            </TouchableOpacity>
-
           </View>
         </View>
       </Modal>
@@ -215,53 +243,148 @@ export default function StepTwoScreen({ onNext, currentWeight,height }) {
   );
 }
 
-const baseColor = '#E0E5EC'; 
-const lightShadow = '#FFFFFF'; 
-const darkShadow = '#B8C4D2'; 
-const accentColor = '#00a3cc';
+// Option 1 Global Shared Brand Theme Constants
+const baseColor = '#E4E9F0';    
+const lightShadow = '#FFFFFF';  
+const darkShadow = '#A6B4C5';   
+const accentColor = '#148F77'; 
+const darkTextBlue = '#1A2332'; 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: baseColor },
   scrollContainer: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 30 },
-  headerSection: { marginBottom: 35, alignItems: 'center' },
-  stepIndicator: { fontSize: 12, fontWeight: 'bold', color: accentColor, letterSpacing: 2, marginBottom: 8 },
-  brandTitle: { fontSize: 32, fontWeight: 'bold', color: '#2D3748' },
-  brandSubtitle: { fontSize: 15, color: '#718096', marginTop: 8, textAlign: 'center', lineHeight: 22 },
-  formSection: { padding: 24, borderRadius: 28 },
-  goalTitle: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 4 },
-  goalDesc: { fontSize: 13, color: '#718096' },
+  headerSection: { marginBottom: 40, alignItems: 'center', width: '100%' },
+  stepIndicator: { fontSize: 11, fontWeight: '800', color: accentColor, letterSpacing: 2, marginBottom: 8, textTransform: 'uppercase' },
+  brandTitle: { fontSize: 40, fontWeight: '800', color: darkTextBlue, letterSpacing: -0.5 },
+  brandSubtitle: { fontSize: 14, color: '#657786', marginTop: 12, textAlign: 'center', lineHeight: 22, fontWeight: '500', paddingHorizontal: 20 },
   
-  targetSection: { marginTop: 15, marginBottom: 10, borderTopWidth: 1, borderTopColor: '#d1d9e6', paddingTop: 20 },
-  inputLabel: { color: '#4A5568', fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 },
-  input: { color: '#2D3748', paddingHorizontal: 16, paddingVertical: 15, fontSize: 16 },
+  /* --- OUTSIDE CONTAINER CARD SHADOWS --- */
+  formSection: { padding: 26, borderRadius: 36, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.6)' },
+  formSectionShadowWhite: { borderRadius: 36, backgroundColor: baseColor, shadowColor: lightShadow, shadowOffset: { width: -7, height: -7 }, shadowOpacity: 1.0, shadowRadius: 8, margin: 10 },
+  formSectionShadowDark: { backgroundColor: baseColor, shadowColor: darkShadow, shadowOffset: { width: 7, height: 7 }, shadowOpacity: 1.0, shadowRadius: 10, borderRadius: 36, elevation: 8 },
   
-  dateInputWrapper: { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-  dateInputText: { flex: 1, color: '#2D3748', paddingHorizontal: 16, paddingVertical: 15, fontSize: 16 },
-  calendarIconBtn: { padding: 12, backgroundColor: baseColor, borderLeftWidth: 1, borderLeftColor: '#d1d9e6' },
-
-  buttonText: { color: '#2D3748', fontSize: 16, fontWeight: 'bold' },
-  buttonTextPressed: { color: '#718096' },
+  /* --- UNPRSED GOAL CARDS EXTENDED SHADOWS --- */
+  goalCardInactiveWrap: { 
+    borderRadius: 18, 
+    backgroundColor: baseColor, 
+    shadowColor: lightShadow, 
+    shadowOffset: { width: -5, height: -5 }, 
+    shadowOpacity: 1.0, 
+    shadowRadius: 6, 
+    marginBottom: 18,
+    marginHorizontal: 6, 
+  },
+  goalCardActiveWrap: { 
+    borderRadius: 18, 
+    backgroundColor: baseColor, 
+    shadowColor: darkShadow, 
+    shadowOffset: { width: 1, height: 1 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 2, 
+    marginBottom: 18,
+    marginHorizontal: 6,
+  },
+  goalCardInner: { 
+    paddingVertical: 20, 
+    paddingHorizontal: 22, 
+    borderRadius: 18, 
+    backgroundColor: baseColor, 
+    shadowColor: darkShadow, 
+    shadowOffset: { width: 5, height: 5 }, 
+    shadowOpacity: 0.85, 
+    shadowRadius: 8, 
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)', 
+  },
+  goalCardInnerActive: { 
+    backgroundColor: '#D9E1EC', 
+    shadowColor: lightShadow, 
+    shadowOffset: { width: -2, height: -2 }, 
+    shadowOpacity: 1.0, 
+    shadowRadius: 4, 
+    elevation: 0, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.7)' 
+  },
+  goalTitle: { fontSize: 16, fontWeight: '800', color: darkTextBlue, marginBottom: 5 },
+  goalDesc: { fontSize: 13, color: '#657786', fontWeight: '500', lineHeight: 18 },
   
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(26, 32, 44, 0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  calendarCard: { width: '100%', padding: 24, borderRadius: 28, alignItems: 'center', backgroundColor: baseColor },
-  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 25 },
-  calendarMonthTitle: { fontSize: 20, fontWeight: '900', color: '#2D3748', letterSpacing: 0.5 },
-  arrowButton: { padding: 10, backgroundColor: baseColor, borderRadius: 12, elevation: 2, shadowColor: darkShadow, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.5 },
-  weekHeaderRow: { flexDirection: 'row', width: '100%', marginBottom: 15 },
-  weekDayLabel: { flex: 1, textAlign: 'center', color: '#A0AAB8', fontWeight: 'bold', fontSize: 13, textTransform: 'uppercase' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', justifyContent: 'space-between' },
+  /* --- FORM DATA FIELDS AND TEXT BOX VALUES --- */
+  targetSection: { marginTop: 8, marginBottom: 16, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.6)', paddingTop: 24 },
+  inputLabel: { color: '#657786', fontSize: 11, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1.5, marginLeft: 6 },
+  inputContainer: { backgroundColor: '#D9E1EC', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+  input: { color: darkTextBlue, paddingHorizontal: 18, paddingVertical: 16, fontSize: 15, fontWeight: '500' },
+  
+  /* --- CALENDAR SYSTEM INNER ELEMENTS --- */
+  dateInputWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateInputText: { flex: 1, color: darkTextBlue, paddingHorizontal: 18, paddingVertical: 16, fontSize: 15, fontWeight: '500' },
+  calendarIconBtn: { padding: 16, justifyContent: 'center', alignItems: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(26, 32, 44, 0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  modalCardShadowWhite: { width: '100%', borderRadius: 36, backgroundColor: baseColor, shadowColor: lightShadow, shadowOffset: { width: -8, height: -8 }, shadowOpacity: 1.0, shadowRadius: 10 },
+  modalCardShadowDark: { width: '100%', backgroundColor: baseColor, shadowColor: darkShadow, shadowOffset: { width: 8, height: 8 }, shadowOpacity: 1.0, shadowRadius: 12, borderRadius: 36, elevation: 10 },
+  calendarCard: { padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.6)' },
+  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 20 },
+  calendarMonthTitle: { fontSize: 18, fontWeight: '800', color: darkTextBlue, letterSpacing: -0.2 },
+  arrowButton: { padding: 8, backgroundColor: baseColor, borderRadius: 12, shadowColor: darkShadow, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.8, shadowRadius: 3, elevation: 2 },
+  weekHeaderRow: { flexDirection: 'row', width: '100%', marginBottom: 10 },
+  weekDayLabel: { flex: 1, textAlign: 'center', color: '#A4B0BE', fontWeight: '800', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', justifyContent: 'space-between', marginBottom: 12 },
   calendarDayButton: { width: '13%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 4, borderRadius: 12 },
   calendarDayEmpty: { width: '13%', aspectRatio: 1, marginVertical: 4 },
-  calendarDayText: { color: '#4A5568', fontWeight: '700', fontSize: 15 },
-  
-  calendarDaySelected: { backgroundColor: accentColor, elevation: 4, shadowColor: accentColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 4 },
-  calendarDayTextSelected: { color: '#FFFFFF', fontWeight: '900' },
-  
-  closeCalendarBtn: { marginTop: 25, paddingVertical: 14, paddingHorizontal: 40, width: '100%' },
-  closeBtnText: { color: '#2D3748', fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
+  calendarDayText: { color: darkTextBlue, fontWeight: '700', fontSize: 14 },
+  calendarDaySelected: { backgroundColor: accentColor, borderRadius: 12 },
+  calendarDayTextSelected: { color: '#FFFFFF', fontWeight: '800' },
 
-  neumorphicOuter: { backgroundColor: baseColor, borderTopWidth: 2, borderLeftWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderTopColor: lightShadow, borderLeftColor: lightShadow, borderBottomColor: darkShadow, borderRightColor: darkShadow, elevation: 4 },
-  neumorphicInner: { backgroundColor: baseColor, borderRadius: 14, marginBottom: 20, borderTopWidth: 3, borderLeftWidth: 3, borderBottomWidth: 1, borderRightWidth: 1, borderTopColor: darkShadow, borderLeftColor: darkShadow, borderBottomColor: lightShadow, borderRightColor: lightShadow },
-  neumorphicOuterBtn: { backgroundColor: baseColor, paddingVertical: 16, borderRadius: 14, borderTopWidth: 2, borderLeftWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderTopColor: lightShadow, borderLeftColor: lightShadow, borderBottomColor: darkShadow, borderRightColor: darkShadow, elevation: 2 },
-  neumorphicInnerBtn: { backgroundColor: baseColor, paddingVertical: 16, borderRadius: 14, borderTopWidth: 3, borderLeftWidth: 3, borderBottomWidth: 1, borderRightWidth: 1, borderTopColor: darkShadow, borderLeftColor: darkShadow, borderBottomColor: lightShadow, borderRightColor: lightShadow, transform: [{ translateY: 1.5 }] },
+  /* --- BRAND ACTION BUTTONS SINGLE-TAP LAYOUT --- */
+  btnShadowWhite: { 
+    width: '100%', 
+    borderRadius: 16, 
+    backgroundColor: baseColor, 
+    shadowColor: lightShadow, 
+    shadowOffset: { width: -4, height: -4 }, 
+    shadowOpacity: 0.9, 
+    shadowRadius: 5,
+    marginTop: 10,
+  },
+  btnShadowDark: { 
+    width: '100%', 
+    borderRadius: 16, 
+    backgroundColor: baseColor, 
+    shadowColor: darkShadow, 
+    shadowOffset: { width: 4, height: 4 }, 
+    shadowOpacity: 0.5, 
+    shadowRadius: 6, 
+    elevation: 4,
+  },
+  buttonPressedContainer: {
+    width: '100%',
+    borderRadius: 16,
+    backgroundColor: '#0E6655',
+    marginTop: 10,
+  },
+  buttonBaseLayout: {
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 54,
+  },
+  buttonInnerUnpressed: {
+    backgroundColor: accentColor, 
+  },
+  buttonInnerPressed: {
+    backgroundColor: '#0E6655', 
+    transform: [{ translateY: 1.5 }],
+  },
+  buttonInner: { 
+    backgroundColor: accentColor, 
+    paddingVertical: 16, 
+    borderRadius: 16, 
+    alignItems: 'center', 
+    width: '100%' 
+  },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+  buttonTextPressed: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 16, fontWeight: '700', letterSpacing: 0.5, textAlign: 'center' },
+  buttonTextWrapper: { paddingVertical: 16, width: '100%', justifyContent: 'center', alignItems: 'center' }
 });
