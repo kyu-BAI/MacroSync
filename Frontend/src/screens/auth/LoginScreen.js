@@ -8,29 +8,36 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  StatusBar
 } from 'react-native';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
 
 export default function LoginScreen({
   onNavigateToSignUp,
   onLoginSuccess,
-  onForgotPassword
+  onForgotPassword,
+  setCurrentUserId
 }) {
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [isPressed, setIsPressed] = useState(false);
 
-  // LOGIN FUNCTION
+  // LOGIN FUNCTION (Untouched backend integration - reads incorrect credential messages directly from API response)
   const handleLogin = async () => {
-    try {
+    if (!email || !password) {
+      alert("Please enter both your email and password.");
+      return;
+    }
 
+    try {
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/signin`,
         {
           method: "POST",
           headers: {
-            "Content-Type":"application/json"
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({
             email,
@@ -40,24 +47,27 @@ export default function LoginScreen({
       );
 
       const data = await response.json();
-
       console.log("Response:", data);
 
-      if(response.ok){
+      if (response.ok) {
         onLoginSuccess();
-        setCurrentUserId(response.user_id);
+        if (setCurrentUserId) {
+          setCurrentUserId(data.user_id || response.user_id);
+        }
       } else {
-        alert(data.detail || "Login failed");
+        // Warns the user directly with the specific error from your backend (e.g., "Incorrect password", "User not found")
+        alert(data.detail || "Incorrect email or password. Please try again.");
       }
 
-    } catch(error){
+    } catch (error) {
       console.log(error);
-      alert("Cannot connect to backend");
+      alert("Cannot connect to backend server. Check your network.");
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -65,65 +75,97 @@ export default function LoginScreen({
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-
+          {/* Header Section */}
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>
-              MacroSync
-            </Text>
-
+            <Text style={styles.brandTitle}>MacroSync</Text>
             <Text style={styles.brandSubtitle}>
               Welcome back, Kaizer. Lock in na man!{"\n"}hanag pasundayag nimo oi
             </Text>
           </View>
 
-          {/* Neumorphic Form Container */}
-          <View style={[styles.neumorphicOuter, styles.formSection]}>
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.neumorphicInner}>
-              <TextInput 
-                style={styles.input}
-                placeholder="Enter your email"
-                placeholderTextColor="#A0AAB8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+          {/* Form Card Group - High Intensity Neumorphic Extrusion */}
+          <View style={styles.formCard}>
+            
+            {/* Email Field Group */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
+                <Mail color="#7FA293" size={20} style={styles.leadingIcon} />
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#7FA293"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
             </View>
 
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.neumorphicInner}>
-              <TextInput 
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#A0AAB8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
+            {/* Password Field Group with Synced Visibility Toggle Behavior */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
+                <Lock color="#7FA293" size={20} style={styles.leadingIcon} />
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#7FA293"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={secureTextEntry}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity 
+                  style={styles.toggleButton} 
+                  onPress={() => setSecureTextEntry(!secureTextEntry)}
+                  activeOpacity={0.6}
+                >
+                  {secureTextEntry ? (
+                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
+                    <EyeOff color="#7FA293" size={22} />
+                  ) : (
+                    /* Text is Unhidden -> Show plain open Eye to represent clear vision state */
+                    <Eye color="#4EA685" size={22} />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Now wired to transition to your recovery workflow */}
-            <TouchableOpacity style={styles.forgotPassword} onPress={onForgotPassword}>
+            {/* Forgot Password Link */}
+            <TouchableOpacity 
+              style={styles.forgotPassword} 
+              onPress={onForgotPassword}
+              activeOpacity={0.7}
+            >
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 
-            {/* Interactive Tactile Button */}
+            {/* Sign In Button */}
             <TouchableOpacity 
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onLoginSuccess}
-              style={isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn}
+              onPress={handleLogin}
+              style={[
+                styles.buttonBase,
+                isPressed ? styles.buttonPressed : styles.buttonUnpressed
+              ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Sign In</Text>
+              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                Sign In
+              </Text>
             </TouchableOpacity>
 
+            {/* Footer Navigation Link */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={onNavigateToSignUp}>
+              <TouchableOpacity onPress={onNavigateToSignUp} activeOpacity={0.7}>
                 <Text style={styles.linkText}>Sign Up</Text>
               </TouchableOpacity>
             </View>
@@ -135,149 +177,164 @@ export default function LoginScreen({
   );
 }
 
-// Light White Neumorphic Color Constants
-const baseColor = '#E0E5EC';    
-const lightShadow = '#FFFFFF';  
-const darkShadow = '#B8C4D2';   
-const accentColor = '#00a3cc';  
+// Intensified Neumorphic Theme Setup
+const baseColor = '#F0F4F2';           
+const clearWhiteHighlight = '#FFFFFF';    
+const softGreenShadow = '#AEC2B7';      
+
+// Logo Branding Metrics
+const logoGreen = '#4EA685';        
+const logoDarkShadow = '#37745D';   
+const logoLightHighlight = '#65D8AD'; 
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0E8F6', // Neumorphic background color
+    backgroundColor: baseColor,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingVertical: 16,
   },
   headerSection: {
-    marginBottom: 30,
+    marginBottom: 35,
     alignItems: 'center',
     width: '100%',
-    paddingHorizontal: 10,
   },
   brandTitle: {
-    fontSize: 38,
-    fontWeight: 'bold',
-    color: '#2D3748', 
-    letterSpacing: 1,
+    fontSize: 42,
+    fontWeight: '900',
+    color: logoGreen, 
+    letterSpacing: -0.5,
   },
   brandSubtitle: {
-    fontSize: 15,
-    color: '#718096',
-    marginTop: 8,
+    fontSize: 14,
+    color: '#556B60',
+    marginTop: 10,
     textAlign: 'center',
     lineHeight: 22,
+    fontWeight: '700',
   },
-  formSection: {
+  formCard: {
+    backgroundColor: baseColor,
+    borderRadius: 40, 
     padding: 24,
-    borderRadius: 28,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 14, height: 14 }, 
+    shadowOpacity: 1,
+    shadowRadius: 16, 
+    elevation: 12,    
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+  },
+  inputGroup: {
+    marginBottom: 22,
   },
   inputLabel: {
-    color: '#4A5568',
-    fontSize: 12,
-    fontWeight: 'bold',
+    color: '#41544B',
+    fontSize: 11,
+    fontWeight: '800',
     marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginLeft: 4,
+    letterSpacing: 1.2,
+    marginLeft: 6,
+  },
+  neumorphicInputInset: {
+    backgroundColor: baseColor,
+    borderRadius: 24, 
+    borderWidth: 1.5, 
+    borderColor: '#D4E2DC',
+    shadowColor: logoGreen,
+    shadowOffset: { width: -4, height: -4 },
+    shadowOpacity: 0.35, 
+    shadowRadius: 5,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  leadingIcon: {
+    marginRight: 4,
   },
   input: {
-    color: '#2D3748',
-    paddingHorizontal: 16,
+    flex: 1,
+    color: '#1A2B23',
     paddingVertical: 15,
+    paddingHorizontal: 8,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  toggleButton: {
+    paddingLeft: 10,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
-    marginTop: 8,
+    marginBottom: 26,
+    marginTop: 2,
   },
   forgotText: {
-    color: accentColor,
+    color: logoGreen,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  buttonBase: {
+    paddingVertical: 16,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  buttonUnpressed: {
+    backgroundColor: '#53B28E', 
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: logoLightHighlight,
+    borderLeftColor: logoLightHighlight,
+    shadowColor: logoDarkShadow,
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 0.95,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  buttonPressed: {
+    backgroundColor: '#3E836A', 
+    borderWidth: 1.5,
+    borderColor: logoDarkShadow,
+    transform: [{ translateY: 2 }], 
   },
   buttonText: {
-    color: '#2D3748',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
     letterSpacing: 0.5,
+    textShadowColor: logoDarkShadow,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   buttonTextPressed: {
-    color: '#718096',
+    color: '#9EDEC4',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: 32,
   },
   footerText: {
-    color: '#718096',
+    color: '#556B60',
     fontSize: 14,
+    fontWeight: '700',
   },
   linkText: {
-    color: accentColor,
+    color: logoGreen,
     fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  /* --- LIGHT WHITE NEUMORPHIC STYLES --- */
-  
-  neumorphicOuter: {
-    backgroundColor: baseColor,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 4, 
-  },
-  neumorphicInner: {
-    backgroundColor: baseColor,
-    borderRadius: 14,
-    marginBottom: 20,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
-  },
-  neumorphicOuterBtn: {
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderTopColor: lightShadow,
-    borderLeftColor: lightShadow,
-    borderBottomColor: darkShadow,
-    borderRightColor: darkShadow,
-    elevation: 2,
-  },
-  neumorphicInnerBtn: {
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: darkShadow,
-    borderLeftColor: darkShadow,
-    borderBottomColor: lightShadow,
-    borderRightColor: lightShadow,
-    transform: [{ translateY: 1.5 }],
+    fontWeight: '900',
   },
 });

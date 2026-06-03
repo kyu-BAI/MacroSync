@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, StatusBar, TouchableOpacity, Platform } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-// Onboarding & Auth Imports
+// Onboarding & Auth Screen Components
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import SignUpScreen from "./src/screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
@@ -11,33 +11,41 @@ import StepOneScreen from "./src/screens/onboarding/StepOneScreen";
 import StepTwoScreen from "./src/screens/onboarding/StepTwoScreen";
 import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
 
-// Core Dashboard Panels
+// Core Dashboard Main Screen Panels
 import DashboardScreen from "./src/screens/main/DashboardScreen";
 import DietRecipesScreen from "./src/screens/main/DietRecipesScreen";
 import WorkoutScreen from "./src/screens/main/WorkoutScreen";
 import SettingsScreen from "./src/screens/main/SettingsScreen";
 
 export default function App() {
-  // Navigation states: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
+  // Navigation Routing States: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('LOGIN');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
 
-  // AUTH STATE MACHINE ROUTING
+  // Core Account Identity State Management
+  const [userId, setUserId] = useState(null);
+  const [resetEmail, setResetEmail] = useState('');
+
+  // ----------------------------------------------------
+  // SECTION 1: AUTHENTICATION ROUTING STATE MACHINE
+  // ----------------------------------------------------
   if (currentScreen === 'LOGIN') {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
         onLoginSuccess={() => setCurrentScreen("DASHBOARD")}
         onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
+        setCurrentUserId={(id) => setUserId(id)} 
       />
     );
   }
+  
   if (currentScreen === "SIGNUP") {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(userId) => {
-          setUserId(userId);
+        onSignUpSuccess={(newUserId) => {
+          setUserId(newUserId); 
           setCurrentScreen("STEP_ONE");
         }}
       />
@@ -49,12 +57,13 @@ export default function App() {
       <ForgotPasswordScreen
         onNavigateBack={() => setCurrentScreen("LOGIN")}
         onOtpSent={(email) => {
-          setResetEmail(email);
+          setResetEmail(email); 
           setCurrentScreen("OTP_ENTRY");
         }}
       />
     );
   }
+  
   if (currentScreen === "RESET_PASS") {
     return (
       <ResetPasswordScreen
@@ -63,6 +72,7 @@ export default function App() {
       />
     );
   }
+  
   if (currentScreen === "OTP_ENTRY") {
     return (
       <OtpScreen
@@ -73,7 +83,9 @@ export default function App() {
     );
   }
   
-  // ONBOARDING SCREEN INTERCHANGES
+  // ----------------------------------------------------
+  // SECTION 2: DYNAMIC ONBOARDING PROCESS STEPS
+  // ----------------------------------------------------
   if (currentScreen === 'STEP_ONE') {
     return <StepOneScreen onNext={() => setCurrentScreen('STEP_TWO')} />;
   }
@@ -84,53 +96,45 @@ export default function App() {
     return <StepThreeScreen onComplete={() => setCurrentScreen('DASHBOARD')} />;
   }
 
-  // 🥗 NAVIGATION DEFINITION WITH LUCIDE COMPONENT REFERENCES
-  const navItems = [
-    { id: 'Home', label: 'Home', IconComponent: Home },
-    { id: 'Diet', label: 'Diet & Recipes', IconComponent: ClipboardList }, 
-    { id: 'Workout', label: 'Workout', IconComponent: Dumbbell },
-    { id: 'Settings', label: 'Settings', IconComponent: SettingsIcon },
-  ];
-
+  // ----------------------------------------------------
+  // SECTION 3: APP CORE VIEWPORTS (FULLY INTEGRATED SCREEN ROUTING)
+  // ----------------------------------------------------
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#E0E5EC" />
-      
-      <View style={styles.header}>
-        <Text style={styles.appName}>MacroSync</Text>
-        <Text style={styles.activeTabIndicator}>{activeTab}</Text>
-      </View>
-
-      <View style={styles.mainContent}>
-        {activeTab === 'DASHBOARD' && <DashboardScreen />}
-        {activeTab === 'DIET' && <DietRecipesScreen />}
-        {activeTab === 'WORKOUT' && <WorkoutScreen />}
-        {activeTab === 'SETTINGS' && <SettingsScreen onLogout={() => setCurrentScreen('LOGIN')} />}
-      </View>
-
-      <View style={styles.bottomTabBar}>
-        {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].map((tab) => (
-          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => setActiveTab(tab)}>
-            <Text style={[styles.tabItemText, activeTab === tab ? styles.tabTextActive : styles.tabTextInactive]}>
-              {tab.substring(0, 4)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-    </SafeAreaView>
+    <View style={styles.appContainerRoot}>
+      {activeTab === 'DASHBOARD' && (
+        <DashboardScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+        />
+      )}
+      {activeTab === 'DIET' && (
+        <DietRecipesScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+        />
+      )}
+      {activeTab === 'WORKOUT' && (
+        <WorkoutScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+        />
+      )}
+      {activeTab === 'SETTINGS' && (
+        <SettingsScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+          onLogout={() => {
+            setCurrentScreen('LOGIN');
+            setActiveTab('DASHBOARD'); // Resets active navigation state variables cleanly
+          }} 
+        />
+      )}
+    </View>
   );
 }
 
+// Uniform High-Contrast System Theme Setup Tokens
+const baseColor = '#F0F4F2';           
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E0E5EC' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 15 },
-  appName: { fontSize: 24, fontWeight: 'bold', color: '#2D3748' },
-  activeTabIndicator: { fontSize: 12, color: '#00a3cc', fontWeight: 'bold', textTransform: 'uppercase', backgroundColor: '#d1d9e6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  mainContent: { flex: 1, paddingHorizontal: 24, paddingTop: 10 },
-  bottomTabBar: { flexDirection: 'row', height: 70, backgroundColor: '#E0E5EC', borderTopWidth: 1, borderTopColor: '#d1d9e6', alignItems: 'center', paddingBottom: Platform.OS === 'ios' ? 15 : 0 },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabItemText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  tabTextActive: { color: '#00a3cc' },
-  tabTextInactive: { color: '#718096' }
+  appContainerRoot: { 
+    flex: 1, 
+    backgroundColor: baseColor 
+  }
 });
