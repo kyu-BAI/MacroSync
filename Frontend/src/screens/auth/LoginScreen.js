@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -24,7 +24,7 @@ export default function LoginScreen({
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [isPressed, setIsPressed] = useState(false);
 
-  // LOGIN FUNCTION (Untouched backend integration - reads incorrect credential messages directly from API response)
+  // LOGIN FUNCTION 
   const handleLogin = async () => {
     if (!email || !password) {
       alert("Please enter both your email and password.");
@@ -55,12 +55,11 @@ export default function LoginScreen({
           setCurrentUserId(data.user_id || response.user_id);
         }
       } else {
-        // Warns the user directly with the specific error from your backend (e.g., "Incorrect password", "User not found")
+        // Warns the user directly with specific error from backend
         alert(data.detail || "Incorrect email or password. Please try again.");
       }
-
     } catch (error) {
-      console.log(error);
+      console.log("LOGIN ERROR:", error);
       alert("Cannot connect to backend server. Check your network.");
     }
   };
@@ -69,7 +68,7 @@ export default function LoginScreen({
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
         <ScrollView
@@ -85,10 +84,10 @@ export default function LoginScreen({
             </Text>
           </View>
 
-          {/* Form Card Group - High Intensity Neumorphic Extrusion */}
+          {/* Form Card Group */}
           <View style={styles.formCard}>
             
-            {/* Email Field Group */}
+            {/* Email Field */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
@@ -106,7 +105,7 @@ export default function LoginScreen({
               </View>
             </View>
 
-            {/* Password Field Group with Synced Visibility Toggle Behavior */}
+            {/* Password Field */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
@@ -127,10 +126,8 @@ export default function LoginScreen({
                   activeOpacity={0.6}
                 >
                   {secureTextEntry ? (
-                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
                     <EyeOff color="#7FA293" size={22} />
                   ) : (
-                    /* Text is Unhidden -> Show plain open Eye to represent clear vision state */
                     <Eye color="#4EA685" size={22} />
                   )}
                 </TouchableOpacity>
@@ -162,7 +159,7 @@ export default function LoginScreen({
               </Text>
             </TouchableOpacity>
 
-            {/* Footer Navigation Link */}
+            {/* Footer Navigation */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account? </Text>
               <TouchableOpacity onPress={onNavigateToSignUp} activeOpacity={0.7}>
@@ -170,19 +167,16 @@ export default function LoginScreen({
               </TouchableOpacity>
             </View>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// Intensified Neumorphic Theme Setup
+// --- Neumorphic Theme Setup ---
 const baseColor = '#F0F4F2';           
 const clearWhiteHighlight = '#FFFFFF';    
 const softGreenShadow = '#AEC2B7';      
-
-// Logo Branding Metrics
 const logoGreen = '#4EA685';        
 const logoDarkShadow = '#37745D';   
 const logoLightHighlight = '#65D8AD'; 
@@ -194,7 +188,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
@@ -248,10 +242,6 @@ const styles = StyleSheet.create({
     borderRadius: 24, 
     borderWidth: 1.5, 
     borderColor: '#D4E2DC',
-    shadowColor: logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -315,9 +305,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   buttonTextPressed: {
     color: '#9EDEC4',

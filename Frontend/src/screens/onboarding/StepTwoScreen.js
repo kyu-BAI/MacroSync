@@ -20,9 +20,21 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
   ];
 
   const goals = [
-    { id: 'muscle', title: 'Build Muscle', desc: 'Focus on hypertrophy and protein intake' },
-    { id: 'fatloss', title: 'Lose Fat', desc: 'Caloric deficit with balanced macros' },
-    { id: 'maintain', title: 'Maintain Weight', desc: 'Optimize current body composition' }
+    {
+      id: "muscle",
+      title: "Build Muscle",
+      desc: "Focus on hypertrophy and protein intake",
+    },
+    {
+      id: "fatloss",
+      title: "Lose Fat",
+      desc: "Caloric deficit with balanced macros",
+    },
+    {
+      id: "maintain",
+      title: "Maintain Weight",
+      desc: "Optimize current body composition",
+    },
   ];
 
   // --- Health Guard Validation Engine (100% Untouched) ---
@@ -44,13 +56,23 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
       return;
     }
 
-    const heightInMeters = height / 100;
+    const heightInMeters = parseFloat(height) / 100;
     const projectedBmi = targetWeightNum / (heightInMeters * heightInMeters);
+
+    if (!heightInMeters) {
+      Alert.alert("Missing data", "Height is required.");
+      return;
+    }
+
+    if (!currentWeight || !height) {
+      Alert.alert("Missing data", "Body data not loaded from Step 1.");
+      return;
+    }
 
     if (projectedBmi < 18.5) {
       Alert.alert(
         "Unsafe Target Weight",
-        `A goal weight of ${targetWeightNum}kg drops your BMI to ${projectedBmi.toFixed(1)} (Underweight). Please set a safer weight target.`
+        `A goal weight of ${targetWeightNum}kg drops your BMI to ${projectedBmi.toFixed(1)} (Underweight). Please set a safer weight target.`,
       );
       return;
     }
@@ -58,7 +80,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
     if (projectedBmi >= 30.0) {
       Alert.alert(
         "Unrealistic Target Weight",
-        `A goal weight of ${targetWeightNum}kg pushes your BMI to ${projectedBmi.toFixed(1)} (Obese). Let's aim for a healthier target.`
+        `A goal weight of ${targetWeightNum}kg pushes your BMI to ${projectedBmi.toFixed(1)} (Obese). Let's aim for a healthier target.`,
       );
       return;
     }
@@ -77,17 +99,21 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
   const daysOfWeek = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
   const changeMonth = (direction) => {
-    const newDate = new Date(navDate.getFullYear(), navDate.getMonth() + direction, 1);
+    const newDate = new Date(
+      navDate.getFullYear(),
+      navDate.getMonth() + direction,
+      1,
+    );
     setNavDate(newDate);
   };
 
   const renderCalendarDays = () => {
     const year = navDate.getFullYear();
     const month = navDate.getMonth();
-    
+
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDays = new Date(year, month + 1, 0).getDate();
-    
+
     const dayButtons = [];
 
     // 1. Render empty spacing slots for the initial leading week
@@ -97,21 +123,31 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
 
     // 2. Render actual day selection elements
     for (let day = 1; day <= totalDays; day++) {
-      const formattedDate = `${String(month + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+      const formattedDate = `${String(month + 1).padStart(2, "0")}/${String(day).padStart(2, "0")}/${year}`;
       const isSelected = targetDate === formattedDate;
 
       dayButtons.push(
         <TouchableOpacity
           key={`day-${day}`}
-          style={[styles.calendarDayButton, isSelected && styles.calendarDaySelected]}
+          style={[
+            styles.calendarDayButton,
+            isSelected && styles.calendarDaySelected,
+          ]}
           disabled={isLoading}
           onPress={() => {
             setTargetDate(formattedDate);
             setShowCalendar(false);
           }}
         >
-          <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>{day}</Text>
-        </TouchableOpacity>
+          <Text
+            style={[
+              styles.calendarDayText,
+              isSelected && styles.calendarDayTextSelected,
+            ]}
+          >
+            {day}
+          </Text>
+        </TouchableOpacity>,
       );
     }
 
@@ -136,7 +172,10 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
           <View style={styles.headerSection}>
             <Text style={styles.stepIndicator}>STEP 2 OF 3</Text>
             <Text style={styles.brandTitle}>Primary Goal</Text>
-            <Text style={styles.brandSubtitle}>What is your main objective? We will tailor your MacroSync plans around this.</Text>
+            <Text style={styles.brandSubtitle}>
+              What is your main objective? We will tailor your MacroSync plans
+              around this.
+            </Text>
           </View>
 
           {/* Form Card Container */}
@@ -216,8 +255,8 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
                     keyboardType="numeric"
                     editable={!isLoading}
                   />
-                  <TouchableOpacity 
-                    style={styles.calendarIconBtn} 
+                  <TouchableOpacity
+                    style={styles.calendarIconBtn}
                     disabled={isLoading}
                     onPress={() => setShowCalendar(true)}
                     activeOpacity={0.6}
@@ -250,7 +289,6 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
             </TouchableOpacity>
 
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
 

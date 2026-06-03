@@ -24,6 +24,37 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   // Evaluates validation rules for password length threshold
   const showPasswordWarning = passwordTouched && password.length > 0 && password.length < 8;
 
+
+  const handleSignup = async () => {
+  try {
+    const res = await fetch(
+      `${API_URL}/signup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    console.log("SIGNUP RESPONSE:", data);
+
+    if (res.ok) {
+      onSignUpSuccess(data.user_id);
+    } else {
+      alert(data.detail || "Signup failed");
+    }
+  } catch (err) {
+    console.log(err);
+    alert("Network error");
+  }
+};
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={baseColor} />

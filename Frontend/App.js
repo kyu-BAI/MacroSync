@@ -7,6 +7,7 @@ import SignUpScreen from "./src/screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
 import OtpScreen from "./src/screens/auth/OtpScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
+
 import StepOneScreen from "./src/screens/onboarding/StepOneScreen";
 import StepTwoScreen from "./src/screens/onboarding/StepTwoScreen";
 import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
@@ -127,6 +128,9 @@ export default function App() {
       )}
     </View>
   );
+
+  // ---------------- MAIN RETURN ----------------
+  return currentScreen === "DASHBOARD" ? renderDashboard() : renderScreen();
 }
 
 // Uniform High-Contrast System Theme Setup Tokens

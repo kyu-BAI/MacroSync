@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -34,18 +34,15 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
         `${process.env.EXPO_PUBLIC_API_URL}/forgot-password`
       );
 
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/forgot-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: email.trim()
-          })
-        }
-      );
+      const response = await fetch(`${API}/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+        }),
+      });
 
       const data = await response.json();
       console.log('Forgot Password Response:', data);
@@ -58,7 +55,6 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
           data.detail || 'Failed to send password reset email.'
         );
       }
-
     } catch (error) {
       console.log('Forgot Password Error:', error);
       Alert.alert(
@@ -67,7 +63,6 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
       );
     }
   };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
@@ -186,7 +181,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
     paddingBottom: 80, 
   },

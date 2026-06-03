@@ -19,7 +19,8 @@
         "foregroundImage": "./assets/splash-icon.png",
         "backgroundColor": "#FAFAFA"
       },
-      "package": "com.anonymous.Frontend"
+      "package": "com.anonymous.Frontend",
+      "usesCleartextTraffic": true
     },
     "plugins": [
       "expo-font",
@@ -28,3 +29,4 @@
     ]
   }
 }
+
