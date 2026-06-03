@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,91 +9,55 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert
-} from 'react-native';
+  Alert,
+} from "react-native";
 
-export default function ForgotPasswordScreen({ onNavigateBack,onOtpSent }) {
-
-  const [email, setEmail] = useState('');
+export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
+  const [email, setEmail] = useState("");
   const [isPressed, setIsPressed] = useState(false);
 
   const handleForgotPassword = async () => {
-
-    if (!email.trim()) {
-      Alert.alert(
-        'Missing Email',
-        'Please enter your email address.'
-      );
-      return;
-    }
-
     try {
+      const API = process.env.EXPO_PUBLIC_API_URL;
 
-      console.log(
-        'Sending request to:',
-        `${process.env.EXPO_PUBLIC_API_URL}/forgot-password`
-      );
+      console.log("Calling:", `${API}/forgot-password`);
 
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/forgot-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: email.trim()
-          })
-        }
-      );
+      const response = await fetch(`${API}/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+        }),
+      });
 
       const data = await response.json();
 
-      console.log('Forgot Password Response:', data);
+      console.log("Response:", data);
 
       if (response.ok) {
-
         onOtpSent(email.trim());
-
       } else {
-
-        Alert.alert(
-          'Error',
-          data.detail || 'Failed to send password reset email.'
-        );
-
+        alert(data.detail || "Failed to send OTP");
       }
-
     } catch (error) {
-
-      console.log(
-        'Forgot Password Error:',
-        error
-      );
-
-      Alert.alert(
-        'Connection Error',
-        'Cannot connect to backend.'
-      );
-
+      console.log("Forgot Password Error:", error);
+      alert("Cannot connect to backend");
     }
   };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>
-              Recover Account
-            </Text>
+            <Text style={styles.brandTitle}>Recover Account</Text>
 
             <Text style={styles.brandSubtitle}>
               Enter your registered email address below.
@@ -101,10 +65,7 @@ export default function ForgotPasswordScreen({ onNavigateBack,onOtpSent }) {
           </View>
 
           <View style={[styles.neumorphicOuter, styles.formSection]}>
-
-            <Text style={styles.inputLabel}>
-              Email Address
-            </Text>
+            <Text style={styles.inputLabel}>Email Address</Text>
 
             <View style={styles.neumorphicInner}>
               <TextInput
@@ -132,7 +93,7 @@ export default function ForgotPasswordScreen({ onNavigateBack,onOtpSent }) {
               <Text
                 style={[
                   styles.buttonText,
-                  isPressed && styles.buttonTextPressed
+                  isPressed && styles.buttonTextPressed,
                 ]}
               >
                 Send Reset Email
@@ -140,27 +101,21 @@ export default function ForgotPasswordScreen({ onNavigateBack,onOtpSent }) {
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
-              <TouchableOpacity
-                onPress={onNavigateBack}
-              >
-                <Text style={styles.linkText}>
-                  ← Back to Login
-                </Text>
+              <TouchableOpacity onPress={onNavigateBack}>
+                <Text style={styles.linkText}>← Back to Login</Text>
               </TouchableOpacity>
             </View>
-
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const baseColor = '#E0E5EC';
-const lightShadow = '#FFFFFF';
-const darkShadow = '#B8C4D2';
-const accentColor = '#00a3cc';
+const baseColor = "#E0E5EC";
+const lightShadow = "#FFFFFF";
+const darkShadow = "#B8C4D2";
+const accentColor = "#00a3cc";
 
 const styles = StyleSheet.create({
   container: {
@@ -170,26 +125,26 @@ const styles = StyleSheet.create({
 
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
 
   headerSection: {
     marginBottom: 35,
-    alignItems: 'center',
+    alignItems: "center",
   },
 
   brandTitle: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2D3748',
+    fontWeight: "bold",
+    color: "#2D3748",
   },
 
   brandSubtitle: {
     fontSize: 15,
-    color: '#718096',
+    color: "#718096",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   formSection: {
@@ -198,42 +153,42 @@ const styles = StyleSheet.create({
   },
 
   inputLabel: {
-    color: '#4A5568',
+    color: "#4A5568",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
     marginLeft: 4,
   },
 
   input: {
-    color: '#2D3748',
+    color: "#2D3748",
     paddingHorizontal: 16,
     paddingVertical: 15,
     fontSize: 16,
   },
 
   buttonText: {
-    color: '#2D3748',
+    color: "#2D3748",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   buttonTextPressed: {
-    color: '#718096',
+    color: "#718096",
   },
 
   footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 30,
   },
 
   linkText: {
     color: accentColor,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   neumorphicOuter: {
@@ -267,7 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 2,
     borderLeftWidth: 2,
     borderBottomWidth: 4,
@@ -283,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 3,
     borderLeftWidth: 3,
     borderBottomWidth: 1,

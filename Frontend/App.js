@@ -9,130 +9,127 @@ import {
   Platform,
 } from "react-native";
 
-// Onboarding & Auth Imports
+// Screens
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import SignUpScreen from "./src/screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
 import OtpScreen from "./src/screens/auth/OtpScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
+
 import StepOneScreen from "./src/screens/onboarding/StepOneScreen";
 import StepTwoScreen from "./src/screens/onboarding/StepTwoScreen";
 import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
 
-// Core Dashboard Panels
 import DashboardScreen from "./src/screens/main/DashboardScreen";
 import DietRecipesScreen from "./src/screens/main/DietRecipesScreen";
 import WorkoutScreen from "./src/screens/main/WorkoutScreen";
 import SettingsScreen from "./src/screens/main/SettingsScreen";
 
 export default function App() {
-  // Navigation states: 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
+  // ---------------- STATE ----------------
   const [currentScreen, setCurrentScreen] = useState("LOGIN");
   const [activeTab, setActiveTab] = useState("DASHBOARD");
-  const [userId, setUserId] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [resetEmail, setResetEmail] = useState("");
   const [profileData, setProfileData] = useState({});
 
+  // ---------------- NAVIGATION ----------------
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case "LOGIN":
+        return (
+          <LoginScreen
+            onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
+            onLoginSuccess={(user_id) => {
+              setCurrentUserId(user_id);
+              setCurrentScreen("DASHBOARD");
+            }}
+            onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
+          />
+        );
 
-  // AUTH STATE MACHINE ROUTING
-  if (currentScreen === "LOGIN") {
-    return (
-      <LoginScreen
-        onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
-        onLoginSuccess={() => setCurrentScreen("DASHBOARD")}
-        onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
-      />
-    );
-  }
-  if (currentScreen === "SIGNUP") {
-    return (
-      <SignUpScreen
-        onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(userId) => {
-          setUserId(userId);
-          setCurrentScreen("STEP_ONE");
-        }}
-      />
-    );
-  }
+      case "SIGNUP":
+        return (
+          <SignUpScreen
+            onNavigateToLogin={() => setCurrentScreen("LOGIN")}
+            onSignUpSuccess={(user_id) => {
+              setUserId(user_id);
+              setCurrentUserId(user_id);
+              setCurrentScreen("STEP_ONE");
+            }}
+          />
+        );
 
-  if (currentScreen === "FORGOT_PASS") {
-    return (
-      <ForgotPasswordScreen
-        onNavigateBack={() => setCurrentScreen("LOGIN")}
-        onOtpSent={(email) => {
-          setResetEmail(email);
-          setCurrentScreen("OTP_ENTRY");
-        }}
-      />
-    );
-  }
-  if (currentScreen === "RESET_PASS") {
-  return (
-    <ResetPasswordScreen
-      email={resetEmail}
-      onResetSuccess={() => setCurrentScreen("LOGIN")}
-    />
-  );
-}
-  if (currentScreen === "OTP_ENTRY") {
-    return (
-      <OtpScreen
-        email={resetEmail}
-        onVerified={() => setCurrentScreen("RESET_PASS")}
-        onNavigateBack={() => setCurrentScreen("FORGOT_PASS")}
-      />
-    );
-  }
+      case "FORGOT_PASS":
+        return (
+          <ForgotPasswordScreen
+            onNavigateBack={() => setCurrentScreen("LOGIN")}
+            onOtpSent={(email) => {
+              setResetEmail(email);
+              setCurrentScreen("OTP_ENTRY");
+            }}
+          />
+        );
 
-  // ONBOARDING SCREEN INTERCHANGES
-  if (currentScreen === "STEP_ONE") {
-  return (
-    <StepOneScreen
-      onNext={(data) => {
-        setProfileData(data);
-        setCurrentScreen("STEP_TWO");
-      }}
-    />
-  );
-}
-  if (currentScreen === "STEP_TWO") {
-  return (
-    <StepTwoScreen
-      currentWeight={profileData.weight}
-      height={profileData.height}
-      onNext={(data) => {
-        setProfileData(prev => ({
-          ...prev,
-          ...data
-        }));
+      case "OTP_ENTRY":
+        return (
+          <OtpScreen
+            email={resetEmail}
+            onVerified={() => setCurrentScreen("RESET_PASS")}
+            onNavigateBack={() => setCurrentScreen("FORGOT_PASS")}
+          />
+        );
 
-        setCurrentScreen("STEP_THREE");
-      }}
-    />
-  );
-}
-  if (currentScreen === "STEP_THREE") {
-  return (
-    <StepThreeScreen
-      profileData={profileData}
-      userId={currentUserId}
-      onComplete={() => setCurrentScreen("DASHBOARD")}
-    />
-  );
-}
-  const [onBoardingData, setOnboardingData] = useState({
-    age: "",
-    currentWeight: "",
-    targetWeight: "",
-    height: "",
-    
-  
-});
+      case "RESET_PASS":
+        return (
+          <ResetPasswordScreen
+            email={resetEmail}
+            onResetSuccess={() => setCurrentScreen("LOGIN")}
+          />
+        );
 
-  // CORE APPLICATION DASHBOARD PANELS
-  return (
+      case "STEP_ONE":
+        return (
+          <StepOneScreen
+            onNext={(data) => {
+              setProfileData(data);
+              setCurrentScreen("STEP_TWO");
+            }}
+          />
+        );
+
+      case "STEP_TWO":
+        return (
+          <StepTwoScreen
+            currentWeight={profileData?.weight || ""}
+            height={profileData?.height || ""}
+            onNext={(data) => {
+              setProfileData((prev) => ({
+                ...prev,
+                ...data,
+              }));
+              setCurrentScreen("STEP_THREE");
+            }}
+          />
+        );
+
+      case "STEP_THREE":
+        return (
+          <StepThreeScreen
+            profileData={profileData}
+            userId={userId}
+            onComplete={() => setCurrentScreen("DASHBOARD")}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ---------------- DASHBOARD ----------------
+  const renderDashboard = () => (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#E0E5EC" />
 
@@ -172,11 +169,15 @@ export default function App() {
       </View>
     </SafeAreaView>
   );
+
+  // ---------------- MAIN RETURN ----------------
+  return currentScreen === "DASHBOARD" ? renderDashboard() : renderScreen();
 }
 
-
+// ---------------- STYLES ----------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#E0E5EC" },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -185,7 +186,9 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 15,
   },
+
   appName: { fontSize: 24, fontWeight: "bold", color: "#2D3748" },
+
   activeTabIndicator: {
     fontSize: 12,
     color: "#00a3cc",
@@ -196,7 +199,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  mainContent: { flex: 1, paddingHorizontal: 24, paddingTop: 10 },
+
+  mainContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+  },
+
   bottomTabBar: {
     flexDirection: "row",
     height: 70,
@@ -206,8 +215,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: Platform.OS === "ios" ? 15 : 0,
   },
-  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
-  tabItemText: { fontSize: 11, fontWeight: "bold", letterSpacing: 0.5 },
+
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  tabItemText: {
+    fontSize: 11,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+
   tabTextActive: { color: "#00a3cc" },
   tabTextInactive: { color: "#718096" },
 });

@@ -9,9 +9,37 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import API_URL from "../config/api";
 
-export default function StepThreeScreen({ onComplete }) {
+export default function StepThreeScreen({ profileData, userId, onComplete }) {
   const [isPressed, setIsPressed] = useState(false);
+
+  const saveOnboarding = async () => {
+    try {
+      const response = await fetch(`${API_URL}/save-onboarding`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          age: Number(profileData.age),
+          weight_kg: Number(profileData.weight),
+          height_cm: Number(profileData.height),
+          goal: profileData.selectedGoal,
+          goal_weight: Number(profileData.goalWeight),
+          target_date: profileData.targetDate,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("Saved:", data);
+
+      onComplete();
+    } catch (err) {
+      console.log("Save error:", err);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -41,7 +69,9 @@ export default function StepThreeScreen({ onComplete }) {
             activeOpacity={1}
             onPressIn={() => setIsPressed(true)}
             onPressOut={() => setIsPressed(false)}
-            onPress={onComplete}
+            onPress={async () => {
+              await saveOnboarding();
+            }}
             style={[
               isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn,
               { marginTop: 40 },

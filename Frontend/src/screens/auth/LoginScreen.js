@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,72 +8,62 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
-} from 'react-native';
+  ScrollView,
+} from "react-native";
+
+import API_URL from "../config/api";
 
 export default function LoginScreen({
   onNavigateToSignUp,
   onLoginSuccess,
-  onForgotPassword
+  onForgotPassword,
 }) {
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
 
   // LOGIN FUNCTION
   const handleLogin = async () => {
-    try {
+  try {
+    const response = await fetch(`${API_URL}/signin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
 
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/signin`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":"application/json"
-          },
-          body: JSON.stringify({
-            email,
-            password
-          })
-        }
-      );
+    const data = await response.json();
 
-      const data = await response.json();
+    console.log("LOGIN RESPONSE:", data);
 
-      console.log("Response:", data);
-
-      if(response.ok){
-        onLoginSuccess();
-        setCurrentUserId(response.user_id);
-      } else {
-        alert(data.detail || "Login failed");
-      }
-
-    } catch(error){
-      console.log(error);
-      alert("Cannot connect to backend");
+    if (response.ok) {
+      onLoginSuccess(data);
+    } else {
+      alert(data.detail || "Login failed");
     }
-  };
 
+  } catch (error) {
+    console.log("LOGIN ERROR:", error);
+    alert("Cannot connect to backend");
+  }
+};
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>
-              MacroSync
-            </Text>
+            <Text style={styles.brandTitle}>MacroSync</Text>
 
             <Text style={styles.brandSubtitle}>
-              Welcome back, Kaizer. Lock in na man!{"\n"}hanag pasundayag nimo oi
+              Welcome back, Kaizer. Lock in na man!{"\n"}hanag pasundayag nimo
+              oi
             </Text>
           </View>
 
@@ -81,7 +71,7 @@ export default function LoginScreen({
           <View style={[styles.neumorphicOuter, styles.formSection]}>
             <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.neumorphicInner}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
                 placeholderTextColor="#A0AAB8"
@@ -94,7 +84,7 @@ export default function LoginScreen({
 
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.neumorphicInner}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Enter your password"
                 placeholderTextColor="#A0AAB8"
@@ -106,19 +96,33 @@ export default function LoginScreen({
             </View>
 
             {/* Now wired to transition to your recovery workflow */}
-            <TouchableOpacity style={styles.forgotPassword} onPress={onForgotPassword}>
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={onForgotPassword}
+            >
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* Interactive Tactile Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onLoginSuccess}
-              style={isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn}
+              onPress={handleLogin}
+              style={
+                isPressed
+                  ? styles.neumorphicInnerBtn
+                  : styles.neumorphicOuterBtn
+              }
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Sign In</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  isPressed && styles.buttonTextPressed,
+                ]}
+              >
+                Sign In
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
@@ -128,7 +132,6 @@ export default function LoginScreen({
               </TouchableOpacity>
             </View>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -136,38 +139,38 @@ export default function LoginScreen({
 }
 
 // Light White Neumorphic Color Constants
-const baseColor = '#E0E5EC';    
-const lightShadow = '#FFFFFF';  
-const darkShadow = '#B8C4D2';   
-const accentColor = '#00a3cc';  
+const baseColor = "#E0E5EC";
+const lightShadow = "#FFFFFF";
+const darkShadow = "#B8C4D2";
+const accentColor = "#00a3cc";
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0E8F6', // Neumorphic background color
+    backgroundColor: "#E0E8F6", // Neumorphic background color
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
   headerSection: {
     marginBottom: 30,
-    alignItems: 'center',
-    width: '100%',
+    alignItems: "center",
+    width: "100%",
     paddingHorizontal: 10,
   },
   brandTitle: {
     fontSize: 38,
-    fontWeight: 'bold',
-    color: '#2D3748', 
+    fontWeight: "bold",
+    color: "#2D3748",
     letterSpacing: 1,
   },
   brandSubtitle: {
     fontSize: 15,
-    color: '#718096',
+    color: "#718096",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
   },
   formSection: {
@@ -175,56 +178,56 @@ const styles = StyleSheet.create({
     borderRadius: 28,
   },
   inputLabel: {
-    color: '#4A5568',
+    color: "#4A5568",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
     marginLeft: 4,
   },
   input: {
-    color: '#2D3748',
+    color: "#2D3748",
     paddingHorizontal: 16,
     paddingVertical: 15,
     fontSize: 16,
   },
   forgotPassword: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginBottom: 24,
     marginTop: 8,
   },
   forgotText: {
     color: accentColor,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   buttonText: {
-    color: '#2D3748',
+    color: "#2D3748",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     letterSpacing: 0.5,
   },
   buttonTextPressed: {
-    color: '#718096',
+    color: "#718096",
   },
   footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 30,
   },
   footerText: {
-    color: '#718096',
+    color: "#718096",
     fontSize: 14,
   },
   linkText: {
     color: accentColor,
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   /* --- LIGHT WHITE NEUMORPHIC STYLES --- */
-  
+
   neumorphicOuter: {
     backgroundColor: baseColor,
     borderTopWidth: 2,
@@ -235,7 +238,7 @@ const styles = StyleSheet.create({
     borderLeftColor: lightShadow,
     borderBottomColor: darkShadow,
     borderRightColor: darkShadow,
-    elevation: 4, 
+    elevation: 4,
   },
   neumorphicInner: {
     backgroundColor: baseColor,
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 2,
     borderLeftWidth: 2,
     borderBottomWidth: 4,
@@ -269,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 3,
     borderLeftWidth: 3,
     borderBottomWidth: 1,

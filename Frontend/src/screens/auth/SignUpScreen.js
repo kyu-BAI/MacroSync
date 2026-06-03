@@ -1,11 +1,42 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-
+import API_URL from '../config/api';
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
+
+
+  const handleSignup = async () => {
+  try {
+    const res = await fetch(
+      `${API_URL}/signup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    console.log("SIGNUP RESPONSE:", data);
+
+    if (res.ok) {
+      onSignUpSuccess(data.user_id);
+    } else {
+      alert(data.detail || "Signup failed");
+    }
+  } catch (err) {
+    console.log(err);
+    alert("Network error");
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -70,7 +101,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onSignUpSuccess}
+              onPress={handleSignup}
               style={[isPressed ? styles.neumorphicInnerBtn : styles.neumorphicOuterBtn, { marginTop: 10 }]}
             >
               <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>Get Started</Text>

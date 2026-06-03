@@ -48,17 +48,21 @@ export default function StepOneScreen({ onNext }) {
   }
 
   const handleNextStep = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
+  if (isLoading) return;
+  setIsLoading(true);
 
-    try {
-      await onNext?.();
-    } catch (err) {
-      console.log(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  try {
+    await onNext?.({
+      age,
+      weight,
+      height,
+    });
+  } catch (err) {
+    console.log(err);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
