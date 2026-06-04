@@ -189,6 +189,7 @@ export default function DashboardScreen({ onTabChange }) {
           activeOpacity={1}
           onPressIn={() => handlePressIn('chatbot')}
           onPressOut={handlePressOut}
+          onPress={() => onTabChange && onTabChange('CHATBOT')}
           style={[
             styles.chatbotFloatingButton,
             isPressedBtn === 'chatbot' ? styles.chatbotPressed : styles.chatbotUnpressed

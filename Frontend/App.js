@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { 
+  StyleSheet, 
+  View 
+} from 'react-native';
 
 // Onboarding & Auth Screen Components
 import LoginScreen from "./src/screens/auth/LoginScreen";
@@ -16,6 +19,7 @@ import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
 import DashboardScreen from "./src/screens/main/DashboardScreen";
 import DietRecipesScreen from "./src/screens/main/DietRecipesScreen";
 import WorkoutScreen from "./src/screens/main/WorkoutScreen";
+import ChatbotAIScreen from "./src/screens/main/ChatbotAIScreen";
 import SettingsScreen from "./src/screens/main/SettingsScreen";
 
 export default function App() {
@@ -109,6 +113,11 @@ export default function App() {
       )}
       {activeTab === 'DIET' && (
         <DietRecipesScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+        />
+      )}
+      {activeTab === 'CHATBOT' && (
+        <ChatbotAIScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
         />
       )}

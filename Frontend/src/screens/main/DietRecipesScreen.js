@@ -277,12 +277,13 @@ export default function DietRecipesScreen({ onTabChange }) {
         )}
       </ScrollView>
 
-      {/* --- FLOATING AI CHATBOT SYSTEM --- */}
+      {/* --- FLOATING AI CHATBOT SYSTEM (WIRED UP TOGGLE HUB) --- */}
       <View style={styles.floatingChatbotContainer}>
         <TouchableOpacity
           activeOpacity={1}
           onPressIn={() => handlePressIn('chatbot')}
           onPressOut={handlePressOut}
+          onPress={() => onTabChange && onTabChange('CHATBOT')}
           style={[styles.chatbotFloatingButton, isPressedBtn === 'chatbot' ? styles.chatbotPressed : styles.chatbotUnpressed]}
         >
           <BotMessageSquare color="#FFFFFF" size={26} strokeWidth={2.5} />
