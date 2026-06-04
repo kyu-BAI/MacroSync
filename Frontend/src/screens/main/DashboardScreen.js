@@ -9,11 +9,11 @@ import {
   Platform,
   Dimensions
 } from 'react-native';
-import { Camera, UtensilsCrossed, MessageSquare, Home, BarChart2, Settings } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings } from 'lucide-react-native';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ onTabChange }) {
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
   // --- MOCK DATA ---
@@ -61,7 +61,6 @@ export default function DashboardScreen() {
             <Text style={styles.subGreeting}>Goal: {goals.primaryGoal} • {goals.weeklyTarget}</Text>
           </View>
           
-          {/* Neumorphic Rounded Wrapper for Avatar */}
           <View style={styles.neuAvatarShadowDark}>
             <View style={styles.avatarGlass}>
               <Text style={styles.avatarText}>K</Text>
@@ -69,7 +68,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 1. NEUMORPHIC WEIGHT PROGRESS WIDGET (Big Ring Layout) */}
+        {/* 1. WEIGHT PROGRESS WIDGET */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Weight Tracking Dashboard</Text>
           <View style={styles.weightCardLayout}>
@@ -112,11 +111,10 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 2. NEUMORPHIC UNIFIED NUTRITION CARD (Big Ring Layout Matching Weight Trackers) */}
+        {/* 2. UNIFIED NUTRITION CARD */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Nutrition Overview</Text>
           <View style={styles.nutritionRow}>
-            {/* Left Column Large Calorie Tracker Ring */}
             <View style={styles.calorieColumn}>
               <View style={styles.calorieOuterRing}>
                 <View style={styles.calorieInnerCircle}>
@@ -126,7 +124,6 @@ export default function DashboardScreen() {
               </View>
             </View>
 
-            {/* Right Column Macro Bars */}
             <View style={styles.macroColumn}>
               {macros.map((macro, idx) => {
                 const pct = Math.min(macro.current / macro.target, 1);
@@ -146,7 +143,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* 3. NEUMORPHIC EXERCISE ANALYTICS */}
+        {/* 3. EXERCISE ANALYTICS */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Exercise Analytics</Text>
           
@@ -197,7 +194,7 @@ export default function DashboardScreen() {
             isPressedBtn === 'chatbot' ? styles.chatbotPressed : styles.chatbotUnpressed
           ]}
         >
-          <MessageSquare color="#FFFFFF" size={26} strokeWidth={2.5} />
+          <BotMessageSquare color="#FFFFFF" size={26} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -205,20 +202,28 @@ export default function DashboardScreen() {
       <View style={styles.navBarOuterEdge}>
         <View style={styles.navBarContentRow}>
           
-          <TouchableOpacity style={styles.navTabItem} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.navTabItem} 
+            activeOpacity={0.7}
+            onPress={() => onTabChange && onTabChange('DASHBOARD')}
+          >
             <Home color={logoGreen} size={22} strokeWidth={2.5} />
             <Text style={[styles.navTabText, { color: logoGreen }]}>Dashboard</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navTabItem} activeOpacity={0.7}>
-            <BarChart2 color="#7FA293" size={22} strokeWidth={2} />
+          <TouchableOpacity 
+            style={styles.navTabItem} 
+            activeOpacity={0.7}
+            onPress={() => onTabChange && onTabChange('DIET')}
+          >
+            <UtensilsCrossed color="#7FA293" size={22} strokeWidth={2.5} />
             <Text style={styles.navTabText}>Diet & Recipes</Text>
           </TouchableOpacity>
 
           {/* --- SCAN FOOD CENTER CAMERA PROTRUDING BUTTON --- */}
           <View style={styles.centerCameraContainer}>
             <TouchableOpacity
-              activeOpacity={1}
+              activeOpacity={0.8}
               onPressIn={() => handlePressIn('camera')}
               onPressOut={handlePressOut}
               style={[
@@ -230,13 +235,21 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.navTabItem} activeOpacity={0.7}>
-            <UtensilsCrossed color="#7FA293" size={22} strokeWidth={2} />
+          <TouchableOpacity 
+            style={styles.navTabItem} 
+            activeOpacity={0.7}
+            onPress={() => onTabChange && onTabChange('WORKOUT')}
+          >
+            <SportShoe color="#7FA293" size={22} strokeWidth={2.5} />
             <Text style={styles.navTabText}>Workout</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navTabItem} activeOpacity={0.7}>
-            <Settings color="#7FA293" size={22} strokeWidth={2} />
+          <TouchableOpacity 
+            style={styles.navTabItem} 
+            activeOpacity={0.7}
+            onPress={() => onTabChange && onTabChange('SETTINGS')}
+          >
+            <Settings color="#7FA293" size={22} strokeWidth={2.5} />
             <Text style={styles.navTabText}>Settings</Text>
           </TouchableOpacity>
 
@@ -247,397 +260,392 @@ export default function DashboardScreen() {
   );
 }
 
-// Unified High-Contrast Hybrid Neumorphic Theme Tokens
 const baseColor = '#F0F4F2';           
 const clearWhiteHighlight = '#FFFFFF';    
 const softGreenShadow = '#AEC2B7';      
-
-// Logo Branding Metrics
 const logoGreen = '#4EA685';        
 const logoDarkShadow = '#37745D';   
 const logoLightHighlight = '#65D8AD'; 
 
 const styles = StyleSheet.create({
-  fullscreenOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    width: screenWidth,
-    height: screenHeight,
+  fullscreenOverlay: { 
+    position: 'absolute', 
+    top: 0, 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    width: screenWidth, 
+    height: screenHeight, 
     backgroundColor: baseColor,
   },
-  container: {
+  container: { 
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
+  scrollContent: { 
+    paddingHorizontal: 20, 
     paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115, 
+    paddingBottom: 115,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
     marginBottom: 12, 
-    paddingHorizontal: 4,
+    paddingHorizontal: 4, 
     width: '100%',
   },
-  headerTextGroup: {
-    flex: 1,
+  headerTextGroup: { 
+    flex: 1, 
     paddingRight: 12,
   },
-  appName: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: logoGreen,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+  appName: { 
+    fontSize: 12, 
+    fontWeight: '900', 
+    color: logoGreen, 
+    textTransform: 'uppercase', 
+    letterSpacing: 2, 
     marginBottom: 2,
   },
-  greeting: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#21332A',
+  greeting: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: '#21332A', 
     letterSpacing: -0.5,
   },
-  subGreeting: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#556B60',
+  subGreeting: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: '#556B60', 
     marginTop: 2,
   },
-  neuAvatarShadowDark: {
-    borderRadius: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
+  neuAvatarShadowDark: { 
+    borderRadius: 24, 
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 4, height: 4 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 4, 
+    elevation: 3, 
+    borderTopWidth: 1.5, 
+    borderLeftWidth: 1.5, 
+    borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
   },
-  avatarGlass: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: baseColor,
-    alignItems: 'center',
+  avatarGlass: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: baseColor, 
+    alignItems: 'center', 
     justifyContent: 'center',
   },
-  avatarText: {
-    fontWeight: '900',
-    color: logoGreen,
+  avatarText: { 
+    fontWeight: '900', 
+    color: logoGreen, 
     fontSize: 16,
   },
   formCard: {
-    backgroundColor: baseColor,
+    backgroundColor: baseColor, 
     borderRadius: 32, 
-    padding: 18,
+    padding: 18, 
     marginBottom: 12, 
-    shadowColor: softGreenShadow,
+    shadowColor: softGreenShadow, 
     shadowOffset: { width: 8, height: 8 }, 
-    shadowOpacity: 1,
+    shadowOpacity: 1, 
     shadowRadius: 10, 
     elevation: 6,    
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
+    borderTopWidth: 1.5, 
+    borderLeftWidth: 1.5, 
+    borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
   },
-  cardTitle: {
-    fontSize: 11,
-    color: '#41544B',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-    fontWeight: '800',
+  cardTitle: { 
+    fontSize: 11, 
+    color: '#41544B', 
+    textTransform: 'uppercase', 
+    letterSpacing: 1.2, 
+    marginBottom: 12, 
+    fontWeight: '800', 
     marginLeft: 2,
   },
-  weightCardLayout: {
-    flexDirection: 'row',
+  weightCardLayout: { 
+    flexDirection: 'row', 
     alignItems: 'center',
   },
-  ringContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  ringContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
     marginRight: 18,
   },
-  // Unified, enlarged dimensions for the tracking dashboard ring layer (120px)
-  outerRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    shadowColor: logoGreen,
-    shadowOffset: { width: -2, height: -2 },
-    shadowOpacity: 0.1,
+  outerRing: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60, 
+    backgroundColor: baseColor, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#D4E2DC', 
+    shadowColor: logoGreen, 
+    shadowOffset: { width: -2, height: -2 }, 
+    shadowOpacity: 0.1, 
     shadowRadius: 3,
   },
-  innerCircle: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
+  innerCircle: { 
+    width: 106, 
+    height: 106, 
+    borderRadius: 53, 
     backgroundColor: baseColor, 
     borderWidth: 7, 
-    borderColor: logoGreen,
-    alignItems: 'center',
+    borderColor: logoGreen, 
+    alignItems: 'center', 
     justifyContent: 'center',
   },
-  percentageText: {
+  percentageText: { 
     fontSize: 24, 
-    fontWeight: '900',
+    fontWeight: '900', 
     color: '#1A2B23',
   },
-  subPercentageText: {
-    fontSize: 10,
-    color: '#556B60',
-    fontWeight: '800',
+  subPercentageText: { 
+    fontSize: 10, 
+    color: '#556B60', 
+    fontWeight: '800', 
     marginTop: 1,
   },
-  metricsContainer: {
+  metricsContainer: { 
     flex: 1,
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  row: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     alignItems: 'center',
   },
-  metricBox: {
+  metricBox: { 
     flex: 1,
   },
-  label: {
-    fontSize: 10,
-    color: '#556B60',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+  label: { 
+    fontSize: 10, 
+    color: '#556B60', 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5, 
+    marginBottom: 2, 
     fontWeight: '800',
   },
-  value: {
-    fontSize: 15,
-    fontWeight: '800',
+  value: { 
+    fontSize: 15, 
+    fontWeight: '800', 
     color: '#1A2B23',
   },
-  subValue: {
-    fontSize: 13,
-    fontWeight: '800',
+  subValue: { 
+    fontSize: 13, 
+    fontWeight: '800', 
     color: '#21332A',
   },
-  glassDivider: {
-    height: 1,
-    backgroundColor: '#D4E2DC',
+  glassDivider: { 
+    height: 1, 
+    backgroundColor: '#D4E2DC', 
     marginVertical: 10,
   },
-  nutritionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  nutritionRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
     width: '100%',
   },
-  calorieColumn: {
-    marginRight: 18,
+  calorieColumn: { 
+    marginRight: 18, 
     alignItems: 'center',
   },
-  // Expanded to match the weight tracking ring dimensions exactly (120px)
-  calorieOuterRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    shadowColor: logoGreen,
-    shadowOffset: { width: -3, height: -3 },
-    shadowOpacity: 0.1,
+  calorieOuterRing: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60, 
+    backgroundColor: baseColor, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#D4E2DC', 
+    shadowColor: logoGreen, 
+    shadowOffset: { width: -3, height: -3 }, 
+    shadowOpacity: 0.1, 
     shadowRadius: 3,
   },
-  calorieInnerCircle: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
+  calorieInnerCircle: { 
+    width: 106, 
+    height: 106, 
+    borderRadius: 53, 
+    backgroundColor: baseColor, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
     borderColor: '#D4E2DC',
   },
-  calorieBigText: {
+  calorieBigText: { 
     fontSize: 22, 
-    fontWeight: '900',
-    color: '#1A2B23',
+    fontWeight: '900', 
+    color: '#1A2B23', 
     letterSpacing: -0.5,
   },
-  calorieSubText: {
-    fontSize: 11,
-    color: '#556B60',
+  calorieSubText: { 
+    fontSize: 11, 
+    color: '#556B60', 
     fontWeight: '800',
   },
-  macroColumn: {
-    flex: 1,
+  macroColumn: { 
+    flex: 1, 
     justifyContent: 'center',
   },
-  macroRow: {
+  macroRow: { 
     marginBottom: 10,
   },
-  macroInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  macroInfo: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     marginBottom: 2,
   },
-  macroLabel: {
-    fontSize: 12,
-    fontWeight: '800',
+  macroLabel: { 
+    fontSize: 12, 
+    fontWeight: '800', 
     color: '#1A2B23',
   },
-  macroValue: {
-    fontSize: 11,
-    color: '#556B60',
+  macroValue: { 
+    fontSize: 11, 
+    color: '#556B60', 
     fontWeight: '700',
   },
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: '#D4E2DC',
-    borderRadius: 3,
+  progressBarTrack: { 
+    height: 6, 
+    backgroundColor: '#D4E2DC', 
+    borderRadius: 3, 
     overflow: 'hidden',
   },
-  progressBarFill: {
-    height: '100%',
+  progressBarFill: { 
+    height: '100%', 
     borderRadius: 3,
   },
-  exerciseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  exerciseRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
     width: '100%',
   },
-  exerciseMetricBox: {
+  exerciseMetricBox: { 
     flex: 1,
   },
-  exerciseValue: {
-    fontSize: 18,
-    fontWeight: '900',
+  exerciseValue: { 
+    fontSize: 18, 
+    fontWeight: '900', 
     color: '#1A2B23',
   },
-  weekBlocksContainer: {
-    flexDirection: 'row',
+  weekBlocksContainer: { 
+    flexDirection: 'row', 
     alignItems: 'center',
   },
-  weekDayBlock: {
-    width: 14,
-    height: 20,
-    borderRadius: 5,
+  weekDayBlock: { 
+    width: 14, 
+    height: 20, 
+    borderRadius: 5, 
     marginLeft: 5,
   },
-  floatingChatbotContainer: {
-    position: 'absolute',
+  floatingChatbotContainer: { 
+    position: 'absolute', 
     bottom: 104, 
-    right: 20,
+    right: 20, 
     zIndex: 99,
   },
-  chatbotFloatingButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
+  chatbotFloatingButton: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    alignItems: 'center', 
     justifyContent: 'center',
   },
-  chatbotUnpressed: {
-    backgroundColor: '#4EA685',
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 3, height: 4 },
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
+  chatbotUnpressed: { 
+    backgroundColor: '#4EA685', 
+    borderTopWidth: 1.5, 
+    borderLeftWidth: 1.5, 
+    borderTopColor: logoLightHighlight, 
+    borderLeftColor: logoLightHighlight, 
+    shadowColor: logoDarkShadow, 
+    shadowOffset: { width: 3, height: 4 }, 
+    shadowOpacity: 0.9, 
+    shadowRadius: 6, 
     elevation: 5,
   },
-  chatbotPressed: {
-    backgroundColor: '#3E836A',
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
+  chatbotPressed: { 
+    backgroundColor: '#3E836A', 
+    borderWidth: 1.5, 
+    borderColor: logoDarkShadow, 
     transform: [{ scale: 0.95 }],
   },
-  navBarOuterEdge: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  navBarOuterEdge: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
     height: 84, 
-    backgroundColor: baseColor,
-    borderTopWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
-    elevation: 16,
-    paddingHorizontal: 6,
-    paddingBottom: Platform.OS === 'ios' ? 18 : 2, 
+    backgroundColor: baseColor, 
+    borderTopWidth: 1.5, 
+    borderTopColor: clearWhiteHighlight, 
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 0, height: -6 }, 
+    shadowOpacity: 0.7, 
+    shadowRadius: 10, 
+    elevation: 16, 
+    paddingHorizontal: 6, 
+    paddingBottom: Platform.OS === 'ios' ? 18 : 2,
   },
-  navBarContentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    height: '100%',
+  navBarContentRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    height: '100%', 
     position: 'relative',
   },
-  navTabItem: {
+  navTabItem: { 
     flex: 1.1, 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', 
+    justifyContent: 'center', 
     paddingVertical: 6,
   },
-  navTabText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#7FA293',
-    marginTop: 4,
+  navTabText: { 
+    fontSize: 9, 
+    fontWeight: '800', 
+    color: '#7FA293', 
+    marginTop: 4, 
     textAlign: 'center',
   },
-  centerCameraContainer: {
-    position: 'relative',
-    width: 68,
-    height: '100%',
-    alignItems: 'center',
+  centerCameraContainer: { 
+    position: 'relative', 
+    width: 68, 
+    height: '100%', 
+    alignItems: 'center', 
     justifyContent: 'center',
   },
-  cameraCircleButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: -20, 
+  cameraCircleButton: { 
+    width: 62, 
+    height: 62, 
+    borderRadius: 31, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    position: 'absolute', 
+    top: -20,
   },
-  cameraUnpressed: {
-    backgroundColor: '#4EA685',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
+  cameraUnpressed: { 
+    backgroundColor: '#4EA685', 
+    borderTopWidth: 2, 
+    borderLeftWidth: 2, 
+    borderTopColor: logoLightHighlight, 
+    borderLeftColor: logoLightHighlight, 
+    shadowColor: logoDarkShadow, 
+    shadowOffset: { width: 0, height: 6 }, 
+    shadowOpacity: 0.9, 
+    shadowRadius: 8, 
     elevation: 8,
   },
-  cameraPressed: {
-    backgroundColor: '#3E836A',
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    top: -18, 
+  cameraPressed: { 
+    backgroundColor: '#3E836A', 
+    borderWidth: 1.5, 
+    borderColor: logoDarkShadow, 
+    top: -18,
   },
 });

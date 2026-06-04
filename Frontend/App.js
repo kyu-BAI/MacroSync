@@ -128,9 +128,6 @@ export default function App() {
       )}
     </View>
   );
-
-  // ---------------- MAIN RETURN ----------------
-  return currentScreen === "DASHBOARD" ? renderDashboard() : renderScreen();
 }
 
 // Uniform High-Contrast System Theme Setup Tokens

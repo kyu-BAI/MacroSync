@@ -35,10 +35,12 @@ export default function StepThreeScreen({ onComplete }) {
     if (!location.trim()) {
       Alert.alert(
         "Missing Location",
-        "Please specify your location or city to unlock accessible, budget-friendly meal suggestions[cite: 1]."
+        "Please specify your location or city to unlock accessible, budget-friendly meal suggestions."
       );
       return;
     }
+    
+    // Callback passes the user data cleanly to App.js without mutating backend code
     onComplete?.({
       location: location.trim(),
       allergies: allergiesText.trim(),
@@ -71,7 +73,7 @@ export default function StepThreeScreen({ onComplete }) {
           {/* MAIN FORM CARD */}
           <View style={styles.formCard}>
             
-            {/* LOCATION-BASED ACCESSIBILITY DISCOVERY INPUT[cite: 1] */}
+            {/* LOCATION INPUT */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Your Location / Area</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
@@ -87,7 +89,7 @@ export default function StepThreeScreen({ onComplete }) {
               </View>
             </View>
 
-            {/* ALLERGIES & RESTRICTIONS FREEFORM ENTRY[cite: 1] */}
+            {/* ALLERGIES FREEFORM ENTRY */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Allergies & Restrictions</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
@@ -103,7 +105,7 @@ export default function StepThreeScreen({ onComplete }) {
               </View>
             </View>
 
-            {/* DIETARY PREFERENCES FLEX-GRID MATRICES[cite: 1] */}
+            {/* DIETARY PREFERENCES FLEX-GRID MATRICES */}
             <Text style={[styles.inputLabel, { marginTop: 4 }]}>Dietary Preference</Text>
             <View style={styles.dietGrid}>
               {dietOptions.map((option) => {

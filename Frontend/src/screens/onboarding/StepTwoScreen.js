@@ -59,32 +59,6 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
     const heightInMeters = parseFloat(height) / 100;
     const projectedBmi = targetWeightNum / (heightInMeters * heightInMeters);
 
-    if (!heightInMeters) {
-      Alert.alert("Missing data", "Height is required.");
-      return;
-    }
-
-    if (!currentWeight || !height) {
-      Alert.alert("Missing data", "Body data not loaded from Step 1.");
-      return;
-    }
-
-    if (projectedBmi < 18.5) {
-      Alert.alert(
-        "Unsafe Target Weight",
-        `A goal weight of ${targetWeightNum}kg drops your BMI to ${projectedBmi.toFixed(1)} (Underweight). Please set a safer weight target.`,
-      );
-      return;
-    }
-
-    if (projectedBmi >= 30.0) {
-      Alert.alert(
-        "Unrealistic Target Weight",
-        `A goal weight of ${targetWeightNum}kg pushes your BMI to ${projectedBmi.toFixed(1)} (Obese). Let's aim for a healthier target.`,
-      );
-      return;
-    }
-
     // Pass chosen metrics upstream cleanly through navigation callback transitions
     onNext({
       activityLevel: selectedActivity,
