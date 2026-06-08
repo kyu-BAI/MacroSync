@@ -11,7 +11,8 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
 
@@ -30,11 +31,25 @@ export default function LoginScreen({
   const [isGooglePressed, setIsGooglePressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const showAlert = (message) => {
+    Alert.alert(
+      "Login Error",
+      message,
+      [{ text: "Acknowledge", fontWeight: '800' }]
+    );
+  };
+
   // STANDARD EMAIL/PASSWORD AUTHENTICATION FLOW
   const handleLogin = async () => {
+    // FRONT-END DEV BYPASS: Go directly to dashboard
+    console.log("FRONT-END DEV BYPASS: Skipping backend auth, routing to Dashboard...");
+    onLoginSuccess();
+    
+    /* 
+    // ORIGINAL BACKEND LOGIC (Keep for later reversion)
     if (isLoading) return;
     if (!email || !password) {
-      alert("Please enter both your email and password.");
+      showAlert("Please enter both your email and password.");
       return;
     }
 
@@ -60,14 +75,15 @@ export default function LoginScreen({
           setCurrentUserId(data.user_id || response.user_id);
         }
       } else {
-        alert(data.detail || "Incorrect email or password. Please try again.");
+        showAlert(data.detail || "Incorrect email or password. Please try again.");
       }
     } catch (error) {
       console.log("LOGIN ERROR:", error);
-      alert("Cannot connect to backend server. Check your network.");
+      showAlert("Cannot connect to backend server. Check your network.");
     } finally {
       setIsLoading(false);
     }
+    */
   };
 
   // GOOGLE OAUTH SECURITY AUTHENTICATION HANDLER
@@ -78,7 +94,7 @@ export default function LoginScreen({
       console.log("GOOGLE OAUTH INITIALIZED");
     } catch (error) {
       console.log("GOOGLE SIGN IN ERROR:", error);
-      alert("Failed to sign in with Google. Please try again.");
+      showAlert("Failed to sign in with Google. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -215,7 +231,7 @@ export default function LoginScreen({
                 <View style={styles.googleContentRow}>
                   {/* Fixed relative path jump parameter */}
                   <Image 
-                    source={require('../../../assets/Images/google.png')} 
+                    source={require('../../images/google.png')} 
                     style={styles.googleIconImage} 
                     resizeMode="contain"
                   />
@@ -236,6 +252,8 @@ export default function LoginScreen({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+
     </SafeAreaView>
   );
 }
@@ -454,4 +472,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
+
 });

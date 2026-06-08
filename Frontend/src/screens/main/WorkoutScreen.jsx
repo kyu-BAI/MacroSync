@@ -11,10 +11,12 @@ import {
   Alert
 } from 'react-native';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle } from 'lucide-react-native';
+import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function WorkoutScreen({ onTabChange }) {
+  const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState('All');
   
@@ -118,12 +120,12 @@ export default function WorkoutScreen({ onTabChange }) {
   };
 
   const handleNextStep = () => {
-    if (currentStepIndex < activeRoutine.tutorials.length - 1) {
+    if (currentStepIndex < activeRoutine?.tutorials?.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
       Alert.alert(
         "Workout Complete!",
-        `Awesome work Kaizer! You crushed "${activeRoutine.title}" and logged ${activeRoutine.caloriesBurn} kcal into MacroSync!`,
+        `Awesome work Kaizer! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
         [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
       );
     }
@@ -149,7 +151,7 @@ export default function WorkoutScreen({ onTabChange }) {
               activeOpacity={0.8}
               onPress={() => setActiveRoutine(null)}
             >
-              <ArrowLeft color="#4EA685" size={20} strokeWidth={2.5} />
+              <ArrowLeft color={logoGreen} size={20} strokeWidth={2.5} />
             </TouchableOpacity>
             <View style={styles.playerHeaderCenterText}>
               <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
@@ -163,7 +165,7 @@ export default function WorkoutScreen({ onTabChange }) {
             
             {/* ANIMATION COMPONENT PLACEHOLDER FRAME */}
             <View style={styles.animationPlaceholderFrame}>
-              <SportShoe color="#4EA685" size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
+              <SportShoe color={logoGreen} size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
               <View style={styles.liveActivityBadge}>
                 <View style={styles.pulseDot} />
                 <Text style={styles.liveBadgeText}>HOME TUTORIAL ACTIVE</Text>
@@ -231,7 +233,7 @@ export default function WorkoutScreen({ onTabChange }) {
             <View style={styles.header}>
               <View style={styles.headerTextGroup}>
                 <Text style={styles.appName}>MacroSync</Text>
-                <Text style={styles.greeting}>Home Workout Plan</Text>
+                <Text style={styles.greeting}>Basic Home Workout</Text>
                 <Text style={styles.subGreeting}>Zero-equipment exercises built for busy schedules and zero cost</Text>
               </View>
             </View>
@@ -251,7 +253,7 @@ export default function WorkoutScreen({ onTabChange }) {
                   >
                     <Text style={[
                       styles.filterChipText, 
-                      { color: selectedIntensity === tier ? '#FFFFFF' : '#41544B' }
+                      { color: selectedIntensity === tier ? '#FFFFFF' : '#21332A' }
                     ]}>
                       {tier}
                     </Text>
@@ -263,7 +265,9 @@ export default function WorkoutScreen({ onTabChange }) {
             {/* WORKOUT PLAN CARD LISTINGS */}
             <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
 
-            {filteredWorkouts.map((workout) => (
+            {filteredWorkouts.map((workout) => {
+              if (!workout) return null;
+              return (
               <View key={workout.id} style={styles.workoutFormCard}>
                 <View style={styles.workoutHeaderRow}>
                   <View style={styles.workoutTitleContainer}>
@@ -285,10 +289,10 @@ export default function WorkoutScreen({ onTabChange }) {
                   </View>
                   
                   <View style={styles.metricItemBox}>
-                    <Flame color="#C53030" size={14} style={styles.metricIconSpacer} />
+                    <Flame color="#E53E3E" size={14} style={styles.metricIconSpacer} />
                     <View>
                       <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                      <Text style={styles.metricTileValue}>{workout.caloriesBurn} kcal</Text>
+                      <Text style={styles.metricTileValue}>{workout?.caloriesBurn} kcal</Text>
                     </View>
                   </View>
 
@@ -296,7 +300,7 @@ export default function WorkoutScreen({ onTabChange }) {
                     <Trophy color="#D69E2E" size={14} style={styles.metricIconSpacer} />
                     <View>
                       <Text style={styles.metricTileLabel}>Intensity</Text>
-                      <Text style={styles.metricTileValue}>{workout.intensity}</Text>
+                      <Text style={styles.metricTileValue}>{workout?.intensity}</Text>
                     </View>
                   </View>
                 </View>
@@ -313,88 +317,27 @@ export default function WorkoutScreen({ onTabChange }) {
                   <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
                 </TouchableOpacity>
               </View>
-            ))}
+              );
+            })}
 
           </ScrollView>
 
           {/* --- FLOATING AI CHATBOT SYSTEM --- */}
-          <View style={styles.floatingChatbotContainer}>
-            <TouchableOpacity
-              activeOpacity={1}
-              onPressIn={() => handlePressIn('chatbot')}
-              onPressOut={handlePressOut}
-              onPress={() => onTabChange && onTabChange('CHATBOT')}
-              style={[
-                styles.chatbotFloatingButton,
-                isPressedBtn === 'chatbot' ? styles.chatbotPressed : styles.chatbotUnpressed
-              ]}
-            >
-              <BotMessageSquare color="#FFFFFF" size={26} strokeWidth={2.5} />
-            </TouchableOpacity>
-          </View>
+          <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
 
           {/* --- BOTTOM NAVIGATION BAR --- */}
-          <View style={styles.navBarOuterEdge}>
-            <View style={styles.navBarContentRow}>
-              
-              <TouchableOpacity 
-                style={styles.navTabItem} 
-                activeOpacity={0.7}
-                onPress={() => onTabChange && onTabChange('DASHBOARD')}
-              >
-                <Home color="#7FA293" size={22} strokeWidth={2.5} />
-                <Text style={styles.navTabText}>Dashboard</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.navTabItem} 
-                activeOpacity={0.7}
-                onPress={() => onTabChange && onTabChange('DIET')}
-              >
-                <UtensilsCrossed color="#7FA293" size={22} strokeWidth={2.5} />
-                <Text style={styles.navTabText}>Diet & Recipes</Text>
-              </TouchableOpacity>
-
-              {/* --- SCAN FOOD CENTER CAMERA PROTRUDING BUTTON --- */}
-              <View style={styles.centerCameraContainer}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPressIn={() => handlePressIn('camera')}
-                  onPressOut={handlePressOut}
-                  style={[
-                    styles.cameraCircleButton,
-                    isPressedBtn === 'camera' ? styles.cameraPressed : styles.cameraUnpressed
-                  ]}
-                >
-                  <Camera color="#FFFFFF" size={28} strokeWidth={2.5} />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.navTabItem} 
-                activeOpacity={0.7}
-                onPress={() => onTabChange && onTabChange('WORKOUT')}
-              >
-                <SportShoe color={logoGreen} size={22} strokeWidth={2.5} />
-                <Text style={[styles.navTabText, { color: logoGreen }]}>Workout</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.navTabItem} 
-                activeOpacity={0.7}
-                onPress={() => onTabChange && onTabChange('SETTINGS')}
-              >
-                <Settings color="#7FA293" size={22} strokeWidth={2.5} />
-                <Text style={styles.navTabText}>Settings</Text>
-              </TouchableOpacity>
-
-            </View>
-          </View>
         </>
       )}
     </View>
   );
 }
+
+           
+    
+      
+        
+   
+ 
 
 const baseColor = '#F0F4F2';           
 const clearWhiteHighlight = '#FFFFFF';    
@@ -403,7 +346,7 @@ const logoGreen = '#4EA685';
 const logoDarkShadow = '#37745D';   
 const logoLightHighlight = '#65D8AD'; 
 
-const styles = StyleSheet.create({
+const getStyles = () => StyleSheet.create({
   fullscreenOverlay: { 
     position: 'absolute', 
     top: 0, 
@@ -460,10 +403,10 @@ const styles = StyleSheet.create({
     padding: 18, 
     marginBottom: 16, 
     shadowColor: softGreenShadow, 
-    shadowOffset: { width: 6, height: 6 }, 
+    shadowOffset: { width: 4, height: 4 }, 
     shadowOpacity: 1, 
-    shadowRadius: 8, 
-    elevation: 4,    
+    shadowRadius: 5, 
+    elevation: 3,
     borderTopWidth: 1.5, 
     borderLeftWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
@@ -471,7 +414,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { 
     fontSize: 11, 
-    color: '#41544B', 
+    color: '#21332A', 
     textTransform: 'uppercase', 
     letterSpacing: 1.2, 
     marginBottom: 12, 
@@ -488,15 +431,27 @@ const styles = StyleSheet.create({
     borderRadius: 16, 
     marginRight: 8, 
     marginBottom: 8, 
-    borderWidth: 1, 
-    borderColor: '#D4E2DC',
+    backgroundColor: baseColor,
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 2, height: 2 }, 
+    shadowOpacity: 0.8, 
+    shadowRadius: 3, 
+    elevation: 2,
+    borderTopWidth: 1, 
+    borderLeftWidth: 1, 
+    borderTopColor: clearWhiteHighlight, 
+    borderLeftColor: clearWhiteHighlight,
   },
   filterChipInactive: { 
     backgroundColor: baseColor,
   },
   filterChipActive: { 
-    backgroundColor: logoGreen, 
-    borderColor: logoGreen,
+    backgroundColor: '#3E836A', 
+    borderTopColor: logoDarkShadow, 
+    borderLeftColor: logoDarkShadow,
+    borderWidth: 1,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   filterChipText: { 
     fontSize: 12, 
@@ -516,10 +471,10 @@ const styles = StyleSheet.create({
     padding: 16, 
     marginBottom: 14,
     shadowColor: softGreenShadow, 
-    shadowOffset: { width: 6, height: 6 }, 
+    shadowOffset: { width: 4, height: 4 }, 
     shadowOpacity: 1, 
-    shadowRadius: 8, 
-    elevation: 4,
+    shadowRadius: 5, 
+    elevation: 3,
     borderTopWidth: 1.5, 
     borderLeftWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
@@ -535,7 +490,7 @@ const styles = StyleSheet.create({
   workoutMainTitle: { 
     fontSize: 16, 
     fontWeight: '900', 
-    color: '#1A2B23', 
+    color: '#21332A', 
     marginBottom: 6, 
     lineHeight: 20,
   },
@@ -572,7 +527,7 @@ const styles = StyleSheet.create({
   metricTileValue: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1A2B23',
+    color: '#21332A',
     marginTop: 1,
   },
   startWorkoutActionButton: {
@@ -594,7 +549,7 @@ const styles = StyleSheet.create({
     right: 20, 
     zIndex: 99,
   },
-  chatbotFloatingButton: { 
+  chatbotFloatingButton: {
     width: 56, 
     height: 56, 
     borderRadius: 28, 
@@ -619,7 +574,7 @@ const styles = StyleSheet.create({
     borderColor: logoDarkShadow, 
     transform: [{ scale: 0.95 }],
   },
-  navBarOuterEdge: { 
+  navBarOuterEdge: {
     position: 'absolute', 
     bottom: 0, 
     left: 0, 
@@ -627,7 +582,7 @@ const styles = StyleSheet.create({
     height: 84, 
     backgroundColor: baseColor, 
     borderTopWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
+    borderTopColor: clearWhiteHighlight,
     shadowColor: softGreenShadow, 
     shadowOffset: { width: 0, height: -6 }, 
     shadowOpacity: 0.7, 
@@ -663,7 +618,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'center',
   },
-  cameraCircleButton: { 
+  cameraCircleButton: {
     width: 62, 
     height: 62, 
     borderRadius: 31, 
@@ -677,7 +632,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 2, 
     borderLeftWidth: 2, 
     borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
+    borderLeftColor: logoLightHighlight,
     shadowColor: logoDarkShadow, 
     shadowOffset: { width: 0, height: 6 }, 
     shadowOpacity: 0.9, 
@@ -713,14 +668,14 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 3, height: 3 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 4, 
     elevation: 3,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderTopColor: clearWhiteHighlight,
+    borderTopWidth: 1, 
+    borderLeftWidth: 1, 
+    borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
   },
   playerHeaderCenterText: {
@@ -746,19 +701,19 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor,
     borderRadius: 36,
     padding: 20,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 8, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 6,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 5, height: 5 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 6, 
+    elevation: 4,
+    borderTopWidth: 1.5, 
+    borderLeftWidth: 1.5, 
+    borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
   },
   animationPlaceholderFrame: {
     height: '42%',
-    backgroundColor: '#E6EFEA',
+    backgroundColor: '#E8F1EC',
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
@@ -787,19 +742,19 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#C53030',
+    backgroundColor: '#E53E3E',
     marginRight: 6,
   },
   liveBadgeText: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#37745D',
+    color: '#21332A',
     letterSpacing: 0.5,
   },
   playerExerciseTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: '#21332A',
     marginTop: 16,
     textAlign: 'center',
   },
@@ -812,11 +767,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     marginTop: 8,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 2,
   },
   targetMetricChipText: {
     fontSize: 12,
@@ -835,7 +785,7 @@ const styles = StyleSheet.create({
   instructionSectionTitleLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#41544B',
+    color: '#21332A',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
@@ -861,8 +811,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 16,
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 2, height: 2 }, 
+    shadowOpacity: 0.8, 
+    shadowRadius: 3, 
+    elevation: 2,
+    borderTopWidth: 1, 
+    borderLeftWidth: 1, 
+    borderTopColor: clearWhiteHighlight, 
+    borderLeftColor: clearWhiteHighlight,
   },
   playerSecondaryActionBtnText: {
     fontSize: 13,
@@ -876,11 +833,6 @@ const styles = StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 14,
     borderRadius: 16,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 5,
-    elevation: 3,
   },
   playerPrimaryActionBtnText: {
     fontSize: 13,

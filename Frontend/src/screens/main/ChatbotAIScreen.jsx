@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -9,56 +9,90 @@ import {
   StatusBar,
   Platform,
   Dimensions,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  Keyboard
 } from 'react-native';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User } from 'lucide-react-native';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function ChatbotAIScreen({ onTabChange }) {
+export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
   
-  // --- MOCK CONVERSATION HISTORY (Module 4 Profile-Aware Interaction) ---
+  // --- DYNAMIC AI GREETING ---
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: 'ai',
-      text: "Hi Kaizer! I'm your MacroSync AI assistant. Based on your onboarding profile, I'm tracking your goal to Gain Weight securely. Ask me anything about local recipes, adjustments to your meal plan, or your workout routine!",
-      time: '10:00 AM'
-    },
-    {
-      id: 2,
-      sender: 'user',
-      text: 'What should I eat if my calories are almost full but I still need more protein today?',
-      time: '10:01 AM'
-    },
-    {
-      id: 3,
-      sender: 'ai',
-      text: 'Since your remaining calorie margin is tight, you should avoid heavy carbs or fats. I suggest sourcing a pure lean protein option available in your local market—like boiled native egg whites or grilled chicken breast without oil. This fulfills your macro target safely without breaching your calorie ceiling!',
-      time: '10:02 AM'
+      text: `Hi ${userProfile?.name || 'there'}! I'm your MacroSync AI assistant. Ask me anything about local recipes, adjustments to your meal plan, or your workout routine!`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
 
-  const handleSendMessage = () => {
-    if (inputText.trim() === '') return;
+  const handleSendMessage = async () => {
+    if (inputText.trim() === '' || isLoading) return;
 
-    const newMessages = [
-      ...messages,
-      {
-        id: Date.now(),
-        sender: 'user',
-        text: inputText,
-        time: '10:03 AM'
-      }
-    ];
+    const userMessage = {
+      id: Date.now(),
+      sender: 'user',
+      text: inputText,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
 
-    setMessages(newMessages);
+    setMessages((prev) => [...prev, userMessage]);
+    const currentInput = inputText.toLowerCase();
     setInputText('');
+    setIsLoading(true);
+
+    // Simulate AI thinking delay of 1 second
+    setTimeout(() => {
+      let aiText = "That's a great question! As your MacroSync AI assistant, I recommend keeping your calorie intake consistent, logging your water daily, and staying active. Let me know if you want tips on specific foods or workouts!";
+
+      if (currentInput.includes('hello') || currentInput.includes('hi') || currentInput.includes('hey')) {
+        aiText = `Hello there! I'm here to help you sync your macros and keep your habits on track. What's on your mind today?`;
+      } else if (currentInput.includes('calorie') || currentInput.includes('macro') || currentInput.includes('nutrition') || currentInput.includes('protein')) {
+        aiText = "To optimize your macros, try aiming for a balance of 30% Protein, 45% Carbs, and 25% Fats. Make sure you log your meals using our AI scanner for precise calculations!";
+      } else if (currentInput.includes('exercise') || currentInput.includes('workout') || currentInput.includes('train') || currentInput.includes('gym')) {
+        aiText = "A solid workout plan combines aerobic activity with resistance training. For muscle building, prioritize progressive overload. Check out our Workout tab for pre-curated routines!";
+      } else if (currentInput.includes('diet') || currentInput.includes('recipe') || currentInput.includes('food') || currentInput.includes('eat')) {
+        aiText = "We have some amazing diet recipes in the Diet & Recipes tab! From high-protein salads to local favorites modified for healthy macros, there is a lot to choose from.";
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'ai',
+          text: aiText,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      setIsLoading(false);
+    }, 1000);
   };
 
   return (
@@ -76,7 +110,10 @@ export default function ChatbotAIScreen({ onTabChange }) {
 
       {/* KEYBOARD WRAPPER JUST FOR THE CONTENT REGION */}
       <KeyboardAvoidingView 
-        style={styles.keyboardContainer}
+        style={[
+          styles.keyboardContainer,
+          { marginBottom: keyboardVisible ? 0 : (Platform.OS === 'ios' ? 90 : 80) }
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
@@ -124,7 +161,37 @@ export default function ChatbotAIScreen({ onTabChange }) {
               </View>
             );
           })}
+          
+          {/* MOCK TYPING INDICATOR BUBBLE */}
+          {isLoading && (
+            <View style={[styles.messageRowFlex, styles.messageRowLeft]}>
+              <View style={styles.aiIconAvatarNeuBox}>
+                <BotMessageSquare color={logoGreen} size={16} strokeWidth={2.5} />
+              </View>
+              <View style={[styles.chatMessageFormCard, styles.aiMessageFormCard, { paddingVertical: 14, width: 60, alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color={logoGreen} />
+              </View>
+            </View>
+          )}
         </ScrollView>
+
+        {/* QUICK REPLY SUGGESTION CHIPS */}
+        {!isLoading && (
+          <View style={styles.suggestionsWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
+              {["What should I eat?", "Am I hitting my protein target?", "Cheap high-protein recipes", "Can I eat fast food today?"].map((chip, idx) => (
+                <TouchableOpacity 
+                  key={idx} 
+                  style={styles.suggestionChip}
+                  onPress={() => setInputText(chip)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.suggestionChipText}>{chip}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* CHAT INPUT BAR HUB (Slides fluidly when keyboard fires up) */}
         <View style={styles.chatInputFormCard}>
@@ -141,70 +208,19 @@ export default function ChatbotAIScreen({ onTabChange }) {
               style={styles.sendActionButton} 
               activeOpacity={0.8}
               onPress={handleSendMessage}
+              disabled={isLoading}
             >
-              <Send color="#FFFFFF" size={16} fill="#FFFFFF" />
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Send color="#FFFFFF" size={16} fill="#FFFFFF" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
 
-      {/* --- BOTTOM NAVIGATION BAR (100% UNTOUCHED & STATIC AT BASELINE) --- */}
-      <View style={styles.navBarOuterEdge}>
-        <View style={styles.navBarContentRow}>
-          
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('DASHBOARD')}
-          >
-            <Home color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Dashboard</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('DIET')}
-          >
-            <UtensilsCrossed color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Diet & Recipes</Text>
-          </TouchableOpacity>
-
-          {/* --- SCAN FOOD CENTER CAMERA PROTRUDING BUTTON --- */}
-          <View style={styles.centerCameraContainer}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPressIn={() => handlePressIn('camera')}
-              onPressOut={handlePressOut}
-              style={[
-                styles.cameraCircleButton,
-                isPressedBtn === 'camera' ? styles.cameraPressed : styles.cameraUnpressed
-              ]}
-            >
-              <Camera color="#FFFFFF" size={28} strokeWidth={2.5} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('WORKOUT')}
-          >
-            <SportShoe color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Workout</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('SETTINGS')}
-          >
-            <Settings color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Settings</Text>
-          </TouchableOpacity>
-
-        </View>
-      </View>
+      {/* --- BOTTOM NAVIGATION BAR --- */}
 
     </View>
   );
@@ -358,13 +374,39 @@ const styles = StyleSheet.create({
     marginTop: 4,
     alignSelf: 'flex-end',
   },
+  suggestionsWrapper: {
+    paddingVertical: 10,
+    backgroundColor: baseColor,
+  },
+  suggestionsScroll: {
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  suggestionChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  suggestionChipText: {
+    color: '#41544B',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   chatInputFormCard: {
     backgroundColor: baseColor,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: Platform.OS === 'ios' ? 16 : 10,
     marginTop: 6,
     shadowColor: softGreenShadow,
     shadowOffset: { width: 4, height: 4 },

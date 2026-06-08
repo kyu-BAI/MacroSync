@@ -39,33 +39,9 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
       return;
     }
 
-    try {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/update-password`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            password: newPassword,
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        Alert.alert("Success", "Password updated successfully.");
-        onResetSuccess();
-      } else {
-        Alert.alert("Error", data.detail || "Failed to update password.");
-      }
-    } catch (error) {
-      console.log(error);
-      Alert.alert("Error", "Unable to connect to backend.");
-    }
+    console.log("FRONT-END DEV BYPASS: Mocking password reset update success...");
+    Alert.alert("Success", "Password updated successfully.");
+    onResetSuccess();
   };
 
   return (

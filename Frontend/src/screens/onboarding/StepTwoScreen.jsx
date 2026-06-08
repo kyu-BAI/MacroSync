@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,7 +11,8 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -30,17 +31,10 @@ const CONFIG = {
   textMuted: '#7FA293',
   borderLight: '#D4E2DC',
   borderItem: '#E1E9E5',
-  bgPill: '#E4ECE8',
-  
-  // Custom Premium Error/Warning Colors
-  warningRed: '#C53030',
-  warningRedDark: '#9B2C2C',
-  warningRedText: '#742A2A',
-  warningRedBg: '#FFF5F5',
-  warningRedBorder: '#FED7D7'
+  bgPill: '#E4ECE8'
 };
 
-export default function StepTwoScreen({ onNext, currentWeight, height }) {
+export default function StepTwoScreen({ onNext, currentWeight, height, weightUnit }) {
   // --- Form Controls States ---
   const [selectedActivity, setSelectedActivity] = useState('moderate');
   const [selectedGoal, setSelectedGoal] = useState('muscle');
@@ -48,18 +42,23 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
   const [targetDate, setTargetDate] = useState('');
   
   // --- Unit & Modal Flow Interface States ---
-  const [goalWeightUnit, setGoalWeightUnit] = useState('kg'); // 'kg' | 'lbs'
+  const [goalWeightUnit, setGoalWeightUnit] = useState('kg');
   const [showCalendar, setShowCalendar] = useState(false);
   const [navDate, setNavDate] = useState(new Date());
 
-  // --- NEW: Premium Safety Warning Modal States ---
-  const [warningVisible, setWarningVisible] = useState(false);
-  const [warningTitle, setWarningTitle] = useState('');
-  const [warningMessage, setWarningMessage] = useState('');
+
 
   // --- Dispatch Handlers Interactivity ---
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Maintain Weight Auto-Fill Logic
+  useEffect(() => {
+    if (selectedGoal === 'maintain' && currentWeight) {
+      const displayWeight = goalWeightUnit === 'lbs' ? (currentWeight * 2.20462).toFixed(1) : currentWeight.toFixed(1);
+      setGoalWeight(displayWeight.toString());
+    }
+  }, [selectedGoal, goalWeightUnit, currentWeight]);
 
   // --- Static Structural Mappings Configuration Arrays ---
   const activityLevels = [
@@ -69,7 +68,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
   ];
 
   const goals = [
-    { id: 'muscle', title: 'Muscle Gain', icon: 'barbell-outline', tag: 'Hypertrophy' },
+    { id: 'muscle', title: 'Gain Weight', icon: 'barbell-outline', tag: 'Surplus' },
     { id: 'fatloss', title: 'Weight Loss', icon: 'trending-down-outline', tag: 'Deficit' },
     { id: 'maintain', title: 'Maintain Weight', icon: 'refresh-outline', tag: 'Balance' }
   ];
@@ -78,9 +77,11 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
   // LOCAL WARNING UTILITY DISPATCHER
   // ==========================================
   const triggerSafetyWarning = (title, message) => {
-    setWarningTitle(title);
-    setWarningMessage(message);
-    setWarningVisible(true);
+    Alert.alert(
+      title,
+      message,
+      [{ text: "Acknowledge", fontWeight: '800' }]
+    );
   };
 
   // ==========================================
@@ -97,6 +98,22 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
       return;
     }
 
+    // 1. Validate Date Format MM/DD/YYYY
+    const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
+    if (!dateRegex.test(targetDate.trim())) {
+      triggerSafetyWarning("Invalid Date", "Please enter the date in MM/DD/YYYY format.");
+      return;
+    }
+
+    // 2. Validate Date is in the future
+    const targetDateObj = new Date(targetDate.trim());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (targetDateObj < today) {
+      triggerSafetyWarning("Invalid Date", "Target date cannot be in the past.");
+      return;
+    }
+
     const enteredWeightNum = parseFloat(goalWeight);
     if (isNaN(enteredWeightNum) || enteredWeightNum <= 0) {
       triggerSafetyWarning("Invalid Input", "Please enter a realistic numeric weight calculation metric entry.");
@@ -105,6 +122,36 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
 
     // Dynamic conversion pipeline to baseline Metrics standard internally (kg)
     const targetWeightInKg = goalWeightUnit === 'lbs' ? enteredWeightNum * 0.45359237 : enteredWeightNum;
+
+    // 3. Validate Goal Logic (Loss vs Gain vs Maintain)
+    if (selectedGoal === 'fatloss' && targetWeightInKg >= currentWeight) {
+      triggerSafetyWarning("Goal Mismatch", "For weight loss, your target weight must be lower than your current weight.");
+      return;
+    }
+    if (selectedGoal === 'muscle' && targetWeightInKg <= currentWeight) {
+      triggerSafetyWarning("Goal Mismatch", "For gaining weight, your target weight must be higher than your current weight.");
+      return;
+    }
+    if (selectedGoal === 'maintain' && Math.abs(targetWeightInKg - currentWeight) > 0.5) {
+      triggerSafetyWarning("Goal Mismatch", "For maintaining weight, your target weight must equal your current weight.");
+      return;
+    }
+
+    // 4. Safe Rate Validation
+    const weeksDiff = (targetDateObj - today) / (1000 * 60 * 60 * 24 * 7);
+    const weightDiffKg = Math.abs(targetWeightInKg - currentWeight);
+
+    if (weeksDiff > 0 && weightDiffKg > 0) {
+      const weeklyChange = weightDiffKg / weeksDiff;
+      if (selectedGoal === 'fatloss' && weeklyChange > 1.2) {
+        triggerSafetyWarning("Aggressive Goal", "This goal requires losing more than 1kg per week, which is medically unsafe. Please select a later date for sustainable results.");
+        return;
+      }
+      if (selectedGoal === 'muscle' && weeklyChange > 0.8) {
+        triggerSafetyWarning("Aggressive Goal", "This goal requires gaining more than 0.5kg per week, which is medically unsafe. Please select a later date for sustainable results.");
+        return;
+      }
+    }
 
     // --- Critical Clinical Medical Guard-Rail System Verification ---
     if (height) {
@@ -164,21 +211,37 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
       dayButtons.push(<View key={`empty-start-${i}`} style={styles.calendarDayEmpty} />);
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     for (let day = 1; day <= totalDays; day++) {
+      const cellDate = new Date(year, month, day);
+      cellDate.setHours(0, 0, 0, 0);
+      const isPast = cellDate < today;
+      const isToday = cellDate.getTime() === today.getTime();
+      
       const formattedDate = `${String(month + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
       const isSelected = targetDate === formattedDate;
 
       dayButtons.push(
         <TouchableOpacity
           key={`day-${day}`}
-          style={[styles.calendarDayButton, isSelected && styles.calendarDaySelected]}
-          disabled={isLoading}
+          style={[
+            styles.calendarDayButton, 
+            isSelected && styles.calendarDaySelected,
+            isToday && !isSelected && styles.calendarDayToday
+          ]}
+          disabled={isLoading || isPast}
           onPress={() => {
             setTargetDate(formattedDate);
             setShowCalendar(false);
           }}
         >
-          <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>
+          <Text style={[
+            styles.calendarDayText, 
+            isSelected && styles.calendarDayTextSelected,
+            isPast && styles.calendarDayTextPast
+          ]}>
             {day}
           </Text>
         </TouchableOpacity>
@@ -273,32 +336,18 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
               {/* TARGET WEIGHT FIELD LAYER AREA */}
               <View style={styles.inputGroup}>
                 <View style={styles.rowLabelWrapper}>
-                  <Text style={styles.inputLabel}>Target Goal Weight</Text>
-                  <View style={styles.togglePillContainer}>
-                    <TouchableOpacity 
-                      style={[styles.toggleBtn, goalWeightUnit === 'kg' && styles.toggleBtnActive]}
-                      onPress={() => setGoalWeightUnit('kg')}
-                    >
-                      <Text style={[styles.toggleBtnText, goalWeightUnit === 'kg' && styles.toggleBtnTextActive]}>kg</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.toggleBtn, goalWeightUnit === 'lbs' && styles.toggleBtnActive]}
-                      onPress={() => setGoalWeightUnit('lbs')}
-                    >
-                      <Text style={[styles.toggleBtnText, goalWeightUnit === 'lbs' && styles.toggleBtnTextActive]}>lbs</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.inputLabel}>Target Goal Weight (kg)</Text>
                 </View>
 
-                <View style={styles.neumorphicInputInset}>
+                <View style={[styles.neumorphicInputInset, selectedGoal === 'maintain' && styles.neumorphicInputDisabled]}>
                   <TextInput 
-                    style={styles.input}
-                    placeholder={goalWeightUnit === 'kg' ? "e.g. 70" : "e.g. 155"}
+                    style={[styles.input, selectedGoal === 'maintain' && styles.inputDisabled]}
+                    placeholder="Enter target weight in kg"
                     placeholderTextColor={CONFIG.textMuted}
                     value={goalWeight}
                     onChangeText={setGoalWeight}
                     keyboardType="numeric"
-                    editable={!isLoading}
+                    editable={!isLoading && selectedGoal !== 'maintain'}
                   />
                 </View>
               </View>
@@ -390,34 +439,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height }) {
         </View>
       </Modal>
 
-      {/* NEW HYBRID-NEUMORPHIC SAFETY COMPLIANCE WARNING SHEET OVERLAY */}
-      <Modal visible={warningVisible} transparent={true} animationType="fade" onRequestClose={() => setWarningVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.warningModalCard}>
-            
-            {/* Top-Right Dismiss Icon */}
-            <TouchableOpacity style={styles.warningCloseButton} onPress={() => setWarningVisible(false)}>
-              <Ionicons name="close" size={22} color={CONFIG.warningRedDark} />
-            </TouchableOpacity>
-            
-            <View style={styles.warningIconContainer}>
-              <Ionicons name="warning-outline" size={32} color={CONFIG.warningRed} />
-            </View>
 
-            <Text style={styles.warningTitleText}>{warningTitle}</Text>
-            <Text style={styles.warningMessageText}>{warningMessage}</Text>
-
-            <TouchableOpacity 
-              style={[styles.buttonBase, styles.warningDismissButton]} 
-              onPress={() => setWarningVisible(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonText}>Acknowledge</Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -638,6 +660,11 @@ const styles = StyleSheet.create({
     height: 50, 
     justifyContent: 'center',
   },
+  neumorphicInputDisabled: {
+    backgroundColor: '#E4ECE8',
+    borderColor: '#D4E2DC',
+    shadowOpacity: 0.1,
+  },
   fieldRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -651,6 +678,9 @@ const styles = StyleSheet.create({
     fontSize: 15, 
     fontWeight: '700' 
   },
+  inputDisabled: {
+    color: CONFIG.textMuted,
+  },
   calendarIconBtn: { 
     height: '100%', 
     justifyContent: 'center', 
@@ -659,13 +689,7 @@ const styles = StyleSheet.create({
   },
   
   // --- Overlay Overrides Custom Modal Sheets Systems ---
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(26, 32, 44, 0.4)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    paddingHorizontal: 20 
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalFormCard: {
     width: '100%',
     backgroundColor: CONFIG.baseColor,
@@ -750,60 +774,12 @@ const styles = StyleSheet.create({
     color: CONFIG.clearWhiteHighlight, 
     fontWeight: '900' 
   },
-
-  // --- STYLIZED PREMIUM SAFETY WARNING LAYOUT MATRIX ---
-  warningModalCard: {
-    width: '100%',
-    backgroundColor: CONFIG.baseColor,
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: CONFIG.warningRed,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: CONFIG.clearWhiteHighlight,
-    position: 'relative'
+  calendarDayToday: {
+    borderWidth: 1.5,
+    borderColor: CONFIG.logoGreen,
   },
-  warningCloseButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 10,
-    padding: 4
-  },
-  warningIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: CONFIG.warningRedBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: CONFIG.warningRedBorder,
-  },
-  warningTitleText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: CONFIG.warningRedDark,
-    marginBottom: 8,
-    textAlign: 'center'
-  },
-  warningMessageText: {
-    fontSize: 13,
-    color: CONFIG.warningRedText,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 19,
-    paddingHorizontal: 6,
-    marginBottom: 24,
-  },
-  warningDismissButton: {
-    backgroundColor: CONFIG.warningRed,
-    width: '100%',
+  calendarDayTextPast: {
+    color: '#AEC2B7',
   },
   
   // --- Operational Lower Buttons Triggers Elements Base Setup ---

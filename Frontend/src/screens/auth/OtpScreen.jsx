@@ -25,33 +25,9 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
       return;
     }
 
-    try {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/verify-reset-otp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            otp: otp.trim(),
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        Alert.alert("Success", "OTP verified successfully.");
-        onVerified(); // Moves cleanly to reset password screen
-      } else {
-        Alert.alert("Invalid OTP", data.detail || "Verification failed.");
-      }
-    } catch (error) {
-      console.log(error);
-      Alert.alert("Connection Error", "Unable to connect to backend.");
-    }
+    console.log("FRONT-END DEV BYPASS: Mocking OTP verification success...");
+    Alert.alert("Success", "OTP verified successfully.");
+    onVerified(); // Moves cleanly to reset password screen
   };
 
   return (

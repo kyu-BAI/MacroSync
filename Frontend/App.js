@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ThemeProvider } from './src/context/ThemeContext';
 import { 
   StyleSheet, 
   View 
@@ -15,6 +16,7 @@ import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
 import StepOneScreen from "./src/screens/onboarding/StepOneScreen";
 import StepTwoScreen from "./src/screens/onboarding/StepTwoScreen";
 import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
+import GeneratingPlanScreen from "./src/screens/onboarding/GeneratingPlanScreen";
 
 // Core Dashboard Main Screen Panels
 import DashboardScreen from "./src/screens/main/DashboardScreen";
@@ -22,15 +24,20 @@ import DietRecipesScreen from "./src/screens/main/DietRecipesScreen";
 import WorkoutScreen from "./src/screens/main/WorkoutScreen";
 import ChatbotAIScreen from "./src/screens/main/ChatbotAIScreen";
 import SettingsScreen from "./src/screens/main/SettingsScreen";
+import NotificationsScreen from "./src/screens/main/NotificationsScreen";
+import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
+import BottomNavBar from "./src/components/BottomNavBar";
 
-export default function App() {
+function MainApp() {
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
 
   // Core Account Identity State Management
   const [userId, setUserId] = useState(null);
+  const [userProfile, setUserProfile] = useState({ name: 'User', email: '' });
   const [resetEmail, setResetEmail] = useState('');
+  const [tempOnboardingData, setTempOnboardingData] = useState(null);
 
   // Collected Onboarding State Metrics to sync downstream
   const [userBaseline, setUserBaseline] = useState({
@@ -44,6 +51,72 @@ export default function App() {
     goalWeight: '',
     targetDate: '',
   });
+
+  // Module 5 Frontend State Sharing
+  const [dailyNutrition, setDailyNutrition] = useState({
+    targetCalories: 2500,
+    consumedCalories: 0,
+    protein: { current: 0, target: 150 },
+    carbs: { current: 0, target: 250 },
+    fats: { current: 0, target: 70 }
+  });
+
+  const [dailyExercise, setDailyExercise] = useState({
+    caloriesBurned: 320,
+    activeMinutes: 45,
+    recentExercise: 'Full Body HIIT - 45 mins'
+  });
+
+  // Persisted Dashboard Local State
+  const [globalLoggedWeight, setGlobalLoggedWeight] = useState(null);
+  const [globalConsumedGlasses, setGlobalConsumedGlasses] = useState(4);
+  const [globalLoggedMeals, setGlobalLoggedMeals] = useState([]);
+
+
+  const [notifications, setNotifications] = useState([
+    { 
+      id: 'n1', 
+      title: 'Hydration & Routine 💧', 
+      category: 'hydration', 
+      time: '10:00 AM', 
+      read: false, 
+      message: 'Automated reminder: Time to drink water! Staying hydrated is key to your healthy routine activities.' 
+    },
+    { 
+      id: 'n2', 
+      title: 'Workout Complete! 🔥', 
+      category: 'achievement', 
+      time: 'Yesterday', 
+      read: false, 
+      message: 'Motivational update: Awesome job! You burned 320 calories. Consistency in health monitoring is key.' 
+    },
+    { 
+      id: 'n3', 
+      title: 'Milestone Reached 🏃', 
+      category: 'achievement', 
+      time: 'Yesterday', 
+      read: true, 
+      message: 'You hit your calorie target and crushed your 10,000 step milestone! Great daily progress.' 
+    },
+    { 
+      id: 'n4', 
+      title: 'Dinner Logging 🍽️', 
+      category: 'meal', 
+      time: '2 Days Ago', 
+      read: true, 
+      message: 'Automated reminder: Don\'t forget to log your dinner macros to maintain diet tracking consistency.' 
+    },
+    { 
+      id: 'n5', 
+      title: 'Smart Goal Adjustment 🧠', 
+      category: 'workout', 
+      time: '3 Days Ago', 
+      read: true, 
+      message: 'Personalized notification: Adjusted based on your behavior and daily routines to improve long-term engagement and adherence.' 
+    }
+  ]);
+
+
 
   // ----------------------------------------------------
   // INITIAL INITIALIZATION STATE VIEWPORT CONTROL
@@ -74,8 +147,9 @@ export default function App() {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(newUserId) => {
+        onSignUpSuccess={(newUserId, newName, newEmail) => {
           setUserId(newUserId); 
+          setUserProfile({ name: newName || 'User', email: newEmail || '' });
           setCurrentScreen("STEP_ONE");
         }}
       />
@@ -145,7 +219,7 @@ export default function App() {
   if (currentScreen === 'STEP_THREE') {
     return (
       <StepThreeScreen 
-        onComplete={(finalPersonalizationData) => {
+        onSubmit={(finalPersonalizationData) => {
           // Unifies all compiled metrics for data payload synchronization
           const onboardingPayload = {
             userId: userId,
@@ -154,8 +228,33 @@ export default function App() {
             ...finalPersonalizationData
           };
           console.log("Complete Integrated Onboarding Payload Matrix:", onboardingPayload);
-          setCurrentScreen('DASHBOARD');
+          setTempOnboardingData(onboardingPayload);
+          setCurrentScreen('GENERATING_PLAN');
         }} 
+      />
+    );
+  }
+
+  if (currentScreen === 'GENERATING_PLAN') {
+    return (
+      <GeneratingPlanScreen
+        profileData={tempOnboardingData}
+        onComplete={(finalData) => {
+          if (finalData) {
+            setUserBaseline({
+              age: finalData.age || userBaseline.age,
+              weight: finalData.weight || userBaseline.weight,
+              height: finalData.height || userBaseline.height,
+            });
+            setUserGoals({
+              activityLevel: finalData.activityLevel || userGoals.activityLevel,
+              goal: finalData.goal || userGoals.goal,
+              goalWeight: finalData.goalWeight || userGoals.goalWeight,
+              targetDate: finalData.targetDate || userGoals.targetDate,
+            });
+          }
+          setCurrentScreen('DASHBOARD');
+        }}
       />
     );
   }
@@ -173,16 +272,51 @@ export default function App() {
       {activeTab === 'DASHBOARD' && (
         <DashboardScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
+          userBaseline={userBaseline}
+          userGoals={userGoals}
+          dailyNutrition={dailyNutrition}
+          dailyExercise={dailyExercise}
+          notifications={notifications}
+          setNotifications={setNotifications}
+          globalLoggedWeight={globalLoggedWeight}
+          setGlobalLoggedWeight={setGlobalLoggedWeight}
+          globalConsumedGlasses={globalConsumedGlasses}
+          setGlobalConsumedGlasses={setGlobalConsumedGlasses}
+          userProfile={userProfile}
         />
       )}
       {activeTab === 'DIET' && (
         <DietRecipesScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
+          dailyNutrition={dailyNutrition}
+          setDailyNutrition={setDailyNutrition}
+          guestBaseline={userBaseline}
+          guestGoals={userGoals}
+          globalLoggedMeals={globalLoggedMeals}
+          setGlobalLoggedMeals={setGlobalLoggedMeals}
         />
       )}
       {activeTab === 'CHATBOT' && (
         <ChatbotAIScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
+          userId={userId}
+          userProfile={userProfile}
+        />
+      )}
+      {activeTab === 'SCANNER' && (
+        <FoodScannerScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+          onLogMeal={(macros) => {
+            if (setDailyNutrition) {
+              setDailyNutrition(prev => ({
+                ...prev,
+                consumedCalories: prev.consumedCalories + macros.calories,
+                protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+                carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+                fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+              }));
+            }
+          }}
         />
       )}
       {activeTab === 'WORKOUT' && (
@@ -200,7 +334,19 @@ export default function App() {
             }
           }} 
           onLogout={handleLogoutRoutine} 
+          userProfile={userProfile}
+          setUserProfile={setUserProfile}
         />
+      )}
+      {activeTab === 'NOTIFICATIONS' && (
+        <NotificationsScreen 
+          onTabChange={(tab) => setActiveTab(tab)} 
+          notifications={notifications}
+          setNotifications={setNotifications}
+        />
+      )}
+      {['DASHBOARD', 'DIET', 'CHATBOT', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
+        <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} />
       )}
     </View>
   );
@@ -215,3 +361,11 @@ const styles = StyleSheet.create({
     backgroundColor: baseColor 
   }
 });
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <MainApp />
+    </ThemeProvider>
+  );
+}

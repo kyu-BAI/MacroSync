@@ -28,40 +28,12 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
       return;
     }
 
-    try {
-      console.log(
-        'Sending request to:',
-        `${process.env.EXPO_PUBLIC_API_URL}/forgot-password`
-      );
-
-      const response = await fetch(`${API}/forgot-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-        }),
-      });
-
-      const data = await response.json();
-      console.log('Forgot Password Response:', data);
-
-      if (response.ok) {
-        onOtpSent(email.trim());
-      } else {
-        Alert.alert(
-          'Error',
-          data.detail || 'Failed to send password reset email.'
-        );
-      }
-    } catch (error) {
-      console.log('Forgot Password Error:', error);
-      Alert.alert(
-        'Connection Error',
-        'Cannot connect to backend.'
-      );
-    }
+    console.log("FRONT-END DEV BYPASS: Mocking OTP code request success...");
+    Alert.alert(
+      "OTP Sent",
+      "A mockup verification OTP code (123456) has been dispatched to your email."
+    );
+    onOtpSent(email.trim());
   };
   return (
     <SafeAreaView style={styles.container}>

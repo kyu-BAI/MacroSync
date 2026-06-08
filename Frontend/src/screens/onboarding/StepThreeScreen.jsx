@@ -12,7 +12,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Modal,
-  FlatList
+  FlatList,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -44,10 +45,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [compiledAddress, setCompiledAddress] = useState('');
   const [compiledAllergiesText, setCompiledAllergiesText] = useState('');
 
-  // NEW: Custom Stylized Incomplete Warning Modal State
-  const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [errorModalTitle, setErrorModalTitle] = useState('');
-  const [errorModalMessage, setErrorModalMessage] = useState('');
+
 
   // References for layout tracking
   const flatListRef = useRef(null);
@@ -97,9 +95,11 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   };
 
   const triggerCustomError = (title, message) => {
-    setErrorModalTitle(title);
-    setErrorModalMessage(message);
-    setErrorModalVisible(true);
+    Alert.alert(
+      title,
+      message,
+      [{ text: "Acknowledge", fontWeight: '800' }]
+    );
   };
 
   const openPicker = async (type) => {
@@ -179,12 +179,11 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     if (isLoading || isLoadingExternal) return;
 
     // Premium UI Incomplete Check replacements
-    if (!region || !province || !city || !barangay) {
+    if (!region || !province || !city) {
       const missingFields = [];
       if (!region) missingFields.push("Region");
       if (!province) missingFields.push("Province");
       if (!city) missingFields.push("City/Municipality");
-      if (!barangay) missingFields.push("Barangay");
 
       triggerCustomError(
         "Incomplete Location",
@@ -202,7 +201,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       return;
     }
 
-    const compiledAddressString = `${barangay.name}, ${city.name}, ${province.name}, ${region.name}`;
+    const compiledAddressString = `${city.name}, ${province.name}, ${region.name}`;
     const activeAllergies = [...selectedAllergies.map(id => presetAllergens.find(p => p.id === id).title)];
     if (trimmedCustomAllergy) activeAllergies.push(trimmedCustomAllergy);
 
@@ -220,8 +219,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         structuredLocation: {
           region: region.name,
           province: province.name,
-          city: city.name,
-          barangay: barangay.name
+          city: city.name
         },
         allergies: [
           ...selectedAllergies,
@@ -295,21 +293,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
               </TouchableOpacity>
             </View>
 
-            {/* BARANGAY SELECTION INPUT BOX */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Barangay</Text>
-              <TouchableOpacity 
-                style={[styles.neumorphicInputInset, styles.selectorRow, !city && styles.disabledSelector]} 
-                onPress={() => openPicker('barangay')} 
-                activeOpacity={0.7}
-                disabled={!city}
-              >
-                <Text style={[styles.selectorValueText, !barangay && styles.placeholderText]}>
-                  {barangay ? barangay.name : "Select Barangay"}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={city ? logoGreen : '#AEC2B7'} />
-              </TouchableOpacity>
-            </View>
+
 
             {/* ALLERGENS SELECTION LAYERS */}
             <Text style={[styles.sectionInputLabel, { marginTop: 14 }]}>Allergies & Restrictions</Text>
@@ -452,33 +436,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         </View>
       </Modal>
 
-      {/* HYBRID-NEUMORPHIC ERROR/INCOMPLETE DIALOG MODAL SHEET */}
-      <Modal visible={errorModalVisible} transparent={true} animationType="fade" onRequestClose={() => setErrorModalVisible(false)}>
-        <View style={styles.confirmOverlay}>
-          <View style={styles.errorModalCard}>
-            
-            <TouchableOpacity style={styles.errorCloseButton} onPress={() => setErrorModalVisible(false)}>
-              <Ionicons name="close" size={22} color="#9B2C2C" />
-            </TouchableOpacity>
-            
-            <View style={styles.errorIconContainer}>
-              <Ionicons name="warning-outline" size={32} color="#C53030" />
-            </View>
 
-            <Text style={styles.errorTitle}>{errorModalTitle}</Text>
-            <Text style={styles.errorMessage}>{errorModalMessage}</Text>
-
-            <TouchableOpacity 
-              style={[styles.confirmButtonBase, styles.errorDismissButton]} 
-              onPress={() => setErrorModalVisible(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.errorDismissButtonText}>Acknowledge</Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -703,11 +661,7 @@ const styles = StyleSheet.create({
   },
 
   // --- POPUP SELECTOR INTERFACES ---
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(26, 32, 44, 0.4)', 
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   pickerModalCard: { 
     backgroundColor: baseColor, 
     borderTopLeftRadius: 32, 
@@ -716,6 +670,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24, 
     height: '75%', 
+    width: '100%',
   },
   pickerHeaderRow: { 
     flexDirection: 'row', 
@@ -861,62 +816,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // --- STYLIZED ERROR / INCOMPLETE SPECIFICATION CARDS ---
-  errorModalCard: {
-    width: '100%',
-    backgroundColor: baseColor,
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#C53030',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: clearWhiteHighlight,
-    position: 'relative'
-  },
-  errorCloseButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 10,
-    padding: 4
-  },
-  errorIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: '#FFF5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FED7D7',
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#9B2C2C',
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 13,
-    color: '#742A2A',
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 19,
-    paddingHorizontal: 6,
-    marginBottom: 24,
-  },
-  errorDismissButton: {
-    backgroundColor: '#C53030',
-    width: '100%',
-  },
-  errorDismissButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  }
 });

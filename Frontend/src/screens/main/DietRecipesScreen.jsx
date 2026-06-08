@@ -8,115 +8,191 @@ import {
   TextInput,
   StatusBar,
   Platform,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
-import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat } from 'lucide-react-native';
+import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
+import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function DietRecipesScreen({ onTabChange }) {
+export default function DietRecipesScreen({ onTabChange, dailyNutrition, setDailyNutrition, guestGoals, guestBaseline, globalLoggedMeals = [], setGlobalLoggedMeals }) {
+  // Use global persisted state so logged meals survive tab switches
+  const loggedMeals = globalLoggedMeals;
+  const setLoggedMeals = setGlobalLoggedMeals || (() => {});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('All');
-  const [selectedLocation, setSelectedLocation] = useState('All');
+  const [selectedLocation, setSelectedLocation] = useState('San Remigio');
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
+  
+  // New UI States
+  const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
 
-  const budgetTiers = ['All', 'Budget', 'Moderate', 'Premium'];
-  const locations = ['All', 'Local Markets', 'Supermarkets', 'Homemade'];
+  const budgetTiers = ['All', 'Under ₱100', '₱100 - ₱300', 'Over ₱300'];
+  const locations = ['San Remigio', 'Bogo City', 'Daanbantayan'];
+  
+  const [selectedAllergy, setSelectedAllergy] = useState('None');
+  const allergyList = ['None', 'Peanuts', 'Dairy', 'Gluten', 'Seafood'];
+
+  // --- DYNAMIC CALORIE & MACRO CALCULATOR ENGINE ---
+  let calculatedTargetCalories = 2000;
+  let targetProtein = 150;
+  let targetCarbs = 225;
+  let targetFats = 55;
+
+  if (guestBaseline?.weight && guestBaseline?.height && guestBaseline?.age && guestGoals?.activityLevel) {
+    const w = parseFloat(guestBaseline.weight);
+    const h = parseFloat(guestBaseline.height);
+    const a = parseInt(guestBaseline.age, 10);
+    
+    // Base BMR (Mifflin-St Jeor)
+    let bmr = (10 * w) + (6.25 * h) - (5 * a) + 5; 
+    
+    // Activity Multiplier
+    let multiplier = 1.2; // sedentary
+    if (guestGoals.activityLevel === 'moderate') multiplier = 1.55;
+    if (guestGoals.activityLevel === 'active') multiplier = 1.725;
+    
+    let tdee = bmr * multiplier;
+    
+    // Goal Adjustment
+    if (guestGoals.goal === 'muscle') tdee += 300;
+    if (guestGoals.goal === 'fatloss') tdee -= 500;
+    
+    calculatedTargetCalories = Math.round(tdee);
+    
+    // Calculate Macros (30% Protein, 45% Carbs, 25% Fats)
+    targetProtein = Math.round((calculatedTargetCalories * 0.30) / 4);
+    targetCarbs = Math.round((calculatedTargetCalories * 0.45) / 4);
+    targetFats = Math.round((calculatedTargetCalories * 0.25) / 9);
+  }
+
+  const targetCalories = calculatedTargetCalories;
+
+  // Dynamic Daily Plan derived from Target Macros
+  const dailyPlan = [
+    { id: 'dp1', mealType: 'Breakfast', title: 'Local Eggs & Pandesal', calories: Math.round(targetCalories * 0.25), protein: `${Math.round(targetProtein * 0.25)}g`, carbs: `${Math.round(targetCarbs * 0.25)}g`, fats: `${Math.round(targetFats * 0.25)}g`, time: '8:00 AM', icon: Coffee },
+    { id: 'dp2', mealType: 'Lunch', title: 'Chicken Adobo & Rice', calories: Math.round(targetCalories * 0.35), protein: `${Math.round(targetProtein * 0.35)}g`, carbs: `${Math.round(targetCarbs * 0.35)}g`, fats: `${Math.round(targetFats * 0.35)}g`, time: '12:30 PM', icon: Sun },
+    { id: 'dp3', mealType: 'Snack', title: 'Banana & Peanut Butter', calories: Math.round(targetCalories * 0.10), protein: `${Math.round(targetProtein * 0.10)}g`, carbs: `${Math.round(targetCarbs * 0.10)}g`, fats: `${Math.round(targetFats * 0.10)}g`, time: '4:00 PM', icon: Flame },
+    { id: 'dp4', mealType: 'Dinner', title: 'Grilled Fish & Veggies', calories: Math.round(targetCalories * 0.30), protein: `${Math.round(targetProtein * 0.30)}g`, carbs: `${Math.round(targetCarbs * 0.30)}g`, fats: `${Math.round(targetFats * 0.30)}g`, time: '7:30 PM', icon: Moon },
+  ];
 
   const recommendedRecipes = [
     {
       id: 1,
-      title: 'High-Protein Local Chicken & Eggs Rice Bowl',
-      calories: 780,
-      protein: '45g',
-      carbs: '85g',
-      fats: '22g',
-      time: '25 mins',
-      budget: 'Budget',
-      location: 'Local Markets',
+      title: 'Fresh Kinilaw na Tangigue',
+      calories: 220,
+      protein: '35g',
+      carbs: '8g',
+      fats: '5g',
+      time: '15 mins',
+      budget: '₱100 - ₱300',
+      location: 'San Remigio',
       ingredients: [
-        '200g Chicken Breast (sliced)',
-        '2 Native Eggs',
-        '1.5 cups White Rice (cooked)',
-        '3 cloves Garlic (minced)',
-        '2 tbsp Soy Sauce',
-        '1 tbsp Olive Oil',
-        'Green onions for garnish'
+        '250g Fresh Tangigue (cubed)',
+        '1/2 cup Coconut Vinegar (Tuba)',
+        '1 Red Onion (minced)',
+        'Ginger & Sili (chopped)',
+        'Kalamansi juice',
       ],
       instructions: [
-        'Heat olive oil in a pan over medium heat and sauté minced garlic until golden brown.',
-        'Add sliced chicken breast and cook thoroughly until edges turn golden (approx. 7-10 minutes).',
-        'Pour soy sauce over the chicken, stirring evenly to let it absorb into the meat.',
-        'Push chicken to the side of the pan, crack native eggs into the space, and scramble gently.',
-        'Assemble by placing warm rice in a bowl, layering chicken and eggs over the top, and garnishing with chopped green onions.'
-      ]
+        'Wash the fresh tangigue cubes quickly with a little vinegar, then drain to remove the fishy smell.',
+        'Mix the fish with coconut vinegar, kalamansi, minced ginger, onions, and chili.',
+        'Let it chill in the fridge for 10 minutes to lightly "cook" in the acid before serving.'
+      ],
+      allergies: ['Seafood']
     },
     {
       id: 2,
-      title: 'Premium Lean Beef Stir-Fry Analytics',
-      calories: 850,
-      protein: '55g',
-      carbs: '90g',
-      fats: '26g',
-      time: '20 mins',
-      budget: 'Premium',
-      location: 'Supermarkets',
+      title: 'Pintos (Sweet Corn Tamales)',
+      calories: 180,
+      protein: '4g',
+      carbs: '38g',
+      fats: '2g',
+      time: 'Ready to Eat',
+      budget: 'Under ₱100',
+      location: 'Bogo City',
       ingredients: [
-        '250g Sirloin Beef (thin strips)',
-        '1 cup Broccoli florets',
-        '1 Bell Pepper (sliced)',
-        '1.5 cups Brown Rice (cooked)',
-        '1 tbsp Sesame Oil',
-        '1 tbsp Oyster sauce',
-        '1 tsp Sesame seeds'
+        'Locally sourced Pintos (wrapped in corn husks)',
+        'Margarine or butter (often mixed in)'
       ],
       instructions: [
-        'Marinate thin sirloin strips with a teaspoon of soy sauce or standard seasoning for 5 minutes.',
-        'Heat sesame oil in a wok or deep skillet on high heat.',
-        'Add beef strips and sear quickly for 3-4 minutes, then set aside to keep tender.',
-        'Toss broccoli florets and bell peppers into the same pan, stir-frying for 3 minutes until crisp-tender.',
-        'Return beef to the pan, drizzle oyster sauce over the mixture, stir rapidly for 1 minute, and serve over warm brown rice topped with sesame seeds.'
-      ]
+        'Purchase freshly steamed Pintos from local Bogo City vendors.',
+        'Unwrap the corn husks and enjoy warm as an energy-dense pre-workout snack or breakfast.'
+      ],
+      allergies: ['Dairy']
     },
     {
       id: 3,
-      title: 'Budget Peanut Butter & Oats Mass Shake',
-      calories: 620,
-      protein: '25g',
-      carbs: '75g',
-      fats: '24g',
-      time: '5 mins',
-      budget: 'Budget',
-      location: 'Homemade',
+      title: 'Daanbantayan Sutukil Platter',
+      calories: 450,
+      protein: '50g',
+      carbs: '15g',
+      fats: '22g',
+      time: '30 mins',
+      budget: 'Over ₱300',
+      location: 'Daanbantayan',
       ingredients: [
-        '2 tbsp Peanut Butter',
-        '1/2 cup Local Oats',
-        '2 Medium Bananas',
-        '350ml Full Cream Milk',
-        '1 scoop Protein Powder (Optional)'
+        'Grilled Fish (Sugba)',
+        'Fish Soup (Tuwa)',
+        'Fresh Seafood Ceviche (Kilaw)',
+        'Local Seaweed (Guso)'
       ],
       instructions: [
-        'Place the local oats into a high-speed blender and pulse briefly until pulverized into a fine powder.',
-        'Add sliced bananas, full cream milk, and heavy tablespoons of smooth peanut butter into the blender jar.',
-        'Blend on high speed for 45-60 seconds until completely unified, creamy, and free of lumps.',
-        'Pour immediately into a shaker cup or glass and consume cold for rapid caloric tracking integration.'
-      ]
+        'Select fresh catch from the local Daanbantayan market.',
+        'Grill the main fish lightly over charcoal.',
+        'Prepare the head and bones in a clear, ginger-infused soup.',
+        'Serve together for a massive, high-protein, omega-rich feast.'
+      ],
+      allergies: ['Seafood']
     },
   ];
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
   const toggleExpandRecipe = (id) => setExpandedRecipeId(expandedRecipeId === id ? null : id);
+  
+    const handleLogMeal = (id, macros) => {
+    if (!loggedMeals.includes(id)) {
+      setLoggedMeals([...loggedMeals, id]);
+      if (setDailyNutrition && macros) {
+        setDailyNutrition(prev => ({
+          ...prev,
+          consumedCalories: prev.consumedCalories + macros.calories,
+          protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+          carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+          fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+        }));
+      }
+    } else {
+      setLoggedMeals(loggedMeals.filter(mealId => mealId !== id));
+      if (setDailyNutrition && macros) {
+        setDailyNutrition(prev => ({
+          ...prev,
+          consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
+          protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
+          carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
+          fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
+        }));
+      }
+    }
+  };
 
   const filteredRecipes = recommendedRecipes.filter(recipe => {
     const matchesBudget = selectedBudget === 'All' || recipe.budget === selectedBudget;
-    const matchesLocation = selectedLocation === 'All' || recipe.location === selectedLocation;
+    const matchesLocation = recipe.location === selectedLocation;
+    const matchesAllergy = selectedAllergy === 'None' || !(recipe.allergies || []).includes(selectedAllergy);
     const ingredientsString = recipe.ingredients.join(', ').toLowerCase();
     const matchesSearch = recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           ingredientsString.includes(searchQuery.toLowerCase());
-    return matchesBudget && matchesLocation && matchesSearch;
+    return matchesBudget && matchesLocation && matchesAllergy && matchesSearch;
   });
+
+  const consumedCalories = dailyNutrition?.consumedCalories || 0;
+  const isOverCalories = consumedCalories > targetCalories;
 
   return (
     <View style={styles.fullscreenOverlay}>
@@ -135,58 +211,220 @@ export default function DietRecipesScreen({ onTabChange }) {
           </View>
         </View>
 
-        <View style={styles.searchFormCard}>
-          <View style={styles.searchBarInnerContainer}>
-            <Search color="#556B60" size={20} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchTextInput}
-              placeholder="Search ingredients or meals..."
-              placeholderTextColor="#7FA293"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
+        {/* --- TAB SWITCHER --- */}
+        <View style={styles.tabSwitcherContainer}>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeDietTab === 'PLAN' ? styles.tabButtonActive : styles.tabButtonInactive]}
+            onPress={() => setActiveDietTab('PLAN')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, activeDietTab === 'PLAN' ? styles.tabTextActive : styles.tabTextInactive]}>Daily Plan</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeDietTab === 'EXPLORE' ? styles.tabButtonActive : styles.tabButtonInactive]}
+            onPress={() => setActiveDietTab('EXPLORE')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, activeDietTab === 'EXPLORE' ? styles.tabTextActive : styles.tabTextInactive]}>Explore Recipes</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.cardTitle}>Budget Preferences</Text>
-          <View style={styles.filterButtonGroupRow}>
-            {budgetTiers.map((tier) => (
-              <TouchableOpacity
-                key={tier}
-                style={[styles.filterChipButton, selectedBudget === tier ? styles.filterChipActive : styles.filterChipInactive]}
-                onPress={() => setSelectedBudget(tier)}
-              >
-                <Text style={[styles.filterChipText, { color: selectedBudget === tier ? '#FFFFFF' : '#41544B' }]}>{tier}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {activeDietTab === 'PLAN' ? (
+          /* --- TAB A: DAILY PLAN --- */
+          <View style={styles.dailyPlanSection}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginLeft: 4 }}>
+              <Text style={[styles.sectionLabelTitle, { marginBottom: 0, marginLeft: 0 }]}>Today's Target Macros</Text>
+              {isOverCalories && (
+                <View style={styles.warningBadge}>
+                  <Text style={styles.warningBadgeText}>Over Calories!</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.dailyProgressCard}>
+              <View style={styles.macroRowInline}>
+                <View style={styles.macroMiniBox}>
+                  <Text style={[styles.macroMiniVal, isOverCalories && { color: '#C53030' }]}>
+                    {consumedCalories} / {targetCalories}
+                  </Text>
+                  <Text style={styles.macroMiniLabel}>Kcal</Text>
+                </View>
+                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.protein?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Protein</Text></View>
+                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.carbs?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Carbs</Text></View>
+                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.fats?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Fats</Text></View>
+              </View>
+            </View>
 
-          <View style={styles.glassDivider} />
-
-          <Text style={styles.cardTitle}>Sourcing & Availability</Text>
-          <View style={styles.filterButtonGroupRow}>
-            {locations.map((loc) => (
-              <TouchableOpacity
-                key={loc}
-                style={[styles.filterChipButton, selectedLocation === loc ? styles.filterChipActive : styles.filterChipInactive]}
-                onPress={() => setSelectedLocation(loc)}
-              >
-                <Text style={[styles.filterChipText, { color: selectedLocation === loc ? '#FFFFFF' : '#41544B' }]}>{loc}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <Text style={styles.sectionLabelTitle}>Recommended Dynamic Recommendations</Text>
-        
-        {filteredRecipes.length === 0 ? (
-          <View style={styles.emptyFormCard}>
-            <Text style={styles.emptyStateText}>No recipes matched your exact targets.</Text>
+            <Text style={styles.sectionLabelTitle}>Your Scheduled Meals</Text>
+            <View style={styles.timelineContainer}>
+              {dailyPlan.map((meal, index) => {
+                const IconComponent = meal.icon;
+                const isLogged = loggedMeals.includes(meal.id);
+                return (
+                  <View key={meal.id} style={styles.timelineItem}>
+                    <View style={styles.timelineLineTrack}>
+                      <View style={[styles.timelineDot, isLogged && { backgroundColor: logoGreen, borderColor: logoGreen }]} />
+                      {index !== dailyPlan.length - 1 && <View style={[styles.timelineLine, isLogged && { backgroundColor: logoGreen }]} />}
+                    </View>
+                    <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
+                      <View style={styles.timelineHeader}>
+                        <View style={styles.mealTypeBadge}>
+                          <IconComponent color={isLogged ? '#FFFFFF' : logoGreen} size={12} />
+                          <Text style={[styles.mealTypeBadgeText, isLogged && { color: '#FFFFFF' }]}>{meal.mealType}</Text>
+                        </View>
+                        <Text style={styles.timelineTime}>{meal.time}</Text>
+                      </View>
+                      <Text style={[styles.timelineTitle, isLogged && { color: '#41544B' }]}>{meal.title}</Text>
+                      <View style={styles.timelineFooter}>
+                        <Text style={styles.timelineMacroText}>{meal.calories} kcal • {meal.protein} protein</Text>
+                        <TouchableOpacity 
+                          style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
+                          onPress={() => handleLogMeal(meal.id, { 
+                            calories: meal.calories, 
+                            protein: parseInt(meal.protein) || 0,
+                            carbs: parseInt(meal.carbs) || 0,
+                            fats: parseInt(meal.fats) || 0
+                          })}
+                          activeOpacity={0.7}
+                        >
+                          {isLogged ? (
+                            <>
+                              <CheckCircle2 color="#FFFFFF" size={12} />
+                              <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
+                            </>
+                          ) : (
+                            <>
+                              <PlusCircle color="#FFFFFF" size={12} />
+                              <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         ) : (
+          /* --- TAB B: EXPLORE RECIPES --- */
+          <View style={styles.exploreSection}>
+            <View style={styles.searchFormCard}>
+              <View style={styles.searchBarInnerContainer}>
+                <Search color="#556B60" size={20} style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchTextInput}
+                  placeholder="Search ingredients or meals..."
+                  placeholderTextColor="#7FA293"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formCard}>
+              <Text style={styles.cardTitle}>Budget Preferences</Text>
+              <View style={styles.filterButtonGroupRow}>
+                {budgetTiers.map((tier) => (
+                  <TouchableOpacity
+                    key={tier}
+                    style={[styles.filterChipButton, selectedBudget === tier ? styles.filterChipActive : styles.filterChipInactive]}
+                    onPress={() => setSelectedBudget(tier)}
+                  >
+                    <Text style={[styles.filterChipText, { color: selectedBudget === tier ? '#FFFFFF' : '#41544B' }]}>{tier}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.glassDivider} />
+
+              <Text style={styles.cardTitle}>📍 Local Food Radar</Text>
+
+              {/* STATIC VISUAL MAP REPLACEMENT */}
+              <View style={styles.staticMapContainer}>
+                {/* Decorative Map Background Elements */}
+                <View style={styles.mapCoastline} />
+                <View style={styles.mapRouteLine} />
+
+                {/* Daanbantayan Pin */}
+                <TouchableOpacity 
+                  style={[styles.mapPinContainer, { top: '15%', left: '42%' }]}
+                  onPress={() => setSelectedLocation('Daanbantayan')}
+                  activeOpacity={0.8}
+                >
+                  <MapPin 
+                    color={selectedLocation === 'Daanbantayan' ? logoGreen : '#7FA293'} 
+                    size={selectedLocation === 'Daanbantayan' ? 32 : 24} 
+                  />
+                  <Text style={[styles.mapPinLabel, selectedLocation === 'Daanbantayan' && styles.mapPinLabelActive]}>Daanbantayan</Text>
+                </TouchableOpacity>
+
+                {/* San Remigio Pin */}
+                <TouchableOpacity 
+                  style={[styles.mapPinContainer, { top: '45%', left: '15%' }]}
+                  onPress={() => setSelectedLocation('San Remigio')}
+                  activeOpacity={0.8}
+                >
+                  <MapPin 
+                    color={selectedLocation === 'San Remigio' ? logoGreen : '#7FA293'} 
+                    size={selectedLocation === 'San Remigio' ? 32 : 24} 
+                  />
+                  <Text style={[styles.mapPinLabel, selectedLocation === 'San Remigio' && styles.mapPinLabelActive]}>San Remigio</Text>
+                </TouchableOpacity>
+
+                {/* Bogo City Pin */}
+                <TouchableOpacity 
+                  style={[styles.mapPinContainer, { top: '65%', left: '55%' }]}
+                  onPress={() => setSelectedLocation('Bogo City')}
+                  activeOpacity={0.8}
+                >
+                  <MapPin 
+                    color={selectedLocation === 'Bogo City' ? logoGreen : '#7FA293'} 
+                    size={selectedLocation === 'Bogo City' ? 32 : 24} 
+                  />
+                  <Text style={[styles.mapPinLabel, selectedLocation === 'Bogo City' && styles.mapPinLabelActive]}>Bogo City</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.filterButtonGroupRow}>
+                {locations.map((loc) => (
+                  <TouchableOpacity
+                    key={loc}
+                    style={[styles.filterChipButton, selectedLocation === loc ? styles.filterChipActive : styles.filterChipInactive]}
+                    onPress={() => setSelectedLocation(loc)}
+                  >
+                    <Text style={[styles.filterChipText, { color: selectedLocation === loc ? '#FFFFFF' : '#41544B' }]}>{loc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.glassDivider} />
+
+              <Text style={styles.cardTitle}>Allergy Filtering</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                <View style={styles.filterButtonGroupRow}>
+                  {allergyList.map((allergy) => (
+                    <TouchableOpacity
+                      key={allergy}
+                      style={[styles.filterChipButton, selectedAllergy === allergy ? styles.filterChipActive : styles.filterChipInactive]}
+                      onPress={() => setSelectedAllergy(allergy)}
+                    >
+                      <Text style={[styles.filterChipText, { color: selectedAllergy === allergy ? '#FFFFFF' : '#41544B' }]}>{allergy}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            <Text style={styles.sectionLabelTitle}>Dynamic Recommendations</Text>
+            
+            {filteredRecipes.length === 0 ? (
+              <View style={styles.emptyFormCard}>
+                <Text style={styles.emptyStateText}>No recipes matched your exact targets.</Text>
+              </View>
+            ) : (
           filteredRecipes.map((recipe) => {
             const isExpanded = expandedRecipeId === recipe.id;
+            const isLogged = loggedMeals.includes(`recipe-${recipe.id}`);
             return (
               <View key={recipe.id} style={styles.recipeFormCard}>
                 <View style={styles.recipeHeaderRow}>
@@ -213,8 +451,8 @@ export default function DietRecipesScreen({ onTabChange }) {
 
                 <View style={styles.macroMetricsSummaryGrid}>
                   <View style={styles.macroTileBox}>
-                    <Text style={styles.macroTileValue}>{recipe.calories} kcal</Text>
-                    <Text style={styles.macroTileLabel}>Calories</Text>
+                    <Text style={styles.macroTileValue}>{recipe.calories}</Text>
+                    <Text style={styles.macroTileLabel}>Kcal</Text>
                   </View>
                   <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
                     <Text style={[styles.macroTileValue, { color: '#4EA685' }]}>{recipe.protein}</Text>
@@ -257,91 +495,57 @@ export default function DietRecipesScreen({ onTabChange }) {
 
                 <View style={styles.glassDivider} />
 
-                <TouchableOpacity 
-                  style={[styles.fullRecipeViewToggleButton, isExpanded && styles.fullRecipeViewToggleActiveButton]}
-                  activeOpacity={0.8}
-                  onPress={() => toggleExpandRecipe(recipe.id)}
-                >
-                  <Text style={[styles.fullRecipeToggleButtonText, isExpanded && { color: '#FFFFFF' }]}>
-                    {isExpanded ? 'Hide Recipe Details' : 'View Full Recipe & Cooking Steps'}
-                  </Text>
-                  {isExpanded ? (
-                    <ChevronUp color={isExpanded ? '#FFFFFF' : logoGreen} size={16} />
-                  ) : (
-                    <ChevronDown color={logoGreen} size={16} />
-                  )}
-                </TouchableOpacity>
+                <View style={styles.recipeFooterActions}>
+                  <TouchableOpacity 
+                    style={[styles.fullRecipeViewToggleButton, isExpanded && styles.fullRecipeViewToggleActiveButton]}
+                    activeOpacity={0.8}
+                    onPress={() => toggleExpandRecipe(recipe.id)}
+                  >
+                    <Text style={[styles.fullRecipeToggleButtonText, isExpanded && { color: '#FFFFFF' }]}>
+                      {isExpanded ? 'Hide Details' : 'View Recipe'}
+                    </Text>
+                    {isExpanded ? (
+                      <ChevronUp color={isExpanded ? '#FFFFFF' : logoGreen} size={16} />
+                    ) : (
+                      <ChevronDown color={logoGreen} size={16} />
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.logRecipeBtn, isLogged && styles.logRecipeBtnLogged]}
+                    onPress={() => handleLogMeal(`recipe-${recipe.id}`, {
+                      calories: recipe.calories,
+                      protein: parseInt(recipe.protein) || 0,
+                      carbs: parseInt(recipe.carbs) || 0,
+                      fats: parseInt(recipe.fats) || 0,
+                    })}
+                    activeOpacity={0.8}
+                  >
+                    {isLogged ? (
+                      <>
+                        <CheckCircle2 color="#FFFFFF" size={14} />
+                        <Text style={styles.logRecipeBtnTextLogged}>Logged</Text>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle color="#FFFFFF" size={14} />
+                        <Text style={styles.logRecipeBtnText}>Log Meal</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
         )}
+        </View>
+      )}
       </ScrollView>
 
       {/* --- FLOATING AI CHATBOT SYSTEM (WIRED UP TOGGLE HUB) --- */}
-      <View style={styles.floatingChatbotContainer}>
-        <TouchableOpacity
-          activeOpacity={1}
-          onPressIn={() => handlePressIn('chatbot')}
-          onPressOut={handlePressOut}
-          onPress={() => onTabChange && onTabChange('CHATBOT')}
-          style={[styles.chatbotFloatingButton, isPressedBtn === 'chatbot' ? styles.chatbotPressed : styles.chatbotUnpressed]}
-        >
-          <BotMessageSquare color="#FFFFFF" size={26} strokeWidth={2.5} />
-        </TouchableOpacity>
-      </View>
+      <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
 
       {/* --- BOTTOM NAVIGATION BAR --- */}
-      <View style={styles.navBarOuterEdge}>
-        <View style={styles.navBarContentRow}>
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('DASHBOARD')}
-          >
-            <Home color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Dashboard</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('DIET')}
-          >
-            <UtensilsCrossed color={logoGreen} size={22} strokeWidth={2.5} />
-            <Text style={[styles.navTabText, { color: logoGreen }]}>Diet & Recipes</Text>
-          </TouchableOpacity>
-
-          {/* --- SCAN FOOD CENTER CAMERA PROTRUDING BUTTON HUB --- */}
-          <View style={styles.centerCameraContainer}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPressIn={() => handlePressIn('camera')}
-              onPressOut={handlePressOut}
-              style={[styles.cameraCircleButton, isPressedBtn === 'camera' ? styles.cameraPressed : styles.cameraUnpressed]}
-            >
-              <Camera color="#FFFFFF" size={28} strokeWidth={2.5} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('WORKOUT')}
-          >
-            <SportShoe color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Workout</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.navTabItem} 
-            activeOpacity={0.7}
-            onPress={() => onTabChange && onTabChange('SETTINGS')}
-          >
-            <Settings color="#7FA293" size={22} strokeWidth={2.5} />
-            <Text style={styles.navTabText}>Settings</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </View>
   );
 }
@@ -626,6 +830,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   fullRecipeViewToggleButton: { 
+    flex: 1,
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
@@ -634,6 +839,7 @@ const styles = StyleSheet.create({
     borderRadius: 16, 
     borderWidth: 1, 
     borderColor: '#D4E2DC',
+    marginRight: 8,
   },
   fullRecipeViewToggleActiveButton: { 
     backgroundColor: '#4EA685', 
@@ -644,6 +850,234 @@ const styles = StyleSheet.create({
     fontWeight: '800', 
     color: '#4EA685', 
     marginRight: 6,
+  },
+  recipeFooterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logRecipeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: logoGreen,
+    paddingVertical: 12,
+    borderRadius: 16,
+    shadowColor: logoGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  logRecipeBtnLogged: {
+    backgroundColor: '#37745D',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  logRecipeBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  logRecipeBtnTextLogged: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  warningBadge: {
+    backgroundColor: '#FED7D7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  warningBadgeText: {
+    color: '#C53030',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  // --- TAB SWITCHER UI ---
+  tabSwitcherContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2ECE7',
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  tabButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#AEC2B7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabButtonInactive: {
+    backgroundColor: 'transparent',
+  },
+  tabTextActive: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: logoGreen,
+  },
+  tabTextInactive: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7FA293',
+  },
+  // --- DAILY PLAN UI ---
+  dailyProgressCard: {
+    backgroundColor: baseColor, 
+    borderRadius: 24, 
+    padding: 16, 
+    marginBottom: 24,
+    shadowColor: softGreenShadow, 
+    shadowOffset: { width: 4, height: 4 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 6, 
+    elevation: 3,
+    borderTopWidth: 1.5, 
+    borderLeftWidth: 1.5, 
+    borderTopColor: clearWhiteHighlight, 
+    borderLeftColor: clearWhiteHighlight,
+  },
+  macroRowInline: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  macroMiniBox: {
+    alignItems: 'center',
+  },
+  macroMiniVal: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#21332A',
+  },
+  macroMiniLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7FA293',
+    marginTop: 2,
+  },
+  timelineContainer: {
+    marginTop: 6,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  timelineLineTrack: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  timelineDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#7FA293',
+    backgroundColor: baseColor,
+    zIndex: 2,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#D4E2DC',
+    marginTop: -2,
+    marginBottom: -4,
+  },
+  timelineCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+  },
+  timelineCardLogged: {
+    backgroundColor: '#F4F7F5',
+    opacity: 0.8,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  mealTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF2EE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  mealTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: logoGreen,
+    marginLeft: 4,
+  },
+  timelineTime: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7FA293',
+  },
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A2B23',
+    marginBottom: 10,
+  },
+  timelineFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+    paddingTop: 10,
+  },
+  timelineMacroText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#556B60',
+  },
+  logMealMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: logoGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  logMealMiniBtnLogged: {
+    backgroundColor: '#7FA293',
+  },
+  logMealMiniBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 4,
+  },
+  logMealMiniBtnTextLogged: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 4,
   },
   emptyFormCard: { 
     padding: 32, 
@@ -756,5 +1190,54 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, 
     borderColor: logoDarkShadow, 
     top: -18,
+  },
+  staticMapContainer: {
+    height: 220,
+    width: '100%',
+    backgroundColor: '#E8F1EC', 
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+    marginBottom: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mapCoastline: {
+    position: 'absolute',
+    top: -50,
+    left: -20,
+    width: 200,
+    height: 300,
+    backgroundColor: '#D1E5DB',
+    borderRadius: 100,
+    opacity: 0.5,
+  },
+  mapRouteLine: {
+    position: 'absolute',
+    top: '20%',
+    left: '48%',
+    width: 2,
+    height: '60%',
+    backgroundColor: '#B5D3C5',
+    transform: [{ rotate: '15deg' }],
+  },
+  mapPinContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinLabel: {
+    fontSize: 10,
+    color: '#7FA293',
+    fontWeight: '600',
+    marginTop: 2,
+    textShadowColor: '#FFFFFF',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  mapPinLabelActive: {
+    color: '#41544B',
+    fontWeight: '800',
+    fontSize: 11,
   },
 });

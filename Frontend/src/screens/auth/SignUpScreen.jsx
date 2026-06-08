@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react-native';
 
@@ -26,34 +27,27 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 
 
   const handleSignup = async () => {
-  try {
-    const res = await fetch(
-      `${API_URL}/signup`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      }
-    );
-
-    const data = await res.json();
-
-    console.log("SIGNUP RESPONSE:", data);
-
-    if (res.ok) {
-      onSignUpSuccess(data.user_id);
-    } else {
-      alert(data.detail || "Signup failed");
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      Alert.alert(
+        "Registration Error",
+        "Please fill in all fields.",
+        [{ text: "Acknowledge", fontWeight: '800' }]
+      );
+      return;
     }
-  } catch (err) {
-    console.log(err);
-    alert("Network error");
-  }
-};
+    if (password.length < 8) {
+      Alert.alert(
+        "Registration Error",
+        "Password must be at least 8 characters.",
+        [{ text: "Acknowledge", fontWeight: '800' }]
+      );
+      return;
+    }
+    
+    console.log("FRONT-END DEV BYPASS: Mocking signup success...");
+    const mockUserId = "mock-user-" + Date.now();
+    onSignUpSuccess(mockUserId, name.trim(), email.trim());
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -78,14 +72,14 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           {/* Form Card Group - High Intensity Neumorphic Extrusion */}
           <View style={styles.formCard}>
             
-            {/* Full Name Field Group */}
+            {/* Username Field Group */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
+              <Text style={styles.inputLabel}>Username</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
                 <User color="#7FA293" size={20} style={styles.leadingIcon} />
                 <TextInput 
                   style={styles.input}
-                  placeholder="Enter your full name"
+                  placeholder="Enter your username"
                   placeholderTextColor="#7FA293"
                   value={name}
                   onChangeText={setName}
@@ -164,7 +158,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               activeOpacity={1}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={onSignUpSuccess}
+              onPress={() => onSignUpSuccess(null, name, email)}
               style={[
                 styles.buttonBase,
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed,

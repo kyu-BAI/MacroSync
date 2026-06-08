@@ -42,24 +42,32 @@ export default function StepOneScreen({ onNext }) {
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
-  
-  // --- Unit Tracking & Foot/Inches Sub-states ---
-  const [weightUnit, setWeightUnit] = useState('kg'); // 'kg' | 'lbs'
-  const [heightUnit, setHeightUnit] = useState('cm'); // 'cm' | 'ft'
   const [heightFt, setHeightFt] = useState('');
   const [heightIn, setHeightIn] = useState('');
+
+  // --- Measurement Units ---
+  const [weightUnit, setWeightUnit] = useState('kg');
+  const [heightUnit, setHeightUnit] = useState('ft');
 
   // --- UI Interactivity ---
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
+  
   // ==========================================
   // BUSINESS LOGIC & CONVERSIONS (DEBUG HUB)
   // ==========================================
+  const triggerSafetyWarning = (title, message) => {
+    Alert.alert(
+      title,
+      message,
+      [{ text: "Acknowledge", fontWeight: '800' }]
+    );
+  };
+
   const getWeightInKg = () => {
     const wNum = parseFloat(weight);
     if (isNaN(wNum) || wNum <= 0) return 0;
-    return weightUnit === 'lbs' ? wNum * 0.45359237 : wNum;
+    return weightUnit === 'kg' ? wNum : wNum * 0.45359237;
   };
 
   const getHeightInCm = () => {
@@ -69,55 +77,49 @@ export default function StepOneScreen({ onNext }) {
     } else {
       const ft = parseFloat(heightFt) || 0;
       const inch = parseFloat(heightIn) || 0;
-      if (ft <= 0 && inch <= 0) return 0;
-      return (ft * 12 + inch) * 2.54;
+      return (ft * 30.48) + (inch * 2.54);
     }
   };
 
-  // --- Dynamic BMI Engine ---
-  const calculateBmiMetrics = () => {
-    const wKg = getWeightInKg();
-    const hCm = getHeightInCm();
+  // BMI Real-Time Calculation Engine
+  const calculateBMI = () => {
+    const w = getWeightInKg();
+    const h = getHeightInCm();
+    
+    if (w > 0 && h > 0) {
+      const heightInMeters = h / 100;
+      const bmiValue = w / (heightInMeters * heightInMeters);
+      
+      let cat = 'Normal';
+      let col = COLORS.normal;
+      
+      if (bmiValue < 18.5) { cat = 'Underweight'; col = COLORS.underweight; }
+      else if (bmiValue >= 25 && bmiValue < 30) { cat = 'Overweight'; col = COLORS.overweight; }
+      else if (bmiValue >= 30) { cat = 'Obese'; col = COLORS.obese; }
 
-    if (wKg <= 0 || hCm <= 0) return { val: null, cat: '', col: COLORS.textMuted };
-
-    const hM = hCm / 100;
-    const rawBmi = wKg / (hM * hM);
-    const val = rawBmi.toFixed(1);
-
-    if (rawBmi < 18.5) {
-      return { val, cat: 'Underweight', col: COLORS.underweight };
-    } else if (rawBmi <= 24.9) {
-      return { val, cat: 'Normal Weight', col: COLORS.normal };
-    } else if (rawBmi <= 29.9) {
-      return { val, cat: 'Overweight', col: COLORS.overweight };
-    } else {
-      return { val, cat: 'Obese', col: COLORS.obese };
+      return { val: bmiValue.toFixed(1), cat, col };
     }
+    return { val: null, cat: '', col: COLORS.textMuted };
   };
 
-  const bmi = calculateBmiMetrics();
+  const bmi = calculateBMI();
 
   // ==========================================
-  // WORKFLOW SUBMISSION DISPATCHER
+  // DISPATCH CONTROLLER & VALIDATOR
   // ==========================================
   const handleNextStep = async () => {
     if (isLoading) return;
 
     if (!age.trim()) {
-      Alert.alert("Missing Metrics", "Please fill in your age before proceeding.");
+      triggerSafetyWarning("Missing Metrics", "Please fill in your age before proceeding.");
       return;
     }
-    if (heightUnit === 'cm' && !height.trim()) {
-      Alert.alert("Missing Metrics", "Please fill in your height measurement.");
-      return;
-    }
-    if (heightUnit === 'ft' && !heightFt.trim() && !heightIn.trim()) {
-      Alert.alert("Missing Metrics", "Please specify your height in feet and inches.");
+    if (!heightFt.trim() && !heightIn.trim()) {
+      triggerSafetyWarning("Missing Metrics", "Please specify your height in feet and inches.");
       return;
     }
     if (!weight.trim()) {
-      Alert.alert("Missing Metrics", "Please fill in your weight metric.");
+      triggerSafetyWarning("Missing Metrics", "Please fill in your weight metric.");
       return;
     }
 
@@ -125,7 +127,7 @@ export default function StepOneScreen({ onNext }) {
     const finalHeightCm = getHeightInCm();
 
     if (finalWeightKg <= 0 || finalHeightCm <= 0) {
-      Alert.alert("Invalid Metrics", "Please provide realistic metric measurement configurations.");
+      triggerSafetyWarning("Invalid Metrics", "Please provide realistic metric measurement configurations.");
       return;
     }
 
@@ -134,7 +136,9 @@ export default function StepOneScreen({ onNext }) {
       await onNext?.({
         age: parseInt(age, 10),
         weight: finalWeightKg,
-        height: finalHeightCm
+        height: finalHeightCm,
+        weightUnit: weightUnit,
+        startingWeight: parseFloat(weight)
       });
     } catch (err) {
       console.log("Navigation Execution Error: ", err);
@@ -170,7 +174,7 @@ export default function StepOneScreen({ onNext }) {
               <View style={styles.neumorphicInputInset}>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. 21"
+                  placeholder="Enter your age"
                   placeholderTextColor={COLORS.textPlaceholder}
                   value={age}
                   onChangeText={setAge}
@@ -180,90 +184,48 @@ export default function StepOneScreen({ onNext }) {
               </View>
             </View>
 
-            {/* FIELD BLOCK: HEIGHT WITH INTEGRATED SWITCH SWITCHERS */}
+            {/* FIELD BLOCK: HEIGHT */}
             <View style={styles.inputGroup}>
               <View style={styles.rowLabelWrapper}>
-                <Text style={styles.inputLabel}>Height</Text>
-                <View style={styles.togglePillContainer}>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, heightUnit === 'cm' && styles.toggleBtnActive]}
-                    onPress={() => setHeightUnit('cm')}
-                  >
-                    <Text style={[styles.toggleBtnText, heightUnit === 'cm' && styles.toggleBtnTextActive]}>cm</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, heightUnit === 'ft' && styles.toggleBtnActive]}
-                    onPress={() => setHeightUnit('ft')}
-                  >
-                    <Text style={[styles.toggleBtnText, heightUnit === 'ft' && styles.toggleBtnTextActive]}>ft/in</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.inputLabel}>Height (ft/in)</Text>
               </View>
 
-              {heightUnit === 'cm' ? (
-                <View style={styles.neumorphicInputInset}>
+              <View style={styles.splitInputRow}>
+                <View style={[styles.neumorphicInputInset, { flex: 1, marginRight: 10 }]}>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. 175"
+                    placeholder="ft"
                     placeholderTextColor={COLORS.textPlaceholder}
-                    value={height}
-                    onChangeText={setHeight}
+                    value={heightFt}
+                    onChangeText={setHeightFt}
                     keyboardType="numeric"
                     autoCorrect={false}
                   />
                 </View>
-              ) : (
-                <View style={styles.splitInputRow}>
-                  <View style={[styles.neumorphicInputInset, { flex: 1, marginRight: 10 }]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="ft"
-                      placeholderTextColor={COLORS.textPlaceholder}
-                      value={heightFt}
-                      onChangeText={setHeightFt}
-                      keyboardType="numeric"
-                      autoCorrect={false}
-                    />
-                  </View>
-                  <View style={[styles.neumorphicInputInset, { flex: 1 }]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="in"
-                      placeholderTextColor={COLORS.textPlaceholder}
-                      value={heightIn}
-                      onChangeText={setHeightIn}
-                      keyboardType="numeric"
-                      autoCorrect={false}
-                    />
-                  </View>
+                <View style={[styles.neumorphicInputInset, { flex: 1 }]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="in"
+                    placeholderTextColor={COLORS.textPlaceholder}
+                    value={heightIn}
+                    onChangeText={setHeightIn}
+                    keyboardType="numeric"
+                    autoCorrect={false}
+                  />
                 </View>
-              )}
+              </View>
             </View>
 
-            {/* FIELD BLOCK: WEIGHT WITH INTEGRATED SWITCH SWITCHERS */}
+            {/* FIELD BLOCK: WEIGHT */}
             <View style={styles.inputGroup}>
               <View style={styles.rowLabelWrapper}>
-                <Text style={styles.inputLabel}>Weight</Text>
-                <View style={styles.togglePillContainer}>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, weightUnit === 'kg' && styles.toggleBtnActive]}
-                    onPress={() => setWeightUnit('kg')}
-                  >
-                    <Text style={[styles.toggleBtnText, weightUnit === 'kg' && styles.toggleBtnTextActive]}>kg</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, weightUnit === 'lbs' && styles.toggleBtnActive]}
-                    onPress={() => setWeightUnit('lbs')}
-                  >
-                    <Text style={[styles.toggleBtnText, weightUnit === 'lbs' && styles.toggleBtnTextActive]}>lbs</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.inputLabel}>Weight (kg)</Text>
               </View>
               
               <View style={styles.neumorphicInputInset}>
                 <TextInput
                   style={styles.input}
-                  placeholder={weightUnit === 'kg' ? "e.g. 66" : "e.g. 145"}
+                  placeholder="Enter weight in kg"
                   placeholderTextColor={COLORS.textPlaceholder}
                   value={weight}
                   onChangeText={setWeight}
@@ -305,7 +267,6 @@ export default function StepOneScreen({ onNext }) {
                 {isLoading ? "Processing..." : "Continue"}
               </Text>
             </TouchableOpacity>
-
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
