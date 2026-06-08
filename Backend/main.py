@@ -70,6 +70,12 @@ class UpdatePasswordRequest(BaseModel):
     password: str
 
 
+class GoogleSignInRequest(BaseModel):
+    email: str
+    name: str
+    id_token: str = None
+
+
 class UpdateWeightData(BaseModel):
     user_id: str
     new_weight: float
@@ -150,6 +156,62 @@ def signin(user: UserLogin):
     except Exception as e:
         print("LOGIN ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------- GOOGLE SIGNIN (BYPASS/PRODUCTION) ----------------
+@app.post("/auth/google-signin")
+async def google_signin(data: GoogleSignInRequest):
+    try:
+        email = data.email.strip().lower()
+        name = data.name.strip()
+        
+        if not email or not name:
+            raise HTTPException(status_code=400, detail="Email and name are required")
+
+        # Check if user already exists in Supabase Auth via Admin Client
+        users = supabase.auth.admin.list_users()
+        user = next((u for u in users if u.email and u.email.lower() == email), None)
+
+        if not user:
+            # Create user in Supabase Auth using admin API to bypass confirmations
+            auth_user = supabase.auth.admin.create_user({
+                "email": email,
+                "email_confirm": True,
+                "user_metadata": {"full_name": name}
+            })
+            user_id = auth_user.user.id
+            
+            # Create corresponding user_profiles row
+            supabase.table("user_profiles").insert({
+                "id": user_id,
+                "email": email,
+                "name": name
+            }).execute()
+        else:
+            user_id = user.id
+            # Ensure the profile exists in user_profiles
+            profile_response = supabase.table("user_profiles").select("id").eq("id", user_id).execute()
+            if not profile_response.data:
+                supabase.table("user_profiles").insert({
+                    "id": user_id,
+                    "email": email,
+                    "name": name
+                }).execute()
+
+        return {
+            "success": True,
+            "user_id": user_id,
+            "user": {
+                "id": user_id,
+                "email": email,
+                "name": name
+            }
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("GOOGLE SIGNIN ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------- FORGOT PASSWORD (FIXED) ----------------
