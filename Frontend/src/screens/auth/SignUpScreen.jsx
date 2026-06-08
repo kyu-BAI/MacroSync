@@ -10,7 +10,8 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react-native';
 
@@ -21,6 +22,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [isPressed, setIsPressed] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false); // Tracks if the user interacted with the password field
+  const [isLoading, setIsLoading] = useState(false);
 
   // Evaluates validation rules for password length threshold
   const showPasswordWarning = passwordTouched && password.length > 0 && password.length < 8;
@@ -44,9 +46,46 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       return;
     }
     
-    console.log("FRONT-END DEV BYPASS: Mocking signup success...");
-    const mockUserId = "mock-user-" + Date.now();
-    onSignUpSuccess(mockUserId, name.trim(), email.trim());
+    if (isLoading) return;
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/signup`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            password: password.trim()
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        onSignUpSuccess(data.user_id, name.trim(), email.trim());
+      } else {
+        Alert.alert(
+          "Registration Error",
+          data.detail || "Failed to create account. Please try again.",
+          [{ text: "Acknowledge", fontWeight: '800' }]
+        );
+      }
+    } catch (error) {
+      console.log("SIGNUP ERROR:", error);
+      Alert.alert(
+        "Registration Error",
+        "Cannot connect to backend server. Make sure it is running and your IP is correct.",
+        [{ text: "Acknowledge", fontWeight: '800' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -156,18 +195,23 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
             {/* Get Started Button */}
             <TouchableOpacity 
               activeOpacity={1}
+              disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={() => onSignUpSuccess(null, name, email)}
+              onPress={handleSignup}
               style={[
                 styles.buttonBase,
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed,
                 { marginTop: 10 }
               ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-                Get Started
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                  Get Started
+                </Text>
+              )}
             </TouchableOpacity>
 
             {/* Footer Row */}

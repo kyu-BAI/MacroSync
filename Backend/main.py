@@ -4,11 +4,14 @@ from supabase import create_client
 from dotenv import load_dotenv
 import os
 import random
-from datetime import datetime, timedelta
+import json
+import time
+from datetime import datetime, timedelta, timezone
 import resend
 from google import genai
 from google.genai import types
 import base64
+
 
 load_dotenv()
 
@@ -30,7 +33,7 @@ if GEMINI_API_KEY:
 else:
     genai_client = None
 
-
+    
 # ---------------- MODELS ----------------
 class UserAuth(BaseModel):
     name: str
@@ -88,6 +91,12 @@ class RecipeRequest(BaseModel):
 
 class AnalyzeFoodRequest(BaseModel):
     image_base64: str
+
+
+class UpdateProfileRequest(BaseModel):
+    user_id: str
+    name: str
+    email: str
 
 
 # ---------------- SIGNUP ----------------
@@ -188,7 +197,10 @@ async def verify_reset_otp(data: VerifyOTPRequest):
     if record["otp"] != data.otp:
         raise HTTPException(400, "Invalid OTP")
 
-    if datetime.utcnow() > datetime.fromisoformat(record["expires_at"]):
+    expires_at = datetime.fromisoformat(record["expires_at"])
+    current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+
+    if current_time > expires_at:
         raise HTTPException(400, "OTP expired")
 
     return {"success": True}
@@ -201,7 +213,7 @@ async def update_password(data: UpdatePasswordRequest):
     try:
         users = supabase.auth.admin.list_users()
 
-        user = next((u for u in users if u.email == data.email), None)
+        user = next((u for u in users if u.email and u.email.lower() == data.email.lower()), None)
 
         if not user:
             raise HTTPException(404, "User not found")
@@ -218,6 +230,8 @@ async def update_password(data: UpdatePasswordRequest):
 
         return {"success": True, "message": "Password updated"}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("UPDATE PASSWORD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -226,15 +240,12 @@ async def update_password(data: UpdatePasswordRequest):
 # ---------------- ONBOARDING ----------------
 @app.post("/save-onboarding")
 async def save_onboarding(data: OnboardingData):
-    import json
-
     prefs = json.dumps({
         "unit": data.weight_unit,
         "starting_weight": data.starting_weight if data.starting_weight is not None else data.weight_kg
     })
 
-    supabase.table("user_profiles").upsert({
-        "id": data.user_id,
+    supabase.table("user_profiles").update({
         "age": data.age,
         "weight_kg": data.weight_kg,
         "height_cm": data.height_cm,
@@ -242,7 +253,7 @@ async def save_onboarding(data: OnboardingData):
         "goalWeight": data.goal_weight,
         "targetDate": data.target_date,
         "location": prefs
-    }).execute()
+    }).eq("id", data.user_id).execute()
 
     return {"success": True}
 
@@ -266,6 +277,19 @@ async def update_weight(data: UpdateWeightData):
         raise HTTPException(status_code=500, detail="Failed to log weight")
 
 
+@app.post("/update-profile")
+async def update_profile(data: UpdateProfileRequest):
+    try:
+        supabase.table("user_profiles").update({
+            "name": data.name,
+            "email": data.email
+        }).eq("id", data.user_id).execute()
+        return {"success": True}
+    except Exception as e:
+        print("UPDATE PROFILE ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to update profile info")
+
+
 # ---------------- DASHBOARD ANALYTICS ----------------
 @app.get("/dashboard/{user_id}")
 async def get_dashboard_data(user_id: str):
@@ -277,7 +301,6 @@ async def get_dashboard_data(user_id: str):
         user = user_result.data[0]
         
         # Parse Preferences from location JSON
-        import json
         prefs = {}
         if user.get("location"):
             try:
@@ -288,12 +311,12 @@ async def get_dashboard_data(user_id: str):
         unit = prefs.get("unit", "kg")
         
         # Raw kg values
-        current_weight_kg = user.get("weight_kg", 70)
-        starting_weight_kg = prefs.get("starting_weight", current_weight_kg)
-        target_weight_kg = user.get("goalWeight", 70)
+        current_weight_kg = user.get("weight_kg") or 70.0
+        starting_weight_kg = prefs.get("starting_weight") or current_weight_kg
+        target_weight_kg = user.get("goalWeight") or 70.0
         
         # Calculate dynamic macros based on goals using kg
-        goal = user.get("goal", "Maintain Weight")
+        goal = user.get("goal") or "Maintain Weight"
         
         if "Lose" in goal:
             target_calories = 1800
@@ -321,8 +344,6 @@ async def get_dashboard_data(user_id: str):
             starting_weight = round(starting_weight_kg, 1)
             target_weight = round(target_weight_kg, 1)
 
-        import random
-        
         # For fresh days, consumed calories starts at 0
         consumed_calories = 0
         
@@ -332,11 +353,14 @@ async def get_dashboard_data(user_id: str):
         return {
             "profile": {
                 "name": user.get("name", "User"),
+                "email": user.get("email", ""),
                 "goal": goal,
                 "currentWeight": current_weight,
                 "targetWeight": target_weight,
                 "startingWeight": starting_weight,
-                "unit": unit
+                "unit": unit,
+                "age": user.get("age"),
+                "height": user.get("height_cm")
             },
             "nutrition": {
                 "isPremium": is_premium,
@@ -361,12 +385,48 @@ async def get_dashboard_data(user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------- AI CHATBOT ----------------
-@app.post("/chat")
-async def chat_with_ai(data: ChatMessageRequest):
+# ---------------- AI HELPER FOR RETRIES & FALLBACKS ----------------
+def generate_gemini_content(prompt: str, image_bytes: bytes = None):
     if not genai_client:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
         
+    # Try multiple models to fallback under high demand
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    last_error = None
+    
+    for model_name in models_to_try:
+        for attempt in range(3):
+            try:
+                if image_bytes:
+                    contents = [
+                        types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
+                        prompt
+                    ]
+                else:
+                    contents = prompt
+                
+                response = genai_client.models.generate_content(
+                    model=model_name,
+                    contents=contents
+                )
+                return response
+            except Exception as e:
+                last_error = e
+                err_msg = str(e)
+                print(f"Gemini API attempt {attempt+1} failed on {model_name}: {err_msg}")
+                # Retry on typical transient failures
+                if any(x in err_msg.lower() for x in ["503", "429", "resource_exhausted", "unavailable", "overloaded", "demand", "limit"]):
+                    time.sleep(1 + attempt)
+                    continue
+                else:
+                    break # Structural failure, don't retry, go to fallback model
+                    
+    raise last_error
+
+
+# ---------------- AI CHATBOT ----------------
+@app.post("/chat")
+async def chat_with_ai(data: ChatMessageRequest):
     try:
         # Fetch user profile for context
         user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
@@ -377,10 +437,7 @@ async def chat_with_ai(data: ChatMessageRequest):
         
         full_prompt = context_prompt + f"User message: {data.message}"
         
-        response = genai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=full_prompt
-        )
+        response = generate_gemini_content(full_prompt)
         
         return {"response": response.text}
     except Exception as e:
@@ -391,9 +448,6 @@ async def chat_with_ai(data: ChatMessageRequest):
 # ---------------- AI RECIPE GENERATOR ----------------
 @app.post("/generate-recipe")
 async def generate_recipe(data: RecipeRequest):
-    if not genai_client:
-        raise HTTPException(status_code=500, detail="Gemini API key not configured")
-        
     try:
         prompt = f"""
         You are an expert local nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
@@ -416,12 +470,8 @@ async def generate_recipe(data: RecipeRequest):
         Do not include markdown code block formatting like ```json in the output, just the raw JSON object.
         """
         
-        response = genai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
+        response = generate_gemini_content(prompt)
         
-        import json
         recipe_json = response.text.strip()
         if recipe_json.startswith("```json"):
             recipe_json = recipe_json[7:-3]
@@ -444,9 +494,6 @@ async def generate_recipe(data: RecipeRequest):
 # ---------------- AI VISION FOOD ANALYSIS ----------------
 @app.post("/analyze-food")
 async def analyze_food(data: AnalyzeFoodRequest):
-    if not genai_client:
-        raise HTTPException(status_code=500, detail="Gemini API key not configured")
-        
     try:
         image_bytes = base64.b64decode(data.image_base64)
         
@@ -466,15 +513,8 @@ async def analyze_food(data: AnalyzeFoodRequest):
         Do not include markdown code block formatting like ```json in the output, just the raw JSON object.
         """
         
-        response = genai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
-                prompt
-            ]
-        )
+        response = generate_gemini_content(prompt, image_bytes=image_bytes)
         
-        import json
         result_json = response.text.strip()
         if result_json.startswith("```json"):
             result_json = result_json[7:-3]

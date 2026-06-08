@@ -13,7 +13,8 @@ import {
   Alert
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -113,7 +114,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
   const handleCapture = async () => {
     if (!cameraRef.current || isScanning) return;
     
-    // Simulate capture and processing
     setIsScanning(true);
     startPulseAnimation();
 
@@ -124,29 +124,103 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
       });
       setCapturedImage(photo.uri);
 
-      // Simulate network latency for 1.5 seconds
-      setTimeout(() => {
-        setIsScanning(false);
-        stopPulseAnimation();
+      const response = await fetch(`${API_URL}/analyze-food`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          image_base64: photo.base64
+        })
+      });
 
-        const mockAnalysisResult = {
-          food_name: "Grilled Chicken Breast with Brown Rice",
-          calories: 520,
-          protein: 42,
-          carbs: 55,
-          fats: 12,
-          confidence: 0.98
-        };
+      const data = await response.json();
 
-        setAnalysisResult(mockAnalysisResult);
-        openBottomSheet();
-      }, 1500);
+      setIsScanning(false);
+      stopPulseAnimation();
+
+      if (response.ok) {
+        if (data.error) {
+          Alert.alert("Analysis Result", data.error);
+          setCapturedImage(null);
+        } else {
+          setAnalysisResult(data);
+          openBottomSheet();
+        }
+      } else {
+        Alert.alert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
+        setCapturedImage(null);
+      }
 
     } catch (error) {
       setIsScanning(false);
       stopPulseAnimation();
       console.error("Scanning Error:", error);
-      Alert.alert("Analysis Error", "Failed to capture photo.");
+      Alert.alert("Analysis Error", "Cannot connect to server. Check your network.");
+      setCapturedImage(null);
+    }
+  };
+
+  const handleUploadImage = async () => {
+    if (isScanning) return;
+
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(
+          "Permission Denied",
+          "You need to allow gallery access to select an image."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        setCapturedImage(selectedAsset.uri);
+        setIsScanning(true);
+        startPulseAnimation();
+
+        const response = await fetch(`${API_URL}/analyze-food`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            image_base64: selectedAsset.base64
+          })
+        });
+
+        const data = await response.json();
+
+        setIsScanning(false);
+        stopPulseAnimation();
+
+        if (response.ok) {
+          if (data.error) {
+            Alert.alert("Analysis Result", data.error);
+            setCapturedImage(null);
+          } else {
+            setAnalysisResult(data);
+            openBottomSheet();
+          }
+        } else {
+          Alert.alert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
+          setCapturedImage(null);
+        }
+      }
+    } catch (error) {
+      setIsScanning(false);
+      stopPulseAnimation();
+      console.error("Gallery Upload Error:", error);
+      Alert.alert("Upload Error", "Failed to choose image from gallery.");
+      setCapturedImage(null);
     }
   };
 
@@ -287,6 +361,15 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
         </Text>
         <View style={styles.shutterContainer}>
           <TouchableOpacity 
+            style={styles.galleryButton} 
+            onPress={handleUploadImage}
+            disabled={isScanning}
+            activeOpacity={0.7}
+          >
+            <Upload color="#4EA685" size={22} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             style={styles.shutterOuter}
             onPress={handleCapture}
             disabled={isScanning}
@@ -389,9 +472,27 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   shutterContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+    position: 'relative',
     height: 80,
+  },
+  galleryButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'absolute',
+    left: '10%',
   },
   shutterOuter: {
     width: 76,

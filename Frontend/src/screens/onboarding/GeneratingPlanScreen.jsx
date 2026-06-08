@@ -84,14 +84,30 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           age: parseInt(pData.age) || 25,
           weight_kg: parseFloat(pData.weight) || 70,
           height_cm: parseFloat(pData.height) || 170,
-          goal: pData.goal || "Maintain Weight",
-          goal_weight: parseFloat(pData.targetWeight) || 70,
-          target_date: pData.targetDate || new Date().toISOString(),
+          goal: pData.goal === 'muscle' ? 'Build Muscle' : pData.goal === 'fatloss' ? 'Lose Weight' : 'Maintain Weight',
+          goal_weight: parseFloat(pData.goalWeight) || 70,
+          target_date: pData.targetDate || new Date().toISOString().split('T')[0],
           weight_unit: pData.weightUnit || "kg",
           starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70
         };
 
-        console.log("Frontend Dev Mode: Bypassing backend save onboarding.");
+        console.log("Saving onboarding data to backend...", payload);
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/save-onboarding`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          }
+        );
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || "Failed to save onboarding data");
+        }
+
         setTimeout(() => {
           if (onComplete) onComplete(profileData);
         }, 1500); // Wait for the short animation for nice UX illusion
@@ -101,7 +117,7 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
         // Fallback progress
         setTimeout(() => {
           if (onComplete) onComplete(profileData);
-        }, 800);
+        }, 1500);
       }
     };
 

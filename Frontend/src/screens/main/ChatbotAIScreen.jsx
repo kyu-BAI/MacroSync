@@ -64,35 +64,59 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const currentInput = inputText.toLowerCase();
+    const messageToSend = inputText;
     setInputText('');
     setIsLoading(true);
 
-    // Simulate AI thinking delay of 1 second
-    setTimeout(() => {
-      let aiText = "That's a great question! As your MacroSync AI assistant, I recommend keeping your calorie intake consistent, logging your water daily, and staying active. Let me know if you want tips on specific foods or workouts!";
+    try {
+      const response = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          message: messageToSend
+        })
+      });
 
-      if (currentInput.includes('hello') || currentInput.includes('hi') || currentInput.includes('hey')) {
-        aiText = `Hello there! I'm here to help you sync your macros and keep your habits on track. What's on your mind today?`;
-      } else if (currentInput.includes('calorie') || currentInput.includes('macro') || currentInput.includes('nutrition') || currentInput.includes('protein')) {
-        aiText = "To optimize your macros, try aiming for a balance of 30% Protein, 45% Carbs, and 25% Fats. Make sure you log your meals using our AI scanner for precise calculations!";
-      } else if (currentInput.includes('exercise') || currentInput.includes('workout') || currentInput.includes('train') || currentInput.includes('gym')) {
-        aiText = "A solid workout plan combines aerobic activity with resistance training. For muscle building, prioritize progressive overload. Check out our Workout tab for pre-curated routines!";
-      } else if (currentInput.includes('diet') || currentInput.includes('recipe') || currentInput.includes('food') || currentInput.includes('eat')) {
-        aiText = "We have some amazing diet recipes in the Diet & Recipes tab! From high-protein salads to local favorites modified for healthy macros, there is a lot to choose from.";
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            sender: 'ai',
+            text: data.response,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            sender: 'ai',
+            text: `Error: ${data.detail || "Failed to get response from AI."}`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
       }
-
+    } catch (error) {
+      console.log("CHAT ERROR:", error);
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 1,
+          id: Date.now(),
           sender: 'ai',
-          text: aiText,
+          text: "Sorry, I am having trouble connecting to the server. Please check your connection and try again.",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (

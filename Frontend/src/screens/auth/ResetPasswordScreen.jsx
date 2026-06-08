@@ -11,6 +11,7 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  ActivityIndicator
 } from "react-native";
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 
@@ -27,7 +28,9 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const isPasswordTooShort = newPassword.length > 0 && newPassword.length < 8;
   const doPasswordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
-  // --- PASSWORD UPDATE LIFE CYCLES (100% Untouched Backend Integration) ---
+  const [isLoading, setIsLoading] = useState(false);
+
+  // --- PASSWORD UPDATE LIFE CYCLES ---
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
       Alert.alert("Error", "Please fill all fields.");
@@ -39,9 +42,38 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
       return;
     }
 
-    console.log("FRONT-END DEV BYPASS: Mocking password reset update success...");
-    Alert.alert("Success", "Password updated successfully.");
-    onResetSuccess();
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/update-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: email,
+          password: newPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success", "Password updated successfully.");
+        onResetSuccess();
+      } else {
+        Alert.alert("Error", data.detail || "Failed to update password. Please try again.");
+      }
+    } catch (error) {
+      console.log("UPDATE PASSWORD ERROR:", error);
+      Alert.alert(
+        "Network Error",
+        "Cannot connect to backend server. Make sure it is running and your IP is correct."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -146,6 +178,7 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
             {/* Action Trigger Button */}
             <TouchableOpacity
               activeOpacity={1}
+              disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
               onPress={handleUpdatePassword}
@@ -154,9 +187,13 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed,
               ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-                Update Password
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                  Update Password
+                </Text>
+              )}
             </TouchableOpacity>
 
           </View>

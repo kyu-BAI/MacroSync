@@ -122,7 +122,9 @@ export default function DashboardScreen({
   notifications = [], setNotifications, 
   globalLoggedWeight, setGlobalLoggedWeight, 
   globalConsumedGlasses, setGlobalConsumedGlasses,
-  userProfile 
+  userProfile,
+  userId,
+  onRefreshDashboard
 }) {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
@@ -154,7 +156,7 @@ export default function DashboardScreen({
 
   // --- DATA MAPPING ---
   const primaryGoal    = userGoals?.goal === 'muscle' ? 'Build Muscle' : userGoals?.goal === 'maintain' ? 'Maintain Weight' : 'Lose Weight';
-  const startingWeight = parseFloat(userBaseline?.weight || 70);
+  const startingWeight = parseFloat(userBaseline?.startingWeight || userBaseline?.weight || 70);
   const goalWeight     = parseFloat(userGoals?.goalWeight || 65);
   const currentWeight  = globalLoggedWeight !== null ? globalLoggedWeight : startingWeight;
   const weightChange   = currentWeight - startingWeight;
@@ -467,20 +469,47 @@ export default function DashboardScreen({
               <TouchableOpacity style={styles.modalCancel} onPress={() => setShowWeightModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSave} onPress={() => {
+              <TouchableOpacity style={styles.modalSave} onPress={async () => {
                 const parsed = parseFloat(weightInput);
                 if (!isNaN(parsed) && parsed > 0) {
-                  if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
-                  setShowWeightModal(false);
-                  if (setNotifications) {
-                    setNotifications(prev => [{
-                      id: 'w' + Date.now(),
-                      title: 'Weight Logged ⚖️',
-                      category: 'achievement',
-                      time: 'Just Now',
-                      read: false,
-                      message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
-                    }, ...prev]);
+                  try {
+                    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/update-weight`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json"
+                      },
+                      body: JSON.stringify({
+                        user_id: userId,
+                        new_weight: parsed,
+                        unit: userBaseline?.unit || 'kg'
+                      })
+                    });
+                    
+                    if (response.ok) {
+                      if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
+                      setShowWeightModal(false);
+                      if (setNotifications) {
+                        setNotifications(prev => [{
+                          id: 'w' + Date.now(),
+                          title: 'Weight Logged ⚖️',
+                          category: 'achievement',
+                          time: 'Just Now',
+                          read: false,
+                          message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
+                        }, ...prev]);
+                      }
+                      if (onRefreshDashboard) {
+                        onRefreshDashboard();
+                      }
+                    } else {
+                      const errData = await response.json();
+                      Alert.alert("Error Logging Weight", errData.detail || "Failed to log weight to server.");
+                    }
+                  } catch (error) {
+                    console.log("LOG WEIGHT ERROR:", error);
+                    Alert.alert("Network Error", "Cannot connect to server. Weight logged locally.");
+                    if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
+                    setShowWeightModal(false);
                   }
                 } else {
                   Alert.alert('Invalid input', 'Please enter a valid number for your weight.');

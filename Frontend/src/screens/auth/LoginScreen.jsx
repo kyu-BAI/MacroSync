@@ -41,12 +41,6 @@ export default function LoginScreen({
 
   // STANDARD EMAIL/PASSWORD AUTHENTICATION FLOW
   const handleLogin = async () => {
-    // FRONT-END DEV BYPASS: Go directly to dashboard
-    console.log("FRONT-END DEV BYPASS: Skipping backend auth, routing to Dashboard...");
-    onLoginSuccess();
-    
-    /* 
-    // ORIGINAL BACKEND LOGIC (Keep for later reversion)
     if (isLoading) return;
     if (!email || !password) {
       showAlert("Please enter both your email and password.");
@@ -70,10 +64,11 @@ export default function LoginScreen({
       console.log("Response:", data);
 
       if (response.ok) {
-        onLoginSuccess();
-        if (setCurrentUserId) {
-          setCurrentUserId(data.user_id || response.user_id);
+        const userId = data.user?.id || data.user_id;
+        if (setCurrentUserId && userId) {
+          setCurrentUserId(userId);
         }
+        onLoginSuccess();
       } else {
         showAlert(data.detail || "Incorrect email or password. Please try again.");
       }
@@ -83,7 +78,6 @@ export default function LoginScreen({
     } finally {
       setIsLoading(false);
     }
-    */
   };
 
   // GOOGLE OAUTH SECURITY AUTHENTICATION HANDLER

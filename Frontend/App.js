@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { 
   StyleSheet, 
   View 
 } from 'react-native';
+import { recommendedRecipesPool } from './src/data/recipes';
 
 // Onboarding & Auth Screen Components
 import SplashScreen from "./src/screens/auth/SplashScreen"; // Cleanly imported matching your folder structure
@@ -44,6 +45,7 @@ function MainApp() {
     age: '',
     weight: '',
     height: '',
+    startingWeight: '',
   });
   const [userGoals, setUserGoals] = useState({
     activityLevel: 'moderate',
@@ -71,6 +73,7 @@ function MainApp() {
   const [globalLoggedWeight, setGlobalLoggedWeight] = useState(null);
   const [globalConsumedGlasses, setGlobalConsumedGlasses] = useState(4);
   const [globalLoggedMeals, setGlobalLoggedMeals] = useState([]);
+  const [sessionRecipes, setSessionRecipes] = useState([]);
 
 
   const [notifications, setNotifications] = useState([
@@ -116,7 +119,72 @@ function MainApp() {
     }
   ]);
 
+  const fetchDashboardData = async () => {
+    if (!userId) return;
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/dashboard/${userId}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Sync frontend states with backend response
+        setUserBaseline({
+          weight: data.profile.currentWeight ? data.profile.currentWeight.toString() : '70',
+          height: data.profile.height ? data.profile.height.toString() : '170',
+          age: data.profile.age ? data.profile.age.toString() : '25',
+          startingWeight: data.profile.startingWeight ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : '70')
+        });
+        
+        setUserGoals({
+          goal: data.profile.goal === 'Build Muscle' ? 'muscle' : data.profile.goal === 'Lose Weight' ? 'fatloss' : 'maintain',
+          goalWeight: data.profile.targetWeight ? data.profile.targetWeight.toString() : '70',
+          targetDate: data.profile.targetDate || '',
+          activityLevel: data.profile.activityLevel || 'moderate'
+        });
+        
+        setDailyNutrition(prev => ({
+          targetCalories: data.nutrition.targetCalories,
+          consumedCalories: prev.consumedCalories,
+          protein: {
+            current: prev.protein.current,
+            target: data.nutrition.protein.target
+          },
+          carbs: {
+            current: prev.carbs.current,
+            target: data.nutrition.carbs.target
+          },
+          fats: {
+            current: prev.fats.current,
+            target: data.nutrition.fats.target
+          }
+        }));
+        
+        setUserProfile(prev => ({
+          ...prev,
+          name: data.profile.name || 'User',
+          email: data.profile.email || prev.email || ''
+        }));
+      } else {
+        console.log("Failed to fetch dashboard data:", data.detail);
+      }
+    } catch (error) {
+      console.log("Error fetching dashboard data:", error);
+    }
+  };
 
+  useEffect(() => {
+    if (userId && currentScreen === 'DASHBOARD') {
+      fetchDashboardData();
+    }
+  }, [userId, currentScreen]);
+
+  useEffect(() => {
+    if (userId) {
+      const shuffled = [...recommendedRecipesPool].sort(() => 0.5 - Math.random());
+      setSessionRecipes(shuffled.slice(0, 8));
+    } else {
+      setSessionRecipes([]);
+    }
+  }, [userId]);
 
   // ----------------------------------------------------
   // INITIAL INITIALIZATION STATE VIEWPORT CONTROL
@@ -245,6 +313,7 @@ function MainApp() {
               age: finalData.age || userBaseline.age,
               weight: finalData.weight || userBaseline.weight,
               height: finalData.height || userBaseline.height,
+              startingWeight: finalData.startingWeight || finalData.weight || userBaseline.startingWeight || userBaseline.weight || '70',
             });
             setUserGoals({
               activityLevel: finalData.activityLevel || userGoals.activityLevel,
@@ -283,6 +352,8 @@ function MainApp() {
           globalConsumedGlasses={globalConsumedGlasses}
           setGlobalConsumedGlasses={setGlobalConsumedGlasses}
           userProfile={userProfile}
+          userId={userId}
+          onRefreshDashboard={fetchDashboardData}
         />
       )}
       {activeTab === 'DIET' && (
@@ -294,6 +365,7 @@ function MainApp() {
           guestGoals={userGoals}
           globalLoggedMeals={globalLoggedMeals}
           setGlobalLoggedMeals={setGlobalLoggedMeals}
+          sessionRecipes={sessionRecipes}
         />
       )}
       {activeTab === 'CHATBOT' && (
@@ -336,6 +408,7 @@ function MainApp() {
           onLogout={handleLogoutRoutine} 
           userProfile={userProfile}
           setUserProfile={setUserProfile}
+          userId={userId}
         />
       )}
       {activeTab === 'NOTIFICATIONS' && (

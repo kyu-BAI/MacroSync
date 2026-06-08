@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -14,14 +14,36 @@ import {
 } from 'react-native';
 import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import { recommendedRecipesPool } from '../../data/recipes';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function DietRecipesScreen({ onTabChange, dailyNutrition, setDailyNutrition, guestGoals, guestBaseline, globalLoggedMeals = [], setGlobalLoggedMeals }) {
+export default function DietRecipesScreen({ 
+  onTabChange, 
+  dailyNutrition, 
+  setDailyNutrition, 
+  guestGoals, 
+  guestBaseline, 
+  globalLoggedMeals = [], 
+  setGlobalLoggedMeals,
+  sessionRecipes
+}) {
   // Use global persisted state so logged meals survive tab switches
   const loggedMeals = globalLoggedMeals;
   const setLoggedMeals = setGlobalLoggedMeals || (() => {});
+  const [recipes, setRecipes] = useState(
+    sessionRecipes && sessionRecipes.length > 0 
+      ? sessionRecipes 
+      : recommendedRecipesPool.slice(0, 4)
+  );
+
+  useEffect(() => {
+    if (sessionRecipes && sessionRecipes.length > 0) {
+      setRecipes(sessionRecipes);
+    }
+  }, [sessionRecipes]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('San Remigio');
@@ -80,80 +102,42 @@ export default function DietRecipesScreen({ onTabChange, dailyNutrition, setDail
     { id: 'dp4', mealType: 'Dinner', title: 'Grilled Fish & Veggies', calories: Math.round(targetCalories * 0.30), protein: `${Math.round(targetProtein * 0.30)}g`, carbs: `${Math.round(targetCarbs * 0.30)}g`, fats: `${Math.round(targetFats * 0.30)}g`, time: '7:30 PM', icon: Moon },
   ];
 
-  const recommendedRecipes = [
-    {
-      id: 1,
-      title: 'Fresh Kinilaw na Tangigue',
-      calories: 220,
-      protein: '35g',
-      carbs: '8g',
-      fats: '5g',
-      time: '15 mins',
-      budget: '₱100 - ₱300',
-      location: 'San Remigio',
-      ingredients: [
-        '250g Fresh Tangigue (cubed)',
-        '1/2 cup Coconut Vinegar (Tuba)',
-        '1 Red Onion (minced)',
-        'Ginger & Sili (chopped)',
-        'Kalamansi juice',
-      ],
-      instructions: [
-        'Wash the fresh tangigue cubes quickly with a little vinegar, then drain to remove the fishy smell.',
-        'Mix the fish with coconut vinegar, kalamansi, minced ginger, onions, and chili.',
-        'Let it chill in the fridge for 10 minutes to lightly "cook" in the acid before serving.'
-      ],
-      allergies: ['Seafood']
-    },
-    {
-      id: 2,
-      title: 'Pintos (Sweet Corn Tamales)',
-      calories: 180,
-      protein: '4g',
-      carbs: '38g',
-      fats: '2g',
-      time: 'Ready to Eat',
-      budget: 'Under ₱100',
-      location: 'Bogo City',
-      ingredients: [
-        'Locally sourced Pintos (wrapped in corn husks)',
-        'Margarine or butter (often mixed in)'
-      ],
-      instructions: [
-        'Purchase freshly steamed Pintos from local Bogo City vendors.',
-        'Unwrap the corn husks and enjoy warm as an energy-dense pre-workout snack or breakfast.'
-      ],
-      allergies: ['Dairy']
-    },
-    {
-      id: 3,
-      title: 'Daanbantayan Sutukil Platter',
-      calories: 450,
-      protein: '50g',
-      carbs: '15g',
-      fats: '22g',
-      time: '30 mins',
-      budget: 'Over ₱300',
-      location: 'Daanbantayan',
-      ingredients: [
-        'Grilled Fish (Sugba)',
-        'Fish Soup (Tuwa)',
-        'Fresh Seafood Ceviche (Kilaw)',
-        'Local Seaweed (Guso)'
-      ],
-      instructions: [
-        'Select fresh catch from the local Daanbantayan market.',
-        'Grill the main fish lightly over charcoal.',
-        'Prepare the head and bones in a clear, ginger-infused soup.',
-        'Serve together for a massive, high-protein, omega-rich feast.'
-      ],
-      allergies: ['Seafood']
-    },
-  ];
-
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
   const toggleExpandRecipe = (id) => setExpandedRecipeId(expandedRecipeId === id ? null : id);
+
+  const handleGenerateRecipe = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Ingredients Required', 'Please enter some ingredients in the search bar first.');
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`${API_URL}/generate-recipe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ingredients: searchQuery,
+          budget: selectedBudget,
+          location: selectedLocation
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to generate recipe');
+      }
+      const data = await response.json();
+      setRecipes(prev => [data, ...prev]);
+      setExpandedRecipeId(data.id);
+      Alert.alert('Success', 'AI generated a healthy recipe matching your preferences!');
+    } catch (error) {
+      console.error("GENERATE RECIPE ERROR:", error);
+      Alert.alert('Generation Failed', 'Failed to generate recipe with AI. Please check your network and try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
   
     const handleLogMeal = (id, macros) => {
     if (!loggedMeals.includes(id)) {
@@ -181,7 +165,7 @@ export default function DietRecipesScreen({ onTabChange, dailyNutrition, setDail
     }
   };
 
-  const filteredRecipes = recommendedRecipes.filter(recipe => {
+  const filteredRecipes = recipes.filter(recipe => {
     const matchesBudget = selectedBudget === 'All' || recipe.budget === selectedBudget;
     const matchesLocation = recipe.location === selectedLocation;
     const matchesAllergy = selectedAllergy === 'None' || !(recipe.allergies || []).includes(selectedAllergy);
@@ -319,6 +303,23 @@ export default function DietRecipesScreen({ onTabChange, dailyNutrition, setDail
                   onChangeText={setSearchQuery}
                 />
               </View>
+              {searchQuery.trim().length > 0 && (
+                <TouchableOpacity 
+                  style={styles.aiGenerateBtn} 
+                  onPress={handleGenerateRecipe}
+                  disabled={isGenerating}
+                  activeOpacity={0.8}
+                >
+                  {isGenerating ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                      <Text style={styles.aiGenerateBtnText}>Generate recipe with Gemini</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.formCard}>
@@ -1239,5 +1240,25 @@ const styles = StyleSheet.create({
     color: '#41544B',
     fontWeight: '800',
     fontSize: 11,
+  },
+  aiGenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: logoGreen,
+    paddingVertical: 10,
+    borderRadius: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: logoGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  aiGenerateBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
   },
 });

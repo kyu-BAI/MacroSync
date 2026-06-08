@@ -18,9 +18,11 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function SettingsScreen({ onTabChange, userProfile, setUserProfile }) {
+export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
@@ -64,7 +66,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!tempName.trim()) {
       Alert.alert("Validation Error", "Name cannot be empty.");
       return;
@@ -74,14 +76,35 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       return;
     }
 
-    if (setUserProfile) {
-      setUserProfile({
-        name: tempName.trim(),
-        email: tempEmail.trim(),
-        profileImage: tempImage
+    try {
+      const response = await fetch(`${API_URL}/update-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          name: tempName.trim(),
+          email: tempEmail.trim()
+        }),
       });
-      setShowEditModal(false);
-      Alert.alert("Success", "Profile updated successfully!");
+
+      if (!response.ok) {
+        throw new Error('Failed to update profile on server');
+      }
+
+      if (setUserProfile) {
+        setUserProfile({
+          name: tempName.trim(),
+          email: tempEmail.trim(),
+          profileImage: tempImage
+        });
+        setShowEditModal(false);
+        Alert.alert("Success", "Profile updated successfully!");
+      }
+    } catch (error) {
+      console.error("UPDATE PROFILE ERROR:", error);
+      Alert.alert("Error", "Failed to update profile on the server. Please try again.");
     }
   };
 

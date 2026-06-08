@@ -11,23 +11,54 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  ActivityIndicator
 } from "react-native";
 import { KeyRound, ChevronLeft } from 'lucide-react-native';
 
 export default function OtpScreen({ email, onVerified, onNavigateBack }) {
   const [otp, setOtp] = useState("");
   const [isPressed, setIsPressed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- OTP VERIFICATION LIFE CYCLES (100% Untouched Backend Integration) ---
+  // --- OTP VERIFICATION LIFE CYCLES ---
   const handleVerifyOTP = async () => {
     if (!otp.trim()) {
       Alert.alert("Missing OTP", "Please enter the OTP code.");
       return;
     }
 
-    console.log("FRONT-END DEV BYPASS: Mocking OTP verification success...");
-    Alert.alert("Success", "OTP verified successfully.");
-    onVerified(); // Moves cleanly to reset password screen
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/verify-reset-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          otp: otp.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success", "OTP verified successfully.");
+        onVerified(); // Moves cleanly to reset password screen
+      } else {
+        Alert.alert("Error", data.detail || "Invalid or expired OTP. Please try again.");
+      }
+    } catch (error) {
+      console.log("VERIFY OTP ERROR:", error);
+      Alert.alert(
+        "Network Error",
+        "Cannot connect to backend server. Make sure it is running and your IP is correct."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -83,6 +114,7 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
             {/* Action Trigger Verification Button */}
             <TouchableOpacity
               activeOpacity={1}
+              disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
               onPress={handleVerifyOTP}
@@ -91,9 +123,13 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed
               ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-                Verify OTP
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                  Verify OTP
+                </Text>
+              )}
             </TouchableOpacity>
 
           </View>

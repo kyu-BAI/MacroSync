@@ -10,15 +10,17 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Mail, ChevronLeft } from 'lucide-react-native';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   const [email, setEmail] = useState('');
   const [isPressed, setIsPressed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- RECOVERY LOGIC CONTROLLERS (100% Untouched Backend Integration) ---
+  // --- RECOVERY LOGIC CONTROLLERS ---
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       Alert.alert(
@@ -28,12 +30,41 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
       return;
     }
 
-    console.log("FRONT-END DEV BYPASS: Mocking OTP code request success...");
-    Alert.alert(
-      "OTP Sent",
-      "A mockup verification OTP code (123456) has been dispatched to your email."
-    );
-    onOtpSent(email.trim());
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: email.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          "OTP Sent",
+          "A verification OTP code has been sent to your email."
+        );
+        onOtpSent(email.trim());
+      } else {
+        Alert.alert(
+          "Error",
+          data.detail || "Failed to send OTP. Please check your email and try again."
+        );
+      }
+    } catch (error) {
+      console.log("FORGOT PASSWORD ERROR:", error);
+      Alert.alert(
+        "Network Error",
+        "Cannot connect to backend server. Make sure it is running and your IP is correct."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
   return (
     <SafeAreaView style={styles.container}>
@@ -91,6 +122,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
             {/* Action Trigger Button (Updated to Send OTP) */}
             <TouchableOpacity
               activeOpacity={1}
+              disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
               onPress={handleForgotPassword}
@@ -99,9 +131,13 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed
               ]}
             >
-              <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-                Send OTP
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                  Send OTP
+                </Text>
+              )}
             </TouchableOpacity>
 
           </View>
