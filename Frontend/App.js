@@ -74,6 +74,7 @@ function MainApp() {
   const [globalConsumedGlasses, setGlobalConsumedGlasses] = useState(4);
   const [globalLoggedMeals, setGlobalLoggedMeals] = useState([]);
   const [sessionRecipes, setSessionRecipes] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
 
 
   const [notifications, setNotifications] = useState([
@@ -141,27 +142,44 @@ function MainApp() {
           activityLevel: data.profile.activityLevel || 'moderate'
         });
         
-        setDailyNutrition(prev => ({
+        setDailyNutrition({
           targetCalories: data.nutrition.targetCalories,
-          consumedCalories: prev.consumedCalories,
+          consumedCalories: data.nutrition.consumedCalories,
           protein: {
-            current: prev.protein.current,
+            current: data.nutrition.protein.current,
             target: data.nutrition.protein.target
           },
           carbs: {
-            current: prev.carbs.current,
+            current: data.nutrition.carbs.current,
             target: data.nutrition.carbs.target
           },
           fats: {
-            current: prev.fats.current,
+            current: data.nutrition.fats.current,
             target: data.nutrition.fats.target
           }
-        }));
+        });
+        
+        if (data.exercise) {
+          setDailyExercise({
+            caloriesBurned: data.exercise.caloriesBurned,
+            activeMinutes: data.exercise.activeMinutes,
+            recentExercise: data.exercise.recentExercise || 'None'
+          });
+        }
+
+        if (data.water) {
+          setGlobalConsumedGlasses(data.water.glasses || 0);
+        }
+
+        if (data.loggedMealIds) {
+          setGlobalLoggedMeals(data.loggedMealIds);
+        }
         
         setUserProfile(prev => ({
           ...prev,
           name: data.profile.name || 'User',
-          email: data.profile.email || prev.email || ''
+          email: data.profile.email || prev.email || '',
+          profileImage: data.profile.profileImage || null
         }));
       } else {
         console.log("Failed to fetch dashboard data:", data.detail);
@@ -332,6 +350,23 @@ function MainApp() {
   // SECTION 3: APP CORE VIEWPORTS (FULLY INTEGRATED SCREEN ROUTING)
   // ----------------------------------------------------
   const handleLogoutRoutine = () => {
+    setUserId(null);
+    setUserProfile({ name: 'User', email: '', profileImage: null });
+    setGlobalLoggedMeals([]);
+    setGlobalConsumedGlasses(0);
+    setDailyNutrition({
+      targetCalories: 2500,
+      consumedCalories: 0,
+      protein: { current: 0, target: 150 },
+      carbs: { current: 0, target: 250 },
+      fats: { current: 0, target: 70 }
+    });
+    setDailyExercise({
+      caloriesBurned: 0,
+      activeMinutes: 0,
+      recentExercise: 'None'
+    });
+    setChatMessages([]);
     setCurrentScreen('LOGIN');
     setActiveTab('DASHBOARD'); // Resets active navigation state variables cleanly
   };
@@ -366,6 +401,7 @@ function MainApp() {
           globalLoggedMeals={globalLoggedMeals}
           setGlobalLoggedMeals={setGlobalLoggedMeals}
           sessionRecipes={sessionRecipes}
+          userId={userId}
         />
       )}
       {activeTab === 'CHATBOT' && (
@@ -373,6 +409,8 @@ function MainApp() {
           onTabChange={(tab) => setActiveTab(tab)} 
           userId={userId}
           userProfile={userProfile}
+          messages={chatMessages}
+          setMessages={setChatMessages}
         />
       )}
       {activeTab === 'SCANNER' && (
@@ -394,6 +432,8 @@ function MainApp() {
       {activeTab === 'WORKOUT' && (
         <WorkoutScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
+          userId={userId}
+          onRefreshDashboard={fetchDashboardData}
         />
       )}
       {activeTab === 'SETTINGS' && (

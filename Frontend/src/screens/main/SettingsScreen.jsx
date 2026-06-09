@@ -55,10 +55,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setTempImage(result.assets[0].uri);
+        const base64Data = 'data:image/jpeg;base64,' + result.assets[0].base64;
+        setTempImage(base64Data);
       }
     } catch (error) {
       console.log("Error picking image:", error);
@@ -93,6 +95,23 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         throw new Error('Failed to update profile on server');
       }
 
+      if (tempImage && tempImage !== userProfile?.profileImage) {
+        const picResponse = await fetch(`${API_URL}/update-profile-picture`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            profile_image: tempImage
+          }),
+        });
+
+        if (!picResponse.ok) {
+          throw new Error('Failed to update profile picture on server');
+        }
+      }
+
       if (setUserProfile) {
         setUserProfile({
           name: tempName.trim(),
@@ -104,7 +123,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
     } catch (error) {
       console.error("UPDATE PROFILE ERROR:", error);
-      Alert.alert("Error", "Failed to update profile on the server. Please try again.");
+      Alert.alert("Error", "Failed to update profile. Please check your network and try again.");
     }
   };
 
@@ -124,10 +143,27 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedUri = result.assets[0].uri;
+        const selectedUri = 'data:image/jpeg;base64,' + result.assets[0].base64;
+        
+        const response = await fetch(`${API_URL}/update-profile-picture`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            profile_image: selectedUri
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update profile picture on server');
+        }
+
         if (setUserProfile) {
           setUserProfile(prev => ({
             ...prev,

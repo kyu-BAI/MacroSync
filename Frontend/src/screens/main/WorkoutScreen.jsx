@@ -15,7 +15,9 @@ import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function WorkoutScreen({ onTabChange }) {
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+export default function WorkoutScreen({ onTabChange, userId, onRefreshDashboard }) {
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState('All');
@@ -119,15 +121,47 @@ export default function WorkoutScreen({ onTabChange }) {
     setCurrentStepIndex(0);
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (currentStepIndex < activeRoutine?.tutorials?.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
-      Alert.alert(
-        "Workout Complete!",
-        `Awesome work Kaizer! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
-        [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
-      );
+      if (!userId) {
+        Alert.alert("Authentication Error", "You must be logged in to log workouts.");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/workouts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: Date.now().toString(),
+            user_id: userId,
+            name: activeRoutine.title,
+            calories_burned: activeRoutine.caloriesBurn,
+            active_minutes: parseInt(activeRoutine.duration) || 15
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to log workout on server');
+        }
+
+        if (onRefreshDashboard) {
+          onRefreshDashboard();
+        }
+
+        Alert.alert(
+          "Workout Complete!",
+          `Awesome work! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
+          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+        );
+      } catch (error) {
+        console.error("LOG WORKOUT API ERROR:", error);
+        Alert.alert("Error", "Could not save workout to server. Please try again.");
+      }
     }
   };
 

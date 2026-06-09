@@ -115,7 +115,9 @@ export default function LoginScreen({
 
     try {
       console.log("GOOGLE OAUTH INITIALIZED WITH:", selectedEmail, selectedName);
-      
+      // Simulate Google selection delay for premium user experience
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/auth/google-signin`,
         {

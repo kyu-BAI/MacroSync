@@ -115,6 +115,35 @@ class UpdateProfileRequest(BaseModel):
     email: str
 
 
+class MealLog(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    calories: int
+    protein: int
+    carbs: int
+    fats: int
+
+
+class WorkoutLog(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    calories_burned: int
+    active_minutes: int
+
+
+class WaterLog(BaseModel):
+    user_id: str
+    glasses: int
+
+
+class ProfilePictureUpdate(BaseModel):
+    user_id: str
+    profile_image: str
+
+
+
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
 async def signup(user: UserAuth):
@@ -362,6 +391,79 @@ async def update_profile(data: UpdateProfileRequest):
         raise HTTPException(status_code=500, detail="Failed to update profile info")
 
 
+# ---------------- MEALS LOGGING ----------------
+@app.post("/meals")
+async def log_meal(data: MealLog):
+    try:
+        supabase.table("logged_meals").upsert({
+            "id": data.id,
+            "user_id": data.user_id,
+            "name": data.name,
+            "calories": data.calories,
+            "protein": data.protein,
+            "carbs": data.carbs,
+            "fats": data.fats
+        }).execute()
+        return {"success": True}
+    except Exception as e:
+        print("LOG MEAL ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to log meal")
+
+
+@app.delete("/meals/{user_id}/{meal_id}")
+async def delete_meal(user_id: str, meal_id: str):
+    try:
+        supabase.table("logged_meals").delete().eq("user_id", user_id).eq("id", meal_id).execute()
+        return {"success": True}
+    except Exception as e:
+        print("DELETE MEAL ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to delete logged meal")
+
+
+# ---------------- WORKOUTS LOGGING ----------------
+@app.post("/workouts")
+async def log_workout(data: WorkoutLog):
+    try:
+        supabase.table("logged_workouts").upsert({
+            "id": data.id,
+            "user_id": data.user_id,
+            "name": data.name,
+            "calories_burned": data.calories_burned,
+            "active_minutes": data.active_minutes
+        }).execute()
+        return {"success": True}
+    except Exception as e:
+        print("LOG WORKOUT ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to log workout")
+
+
+# ---------------- WATER LOGGING ----------------
+@app.post("/water")
+async def log_water(data: WaterLog):
+    try:
+        supabase.table("water_logs").upsert({
+            "user_id": data.user_id,
+            "glasses": data.glasses
+        }).execute()
+        return {"success": True}
+    except Exception as e:
+        print("LOG WATER ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to log water")
+
+
+# ---------------- PROFILE PICTURE UPDATE ----------------
+@app.post("/update-profile-picture")
+async def update_profile_picture(data: ProfilePictureUpdate):
+    try:
+        supabase.table("user_profiles").update({
+            "profile_image": data.profile_image
+        }).eq("id", data.user_id).execute()
+        return {"success": True}
+    except Exception as e:
+        print("UPDATE PROFILE IMAGE ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to update profile picture")
+
+
 # ---------------- DASHBOARD ANALYTICS ----------------
 @app.get("/dashboard/{user_id}")
 async def get_dashboard_data(user_id: str):
@@ -416,9 +518,49 @@ async def get_dashboard_data(user_id: str):
             starting_weight = round(starting_weight_kg, 1)
             target_weight = round(target_weight_kg, 1)
 
-        # For fresh days, consumed calories starts at 0
-        consumed_calories = 0
+        # Calculate start of today in Manila time (UTC+8) to filter today's logs
+        manila_tz = timezone(timedelta(hours=8))
+        now_manila = datetime.now(manila_tz)
+        today_start_manila = now_manila.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start_manila.astimezone(timezone.utc)
+
+        # 1. Fetch meals logged today
+        meals_res = supabase.table("logged_meals") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .gte("logged_at", today_start_utc.isoformat()) \
+            .execute()
         
+        logged_meals_data = meals_res.data or []
+        logged_meal_ids = [m["id"] for m in logged_meals_data]
+        
+        consumed_calories = sum(m["calories"] for m in logged_meals_data)
+        consumed_protein = sum(m["protein"] for m in logged_meals_data)
+        consumed_carbs = sum(m["carbs"] for m in logged_meals_data)
+        consumed_fats = sum(m["fats"] for m in logged_meals_data)
+
+        # 2. Fetch water logs
+        water_res = supabase.table("water_logs") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        glasses = 0
+        if water_res.data:
+            glasses = water_res.data[0].get("glasses", 0)
+
+        # 3. Fetch workouts logged today
+        workouts_res = supabase.table("logged_workouts") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .gte("logged_at", today_start_utc.isoformat()) \
+            .execute()
+            
+        workouts_data = workouts_res.data or []
+        calories_burned = sum(w["calories_burned"] for w in workouts_data)
+        active_minutes = sum(w["active_minutes"] for w in workouts_data)
+        recent_exercise = workouts_data[-1]["name"] if workouts_data else "None"
+
         # Premium status mocked to false for free tier UI demonstration
         is_premium = False
         
@@ -426,6 +568,7 @@ async def get_dashboard_data(user_id: str):
             "profile": {
                 "name": user.get("name", "User"),
                 "email": user.get("email", ""),
+                "profileImage": user.get("profile_image"),
                 "goal": goal,
                 "currentWeight": current_weight,
                 "targetWeight": target_weight,
@@ -438,10 +581,19 @@ async def get_dashboard_data(user_id: str):
                 "isPremium": is_premium,
                 "targetCalories": target_calories,
                 "consumedCalories": consumed_calories,
-                "protein": {"current": 0, "target": target_protein},
-                "carbs": {"current": 0, "target": target_carbs},
-                "fats": {"current": 0, "target": target_fats}
+                "protein": {"current": consumed_protein, "target": target_protein},
+                "carbs": {"current": consumed_carbs, "target": target_carbs},
+                "fats": {"current": consumed_fats, "target": target_fats}
             },
+            "water": {
+                "glasses": glasses
+            },
+            "exercise": {
+                "caloriesBurned": calories_burned,
+                "activeMinutes": active_minutes,
+                "recentExercise": recent_exercise
+            },
+            "loggedMealIds": logged_meal_ids,
             "weeklyActivity": [
                 {"day": "M", "value": random.randint(300, 800)},
                 {"day": "T", "value": random.randint(300, 800)},
@@ -463,7 +615,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
         
     # Try multiple models to fallback under high demand
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    models_to_try = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
     last_error = None
     
     for model_name in models_to_try:
@@ -505,7 +657,48 @@ async def chat_with_ai(data: ChatMessageRequest):
         context_prompt = ""
         if user_result.data:
             user = user_result.data[0]
-            context_prompt = f"User Profile Context: You are MacroSync AI, a health and fitness assistant. The user is {user.get('name', 'a user')}. Age: {user.get('age')}, Current Weight: {user.get('weight_kg')} kg, Goal: {user.get('goal')}, Target Weight: {user.get('goal_weight')} kg. Respond concisely and helpfully to their fitness and nutrition queries based on this profile.\n\n"
+            
+            # Parse preferences from location column
+            prefs = {}
+            if user.get("location"):
+                try:
+                    prefs = json.loads(user["location"])
+                except:
+                    pass
+            
+            unit = prefs.get("unit", "kg")
+            current_weight_kg = user.get("weight_kg")
+            target_weight_kg = user.get("goalWeight")
+            starting_weight_kg = prefs.get("starting_weight")
+            
+            current_weight_str = f"{current_weight_kg} kg" if current_weight_kg else "Not logged"
+            target_weight_str = f"{target_weight_kg} kg" if target_weight_kg else "Not set"
+            starting_weight_str = f"{starting_weight_kg} kg" if starting_weight_kg else "Not logged"
+            
+            if unit == "lbs":
+                if current_weight_kg:
+                    current_weight_str = f"{round(current_weight_kg * 2.20462, 1)} lbs ({current_weight_kg} kg)"
+                if target_weight_kg:
+                    target_weight_str = f"{round(target_weight_kg * 2.20462, 1)} lbs ({target_weight_kg} kg)"
+                if starting_weight_kg:
+                    starting_weight_str = f"{round(starting_weight_kg * 2.20462, 1)} lbs ({starting_weight_kg} kg)"
+            
+            context_prompt = (
+                f"User Profile Context:\n"
+                f"- User Name: {user.get('name', 'User')}\n"
+                f"- Email: {user.get('email', 'N/A')}\n"
+                f"- Age: {user.get('age', 'N/A')}\n"
+                f"- Height: {user.get('height_cm', 'N/A')} cm\n"
+                f"- Preferred Unit: {unit}\n"
+                f"- Current Weight: {current_weight_str}\n"
+                f"- Starting Weight: {starting_weight_str}\n"
+                f"- Goal Weight: {target_weight_str}\n"
+                f"- Goal Type: {user.get('goal', 'N/A')}\n"
+                f"- Target Date for Goal: {user.get('targetDate', 'N/A')}\n\n"
+                f"You are MacroSync AI, a health and fitness assistant. Use this profile context when responding to the user. "
+                f"If the user asks about their weight, name, height, or progress, answer accurately using the values above in their preferred unit ({unit}). "
+                f"Respond concisely, friendly, and helpfully.\n\n"
+            )
         
         full_prompt = context_prompt + f"User message: {data.message}"
         

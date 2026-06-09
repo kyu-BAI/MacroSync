@@ -27,7 +27,8 @@ export default function DietRecipesScreen({
   guestBaseline, 
   globalLoggedMeals = [], 
   setGlobalLoggedMeals,
-  sessionRecipes
+  sessionRecipes,
+  userId
 }) {
   // Use global persisted state so logged meals survive tab switches
   const loggedMeals = globalLoggedMeals;
@@ -139,28 +140,71 @@ export default function DietRecipesScreen({
     }
   };
   
-    const handleLogMeal = (id, macros) => {
+  const handleLogMeal = async (id, macros) => {
+    if (!userId) {
+      Alert.alert("Authentication Error", "You must be logged in to log meals.");
+      return;
+    }
+
     if (!loggedMeals.includes(id)) {
-      setLoggedMeals([...loggedMeals, id]);
-      if (setDailyNutrition && macros) {
-        setDailyNutrition(prev => ({
-          ...prev,
-          consumedCalories: prev.consumedCalories + macros.calories,
-          protein: { ...prev.protein, current: prev.protein.current + macros.protein },
-          carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
-          fats: { ...prev.fats, current: prev.fats.current + macros.fats }
-        }));
+      try {
+        const response = await fetch(`${API_URL}/meals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id,
+            user_id: userId,
+            name: macros.name || 'Meal',
+            calories: macros.calories || 0,
+            protein: macros.protein || 0,
+            carbs: macros.carbs || 0,
+            fats: macros.fats || 0
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to log meal on server');
+        }
+
+        setLoggedMeals([...loggedMeals, id]);
+        if (setDailyNutrition && macros) {
+          setDailyNutrition(prev => ({
+            ...prev,
+            consumedCalories: prev.consumedCalories + macros.calories,
+            protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+            carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+            fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+          }));
+        }
+      } catch (error) {
+        console.error("LOG MEAL API ERROR:", error);
+        Alert.alert("Error", "Could not save logged meal to server. Please try again.");
       }
     } else {
-      setLoggedMeals(loggedMeals.filter(mealId => mealId !== id));
-      if (setDailyNutrition && macros) {
-        setDailyNutrition(prev => ({
-          ...prev,
-          consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
-          protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
-          carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
-          fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
-        }));
+      try {
+        const response = await fetch(`${API_URL}/meals/${userId}/${id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete meal on server');
+        }
+
+        setLoggedMeals(loggedMeals.filter(mealId => mealId !== id));
+        if (setDailyNutrition && macros) {
+          setDailyNutrition(prev => ({
+            ...prev,
+            consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
+            protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
+            carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
+            fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
+          }));
+        }
+      } catch (error) {
+        console.error("DELETE MEAL API ERROR:", error);
+        Alert.alert("Error", "Could not remove logged meal from server. Please try again.");
       }
     }
   };
@@ -263,6 +307,7 @@ export default function DietRecipesScreen({
                         <TouchableOpacity 
                           style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
                           onPress={() => handleLogMeal(meal.id, { 
+                            name: meal.title,
                             calories: meal.calories, 
                             protein: parseInt(meal.protein) || 0,
                             carbs: parseInt(meal.carbs) || 0,
@@ -515,6 +560,7 @@ export default function DietRecipesScreen({
                   <TouchableOpacity 
                     style={[styles.logRecipeBtn, isLogged && styles.logRecipeBtnLogged]}
                     onPress={() => handleLogMeal(`recipe-${recipe.id}`, {
+                      name: recipe.title,
                       calories: recipe.calories,
                       protein: parseInt(recipe.protein) || 0,
                       carbs: parseInt(recipe.carbs) || 0,

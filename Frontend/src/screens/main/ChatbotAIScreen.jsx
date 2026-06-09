@@ -18,7 +18,7 @@ import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, S
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
+export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -41,14 +41,18 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
   }, []);
   
   // --- DYNAMIC AI GREETING ---
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'ai',
-      text: `Hi ${userProfile?.name || 'there'}! I'm your MacroSync AI assistant. Ask me anything about local recipes, adjustments to your meal plan, or your workout routine!`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([
+        {
+          id: 1,
+          sender: 'ai',
+          text: `Hi ${userProfile?.name || 'there'}! I'm your MacroSync AI assistant. Ask me anything about local recipes, adjustments to your meal plan, or your workout routine!`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
     }
-  ]);
+  }, []);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -119,6 +123,46 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
     }
   };
 
+  // Helper to parse markdown-like bold (**text**) and bullet points (* item)
+  const renderMessageText = (text) => {
+    if (!text) return null;
+
+    const lines = text.split('\n');
+    return lines.map((line, lineIdx) => {
+      let isBullet = false;
+      let cleanLine = line;
+
+      // Check if the line starts with a bullet point '*'
+      if (line.trim().startsWith('*')) {
+        isBullet = true;
+        // Strip the leading '*' and any spaces following it
+        cleanLine = line.replace(/^\s*\*\s*/, '');
+      }
+
+      // Split by '**' to find bold text
+      const parts = cleanLine.split('**');
+      const textElements = parts.map((part, partIdx) => {
+        // Odd indices represent text inside '**'
+        if (partIdx % 2 === 1) {
+          return (
+            <Text key={partIdx} style={{ fontWeight: '800' }}>
+              {part}
+            </Text>
+          );
+        }
+        return <Text key={partIdx}>{part}</Text>;
+      });
+
+      return (
+        <Text key={lineIdx} style={{ lineHeight: 22 }}>
+          {isBullet && <Text style={{ color: logoGreen, fontWeight: '900' }}>• </Text>}
+          {textElements}
+          {lineIdx < lines.length - 1 ? '\n' : ''}
+        </Text>
+      );
+    });
+  };
+
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
@@ -170,7 +214,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile }) {
                 ]}
                 >
                   <Text style={[styles.messageBubbleText, isAI ? styles.aiBubbleText : styles.userBubbleText]}>
-                    {msg.text}
+                    {renderMessageText(msg.text)}
                   </Text>
                   <Text style={styles.messageTimeStampText}>
                     {msg.time}

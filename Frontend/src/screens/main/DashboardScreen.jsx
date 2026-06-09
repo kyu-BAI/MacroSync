@@ -139,18 +139,43 @@ export default function DashboardScreen({
   const recommendedWaterMl = (weightKg * 35) + (Math.max(0, heightCm - 150) * 10);
   const targetGlasses      = Math.min(15, Math.max(6, Math.round(recommendedWaterMl / 250)));
 
-  const handleAddGlass = () => {
+  const handleAddGlass = async () => {
     const newAmount = consumedGlasses + 1;
-    if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
-    if (newAmount === targetGlasses && setNotifications) {
-      setNotifications(prev => [{
-        id: `n-${Date.now()}`,
-        title: 'Hydration Goal Reached! 💧',
-        category: 'hydration',
-        time: 'Just Now',
-        read: false,
-        message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
-      }, ...prev]);
+    if (!userId) {
+      Alert.alert("Authentication Error", "You must be logged in to log water.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/water`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          glasses: newAmount
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to log water on server');
+      }
+
+      if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
+      if (newAmount === targetGlasses && setNotifications) {
+        setNotifications(prev => [{
+          id: `n-${Date.now()}`,
+          title: 'Hydration Goal Reached! 💧',
+          category: 'hydration',
+          time: 'Just Now',
+          read: false,
+          message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
+        }, ...prev]);
+      }
+    } catch (error) {
+      console.error("LOG WATER API ERROR:", error);
+      Alert.alert("Error", "Could not log water. Please check your connection.");
     }
   };
 
