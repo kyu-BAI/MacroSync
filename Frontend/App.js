@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { 
   StyleSheet, 
-  View 
+  View,
+  Alert 
 } from 'react-native';
 import { recommendedRecipesPool } from './src/data/recipes';
 
@@ -418,15 +419,55 @@ function MainApp() {
       {activeTab === 'SCANNER' && (
         <FoodScannerScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
-          onLogMeal={(macros) => {
-            if (setDailyNutrition) {
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + macros.calories,
-                protein: { ...prev.protein, current: prev.protein.current + macros.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + macros.fats }
-              }));
+          onLogMeal={async (macros) => {
+            if (!userId) {
+              Alert.alert("Authentication Error", "You must be logged in to log meals.");
+              return;
+            }
+            const mealId = `meal-${Date.now()}`;
+            try {
+              const response = await fetch(`${API_URL}/meals`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  id: mealId,
+                  user_id: userId,
+                  name: macros.name || 'Scanned Food',
+                  calories: macros.calories || 0,
+                  protein: macros.protein || 0,
+                  carbs: macros.carbs || 0,
+                  fats: macros.fats || 0
+                }),
+              });
+
+              if (!response.ok) {
+                let errMsg = 'Failed to log meal on server';
+                try {
+                  const errData = await response.json();
+                  if (errData && errData.detail) {
+                    errMsg = errData.detail;
+                  }
+                } catch (_) {}
+                throw new Error(errMsg);
+              }
+
+              if (setDailyNutrition) {
+                setDailyNutrition(prev => ({
+                  ...prev,
+                  consumedCalories: prev.consumedCalories + macros.calories,
+                  protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+                  carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+                  fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+                }));
+              }
+              if (setGlobalLoggedMeals) {
+                setGlobalLoggedMeals(prev => [...prev, mealId]);
+              }
+            } catch (error) {
+              console.error("Error logging scanned food:", error);
+              Alert.alert("Error", error.message || "Failed to log meal to server.");
             }
           }}
         />

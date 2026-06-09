@@ -227,13 +227,14 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
   const handleLogFood = () => {
     if (onLogMeal && analysisResult) {
       onLogMeal({
+        name: analysisResult.name,
         calories: analysisResult.calories,
         protein: analysisResult.protein,
         carbs: analysisResult.carbs,
         fats: analysisResult.fats
       });
     }
-    onTabChange('DIET');
+    onTabChange('DASHBOARD');
   };
 
   // If we have a result, show the split screen layout (Photo Top, Macros Bottom)
