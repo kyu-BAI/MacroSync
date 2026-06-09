@@ -174,6 +174,10 @@ function MainApp() {
           setGlobalConsumedGlasses(data.water.glasses || 0);
         }
 
+        if (data.profile.currentWeight !== undefined && data.profile.currentWeight !== null) {
+          setGlobalLoggedWeight(data.profile.currentWeight);
+        }
+
         if (data.loggedMealIds) {
           setGlobalLoggedMeals(data.loggedMealIds);
         }
@@ -355,6 +359,7 @@ function MainApp() {
   const handleLogoutRoutine = () => {
     setUserId(null);
     setUserProfile({ name: 'User', email: '', profileImage: null });
+    setGlobalLoggedWeight(null);
     setGlobalLoggedMeals([]);
     setGlobalConsumedGlasses(0);
     setDailyNutrition({
