@@ -448,7 +448,7 @@ async def log_water(data: WaterLog):
         return {"success": True}
     except Exception as e:
         print("LOG WATER ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to log water")
+        raise HTTPException(status_code=500, detail=f"Failed to log water: {repr(e)}")
 
 
 # ---------------- PROFILE PICTURE UPDATE ----------------
@@ -547,7 +547,18 @@ async def get_dashboard_data(user_id: str):
         
         glasses = 0
         if water_res.data:
-            glasses = water_res.data[0].get("glasses", 0)
+            record = water_res.data[0]
+            updated_at_str = record.get("updated_at")
+            if updated_at_str:
+                try:
+                    updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                    if updated_at >= today_start_utc:
+                        glasses = record.get("glasses", 0)
+                except Exception as ex:
+                    print("Error parsing water updated_at timestamp:", ex)
+                    glasses = record.get("glasses", 0)
+            else:
+                glasses = record.get("glasses", 0)
 
         # 3. Fetch workouts logged today
         workouts_res = supabase.table("logged_workouts") \
