@@ -823,3 +823,25 @@ async def analyze_food(data: AnalyzeFoodRequest):
         raise HTTPException(status_code=500, detail="Failed to analyze image. Please try again.")
 
 
+@app.get("/debug-key")
+def debug_key():
+    try:
+        if not SUPABASE_KEY:
+            return {"error": "SUPABASE_KEY is missing"}
+        parts = SUPABASE_KEY.split(".")
+        if len(parts) != 3:
+            return {"error": "Invalid JWT format"}
+        payload_b64 = parts[1]
+        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload_json = json.loads(base64.b64decode(payload_b64).decode())
+        return {
+            "role": payload_json.get("role"),
+            "ref": payload_json.get("ref"),
+            "iss": payload_json.get("iss"),
+            "key_length": len(SUPABASE_KEY)
+        }
+    except Exception as e:
+        return {"error": f"Failed to parse key: {str(e)}"}
+
+
+
