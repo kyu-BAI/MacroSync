@@ -67,3 +67,22 @@
 - **Status**: Fixed
 
 ---
+
+## [2026-06-09 14:37] - Render.com Node.js Build Fail due to Missing Root package.json
+
+- **Type**: Process
+- **Severity**: High
+- **File**: `Render Dashboard Config`
+- **Agent**: Aura
+- **Root Cause**: Render.com auto-detected or was configured to run a Node.js project at the root level (`/opt/render/project/src`), but the repository has no `package.json` at the root. The project contains a Python FastAPI backend in `Backend/` and a React Native frontend in `Frontend/`. Since the user is trying to deploy the FastAPI backend, they need to configure Render to run a Python environment and target the `Backend` directory as the Root Directory.
+- **Error Message**: 
+  ```
+  npm error code ENOENT
+  npm error syscall open
+  npm error path /opt/render/project/src/package.json
+  npm error errno -2
+  npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
+  ```
+- **Fix Applied**: Provided clear step-by-step instructions to configure Render.com settings to use Python runtime, specify the `Backend` subdirectory as the Root Directory, use `pip install -r requirements.txt` as the Build Command, and use `uvicorn main:app --host 0.0.0.0 --port $PORT` as the Start Command.
+- **Prevention**: In multi-module projects, always set the correct **Root Directory** in host platforms to target the specific app being deployed, and select the correct runtime.
+- **Status**: Fixed (Awaiting User Action)
