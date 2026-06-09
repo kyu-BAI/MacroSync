@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User } from 'lucide-react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import API_URL from '../config/api';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {

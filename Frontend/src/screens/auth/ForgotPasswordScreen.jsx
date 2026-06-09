@@ -14,6 +14,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Mail, ChevronLeft } from 'lucide-react-native';
+import API_URL from '../config/api';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/forgot-password`, {
+      const response = await fetch(`${API_URL}/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

@@ -16,6 +16,8 @@ import {
   Modal
 } from 'react-native';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
+import API_URL from '../config/api';
+
 
 export default function LoginScreen({
   onNavigateToSignUp,
@@ -58,7 +60,7 @@ export default function LoginScreen({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/signin`,
+        `${API_URL}/signin`,
         {
           method: "POST",
           headers: {
@@ -119,7 +121,7 @@ export default function LoginScreen({
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/auth/google-signin`,
+        `${API_URL}/auth/google-signin`,
         {
           method: "POST",
           headers: {

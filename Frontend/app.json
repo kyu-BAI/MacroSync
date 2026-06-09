@@ -43,6 +43,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6bd1dc63-e86a-459c-9bf3-8501b5231be1"
+      }
+    },
+    "owner": "kyubi.karlsefni"
   }
 }

@@ -15,8 +15,7 @@ import {
 import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 import { recommendedRecipesPool } from '../../data/recipes';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import API_URL from '../config/api';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function DietRecipesScreen({ 

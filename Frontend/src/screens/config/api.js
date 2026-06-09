@@ -1,2 +1,2 @@
-const API_URL = "http://192.168.254.108:8000";
+const API_URL = "https://macrosync-api.onrender.com";
 export default API_URL;

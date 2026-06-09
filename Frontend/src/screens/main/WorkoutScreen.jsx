@@ -15,7 +15,7 @@ import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import API_URL from '../config/api';
 
 export default function WorkoutScreen({ onTabChange, userId, onRefreshDashboard }) {
   const styles = getStyles();

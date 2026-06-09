@@ -21,6 +21,8 @@ import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, D
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import API_URL from '../config/api';
+
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -147,7 +149,7 @@ export default function DashboardScreen({
     }
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/water`, {
+      const response = await fetch(`${API_URL}/water`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -159,7 +161,14 @@ export default function DashboardScreen({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to log water on server');
+        let errMsg = 'Failed to log water on server';
+        try {
+          const errData = await response.json();
+          if (errData && errData.detail) {
+            errMsg = errData.detail;
+          }
+        } catch (_) {}
+        throw new Error(errMsg);
       }
 
       if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
@@ -175,7 +184,7 @@ export default function DashboardScreen({
       }
     } catch (error) {
       console.error("LOG WATER API ERROR:", error);
-      Alert.alert("Error", "Could not log water. Please check your connection.");
+      Alert.alert("Error", error.message || "Could not log water. Please check your connection.");
     }
   };
 
@@ -498,7 +507,7 @@ export default function DashboardScreen({
                 const parsed = parseFloat(weightInput);
                 if (!isNaN(parsed) && parsed > 0) {
                   try {
-                    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/update-weight`, {
+                    const response = await fetch(`${API_URL}/update-weight`, {
                       method: "POST",
                       headers: {
                         "Content-Type": "application/json"

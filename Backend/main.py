@@ -177,6 +177,23 @@ def signin(user: UserLogin):
             "password": user.password
         })
 
+        user_id = auth.user.id
+        email = auth.user.email
+        # Ensure profile exists in user_profiles
+        try:
+            profile_response = supabase.table("user_profiles").select("id").eq("id", user_id).execute()
+            if not profile_response.data:
+                name = auth.user.user_metadata.get("full_name") if auth.user.user_metadata else None
+                if not name:
+                    name = email.split("@")[0]
+                supabase.table("user_profiles").insert({
+                    "id": user_id,
+                    "email": email,
+                    "name": name
+                }).execute()
+        except Exception as profile_err:
+            print("ERROR ENSURING PROFILE ON SIGNIN:", repr(profile_err))
+
         return {
             "user": auth.user,
             "session": auth.session

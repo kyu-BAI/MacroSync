@@ -14,6 +14,7 @@ import {
   ActivityIndicator
 } from "react-native";
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
+import API_URL from '../config/api';
 
 export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const [newPassword, setNewPassword] = useState("");
@@ -46,7 +47,7 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/update-password`, {
+      const response = await fetch(`${API_URL}/update-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

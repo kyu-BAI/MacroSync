@@ -15,8 +15,8 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import API_URL from '../config/api';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 // High-Contrast System Theme Setup Tokens

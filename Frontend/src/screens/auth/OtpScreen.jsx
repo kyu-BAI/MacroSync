@@ -14,6 +14,7 @@ import {
   ActivityIndicator
 } from "react-native";
 import { KeyRound, ChevronLeft } from 'lucide-react-native';
+import API_URL from '../config/api';
 
 export default function OtpScreen({ email, onVerified, onNavigateBack }) {
   const [otp, setOtp] = useState("");
@@ -31,7 +32,7 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/verify-reset-otp`, {
+      const response = await fetch(`${API_URL}/verify-reset-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

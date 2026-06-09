@@ -9,6 +9,7 @@ import {
   StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import API_URL from '../config/api';
 
 // Neumorphic Theme Tokens
 const COLORS = {
@@ -93,7 +94,7 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
 
         console.log("Saving onboarding data to backend...", payload);
         const response = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL}/save-onboarding`,
+          `${API_URL}/save-onboarding`,
           {
             method: "POST",
             headers: {

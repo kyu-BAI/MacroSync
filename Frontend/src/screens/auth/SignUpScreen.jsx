@@ -14,6 +14,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react-native';
+import API_URL from '../config/api';
+
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [name, setName] = useState("");
@@ -51,7 +53,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/signup`,
+        `${API_URL}/signup`,
         {
           method: "POST",
           headers: {

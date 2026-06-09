@@ -18,8 +18,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import API_URL from '../config/api';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {

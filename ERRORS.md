@@ -86,3 +86,25 @@
 - **Fix Applied**: Provided clear step-by-step instructions to configure Render.com settings to use Python runtime, specify the `Backend` subdirectory as the Root Directory, use `pip install -r requirements.txt` as the Build Command, and use `uvicorn main:app --host 0.0.0.0 --port $PORT` as the Start Command.
 - **Prevention**: In multi-module projects, always set the correct **Root Directory** in host platforms to target the specific app being deployed, and select the correct runtime.
 - **Status**: Fixed (Awaiting User Action)
+
+---
+
+## [2026-06-09 14:54] - Metro Bundler Dev Server Crash: Cannot pipe to a closed or destroyed stream
+
+- **Type**: Process
+- **Severity**: Medium
+- **File**: `Frontend/node_modules/expo-server/src/vendor/http.ts`
+- **Agent**: Aura
+- **Root Cause**: The Metro bundler crashed during the web bundling process because of a broken pipe/stream closure issue in the HTTP dev server wrapper (often occurring on newer Node.js versions like v24 when connection drops or is closed mid-transfer).
+- **Error Message**: 
+  ```
+  Error: Cannot pipe to a closed or destroyed stream
+      at pipelineImpl (node:internal/streams/pipeline:264:15)
+      at node:stream/promises:31:5
+      at new Promise (<anonymous>)
+      at pipeline (node:stream/promises:20:10)
+      at respond (C:\Users\Dell\Desktop\MACRO_SYNC\MacroSync\Frontend\node_modules\expo-server\src\vendor\http.ts:138:19)
+  ```
+- **Fix Applied**: Advised clearing the Expo cache and starting the Metro server with the clear cache flag (`npx expo start -c`), and ensuring that the web build is not triggered since only the Android Expo Go target is needed.
+- **Prevention**: Start Expo with clean cache and ensure network stability.
+- **Status**: Fixed (Awaiting User Action)

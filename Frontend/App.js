@@ -28,6 +28,8 @@ import SettingsScreen from "./src/screens/main/SettingsScreen";
 import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
+import API_URL from "./src/screens/config/api";
+
 
 function MainApp() {
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
@@ -123,7 +125,7 @@ function MainApp() {
   const fetchDashboardData = async () => {
     if (!userId) return;
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/dashboard/${userId}`);
+      const response = await fetch(`${API_URL}/dashboard/${userId}`);
       const data = await response.json();
       
       if (response.ok) {
