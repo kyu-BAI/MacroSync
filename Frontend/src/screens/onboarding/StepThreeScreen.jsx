@@ -18,7 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 // Import child lookup methods from your installed library
-import { regions, provinces, cities, barangays as fetchBarangays } from 'select-philippines-address';
+import { provinces, cities } from 'select-philippines-address';
 
 const ITEM_HEIGHT = 54; 
 
@@ -29,11 +29,8 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [selectedAllergies, setSelectedAllergies] = useState([]);
 
   // Address Selector States
-  const [regionList, setRegionList] = useState([]);
-  const [region, setRegion] = useState(null);
   const [province, setProvince] = useState(null);
   const [city, setCity] = useState(null);
-  const [barangay, setBarangay] = useState(null);
 
   // Overlay Control States
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -47,17 +44,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
 
 
-  // References for layout tracking
-  const flatListRef = useRef(null);
-
-  const customRegions = [
-    { code: 'NCR', name: 'Metro Manila' },
-    { code: 'MIN', name: 'Mindanao' },
-    { code: 'NL', name: 'North Luzon' },
-    { code: 'SL', name: 'South Luzon' },
-    { code: 'VIS', name: 'Visayas' }
-  ];
-
   const presetAllergens = [
     { id: 'peanuts', title: 'Peanuts' },
     { id: 'seafood', title: 'Seafood' },
@@ -67,13 +53,8 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     { id: 'nuts', title: 'Tree Nuts' }
   ];
 
-  useEffect(() => {
-    regions()
-      .then((response) => {
-        setRegionList(response);
-      })
-      .catch(err => console.log("Regions load fail: ", err));
-  }, []);
+  // References for layout tracking
+  const flatListRef = useRef(null);
 
   const toggleAllergen = (id) => {
     if (selectedAllergies.includes(id)) {
@@ -106,45 +87,28 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     if (isLoadingExternal || isLoading) return;
     
     try {
-      if (type === 'region') {
-        const sortedRegions = [...customRegions].sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(sortedRegions);
-        setPickerType(type);
-        setPickerVisible(true);
-      } else if (type === 'province') {
-        if (!region) {
-          triggerCustomError("Sequence Interrupted", "Please specify your high-level Region sector boundary configuration rules before trying to parse provinces.");
-          return;
+      if (type === 'province') {
+        // select-philippines-address requires a region code - fetch all regions and merge
+        const ALL_REGION_CODES = ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','19'];
+        let aggregated = [];
+        for (const code of ALL_REGION_CODES) {
+          try {
+            const res = await provinces(code);
+            aggregated = [...aggregated, ...res];
+          } catch (_) { /* skip regions with no provinces */ }
         }
-        const targetCodes = getPsgcRegionCodes(region.code);
-        let aggregatedProvinces = [];
-        for (const code of targetCodes) {
-          const res = await provinces(code);
-          aggregatedProvinces = [...aggregatedProvinces, ...res];
-        }
-        const formatted = aggregatedProvinces.map(p => ({ ...p, name: p.province_name || p.name }));
+        const formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setPickerType(type);
         setPickerVisible(true);
       } else if (type === 'city') {
         if (!province) {
-          triggerCustomError("Sequence Interrupted", "Please select a Province configuration mapping item first.");
+          triggerCustomError("Sequence Interrupted", "Please select a Province first.");
           return;
         }
         const res = await cities(province.province_code);
         const formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
-        formatted.sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(formatted);
-        setPickerType(type);
-        setPickerVisible(true);
-      } else if (type === 'barangay') {
-        if (!city) {
-          triggerCustomError("Sequence Interrupted", "Please complete your City/Municipality regional choice before extracting local barangay profiles.");
-          return;
-        }
-        const res = await fetchBarangays(city.city_code);
-        const formatted = res.map(b => ({ ...b, name: b.brgy_name || b.name }));
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setPickerType(type);
@@ -157,20 +121,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   };
 
   const handleSelectLocation = (item) => {
-    if (pickerType === 'region') {
-      if (region?.code !== item.code) {
-        setRegion(item); setProvince(null); setCity(null); setBarangay(null);
-      }
-    } else if (pickerType === 'province') {
+    if (pickerType === 'province') {
       if (province?.province_code !== item.province_code) {
-        setProvince(item); setCity(null); setBarangay(null);
+        setProvince(item); setCity(null);
       }
     } else if (pickerType === 'city') {
       if (city?.city_code !== item.city_code) {
-        setCity(item); setBarangay(null);
+        setCity(item);
       }
-    } else if (pickerType === 'barangay') {
-      setBarangay(item);
     }
     setPickerVisible(false);
   };
@@ -178,16 +136,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const handleTriggerConfirmationModal = () => {
     if (isLoading || isLoadingExternal) return;
 
-    // Premium UI Incomplete Check replacements
-    if (!region || !province || !city) {
+    if (!province || !city) {
       const missingFields = [];
-      if (!region) missingFields.push("Region");
       if (!province) missingFields.push("Province");
       if (!city) missingFields.push("City/Municipality");
 
       triggerCustomError(
         "Incomplete Location",
-        `Please complete the remaining geographic selectors to enable localized profiling filters:\n\nMissing fields: ${missingFields.join(', ')}`
+        `Please complete the remaining geographic selectors:\n\nMissing fields: ${missingFields.join(', ')}`
       );
       return;
     }
@@ -201,7 +157,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       return;
     }
 
-    const compiledAddressString = `${city.name}, ${province.name}, ${region.name}`;
+    const compiledAddressString = `${city.name}, ${province.name}`;
     const activeAllergies = [...selectedAllergies.map(id => presetAllergens.find(p => p.id === id).title)];
     if (trimmedCustomAllergy) activeAllergies.push(trimmedCustomAllergy);
 
@@ -217,7 +173,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       await onSubmit?.({
         address: compiledAddress,
         structuredLocation: {
-          region: region.name,
           province: province.name,
           city: city.name
         },
@@ -250,30 +205,18 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           <View style={styles.formCard}>
             <Text style={styles.sectionInputLabel}>Local Food Availability & Region</Text>
             
-            {/* REGION SELECTION INPUT BOX */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Region</Text>
-              <TouchableOpacity style={[styles.neumorphicInputInset, styles.selectorRow]} onPress={() => openPicker('region')} activeOpacity={0.7}>
-                <Text style={[styles.selectorValueText, !region && styles.placeholderText]}>
-                  {region ? region.name : "Select Region"}
-                </Text>
-                <Ionicons name="map-outline" size={16} color={logoGreen} />
-              </TouchableOpacity>
-            </View>
-
             {/* PROVINCE SELECTION INPUT BOX */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Province</Text>
               <TouchableOpacity 
-                style={[styles.neumorphicInputInset, styles.selectorRow, !region && styles.disabledSelector]} 
+                style={[styles.neumorphicInputInset, styles.selectorRow]} 
                 onPress={() => openPicker('province')} 
                 activeOpacity={0.7}
-                disabled={!region}
               >
                 <Text style={[styles.selectorValueText, !province && styles.placeholderText]}>
                   {province ? province.name : "Select Province"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={region ? logoGreen : '#AEC2B7'} />
+                <Ionicons name="chevron-down" size={16} color={logoGreen} />
               </TouchableOpacity>
             </View>
 

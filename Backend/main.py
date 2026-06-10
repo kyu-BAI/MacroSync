@@ -419,7 +419,8 @@ async def log_meal(data: MealLog):
             "calories": data.calories,
             "protein": data.protein,
             "carbs": data.carbs,
-            "fats": data.fats
+            "fats": data.fats,
+            "logged_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:
@@ -446,7 +447,8 @@ async def log_workout(data: WorkoutLog):
             "user_id": data.user_id,
             "name": data.name,
             "calories_burned": data.calories_burned,
-            "active_minutes": data.active_minutes
+            "active_minutes": data.active_minutes,
+            "logged_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:
@@ -460,7 +462,8 @@ async def log_water(data: WaterLog):
     try:
         supabase.table("water_logs").upsert({
             "user_id": data.user_id,
-            "glasses": data.glasses
+            "glasses": data.glasses,
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:

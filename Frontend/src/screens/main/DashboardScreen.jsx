@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { 
   StyleSheet, 
@@ -22,6 +22,7 @@ import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 import API_URL from '../config/api';
+import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -126,13 +127,28 @@ export default function DashboardScreen({
   globalConsumedGlasses, setGlobalConsumedGlasses,
   userProfile,
   userId,
-  onRefreshDashboard
+  onRefreshDashboard,
+  isOnline = true,
 }) {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState('');
+
+  // ── New Goal Modal (shown when user hits 100% progress) ──
+  const [showNewGoalModal, setShowNewGoalModal] = useState(false);
+  const [goalReachedAlertShown, setGoalReachedAlertShown] = useState(false);
+  const [localStartingWeight, setLocalStartingWeight] = useState(null);
+  const [localGoalWeight, setLocalGoalWeight] = useState(null);
+  const [localGoalLabel, setLocalGoalLabel] = useState(null);
+
+  const NEW_GOAL_OPTIONS = [
+    { id: 'fatloss',  label: '🔥 Lose Weight',     desc: 'Burn fat, slim down, feel lighter',   offsetKg: -10 },
+    { id: 'maintain', label: '⚖️ Maintain Weight',  desc: 'Keep your current physique balanced',  offsetKg:  0  },
+    { id: 'gain',     label: '📈 Gain Weight',      desc: 'Add healthy mass and strength',         offsetKg: +10 },
+    { id: 'muscle',   label: '💪 Gain Muscle',      desc: 'Build lean muscle, increase strength',  offsetKg:  +5  },
+  ];
 
   // Water Intake State & Logic
   const consumedGlasses    = globalConsumedGlasses !== undefined ? globalConsumedGlasses : 4;
@@ -148,50 +164,46 @@ export default function DashboardScreen({
       return;
     }
 
+    // Optimistic UI update
+    if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
+    if (newAmount === targetGlasses && setNotifications) {
+      setNotifications(prev => [{
+        id: `n-${Date.now()}`,
+        title: 'Hydration Goal Reached! 💧',
+        category: 'hydration',
+        time: 'Just Now',
+        read: false,
+        message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
+      }, ...prev]);
+    }
+
+    if (!isOnline) {
+      await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
+      await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/water`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          glasses: newAmount
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, glasses: newAmount }),
       });
-
       if (!response.ok) {
-        let errMsg = 'Failed to log water on server';
-        try {
-          const errData = await response.json();
-          if (errData && errData.detail) {
-            errMsg = errData.detail;
-          }
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
-
-      if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
-      if (newAmount === targetGlasses && setNotifications) {
-        setNotifications(prev => [{
-          id: `n-${Date.now()}`,
-          title: 'Hydration Goal Reached! 💧',
-          category: 'hydration',
-          time: 'Just Now',
-          read: false,
-          message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
-        }, ...prev]);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to log water on server');
       }
     } catch (error) {
-      console.error("LOG WATER API ERROR:", error);
-      Alert.alert("Error", error.message || "Could not log water. Please check your connection.");
+      console.error("LOG WATER ERROR (falling back to queue):", error);
+      await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
+      await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
     }
   };
 
   // --- DATA MAPPING ---
-  const primaryGoal    = userGoals?.goal === 'muscle' ? 'Build Muscle' : userGoals?.goal === 'maintain' ? 'Maintain Weight' : 'Lose Weight';
-  const startingWeight = parseFloat(userBaseline?.startingWeight || userBaseline?.weight || 70);
-  const goalWeight     = parseFloat(userGoals?.goalWeight || 65);
+  const primaryGoal    = localGoalLabel || (userGoals?.goal === 'muscle' ? 'Build Muscle' : userGoals?.goal === 'maintain' ? 'Maintain Weight' : 'Lose Weight');
+  const startingWeight = localStartingWeight !== null ? localStartingWeight : parseFloat(userBaseline?.startingWeight || userBaseline?.weight || 70);
+  const goalWeight     = localGoalWeight !== null ? localGoalWeight : parseFloat(userGoals?.goalWeight || 65);
   const currentWeight  = globalLoggedWeight !== null ? globalLoggedWeight : startingWeight;
   const weightChange   = currentWeight - startingWeight;
 
@@ -200,6 +212,49 @@ export default function DashboardScreen({
   let progressPct   = totalDiff === 0 ? 0 : currentDiff / totalDiff;
   if (progressPct < 0) progressPct = 0;
   if (progressPct > 1) progressPct = 1;
+
+  // Trigger goal-reached modal once when 100% is hit
+  useEffect(() => {
+    if (progressPct >= 1 && !goalReachedAlertShown) {
+      setGoalReachedAlertShown(true);
+      setShowNewGoalModal(true);
+    }
+  }, [progressPct, goalReachedAlertShown]);
+
+  const handleSelectNewGoal = useCallback(async (option) => {
+    const newStarting = currentWeight;
+    const newGoal     = currentWeight + option.offsetKg;
+    setLocalStartingWeight(newStarting);
+    setLocalGoalWeight(newGoal);
+    setLocalGoalLabel(option.label.replace(/^[^a-zA-Z]+/, '').trim());
+    setGoalReachedAlertShown(false); // allow future re-detection
+    setShowNewGoalModal(false);
+
+    // Notification
+    if (setNotifications) {
+      setNotifications(prev => [{
+        id: 'ng-' + Date.now(),
+        title: '🎯 New Goal Set!',
+        category: 'achievement',
+        time: 'Just Now',
+        read: false,
+        message: `Your weight goal has been reset. New target: ${option.label}. Starting from ${newStarting.toFixed(1)} kg → ${newGoal.toFixed(1)} kg. Let's go!`
+      }, ...prev]);
+    }
+
+    // Persist to backend
+    if (isOnline && userId) {
+      try {
+        await fetch(`${API_URL}/update-weight`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, new_weight: newStarting, unit: userBaseline?.unit || 'kg', new_goal: option.id, goal_weight: newGoal }),
+        });
+      } catch (e) {
+        console.log('NEW GOAL PERSIST ERROR:', e);
+      }
+    }
+  }, [currentWeight, isOnline, userId, userBaseline, setNotifications]);
 
   const ringRadius        = 52;
   const ringStroke        = 10;
@@ -250,7 +305,10 @@ export default function DashboardScreen({
     propsForDots: { r: '4', strokeWidth: '2', stroke: logoGreen },
     decimalPlaces: 0,
   };
-  const weightDataPoints = [startingWeight, startingWeight - 0.5, startingWeight - 0.8, startingWeight - 1.2, startingWeight - 1.0, startingWeight - 1.5, currentWeight];
+  // After a goal reset, chart starts flat from the new baseline
+  const weightDataPoints = localStartingWeight !== null
+    ? [localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, currentWeight]
+    : [startingWeight, startingWeight - 0.5, startingWeight - 0.8, startingWeight - 1.2, startingWeight - 1.0, startingWeight - 1.5, currentWeight];
   const weightChartData  = {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [{ data: weightDataPoints, color: () => logoGreen, strokeWidth: 3 }],
@@ -506,44 +564,43 @@ export default function DashboardScreen({
               <TouchableOpacity style={styles.modalSave} onPress={async () => {
                 const parsed = parseFloat(weightInput);
                 if (!isNaN(parsed) && parsed > 0) {
+                  // Optimistic UI update
+                  if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
+                  setShowWeightModal(false);
+                  if (setNotifications) {
+                    setNotifications(prev => [{
+                      id: 'w' + Date.now(),
+                      title: 'Weight Logged ⚖️',
+                      category: 'achievement',
+                      time: 'Just Now',
+                      read: false,
+                      message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
+                    }, ...prev]);
+                  }
+
+                  if (!isOnline) {
+                    await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
+                    await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
+                    Alert.alert('📴 Saved Offline', 'Weight saved locally. Will sync when back online.');
+                    return;
+                  }
+
                   try {
                     const response = await fetch(`${API_URL}/update-weight`, {
                       method: "POST",
-                      headers: {
-                        "Content-Type": "application/json"
-                      },
-                      body: JSON.stringify({
-                        user_id: userId,
-                        new_weight: parsed,
-                        unit: userBaseline?.unit || 'kg'
-                      })
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' })
                     });
-                    
-                    if (response.ok) {
-                      if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
-                      setShowWeightModal(false);
-                      if (setNotifications) {
-                        setNotifications(prev => [{
-                          id: 'w' + Date.now(),
-                          title: 'Weight Logged ⚖️',
-                          category: 'achievement',
-                          time: 'Just Now',
-                          read: false,
-                          message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
-                        }, ...prev]);
-                      }
-                      if (onRefreshDashboard) {
-                        onRefreshDashboard();
-                      }
-                    } else {
-                      const errData = await response.json();
+                    if (response.ok && onRefreshDashboard) {
+                      onRefreshDashboard();
+                    } else if (!response.ok) {
+                      const errData = await response.json().catch(() => ({}));
                       Alert.alert("Error Logging Weight", errData.detail || "Failed to log weight to server.");
                     }
                   } catch (error) {
                     console.log("LOG WEIGHT ERROR:", error);
-                    Alert.alert("Network Error", "Cannot connect to server. Weight logged locally.");
-                    if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
-                    setShowWeightModal(false);
+                    await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
+                    await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
                   }
                 } else {
                   Alert.alert('Invalid input', 'Please enter a valid number for your weight.');
@@ -553,6 +610,39 @@ export default function DashboardScreen({
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ── NEW GOAL MODAL (shown on goal completion) ── */}
+      <Modal visible={showNewGoalModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: 28 }]}>
+            {/* Trophy Header */}
+            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 8 }}>🏆</Text>
+            <Text style={[styles.modalTitle, { fontSize: 22 }]}>Goal Achieved!</Text>
+            <Text style={[styles.modalSubtitle, { marginBottom: 24 }]}>
+              You've reached your target of {goalWeight.toFixed(1)} kg.{`\n`}Choose your next fitness goal:
+            </Text>
+
+            {NEW_GOAL_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.id}
+                style={styles.newGoalOptionBtn}
+                onPress={() => handleSelectNewGoal(option)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.newGoalOptionLabel}>{option.label}</Text>
+                <Text style={styles.newGoalOptionDesc}>{option.desc}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.modalCancel, { marginTop: 12 }]}
+              onPress={() => setShowNewGoalModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Decide Later</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -639,6 +729,29 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
   modalCancelText: { color: '#7FA293', fontWeight: '700', fontSize: 14 },
   modalSave: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
   modalSaveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+
+  // New Goal Options (shown on goal completion)
+  newGoalOptionBtn: {
+    width: '100%',
+    backgroundColor: '#EBF5F0',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#C6E0D4',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  newGoalOptionLabel: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#1A2B23',
+    marginBottom: 2,
+  },
+  newGoalOptionDesc: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7FA293',
+  },
 
   // Chatbot FAB
   chatbotFab: {

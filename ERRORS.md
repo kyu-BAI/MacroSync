@@ -108,3 +108,17 @@
 - **Fix Applied**: Advised clearing the Expo cache and starting the Metro server with the clear cache flag (`npx expo start -c`), and ensuring that the web build is not triggered since only the Android Expo Go target is needed.
 - **Prevention**: Start Expo with clean cache and ensure network stability.
 - **Status**: Fixed (Awaiting User Action)
+
+---
+
+## [2026-06-10 22:33] - Meal and Water Logging Progress Reset on Dashboard Reload / Re-authentication
+
+- **Type**: Logic
+- **Severity**: High
+- **File**: `Backend/main.py:412`
+- **Agent**: Aura
+- **Root Cause**: Database upserts for logged_meals and water_logs did not explicitly update the logged_at and updated_at fields. In Supabase/Postgres, default expressions like now() are only evaluated on INSERT, not UPDATE. As a result, subsequent logs/updates kept their old timestamps, causing get_dashboard_data to filter them out of today's progress calculations when reloading or logging in/out.
+- **Error Message**: N/A
+- **Fix Applied**: Updated /meals, /workouts, and /water backend endpoints to explicitly include updated UTC ISO-8601 timestamps in the payload dictionary sent to supabase table upsert.
+- **Prevention**: Always explicitly update timestamp fields like updated_at or logged_at when performing row upserts to ensure queries filtering by date remain accurate.
+- **Status**: Fixed
