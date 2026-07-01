@@ -129,6 +129,16 @@ export default function DashboardScreen({
   userId,
   onRefreshDashboard,
   isOnline = true,
+  localStartingWeight,
+  setLocalStartingWeight,
+  localGoalWeight,
+  setLocalGoalWeight,
+  localGoalLabel,
+  setLocalGoalLabel,
+  goalReachedAlertShown,
+  setGoalReachedAlertShown,
+  weightHistory,
+  setWeightHistory,
 }) {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
@@ -138,16 +148,11 @@ export default function DashboardScreen({
 
   // ── New Goal Modal (shown when user hits 100% progress) ──
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
-  const [goalReachedAlertShown, setGoalReachedAlertShown] = useState(false);
-  const [localStartingWeight, setLocalStartingWeight] = useState(null);
-  const [localGoalWeight, setLocalGoalWeight] = useState(null);
-  const [localGoalLabel, setLocalGoalLabel] = useState(null);
 
   const NEW_GOAL_OPTIONS = [
-    { id: 'fatloss',  label: '🔥 Lose Weight',     desc: 'Burn fat, slim down, feel lighter',   offsetKg: -10 },
-    { id: 'maintain', label: '⚖️ Maintain Weight',  desc: 'Keep your current physique balanced',  offsetKg:  0  },
-    { id: 'gain',     label: '📈 Gain Weight',      desc: 'Add healthy mass and strength',         offsetKg: +10 },
-    { id: 'muscle',   label: '💪 Gain Muscle',      desc: 'Build lean muscle, increase strength',  offsetKg:  +5  },
+    { id: 'fatloss',  label: 'Weight Loss',     desc: 'Burn fat, slim down, and optimize health (Deficit)',   offsetKg: -5 },
+    { id: 'maintain', label: 'Maintain Weight',  desc: 'Maintain balance and focus on recomposition (Balance)',  offsetKg:  0  },
+    { id: 'muscle',   label: 'Gain Weight',      desc: 'Build muscle mass, gain weight, and build strength (Surplus)',  offsetKg:  +5 },
   ];
 
   // Water Intake State & Logic
@@ -164,39 +169,54 @@ export default function DashboardScreen({
       return;
     }
 
-    // Optimistic UI update
-    if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
-    if (newAmount === targetGlasses && setNotifications) {
-      setNotifications(prev => [{
-        id: `n-${Date.now()}`,
-        title: 'Hydration Goal Reached! 💧',
-        category: 'hydration',
-        time: 'Just Now',
-        read: false,
-        message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
-      }, ...prev]);
-    }
-
-    if (!isOnline) {
-      await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
-      await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/water`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, glasses: newAmount }),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Failed to log water on server');
+    const logWaterAction = async () => {
+      // Optimistic UI update
+      if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
+      if (newAmount === targetGlasses && setNotifications) {
+        setNotifications(prev => [{
+          id: `n-${Date.now()}`,
+          title: 'Hydration Goal Reached! 💧',
+          category: 'hydration',
+          time: 'Just Now',
+          read: false,
+          message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
+        }, ...prev]);
       }
-    } catch (error) {
-      console.error("LOG WATER ERROR (falling back to queue):", error);
-      await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
-      await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
+
+      if (!isOnline) {
+        await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
+        await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/water`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, glasses: newAmount }),
+        });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || 'Failed to log water on server');
+        }
+      } catch (error) {
+        console.error("LOG WATER ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
+        await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
+      }
+    };
+
+    if (consumedGlasses >= targetGlasses) {
+      Alert.alert(
+        "Hydration Target Reached 💧",
+        "You have already reached your daily water intake quota. Drinking too much water can be harmful. Do you want to log another glass?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Log Anyway", onPress: logWaterAction }
+        ]
+      );
+    } else {
+      await logWaterAction();
     }
   };
 
@@ -226,9 +246,13 @@ export default function DashboardScreen({
     const newGoal     = currentWeight + option.offsetKg;
     setLocalStartingWeight(newStarting);
     setLocalGoalWeight(newGoal);
-    setLocalGoalLabel(option.label.replace(/^[^a-zA-Z]+/, '').trim());
+    setLocalGoalLabel(option.label);
     setGoalReachedAlertShown(false); // allow future re-detection
     setShowNewGoalModal(false);
+    // Reset chart history to a flat baseline at the new starting weight
+    if (setWeightHistory) {
+      setWeightHistory(Array.from({ length: 7 }, () => parseFloat(newStarting.toFixed(1))));
+    }
 
     // Notification
     if (setNotifications) {
@@ -245,16 +269,35 @@ export default function DashboardScreen({
     // Persist to backend
     if (isOnline && userId) {
       try {
-        await fetch(`${API_URL}/update-weight`, {
+        // Calculate a target date 90 days in the future as a default target date
+        const targetDateObj = new Date();
+        targetDateObj.setDate(targetDateObj.getDate() + 90);
+        const formattedTargetDate = `${String(targetDateObj.getMonth() + 1).padStart(2, '0')}/${String(targetDateObj.getDate()).padStart(2, '0')}/${targetDateObj.getFullYear()}`;
+
+        const response = await fetch(`${API_URL}/save-onboarding`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, new_weight: newStarting, unit: userBaseline?.unit || 'kg', new_goal: option.id, goal_weight: newGoal }),
+          body: JSON.stringify({
+            user_id: userId,
+            age: parseInt(userBaseline?.age || 25, 10),
+            weight_kg: newStarting,
+            height_cm: parseFloat(userBaseline?.height || 170),
+            goal: option.id, // 'fatloss', 'maintain', or 'muscle'
+            goal_weight: newGoal,
+            target_date: formattedTargetDate,
+            weight_unit: userBaseline?.unit || 'kg',
+            starting_weight: newStarting
+          }),
         });
+
+        if (response.ok && onRefreshDashboard) {
+          onRefreshDashboard();
+        }
       } catch (e) {
         console.log('NEW GOAL PERSIST ERROR:', e);
       }
     }
-  }, [currentWeight, isOnline, userId, userBaseline, setNotifications]);
+  }, [currentWeight, isOnline, userId, userBaseline, setNotifications, onRefreshDashboard]);
 
   const ringRadius        = 52;
   const ringStroke        = 10;
@@ -305,10 +348,11 @@ export default function DashboardScreen({
     propsForDots: { r: '4', strokeWidth: '2', stroke: logoGreen },
     decimalPlaces: 0,
   };
-  // After a goal reset, chart starts flat from the new baseline
-  const weightDataPoints = localStartingWeight !== null
-    ? [localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, localStartingWeight, currentWeight]
-    : [startingWeight, startingWeight - 0.5, startingWeight - 0.8, startingWeight - 1.2, startingWeight - 1.0, startingWeight - 1.5, currentWeight];
+  // Weight chart data — use the lifted history if available, otherwise seed a flat line
+  const fallbackStart = startingWeight;
+  const weightDataPoints = weightHistory && weightHistory.length === 7
+    ? weightHistory
+    : Array.from({ length: 6 }, () => fallbackStart).concat([currentWeight]);
   const weightChartData  = {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [{ data: weightDataPoints, color: () => logoGreen, strokeWidth: 3 }],
@@ -432,6 +476,13 @@ export default function DashboardScreen({
               })}
             </View>
           </View>
+          {nutrition.consumedCalories >= targetCalories && (
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningBannerText}>
+                ⚠️ You have reached or exceeded your daily calorie quota ({nutrition.consumedCalories} / {targetCalories} kcal).
+              </Text>
+            </View>
+          )}
         </FadeCard>
 
         {/* ── 3. EXERCISE & ACTIVITY ── */}
@@ -462,6 +513,13 @@ export default function DashboardScreen({
             </View>
             <AnimatedBar pct={Math.min((exercise.activeMinutes / (exercise.targetMinutes || 60)), 1)} color={logoGreen} delay={500} />
           </View>
+          {exercise.activeMinutes >= (exercise.targetMinutes || 60) && (
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningBannerText}>
+                ⚡ Daily exercise quota achieved ({exercise.activeMinutes} mins). Excellent work, make sure to rest!
+              </Text>
+            </View>
+          )}
         </FadeCard>
 
         {/* ── 3.5 HYDRATION ── */}
@@ -501,6 +559,13 @@ export default function DashboardScreen({
           >
             <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>+ Quick Add Glass</Text>
           </TouchableOpacity>
+          {consumedGlasses >= targetGlasses && (
+            <View style={[styles.warningBanner, { borderColor: '#BEE3F8', backgroundColor: '#EBF8FF' }]}>
+              <Text style={[styles.warningBannerText, { color: '#2B6CB0' }]}>
+                💧 Daily hydration target achieved ({consumedGlasses} / {targetGlasses} glasses). Stay balanced and avoid overhydrating.
+              </Text>
+            </View>
+          )}
         </FadeCard>
 
         {/* ── 4. WEIGHT TREND ANALYTICS ── */}
@@ -566,6 +631,15 @@ export default function DashboardScreen({
                 if (!isNaN(parsed) && parsed > 0) {
                   // Optimistic UI update
                   if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
+                  // Append to persistent chart history (slide window forward)
+                  if (setWeightHistory) {
+                    setWeightHistory(prev => {
+                      const base = prev && prev.length === 7
+                        ? prev
+                        : Array.from({ length: 6 }, () => startingWeight).concat([currentWeight]);
+                      return [...base.slice(1), parseFloat(parsed.toFixed(1))];
+                    });
+                  }
                   setShowWeightModal(false);
                   if (setNotifications) {
                     setNotifications(prev => [{
@@ -772,4 +846,22 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
   navTabText:          { fontSize: 9, fontWeight: '800', color: '#7FA293', marginTop: 4, textAlign: 'center' },
   centerCameraContainer: { position: 'relative', width: 68, height: '100%', alignItems: 'center', justifyContent: 'center' },
   cameraCircleButton:  { backgroundColor: logoGreen, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', position: 'absolute', top: -20 },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  warningBannerText: {
+    fontSize: 11,
+    color: '#D97706',
+    fontWeight: '700',
+    marginLeft: 6,
+    flex: 1,
+    lineHeight: 15,
+  },
 });

@@ -95,6 +95,16 @@ function MainApp() {
   const [sessionRecipes, setSessionRecipes] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
 
+  // Lifted Goal completion & Reset States to survive tab switches
+  const [localStartingWeight, setLocalStartingWeight] = useState(null);
+  const [localGoalWeight, setLocalGoalWeight] = useState(null);
+  const [localGoalLabel, setLocalGoalLabel] = useState(null);
+  const [goalReachedAlertShown, setGoalReachedAlertShown] = useState(false);
+
+  // Lifted weight chart history (7-day window) — survives tab switches
+  // Each entry is a kg value; index 6 = today (most recent)
+  const [weightHistory, setWeightHistory] = useState(null);
+
 
   const [notifications, setNotifications] = useState([
     { 
@@ -169,7 +179,18 @@ function MainApp() {
     }
     if (data.water) setGlobalConsumedGlasses(data.water.glasses || 0);
     if (data.profile.currentWeight !== undefined && data.profile.currentWeight !== null) {
-      setGlobalLoggedWeight(data.profile.currentWeight);
+      const w = data.profile.currentWeight;
+      setGlobalLoggedWeight(w);
+      // Seed the chart history only once (when it is still null)
+      setWeightHistory(prev => {
+        if (prev !== null) return prev; // already seeded — don't overwrite user's logged history
+        const sw = data.profile.startingWeight || w;
+        // Build a realistic-looking 6-day ramp from startingWeight toward current
+        const step = (w - sw) / 6;
+        return Array.from({ length: 7 }, (_, i) =>
+          parseFloat((sw + step * i).toFixed(1))
+        );
+      });
     }
     if (data.loggedMealIds) setGlobalLoggedMeals(data.loggedMealIds);
     setUserProfile(prev => ({
@@ -447,6 +468,16 @@ function MainApp() {
           userId={userId}
           onRefreshDashboard={fetchDashboardData}
           isOnline={isOnline}
+          localStartingWeight={localStartingWeight}
+          setLocalStartingWeight={setLocalStartingWeight}
+          localGoalWeight={localGoalWeight}
+          setLocalGoalWeight={setLocalGoalWeight}
+          localGoalLabel={localGoalLabel}
+          setLocalGoalLabel={setLocalGoalLabel}
+          goalReachedAlertShown={goalReachedAlertShown}
+          setGoalReachedAlertShown={setGoalReachedAlertShown}
+          weightHistory={weightHistory}
+          setWeightHistory={setWeightHistory}
         />
       )}
       {activeTab === 'DIET' && (

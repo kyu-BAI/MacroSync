@@ -428,7 +428,12 @@ export default function DietRecipesScreen({
     }
   };
 
-  const filteredRecipes = recipes.filter(recipe => {
+  // Deduplicate recipes by ID to ensure no duplicate cards are shown in the Explore tab
+  const uniqueRecipes = recipes.filter((recipe, index, self) =>
+    recipe && index === self.findIndex((r) => r && r.id === recipe.id)
+  );
+
+  const filteredRecipes = uniqueRecipes.filter(recipe => {
     const matchesBudget = selectedBudget === 'All' || recipe.budget === selectedBudget;
     const matchesLocation = recipe.location === selectedLocation;
     const matchesAllergy = selectedAllergy === 'None' || !(recipe.allergies || []).includes(selectedAllergy);
@@ -771,15 +776,6 @@ export default function DietRecipesScreen({
                 <View style={styles.glassDivider} />
 
                 <View style={styles.recipeFooterActions}>
-                  {/* Bottom-left AI Recipe Button */}
-                  <TouchableOpacity
-                    style={styles.exploreAiRecipeBtn}
-                    onPress={() => handleViewRecipe(recipe)}
-                    activeOpacity={0.7}
-                  >
-                    <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
-                    <Text style={styles.exploreAiRecipeBtnText}>AI Recipe</Text>
-                  </TouchableOpacity>
 
                   <TouchableOpacity 
                     style={[styles.fullRecipeViewToggleButton, isExpanded && styles.fullRecipeViewToggleActiveButton]}
@@ -1791,21 +1787,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#37745D',
     marginTop: 12,
-  },
-  exploreAiRecipeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EBF5F0',
-    borderWidth: 1.5,
-    borderColor: '#4EA685',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginRight: 'auto',
-  },
-  exploreAiRecipeBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#4EA685',
   },
 });
