@@ -197,7 +197,8 @@ function MainApp() {
       ...prev,
       name: data.profile.name || 'User',
       email: data.profile.email || prev.email || '',
-      profileImage: data.profile.profileImage || null
+      profileImage: data.profile.profileImage || null,
+      isPremium: !!data.nutrition.isPremium
     }));
   };
 
@@ -506,6 +507,8 @@ function MainApp() {
       {activeTab === 'SCANNER' && (
         <FoodScannerScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
+          userId={userId}
+          userProfile={userProfile}
           onLogMeal={async (macros) => {
             if (!userId) {
               Alert.alert('Authentication Error', 'You must be logged in to log meals.');

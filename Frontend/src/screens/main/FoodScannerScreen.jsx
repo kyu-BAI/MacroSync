@@ -23,7 +23,7 @@ const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 const logoGreen = '#4EA685';
 const baseColor = '#F0F4F2';
 
-export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
+export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState('off');
   const [isScanning, setIsScanning] = useState(false);
@@ -130,7 +130,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          image_base64: photo.base64
+          image_base64: photo.base64,
+          user_id: userId
         })
       });
 
@@ -138,6 +139,19 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
 
       setIsScanning(false);
       stopPulseAnimation();
+
+      if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
+        setCapturedImage(null);
+        Alert.alert(
+          "Scan Limit Reached",
+          "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+          [
+            { text: "Continue on Free Plan", style: "cancel" },
+            { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+          ]
+        );
+        return;
+      }
 
       if (response.ok) {
         if (data.error) {
@@ -193,7 +207,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            image_base64: selectedAsset.base64
+            image_base64: selectedAsset.base64,
+            user_id: userId
           })
         });
 
@@ -201,6 +216,19 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
 
         setIsScanning(false);
         stopPulseAnimation();
+
+        if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
+          setCapturedImage(null);
+          Alert.alert(
+            "Scan Limit Reached",
+            "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+            [
+              { text: "Continue on Free Plan", style: "cancel" },
+              { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+            ]
+          );
+          return;
+        }
 
         if (response.ok) {
           if (data.error) {

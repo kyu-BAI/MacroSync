@@ -11,7 +11,8 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Keyboard
+  Keyboard,
+  Alert
 } from 'react-native';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User } from 'lucide-react-native';
 
@@ -85,6 +86,19 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       });
 
       const data = await response.json();
+
+      if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
+        setIsLoading(false);
+        Alert.alert(
+          "Chat Limit Reached",
+          "You've reached your daily limit of 5 chatbot messages on the Free Plan. You can continue using MacroSync without the AI chatbot, or upgrade to Premium for unlimited chatbot usage and scans.",
+          [
+            { text: "Continue on Free Plan", style: "cancel" },
+            { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+          ]
+        );
+        return;
+      }
 
       if (response.ok) {
         setMessages((prev) => [

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -183,22 +183,56 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [personalizedAlerts, setPersonalizedAlerts] = useState(false);
 
   // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
-  const [accountTier, setAccountTier] = useState('Free');
+  const [accountTier, setAccountTier] = useState(userProfile?.isPremium ? 'Premium' : 'Free');
   const [showBillingOptions, setShowBillingOptions] = useState(false);
   
   // Tracks exactly which option ('Monthly' or 'Annual') has the active focus/outline
   const [selectedBillingCycle, setSelectedBillingCycle] = useState(null);
 
+  useEffect(() => {
+    setAccountTier(userProfile?.isPremium ? 'Premium' : 'Free');
+  }, [userProfile?.isPremium]);
+
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
 
   // --- ACCOUNT TIER MANAGER ACTIONS ---
-  const handleSelectTierOption = (tierType) => {
-    setAccountTier(tierType);
+  const handleSelectTierOption = async (tierType) => {
     if (tierType === 'Free') {
-      Alert.alert("Plan Updated", "You are currently on the Free Plan.");
+      if (userProfile?.isPremium) {
+        Alert.alert(
+          "Cancel Subscription",
+          "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
+          [
+            { text: "No", style: "cancel" },
+            { 
+              text: "Yes, Downgrade", 
+              onPress: async () => {
+                try {
+                  const response = await fetch(`${API_URL}/update-subscription`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, is_premium: false })
+                  });
+                  if (response.ok) {
+                    setUserProfile(prev => ({ ...prev, isPremium: false }));
+                    setAccountTier('Free');
+                    Alert.alert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
+                  } else {
+                    Alert.alert("Error", "Failed to cancel subscription on server.");
+                  }
+                } catch (e) {
+                  Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        setAccountTier('Free');
+      }
     } else {
-      Alert.alert("Coming Soon", "Premium plan details and pricing will be available soon. Stay tuned!");
+      setAccountTier('Premium');
     }
   };
 
@@ -221,13 +255,28 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         },
         {
           text: "Proceed to Pay",
-          onPress: () => {
-            setAccountTier(`Premium (${planName})`);
-            setShowBillingOptions(false);
-            Alert.alert(
-              "Processing Payment",
-              "Connecting to payment gateway handlers... Subscription initialized successfully."
-            );
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/update-subscription`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, is_premium: true })
+              });
+              if (response.ok) {
+                setUserProfile(prev => ({ ...prev, isPremium: true }));
+                setAccountTier('Premium');
+                Alert.alert(
+                  "Success ✨",
+                  "Subscription initialized successfully. Welcome to MacroSync Premium!"
+                );
+              } else {
+                Alert.alert("Error", "Failed to activate subscription on the server.");
+                setSelectedBillingCycle(null);
+              }
+            } catch (e) {
+              Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+              setSelectedBillingCycle(null);
+            }
           }
         }
       ]
@@ -339,11 +388,69 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           </View>
 
           {accountTier === 'Premium' && (
-            <View style={{ marginTop: 12 }}>
+            <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
-              <Text style={[styles.premiumPanelHeading, { textAlign: 'center', color: '#7FA293' }]}>
-                🚀 Premium plan details coming soon!
-              </Text>
+              
+              <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
+              
+              {/* Monthly Plan */}
+              <TouchableOpacity 
+                style={[
+                  styles.billingPlanSelectorRowItem,
+                  selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
+                  { marginBottom: 12 }
+                ]}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱200/mo')}
+              >
+                <View style={styles.billingPlanTextGroup}>
+                  <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
+                  <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
+                </View>
+                <Text style={styles.billingPlanPriceBadgeText}>₱200/mo</Text>
+              </TouchableOpacity>
+
+              {/* Annual Plan */}
+              <TouchableOpacity 
+                style={[
+                  styles.billingPlanSelectorRowItem,
+                  selectedBillingCycle === 'Annual' && styles.billingPlanActive
+                ]}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,149/yr')}
+              >
+                <View style={styles.billingPlanTextGroup}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
+                    <View style={styles.bestValueBadge}>
+                      <Text style={styles.bestValueBadgeText}>SAVE 10%</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
+                </View>
+                <Text style={styles.billingPlanPriceBadgeText}>₱2,149/yr</Text>
+              </TouchableOpacity>
+
+              {/* Premium Feature List */}
+              <View style={styles.premiumFeatureDetailsBox}>
+                <View style={styles.featureDetailsHeadingFlexRow}>
+                  <Sparkles color={logoGreen} size={16} style={{ marginRight: 6 }} />
+                  <Text style={styles.premiumDetailsHeadingText}>Premium Benefits</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Unlimited smart food scanner usage (AI vision analysis)</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Unlimited chatbot queries & nutrition planning</Text>
+                </View>
+
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Priority generation speeds and backup model availability</Text>
+                </View>
+              </View>
             </View>
           )}
         </View>

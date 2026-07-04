@@ -107,6 +107,12 @@ class RecipeRequest(BaseModel):
 
 class AnalyzeFoodRequest(BaseModel):
     image_base64: str
+    user_id: str = None
+
+
+class UpdateSubscriptionRequest(BaseModel):
+    user_id: str
+    is_premium: bool
 
 
 class UpdateProfileRequest(BaseModel):
@@ -408,6 +414,36 @@ async def update_profile(data: UpdateProfileRequest):
         raise HTTPException(status_code=500, detail="Failed to update profile info")
 
 
+@app.post("/update-subscription")
+async def update_subscription(data: UpdateSubscriptionRequest):
+    try:
+        # Fetch existing profile location/preferences JSON to preserve other keys
+        res = supabase.table("user_profiles").select("location").eq("id", data.user_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        prefs = {}
+        loc_str = res.data[0].get("location")
+        if loc_str:
+            try:
+                prefs = json.loads(loc_str)
+            except:
+                pass
+                
+        prefs["is_premium"] = data.is_premium
+        
+        supabase.table("user_profiles").update({
+            "location": json.dumps(prefs)
+        }).eq("id", data.user_id).execute()
+        
+        return {"success": True, "is_premium": data.is_premium}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("UPDATE SUBSCRIPTION ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------- MEALS LOGGING ----------------
 @app.post("/meals")
 async def log_meal(data: MealLog):
@@ -592,8 +628,8 @@ async def get_dashboard_data(user_id: str):
         active_minutes = sum(w["active_minutes"] for w in workouts_data)
         recent_exercise = workouts_data[-1]["name"] if workouts_data else "None"
 
-        # Premium status mocked to false for free tier UI demonstration
-        is_premium = False
+        # Premium status from user preferences JSON
+        is_premium = prefs.get("is_premium", False)
         
         return {
             "profile": {
@@ -697,6 +733,23 @@ async def chat_with_ai(data: ChatMessageRequest):
                 except:
                     pass
             
+            is_premium = prefs.get("is_premium", False)
+            if not is_premium:
+                manila_tz = timezone(timedelta(hours=8))
+                today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                usage = prefs.get("usage", {})
+                day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+                
+                if day_usage.get("chats", 0) >= 5:
+                    raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
+                
+                day_usage["chats"] = day_usage.get("chats", 0) + 1
+                usage[today_str] = day_usage
+                prefs["usage"] = usage
+                
+                # Save incremented count back to database
+                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+
             unit = prefs.get("unit", "kg")
             current_weight_kg = user.get("weight_kg")
             target_weight_kg = user.get("goalWeight")
@@ -736,6 +789,8 @@ async def chat_with_ai(data: ChatMessageRequest):
         response = generate_gemini_content(full_prompt)
         
         return {"response": response.text}
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("CHAT ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -791,6 +846,33 @@ async def generate_recipe(data: RecipeRequest):
 @app.post("/analyze-food")
 async def analyze_food(data: AnalyzeFoodRequest):
     try:
+        if data.user_id:
+            user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
+            if user_result.data:
+                user = user_result.data[0]
+                prefs = {}
+                if user.get("location"):
+                    try:
+                        prefs = json.loads(user["location"])
+                    except:
+                        pass
+                
+                is_premium = prefs.get("is_premium", False)
+                if not is_premium:
+                    manila_tz = timezone(timedelta(hours=8))
+                    today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                    usage = prefs.get("usage", {})
+                    day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+                    
+                    if day_usage.get("scans", 0) >= 3:
+                        raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
+                    
+                    day_usage["scans"] = day_usage.get("scans", 0) + 1
+                    usage[today_str] = day_usage
+                    prefs["usage"] = usage
+                    
+                    supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+
         image_bytes = base64.b64decode(data.image_base64)
         
         prompt = """
@@ -821,9 +903,11 @@ async def analyze_food(data: AnalyzeFoodRequest):
         
         return result_data
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("VISION ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to analyze image. Please try again.")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/debug-key")
