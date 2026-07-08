@@ -20,7 +20,6 @@ import {
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
-import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 
@@ -721,7 +720,6 @@ export default function DashboardScreen({
       </Modal>
 
       {/* ── FLOATING CHATBOT ── */}
-      <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
 
       {/* ── BOTTOM NAV ── */}
     </View>
@@ -839,13 +837,7 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
     borderTopColor: '#64D4AA', borderLeftColor: '#64D4AA',
   },
 
-  // Nav bar
-  navBarOuterEdge:     { borderWidth: 1, borderColor: '#E2ECE7', position: 'absolute', bottom: 0, left: 0, right: 0, height: 84, backgroundColor: baseColor, paddingHorizontal: 6, paddingBottom: Platform.OS === 'ios' ? 18 : 2 },
-  navBarContentRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: '100%', position: 'relative' },
-  navTabItem:          { flex: 1.1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
-  navTabText:          { fontSize: 9, fontWeight: '800', color: '#7FA293', marginTop: 4, textAlign: 'center' },
-  centerCameraContainer: { position: 'relative', width: 68, height: '100%', alignItems: 'center', justifyContent: 'center' },
-  cameraCircleButton:  { backgroundColor: logoGreen, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', position: 'absolute', top: -20 },
+
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',

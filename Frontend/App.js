@@ -42,6 +42,7 @@ import SettingsScreen from "./src/screens/main/SettingsScreen";
 import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
+import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import API_URL from "./src/screens/config/api";
 
 
@@ -675,6 +676,9 @@ function MainApp() {
           notifications={notifications}
           setNotifications={setNotifications}
         />
+      )}
+      {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
+        <DraggableChatbotButton onPress={() => setActiveTab('CHATBOT')} />
       )}
       {['DASHBOARD', 'DIET', 'CHATBOT', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
         <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} />

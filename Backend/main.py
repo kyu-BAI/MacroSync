@@ -762,7 +762,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
 
 # ---------------- AI CHATBOT ----------------
 @app.post("/chat")
-async def chat_with_ai(data: ChatMessageRequest):
+def chat_with_ai(data: ChatMessageRequest):
     try:
         # Fetch user profile for context
         user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
@@ -785,7 +785,7 @@ async def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 5:
+                if day_usage.get("chats", 0) >= 10:
                     raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
@@ -843,7 +843,7 @@ async def chat_with_ai(data: ChatMessageRequest):
 
 # ---------------- AI RECIPE GENERATOR ----------------
 @app.post("/generate-recipe")
-async def generate_recipe(data: RecipeRequest):
+def generate_recipe(data: RecipeRequest):
     try:
         prompt = f"""
         You are an expert local nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
@@ -889,7 +889,7 @@ async def generate_recipe(data: RecipeRequest):
 
 # ---------------- AI VISION FOOD ANALYSIS ----------------
 @app.post("/analyze-food")
-async def analyze_food(data: AnalyzeFoodRequest):
+def analyze_food(data: AnalyzeFoodRequest):
     try:
         if data.user_id:
             user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
@@ -909,7 +909,7 @@ async def analyze_food(data: AnalyzeFoodRequest):
                     usage = prefs.get("usage", {})
                     day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                     
-                    if day_usage.get("scans", 0) >= 3:
+                    if day_usage.get("scans", 0) >= 5:
                         raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
                     
                     day_usage["scans"] = day_usage.get("scans", 0) + 1
@@ -927,6 +927,7 @@ async def analyze_food(data: AnalyzeFoodRequest):
         
         Otherwise, return a JSON object with the following keys:
         - "name" (string, the name of the food)
+        - "serving_weight_g" (integer, the estimated portion size/weight in grams)
         - "confidence" (integer between 0 and 100)
         - "calories" (integer)
         - "protein" (integer, in grams)
@@ -953,6 +954,535 @@ async def analyze_food(data: AnalyzeFoodRequest):
     except Exception as e:
         print("VISION ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_static_fallback_workouts(goal: str):
+    goal_lower = goal.lower() if goal else ""
+    if "muscle" in goal_lower or "gain" in goal_lower:
+        return [
+            {
+                "id": 1,
+                "title": "Home Calisthenics Push & Core Mass",
+                "intensity": "Intense",
+                "duration": "25 mins",
+                "targetGains": "Muscle Growth",
+                "caloriesBurn": 290,
+                "description": "Decline push-ups, explosive push-ups, chair dips, planks, and leg raises for upper body muscle development.",
+                "tutorials": [
+                    {
+                        "name": "Decline Bodyweight Push-Ups",
+                        "target": "3 Sets x 12 Reps",
+                        "setup": "Elevate feet on a chair or couch. Place hands slightly wider than shoulders.",
+                        "form": "Lower your chest with control, keeping your body in a straight line, then push up explosively."
+                    },
+                    {
+                        "name": "Tricep Chair Dips",
+                        "target": "3 Sets x 15 Reps",
+                        "setup": "Sit on edge of a chair, place palms next to hips, slide glutes forward off the seat.",
+                        "form": "Bend elbows to 90 degrees to lower hips. Press firmly through palms to lock out."
+                    },
+                    {
+                        "name": "Strict Isometric Floor Plank",
+                        "target": "3 Sets x 45 Seconds",
+                        "setup": "Place forearms on the floor, elbows aligned under shoulders.",
+                        "form": "Squeeze core, glutes, and thighs. Maintain a perfectly flat table posture."
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Lower Body & Legs Hypertrophy",
+                "intensity": "Moderate",
+                "duration": "20 mins",
+                "targetGains": "Leg Strength",
+                "caloriesBurn": 210,
+                "description": "Slow tempo air squats, bulgarian split squats, and calf raises to build lower body muscle mass.",
+                "tutorials": [
+                    {
+                        "name": "Air Squats (Slow Tempo)",
+                        "target": "4 Sets x 15 Reps",
+                        "setup": "Feet shoulder-width apart, toes pointing slightly out.",
+                        "form": "Lower down slowly for 3 seconds, pause at parallel, then drive back up in 1 second."
+                    },
+                    {
+                        "name": "Bulgarian Split Squats",
+                        "target": "3 Sets x 10 Reps per leg",
+                        "setup": "Place one foot behind you on a chair, standard stance with the forward foot.",
+                        "form": "Lower your hips until your back knee is just above the floor. Drive through front heel."
+                    },
+                    {
+                        "name": "Single-Leg Calf Raises",
+                        "target": "3 Sets x 20 Reps per leg",
+                        "setup": "Stand on one foot near a wall or chair for balance.",
+                        "form": "Raise up onto your toes as high as possible, pause at top, lower slowly."
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Core Sculpt & Stability",
+                "intensity": "Light",
+                "duration": "15 mins",
+                "targetGains": "Abdominal Strength",
+                "caloriesBurn": 90,
+                "description": "Bicycle crunches, lying leg raises, and bird-dogs for absolute core stabilization.",
+                "tutorials": [
+                    {
+                        "name": "Lying Leg Raises",
+                        "target": "3 Sets x 12 Reps",
+                        "setup": "Lie flat on your back, hands placed under your glutes for lower back support.",
+                        "form": "Keep legs straight, lift them to 90 degrees, then lower slowly without touching the floor."
+                    },
+                    {
+                        "name": "Bicycle Crunches",
+                        "target": "3 Sets x 20 Reps",
+                        "setup": "Lie on back, hands behind head, knees bent at 90 degrees.",
+                        "form": "Alternately bring elbow to opposite knee while extending the other leg straight."
+                    },
+                    {
+                        "name": "Isometric Bird-Dog",
+                        "target": "3 Sets x 10 Reps per side",
+                        "setup": "All fours position with knees under hips and hands under shoulders.",
+                        "form": "Reach right arm forward and left leg backward simultaneously. Hold for 2 seconds."
+                    }
+                ]
+            }
+        ]
+    elif "loss" in goal_lower or "lost" in goal_lower or "fat" in goal_lower:
+        return [
+            {
+                "id": 1,
+                "title": "Fat-Burning Metabolic HIIT",
+                "intensity": "Intense",
+                "duration": "20 mins",
+                "targetGains": "Fat Loss & Endurance",
+                "caloriesBurn": 320,
+                "description": "High-intensity burpees, mountain climbers, and jumping lunges to trigger the afterburn effect.",
+                "tutorials": [
+                    {
+                        "name": "Full Body Burpees",
+                        "target": "4 Sets x 12 Reps",
+                        "setup": "Stand tall, feet shoulder-width apart.",
+                        "form": "Drop to squat, kick feet back to plank, perform pushup, snap feet back, and jump up explosively."
+                    },
+                    {
+                        "name": "Jumping Lunges",
+                        "target": "3 Sets x 30 Seconds",
+                        "setup": "Step into a lunge stance, core tight.",
+                        "form": "Explode upward and switch leg positions in the air, landing softly into a lunge."
+                    },
+                    {
+                        "name": "High-Speed Mountain Climbers",
+                        "target": "3 Sets x 45 Seconds",
+                        "setup": "High push-up plank, shoulders stacked over wrists.",
+                        "form": "Drive knees to chest as fast as possible while maintaining flat hips."
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Full-Body Conditioning",
+                "intensity": "Moderate",
+                "duration": "18 mins",
+                "targetGains": "Cardio Stamina",
+                "caloriesBurn": 220,
+                "description": "Jumping jacks, air squats, and push-up rotations for steady calorie expenditure.",
+                "tutorials": [
+                    {
+                        "name": "Jumping Jacks",
+                        "target": "3 Sets x 60 Seconds",
+                        "setup": "Stand with feet together, arms at your sides.",
+                        "form": "Jump feet out while swinging arms overhead. Return to start quickly."
+                    },
+                    {
+                        "name": "Air Squats (Paced)",
+                        "target": "3 Sets x 20 Reps",
+                        "setup": "Feet shoulder-width apart, arms extended forward.",
+                        "form": "Squat down until thighs are parallel to ground, maintaining a steady, fast pace."
+                    },
+                    {
+                        "name": "Push-up to Side Plank Rotation",
+                        "target": "3 Sets x 10 Reps",
+                        "setup": "Start in a standard push-up position.",
+                        "form": "Do a push-up, then rotate your body open into a side plank. Alternate sides."
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Core Burn & Cardio Flow",
+                "intensity": "Light",
+                "duration": "15 mins",
+                "targetGains": "Toning & Agility",
+                "caloriesBurn": 120,
+                "description": "Plank taps, flutter kicks, and dynamic cat-cow for low impact cardio and core toning.",
+                "tutorials": [
+                    {
+                        "name": "Plank Shoulder Taps",
+                        "target": "3 Sets x 20 Reps",
+                        "setup": "High push-up position, feet slightly wider than usual for balance.",
+                        "form": "Tap left shoulder with right hand, then right shoulder with left hand. Keep hips stable."
+                    },
+                    {
+                        "name": "Flutter Kicks",
+                        "target": "3 Sets x 40 Seconds",
+                        "setup": "Lying on back, lift head/shoulders slightly, raise heels 6 inches off ground.",
+                        "form": "Kick legs up and down in a small, rapid fluttering motion. Keep lower back flat."
+                    },
+                    {
+                        "name": "Dynamic Cat-Cow Flow",
+                        "target": "2 Sets x 12 Cycles",
+                        "setup": "On all fours, knees under hips, hands under shoulders.",
+                        "form": "Inhale to arch back down and look up; exhale to round spine and look at navel."
+                    }
+                ]
+            }
+        ]
+    else:
+        return [
+            {
+                "id": 1,
+                "title": "Functional Full-Body Integration",
+                "intensity": "Intense",
+                "duration": "22 mins",
+                "targetGains": "Strength & Agility",
+                "caloriesBurn": 260,
+                "description": "Walkout pushups, speed air squats, and plank jacks to build balanced strength.",
+                "tutorials": [
+                    {
+                        "name": "Inchworm Walkout to Push-up",
+                        "target": "3 Sets x 10 Reps",
+                        "setup": "Stand straight, bend at hips, place hands on floor near feet.",
+                        "form": "Walk hands forward to plank, perform a pushup, then walk hands back and stand tall."
+                    },
+                    {
+                        "name": "Plank Jacks",
+                        "target": "3 Sets x 45 Seconds",
+                        "setup": "Low forearm plank position, body in straight line.",
+                        "form": "Jump feet out wide, then jump them back together, maintaining plank height."
+                    },
+                    {
+                        "name": "Jumping Squats",
+                        "target": "3 Sets x 12 Reps",
+                        "setup": "Standard squat stance.",
+                        "form": "Squat down, then explode upwards into a vertical jump. Land softly."
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Steady Mobility & Strength",
+                "intensity": "Moderate",
+                "duration": "20 mins",
+                "targetGains": "Joint Mobility & Tone",
+                "caloriesBurn": 180,
+                "description": "Reverse lunges, pushups, and bird-dog sequence for whole-body mobility.",
+                "tutorials": [
+                    {
+                        "name": "Standard Bodyweight Pushups",
+                        "target": "3 Sets x 12 Reps",
+                        "setup": "Plank position, hands shoulder-width apart.",
+                        "form": "Lower chest to ground, elbows tucked at 45 degrees, push up fully."
+                    },
+                    {
+                        "name": "Reverse Lunges (Alternating)",
+                        "target": "3 Sets x 16 Reps",
+                        "setup": "Stand tall, hands on hips.",
+                        "form": "Step back, drop knee to 90 degrees, return to start. Alternate legs."
+                    },
+                    {
+                        "name": "Alternating Bird-Dog Flow",
+                        "target": "3 Sets x 12 Reps",
+                        "setup": "On all fours, knees under hips.",
+                        "form": "Extend opposite arm and leg, hold for 1 second. Swap sides."
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Living Room Mobility & Posture Alignment",
+                "intensity": "Light",
+                "duration": "15 mins",
+                "targetGains": "Flexibility & Health",
+                "caloriesBurn": 85,
+                "description": "Dynamic stretching sequences, yoga-inspired spinal decompression, and core stability activation patterns.",
+                "tutorials": [
+                    {
+                        "name": "Quadruped Cat-Cow Flow",
+                        "target": "2 Sets x 10 Cycles",
+                        "setup": "All fours, knees under hips.",
+                        "form": "Arch back down looking up (inhale), round spine looking down (exhale)."
+                    },
+                    {
+                        "name": "Deep Yogi Squat Hold",
+                        "target": "2 Sets x 45 Seconds",
+                        "setup": "Stand with feet slightly wider than shoulder-width, toes flared.",
+                        "form": "Sit deep into a full squat. Press elbows against inside of knees to stretch hips."
+                    },
+                    {
+                        "name": "Plank Knee-to-Elbow Taps",
+                        "target": "2 Sets x 12 Reps",
+                        "setup": "High push-up plank position.",
+                        "form": "Bring right knee to touch right elbow. Return and bring left knee to left elbow."
+                    }
+                ]
+            }
+        ]
+
+
+@app.get("/workouts/recommend/{user_id}")
+def recommend_workouts(user_id: str):
+    # Default goal fallback
+    fallback_goal = "Maintain Weight"
+    try:
+        # Fetch user profiles from supabase
+        profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        if not profile_res.data:
+            return get_static_fallback_workouts(fallback_goal)
+
+        profile = profile_res.data[0]
+        goal = profile.get("goal", "Maintain Weight")
+        fallback_goal = goal
+        weight_kg = profile.get("weight_kg", 70.0)
+        goal_weight = profile.get("goalWeight", 70.0)
+        height_cm = profile.get("height_cm", 170.0)
+        age = profile.get("age", 25)
+
+        # Manila timezone for seed date string so rotation changes daily
+        manila_tz = timezone(timedelta(hours=8))
+        now_manila = datetime.now(manila_tz)
+        date_str = now_manila.strftime("%A, %B %d, %Y")
+
+        prompt = f"""
+        You are an elite personal fitness trainer. Recommend exactly 3 custom bodyweight home workout routines (one Light, one Moderate, one Intense) specifically tailored to the user's goal to achieve their target weight:
+        - User Baseline: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg
+        - User Target Weight: {goal_weight}kg
+        - Primary Fitness Goal: {goal}
+        
+        Generate safe, effective routines that require no gym equipment.
+        To maintain daily variety, today's date rotation seed is: {date_str}. Recommend a unique combination of exercises for this specific date, different from typical recommendations.
+
+        Return ONLY a JSON array of 3 objects (no markdown blocks, no backticks, just raw JSON).
+        Each object must have the following keys:
+        - "id" (integer: 1, 2, or 3)
+        - "title" (string, descriptive title of the workout)
+        - "intensity" (string: "Light", "Moderate", or "Intense")
+        - "duration" (string, e.g. "15 mins", "20 mins", "25 mins")
+        - "targetGains" (string, the main benefit, e.g. "Fat Loss & Conditioning", "Hypertrophy")
+        - "caloriesBurn" (integer, estimated calorie burn)
+        - "description" (string, brief summary of the routine)
+        - "tutorials" (a list of exactly 3 exercise objects, each containing:
+            - "name" (string, exercise name)
+            - "target" (string, reps/sets or duration, e.g. "3 Sets x 12 Reps")
+            - "setup" (string, starting position setup guide)
+            - "form" (string, key movement and safety tips)
+          )
+        """
+
+        if not genai_client:
+            return get_static_fallback_workouts(goal)
+
+        response = generate_gemini_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+        workouts = json.loads(text)
+        if isinstance(workouts, list) and len(workouts) == 3:
+            return workouts
+        else:
+            print("Gemini response was not a list of 3 items, falling back.")
+            return get_static_fallback_workouts(goal)
+            
+    except Exception as e:
+        print("WORKOUT RECOMMENDATION ROUTE ERROR:", repr(e))
+        return get_static_fallback_workouts(fallback_goal)
+
+
+def get_static_fallback_meals(goal: str, targetCalories: int, targetProtein: int, targetCarbs: int, targetFats: int):
+    return [
+        {
+            "id": "dp1",
+            "mealType": "Breakfast",
+            "title": "Local Eggs & Pandesal",
+            "calories": int(round(targetCalories * 0.25)),
+            "protein": f"{int(round(targetProtein * 0.25))}g",
+            "carbs": f"{int(round(targetCarbs * 0.25))}g",
+            "fats": f"{int(round(targetFats * 0.25))}g",
+            "time": "8:00 AM",
+            "ingredients": [
+                "2 fresh local eggs",
+                "2 pieces whole-wheat or regular pandesal bread",
+                "1 tsp oil or butter for frying",
+                "Pinch of salt and black pepper"
+            ],
+            "instructions": [
+                "Heat oil or butter in a non-stick pan over medium heat.",
+                "Crack the eggs in and cook scrambled or sunny-side-up as preferred.",
+                "Toast your pandesal slices lightly in a toaster or pan.",
+                "Plate the hot toasted pandesal, serve with the cooked eggs, and optionally season with salt and pepper."
+            ]
+        },
+        {
+            "id": "dp2",
+            "mealType": "Lunch",
+            "title": "Chicken Adobo & Rice",
+            "calories": int(round(targetCalories * 0.35)),
+            "protein": f"{int(round(targetProtein * 0.35))}g",
+            "carbs": f"{int(round(targetCarbs * 0.35))}g",
+            "fats": f"{int(round(targetFats * 0.35))}g",
+            "time": "12:30 PM",
+            "ingredients": [
+                "150g skinless chicken thigh or breast, chopped",
+                "1 cup cooked white or brown rice",
+                "2 tbsp soy sauce",
+                "1 tbsp vinegar",
+                "2 cloves garlic, crushed",
+                "1 dried bay leaf",
+                "1/2 tsp whole black peppercorns"
+            ],
+            "instructions": [
+                "Combine chicken, soy sauce, garlic, and peppercorns in a bowl. Marinate for 10-15 minutes.",
+                "Heat a pot over medium-high heat and sear the chicken pieces until lightly browned.",
+                "Pour in the marinade, vinegar, and add the bay leaf. Bring to a boil, then cover and lower the heat to simmer for 20 minutes.",
+                "Serve hot chicken adobo with its savory sauce over a cup of steamed rice."
+            ]
+        },
+        {
+            "id": "dp3",
+            "mealType": "Snack",
+            "title": "Banana & Peanut Butter",
+            "calories": int(round(targetCalories * 0.10)),
+            "protein": f"{int(round(targetProtein * 0.10))}g",
+            "carbs": f"{int(round(targetCarbs * 0.10))}g",
+            "fats": f"{int(round(targetFats * 0.10))}g",
+            "time": "4:00 PM",
+            "ingredients": [
+                "1 medium local banana (Lakatan or Latundan)",
+                "1.5 tbsp natural unsweetened peanut butter"
+            ],
+            "instructions": [
+                "Peel the banana and slice it horizontally or into bite-sized coins.",
+                "Spread the natural unsweetened peanut butter evenly across the banana slices.",
+                "Enjoy immediately as a high-potassium, healthy-fat pre-workout snack."
+            ]
+        },
+        {
+            "id": "dp4",
+            "mealType": "Dinner",
+            "title": "Grilled Fish & Veggies",
+            "calories": int(round(targetCalories * 0.30)),
+            "protein": f"{int(round(targetProtein * 0.30))}g",
+            "carbs": f"{int(round(targetCarbs * 0.30))}g",
+            "fats": f"{int(round(targetFats * 0.30))}g",
+            "time": "7:30 PM",
+            "ingredients": [
+                "150g fresh local fish fillet (like Tilapia or Bangus)",
+                "1 cup steamed mixed local vegetables (like Okra, Squash, Eggplant)",
+                "1 tsp olive or coconut oil",
+                "1 squeeze of fresh calamansi juice",
+                "Salt, pepper, and garlic powder to taste"
+            ],
+            "instructions": [
+                "Season the fish fillet with salt, pepper, garlic powder, and a squeeze of calamansi juice.",
+                "Heat oil in a grill pan or skillet over medium-high heat and cook the fish for 3-4 minutes per side until flaky.",
+                "Steam your mixed vegetables in a separate pot until tender but crisp.",
+                "Serve the grilled fish hot alongside the steamed fresh vegetables."
+            ]
+        }
+    ]
+
+
+@app.get("/meals/recommend/{user_id}")
+def recommend_meals(user_id: str):
+    # Default macros fallback
+    fallback_goal = "Maintain Weight"
+    target_calories = 2200
+    target_protein = 126
+    target_carbs = 250
+    target_fats = 70
+    try:
+        # Fetch user profiles from supabase
+        profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        if not profile_res.data:
+            return get_static_fallback_meals(fallback_goal, target_calories, target_protein, target_carbs, target_fats)
+
+        profile = profile_res.data[0]
+        goal = profile.get("goal", "Maintain Weight")
+        fallback_goal = goal
+        weight_kg = profile.get("weight_kg", 70.0)
+
+        # Calculate macros
+        if "Lose" in goal:
+            target_calories = 1800
+            target_protein = int(weight_kg * 2.2)
+            target_carbs = 150
+            target_fats = 60
+        elif "Gain" in goal:
+            target_calories = 2800
+            target_protein = int(weight_kg * 2.0)
+            target_carbs = 350
+            target_fats = 80
+        else:
+            target_calories = 2200
+            target_protein = int(weight_kg * 1.8)
+            target_carbs = 250
+            target_fats = 70
+
+        # Manila timezone for seed date string so rotation changes daily
+        manila_tz = timezone(timedelta(hours=8))
+        now_manila = datetime.now(manila_tz)
+        date_str = now_manila.strftime("%A, %B %d, %Y")
+
+        prompt = f"""
+        You are an elite personal fitness dietitian. Recommend exactly 4 custom recipes (Breakfast, Lunch, Snack, Dinner) for this user profile:
+        - Primary Fitness Goal: {goal}
+        - Total Daily Nutritional Targets: {target_calories} kcal, {target_protein}g Protein, {target_carbs}g Carbs, {target_fats}g Fats.
+        - Date Rotation Seed: {date_str}
+
+        Guidelines:
+        - Distribute the targets: Breakfast (25% calories), Lunch (35% calories), Snack (10% calories), Dinner (30% calories).
+        - Recommend distinct healthy recipes with clear, easy to procure ingredients and easy cooking instructions.
+        - Do not use any currency symbols other than the Philippine Peso sign (₱).
+
+        Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
+        Each object must have the following keys:
+        - "id" (string: "dp1", "dp2", "dp3", or "dp4")
+        - "mealType" (string: "Breakfast", "Lunch", "Snack", or "Dinner")
+        - "title" (string, recipe name)
+        - "calories" (integer, calories in kcal)
+        - "protein" (string, e.g. "30g")
+        - "carbs" (string, e.g. "50g")
+        - "fats" (string, e.g. "15g")
+        - "time" (string, e.g. "8:00 AM", "12:30 PM", "4:00 PM", "7:30 PM")
+        - "ingredients" (list of strings, ingredient items)
+        - "instructions" (list of strings, cooking instructions)
+        """
+
+        if not genai_client:
+            return get_static_fallback_meals(goal, target_calories, target_protein, target_carbs, target_fats)
+
+        response = generate_gemini_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+        meals = json.loads(text)
+        if isinstance(meals, list) and len(meals) == 4:
+            return meals
+        else:
+            print("Gemini response was not a list of 4 items, falling back.")
+            return get_static_fallback_meals(goal, target_calories, target_protein, target_carbs, target_fats)
+            
+    except Exception as e:
+        print("MEAL RECOMMENDATION ROUTE ERROR:", repr(e))
+        return get_static_fallback_meals(fallback_goal, target_calories, target_protein, target_carbs, target_fats)
 
 
 @app.get("/debug-key")

@@ -13,12 +13,13 @@ import {
   Alert,
   Modal
 } from 'react-native';
-import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
-import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DietRecipesScreen({ 
   onTabChange, 
@@ -234,13 +235,76 @@ export default function DietRecipesScreen({
 
   const targetCalories = calculatedTargetCalories;
 
-  // Dynamic Daily Plan derived from Target Macros
-  const dailyPlan = [
-    { id: 'dp1', mealType: 'Breakfast', title: 'Local Eggs & Pandesal', calories: Math.round(targetCalories * 0.25), protein: `${Math.round(targetProtein * 0.25)}g`, carbs: `${Math.round(targetCarbs * 0.25)}g`, fats: `${Math.round(targetFats * 0.25)}g`, time: '8:00 AM', icon: Coffee },
-    { id: 'dp2', mealType: 'Lunch', title: 'Chicken Adobo & Rice', calories: Math.round(targetCalories * 0.35), protein: `${Math.round(targetProtein * 0.35)}g`, carbs: `${Math.round(targetCarbs * 0.35)}g`, fats: `${Math.round(targetFats * 0.35)}g`, time: '12:30 PM', icon: Sun },
-    { id: 'dp3', mealType: 'Snack', title: 'Banana & Peanut Butter', calories: Math.round(targetCalories * 0.10), protein: `${Math.round(targetProtein * 0.10)}g`, carbs: `${Math.round(targetCarbs * 0.10)}g`, fats: `${Math.round(targetFats * 0.10)}g`, time: '4:00 PM', icon: Flame },
-    { id: 'dp4', mealType: 'Dinner', title: 'Grilled Fish & Veggies', calories: Math.round(targetCalories * 0.30), protein: `${Math.round(targetProtein * 0.30)}g`, carbs: `${Math.round(targetCarbs * 0.30)}g`, fats: `${Math.round(targetFats * 0.30)}g`, time: '7:30 PM', icon: Moon },
-  ];
+  const getMealAccentColor = (mealType) => {
+    switch (mealType) {
+      case 'Breakfast': return '#F28D52';
+      case 'Lunch': return '#E4B53D';
+      case 'Snack': return '#5FB496';
+      case 'Dinner': return '#6A82E6';
+      default: return '#4EA685';
+    }
+  };
+
+  // Mapping helper to resolve Lucide icon components from meal type names
+  const getMealIconComponent = (mealType) => {
+    switch (mealType) {
+      case 'Breakfast': return Coffee;
+      case 'Lunch': return Sun;
+      case 'Snack': return Flame;
+      case 'Dinner': return Moon;
+      default: return UtensilsCrossed;
+    }
+  };
+
+  // AI Daily Meal Recommendation State
+  const [dailyPlan, setDailyPlan] = useState([]);
+  const [loadingMeals, setLoadingMeals] = useState(true);
+
+  useEffect(() => {
+    const loadCachedOrFetchMeals = async () => {
+      try {
+        setLoadingMeals(true);
+        const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
+
+        // 1. Check local cache
+        const cachedRaw = await AsyncStorage.getItem('ms_meals_cache');
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.meals)) {
+            setDailyPlan(parsed.meals);
+            setLoadingMeals(false);
+            return; // Cache hit!
+          }
+        }
+
+        // 2. Cache miss: Fetch from backend
+        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
+        if (!res.ok) {
+          throw new Error("Failed to fetch custom meal suggestions");
+        }
+        const data = await res.json();
+        setDailyPlan(data);
+
+        // 3. Save to local cache
+        const cachePayload = {
+          userId,
+          date: todayStr,
+          meals: data
+        };
+        await AsyncStorage.setItem('ms_meals_cache', JSON.stringify(cachePayload));
+      } catch (err) {
+        console.warn("MEAL RECOMMENDATION LOAD ERROR:", err);
+      } finally {
+        setLoadingMeals(false);
+      }
+    };
+
+    if (userId) {
+      loadCachedOrFetchMeals();
+    } else {
+      setLoadingMeals(false);
+    }
+  }, [userId]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -446,6 +510,19 @@ export default function DietRecipesScreen({
   const consumedCalories = dailyNutrition?.consumedCalories || 0;
   const isOverCalories = consumedCalories > targetCalories;
 
+  if (loadingMeals) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: baseColor }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+        <View style={styles.loaderOuterNeu}>
+          <ActivityIndicator size="large" color={logoGreen} />
+        </View>
+        <Text style={styles.loaderTextTitle}>AI Dietitian Active</Text>
+        <Text style={styles.loaderTextDesc}>Customizing today's meal suggestions based on your target macros...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
@@ -509,17 +586,19 @@ export default function DietRecipesScreen({
             <Text style={styles.sectionLabelTitle}>Your Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
               {dailyPlan.map((meal, index) => {
-                const IconComponent = meal.icon;
+                const IconComponent = getMealIconComponent(meal.mealType);
                 const isLogged = loggedMeals.includes(meal.id);
                 return (
                   <View key={meal.id} style={styles.timelineItem}>
-                    <View style={styles.timelineLineTrack}>
-                      <View style={[styles.timelineDot, isLogged && { backgroundColor: logoGreen, borderColor: logoGreen }]} />
-                      {index !== dailyPlan.length - 1 && <View style={[styles.timelineLine, isLogged && { backgroundColor: logoGreen }]} />}
-                    </View>
-                    <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
+                    <View 
+                      style={[
+                        styles.timelineCard, 
+                        isLogged && styles.timelineCardLogged,
+                        { borderLeftColor: getMealAccentColor(meal.mealType), borderLeftWidth: 5 }
+                      ]}
+                    >
                       <View style={styles.timelineHeader}>
-                        <View style={styles.mealTypeBadge}>
+                        <View style={[styles.mealTypeBadge, isLogged && { backgroundColor: '#37745D' }]}>
                           <IconComponent color={isLogged ? '#FFFFFF' : logoGreen} size={12} />
                           <Text style={[styles.mealTypeBadgeText, isLogged && { color: '#FFFFFF' }]}>{meal.mealType}</Text>
                         </View>
@@ -535,7 +614,7 @@ export default function DietRecipesScreen({
                             activeOpacity={0.6}
                           >
                             <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
-                            <Text style={styles.viewRecipeTextBtnLabel}>View AI Recipe</Text>
+                            <Text style={styles.viewRecipeTextBtnLabel}>View Recipe</Text>
                           </TouchableOpacity>
                         </View>
                         <TouchableOpacity 
@@ -716,7 +795,6 @@ export default function DietRecipesScreen({
                         <Text style={styles.metaBadgeText}>{recipe.time}</Text>
                       </View>
                       <View style={styles.metaBadge}>
-                        <DollarSign color={logoGreen} size={12} />
                         <Text style={styles.metaBadgeText}>{recipe.budget}</Text>
                       </View>
                       <View style={styles.metaBadge}>
@@ -825,75 +903,71 @@ export default function DietRecipesScreen({
       </ScrollView>
 
       {/* --- FLOATING AI CHATBOT SYSTEM (WIRED UP TOGGLE HUB) --- */}
-      <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
 
       {/* ── RECIPE MODAL ── */}
-      <Modal visible={showRecipeModal} transparent={true} animationType="fade" onRequestClose={() => setShowRecipeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.recipeModalContent}>
-            {selectedRecipe && (
-              <>
-                <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
-                
-                {/* Meta Row */}
-                <View style={styles.recipeModalMetaRow}>
-                  <View style={styles.recipeModalMetaBadge}>
-                    <Clock color={logoGreen} size={12} />
-                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
-                  </View>
-                  <View style={styles.recipeModalMetaBadge}>
-                    <DollarSign color={logoGreen} size={12} />
-                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
-                  </View>
+      <Modal visible={showRecipeModal} transparent={false} animationType="slide" onRequestClose={() => setShowRecipeModal(false)}>
+        <View style={styles.recipeModalContent}>
+          {selectedRecipe && (
+            <>
+              <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
+              
+              {/* Meta Row */}
+              <View style={styles.recipeModalMetaRow}>
+                <View style={styles.recipeModalMetaBadge}>
+                  <Clock color={logoGreen} size={12} />
+                  <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
+                </View>
+                <View style={styles.recipeModalMetaBadge}>
+                  <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
+                </View>
+              </View>
+
+              {/* Macro Details Grid */}
+              <View style={styles.recipeModalMacrosGrid}>
+                <View style={styles.recipeModalMacroBox}>
+                  <Text style={styles.recipeModalMacroVal}>{selectedRecipe.calories}</Text>
+                  <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
+                </View>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                  <Text style={[styles.recipeModalMacroVal, { color: logoGreen }]}>{selectedRecipe.protein}</Text>
+                  <Text style={styles.recipeModalMacroLabel}>Protein</Text>
+                </View>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                  <Text style={[styles.recipeModalMacroVal, { color: '#3B82F6' }]}>{selectedRecipe.carbs}</Text>
+                  <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
+                </View>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                  <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
+                  <Text style={styles.recipeModalMacroLabel}>Fats</Text>
+                </View>
+              </View>
+
+              {/* Ingredients & Instructions Scroll */}
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.recipeModalScroll}>
+                <View style={styles.recipeModalIngredientsBox}>
+                  <Text style={styles.recipeModalSecTitle}>Ingredients</Text>
+                  {(selectedRecipe.ingredients || []).map((ing, i) => (
+                    <Text key={i} style={styles.recipeModalListItem}>• {ing}</Text>
+                  ))}
                 </View>
 
-                {/* Macro Details Grid */}
-                <View style={styles.recipeModalMacrosGrid}>
-                  <View style={styles.recipeModalMacroBox}>
-                    <Text style={styles.recipeModalMacroVal}>{selectedRecipe.calories}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: logoGreen }]}>{selectedRecipe.protein}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Protein</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: '#3B82F6' }]}>{selectedRecipe.carbs}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Fats</Text>
-                  </View>
+                <View style={styles.recipeModalInstructionsBox}>
+                  <Text style={styles.recipeModalSecTitle}>Instructions</Text>
+                  {(selectedRecipe.instructions || []).map((step, i) => (
+                    <View key={i} style={styles.recipeModalStepRow}>
+                      <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
+                      <Text style={styles.recipeModalStepText}>{step}</Text>
+                    </View>
+                  ))}
                 </View>
+              </ScrollView>
 
-                {/* Ingredients & Instructions Scroll */}
-                <ScrollView showsVerticalScrollIndicator={false} style={styles.recipeModalScroll}>
-                  <View style={styles.recipeModalIngredientsBox}>
-                    <Text style={styles.recipeModalSecTitle}>Ingredients</Text>
-                    {(selectedRecipe.ingredients || []).map((ing, i) => (
-                      <Text key={i} style={styles.recipeModalListItem}>• {ing}</Text>
-                    ))}
-                  </View>
-
-                  <View style={styles.recipeModalInstructionsBox}>
-                    <Text style={styles.recipeModalSecTitle}>Instructions</Text>
-                    {(selectedRecipe.instructions || []).map((step, i) => (
-                      <View key={i} style={styles.recipeModalStepRow}>
-                        <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
-                        <Text style={styles.recipeModalStepText}>{step}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                {/* Close Button */}
-                <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={() => setShowRecipeModal(false)}>
-                  <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+              {/* Close Button */}
+              <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={() => setShowRecipeModal(false)}>
+                <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </Modal>
 
@@ -1263,10 +1337,12 @@ const styles = StyleSheet.create({
   // --- TAB SWITCHER UI ---
   tabSwitcherContainer: {
     flexDirection: 'row',
-    backgroundColor: '#E2ECE7',
+    backgroundColor: '#E5ECE8',
     borderRadius: 20,
     padding: 4,
     marginBottom: 20,
+    borderWidth: 1.2,
+    borderColor: '#D4E2DC',
   },
   tabButton: {
     flex: 1,
@@ -1275,12 +1351,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   tabButtonActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#AEC2B7',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    backgroundColor: baseColor,
+    borderWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.8,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   tabButtonInactive: {
     backgroundColor: 'transparent',
@@ -1297,29 +1378,36 @@ const styles = StyleSheet.create({
   },
   // --- DAILY PLAN UI ---
   dailyProgressCard: {
-    backgroundColor: baseColor, 
+    backgroundColor: 'transparent', 
     borderRadius: 24, 
-    padding: 16, 
+    padding: 0, 
     marginBottom: 24,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 6, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
   },
   macroRowInline: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   macroMiniBox: {
+    flex: 1,
+    backgroundColor: baseColor,
+    marginHorizontal: 4,
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 2,
   },
   macroMiniVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
     color: '#21332A',
   },
@@ -1336,43 +1424,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
   },
-  timelineLineTrack: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  timelineDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: '#7FA293',
-    backgroundColor: baseColor,
-    zIndex: 2,
-  },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: '#D4E2DC',
-    marginTop: -2,
-    marginBottom: -4,
-  },
+
   timelineCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: baseColor,
     borderRadius: 20,
     padding: 14,
+    borderWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
     shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 5,
+    elevation: 3,
   },
   timelineCardLogged: {
-    backgroundColor: '#F4F7F5',
-    opacity: 0.8,
+    backgroundColor: '#E6EFEA',
+    borderWidth: 1.5,
+    borderTopColor: '#C2D6CE',
+    borderLeftColor: '#C2D6CE',
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+    opacity: 0.85,
   },
   timelineHeader: {
     flexDirection: 'row',
@@ -1482,77 +1560,7 @@ const styles = StyleSheet.create({
     borderColor: logoDarkShadow, 
     transform: [{ scale: 0.95 }],
   },
-  navBarOuterEdge: {
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    height: 84, 
-    backgroundColor: baseColor, 
-    borderTopWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: -6 }, 
-    shadowOpacity: 0.7, 
-    shadowRadius: 10, 
-    elevation: 16, 
-    paddingHorizontal: 6, 
-    paddingBottom: Platform.OS === 'ios' ? 18 : 2,
-  },
-  navBarContentRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    height: '100%', 
-    position: 'relative',
-  },
-  navTabItem: { 
-    flex: 1.1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 6,
-  },
-  navTabText: { 
-    fontSize: 9, 
-    fontWeight: '800', 
-    color: '#7FA293', 
-    marginTop: 4, 
-    textAlign: 'center',
-  },
-  centerCameraContainer: { 
-    position: 'relative', 
-    width: 68, 
-    height: '100%', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  cameraCircleButton: { 
-    width: 62, 
-    height: 62, 
-    borderRadius: 31, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    position: 'absolute', 
-    top: -20,
-  },
-  cameraUnpressed: {
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 2, 
-    borderLeftWidth: 2, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 0, height: 6 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 8, 
-    elevation: 8,
-  },
-  cameraPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    top: -18,
-  },
+
   staticMapContainer: {
     height: 220,
     width: '100%',
@@ -1635,18 +1643,11 @@ const styles = StyleSheet.create({
   },
   // --- View Recipe Modal Styles ---
   recipeModalContent: {
-    width: '90%',
-    maxHeight: '80%',
+    flex: 1,
     backgroundColor: baseColor,
-    borderRadius: 32,
     padding: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   recipeModalTitle: {
     fontSize: 20,
@@ -1701,6 +1702,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   recipeModalScroll: {
+    flex: 1,
     marginBottom: 16,
   },
   recipeModalIngredientsBox: {
@@ -1787,5 +1789,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#37745D',
     marginTop: 12,
+  },
+  loaderOuterNeu: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: baseColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: clearWhiteHighlight,
+  },
+  loaderTextTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1A2B23',
+    marginBottom: 8,
+  },
+  loaderTextDesc: {
+    fontSize: 14,
+    color: '#7FA293',
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 20,
   },
 });

@@ -16,53 +16,10 @@ import { ChevronLeft, Award, Droplets, Utensils, Activity, Bell, CheckCheck, Tra
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function NotificationsScreen({ onTabChange, notifications: propNotifications, setNotifications: propSetNotifications }) {
-  const [localNotifications, setLocalNotifications] = useState([
-    { 
-      id: 'n1', 
-      title: 'Hydration & Routine 💧', 
-      category: 'hydration', 
-      time: '10:00 AM', 
-      read: false, 
-      message: 'Automated reminder: Time to drink water! Staying hydrated is key to your healthy routine activities.' 
-    },
-    { 
-      id: 'n2', 
-      title: 'Workout Complete! 🔥', 
-      category: 'achievement', 
-      time: 'Yesterday', 
-      read: false, 
-      message: 'Motivational update: Awesome job! You burned 320 calories. Consistency in health monitoring is key.' 
-    },
-    { 
-      id: 'n3', 
-      title: 'Milestone Reached 🏃', 
-      category: 'achievement', 
-      time: 'Yesterday', 
-      read: true, 
-      message: 'You hit your calorie target and crushed your 10,000 step milestone! Great daily progress.' 
-    },
-    { 
-      id: 'n4', 
-      title: 'Dinner Logging 🍽️', 
-      category: 'meal', 
-      time: '2 Days Ago', 
-      read: true, 
-      message: "Automated reminder: Don't forget to log your dinner macros to maintain diet tracking consistency." 
-    },
-    { 
-      id: 'n5', 
-      title: 'Smart Goal Adjustment 🧠', 
-      category: 'workout', 
-      time: '3 Days Ago', 
-      read: true, 
-      message: 'Personalized notification: Adjusted based on your behavior and daily routines to improve long-term engagement and adherence.' 
-    }
-  ]);
-
   const emptyAnim = useRef(new Animated.Value(0)).current;
 
-  const activeNotifications    = propNotifications && propNotifications.length > 0 ? propNotifications : localNotifications;
-  const activeSetNotifications = propSetNotifications || setLocalNotifications;
+  const activeNotifications    = propNotifications || [];
+  const activeSetNotifications = propSetNotifications;
 
   const getCategoryStyles = (category) => {
     switch (category) {
@@ -131,30 +88,6 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
             </View>
           )}
         </View>
-
-        {/* Action buttons — Mark Read + Clear All */}
-        <View style={styles.headerActions}>
-          {unreadCount > 0 && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.markReadBtn]}
-              activeOpacity={0.7}
-              onPress={markAllAsRead}
-            >
-              <CheckCheck color="#4EA685" size={14} strokeWidth={2.5} />
-              <Text style={styles.markReadText}>Mark Read</Text>
-            </TouchableOpacity>
-          )}
-          {hasAny && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.clearAllBtn]}
-              activeOpacity={0.7}
-              onPress={clearAllNotifications}
-            >
-              <Trash2 color="#E53E3E" size={14} strokeWidth={2.5} />
-              <Text style={styles.clearAllText}>Clear All</Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
 
       <ScrollView 
@@ -179,7 +112,29 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
           </Animated.View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Recent</Text>
+            <View style={styles.subHeaderActionsRow}>
+              <Text style={styles.sectionTitle}>Recent</Text>
+              <View style={styles.actionButtonsContainer}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.markReadBtn]}
+                    activeOpacity={0.7}
+                    onPress={markAllAsRead}
+                  >
+                    <CheckCheck color="#4EA685" size={14} strokeWidth={2.5} />
+                    <Text style={styles.markReadText}>Mark Read</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.clearAllBtn]}
+                  activeOpacity={0.7}
+                  onPress={clearAllNotifications}
+                >
+                  <Trash2 color="#E53E3E" size={14} strokeWidth={2.5} />
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {activeNotifications.map((notif) => {
               const { icon: IconComponent, color, bgColor } = getCategoryStyles(notif.category);
@@ -267,10 +222,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 1, 
     shadowRadius: 5, 
     elevation: 3, 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   headerTitleGroup: {
     flexDirection: 'row',
@@ -337,7 +293,18 @@ const styles = StyleSheet.create({
     color: '#7FA293',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  subHeaderActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+    width: '100%',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   notificationCard: {
     flexDirection: 'row',
@@ -351,10 +318,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.7, 
     shadowRadius: 6, 
     elevation: 4,    
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   unreadCard: {
     backgroundColor: '#FFFFFF',
@@ -442,10 +410,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 8,
     elevation: 4,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
+    borderWidth: 2,
     borderTopColor: clearWhiteHighlight,
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   emptyTitle: {
     fontSize: 20,

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   TextInput,
   StatusBar,
   Platform,
@@ -40,7 +40,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       hideSubscription.remove();
     };
   }, []);
-  
+
   // --- DYNAMIC AI GREETING ---
   useEffect(() => {
     if (messages.length === 0) {
@@ -180,7 +180,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-      
+
       {/* HEADER BRANDING SECTION */}
       <View style={styles.header}>
         <View style={styles.headerTextGroup}>
@@ -191,27 +191,27 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       </View>
 
       {/* KEYBOARD WRAPPER JUST FOR THE CONTENT REGION */}
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={[
           styles.keyboardContainer,
-          { marginBottom: keyboardVisible ? 0 : (Platform.OS === 'ios' ? 90 : 80) }
+          { marginBottom: keyboardVisible ? 0 : (Platform.OS === 'ios' ? 125 : 115) }
         ]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
         {/* CHAT MESSAGES SCROLL AREA */}
-        <ScrollView 
-          style={styles.chatContainer} 
-          showsVerticalScrollIndicator={false} 
+        <ScrollView
+          style={styles.chatContainer}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.chatScrollContent}
         >
           {messages.map((msg) => {
             const isAI = msg.sender === 'ai';
             return (
-              <View 
-                key={msg.id} 
+              <View
+                key={msg.id}
                 style={[
-                  styles.messageRowFlex, 
+                  styles.messageRowFlex,
                   isAI ? styles.messageRowLeft : styles.messageRowRight
                 ]}
               >
@@ -221,11 +221,11 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
                   </View>
                 )}
 
-                <View 
+                <View
                   style={[
                     styles.chatMessageFormCard,
                     isAI ? styles.aiMessageFormCard : styles.userMessageFormCard
-                ]}
+                  ]}
                 >
                   <Text style={[styles.messageBubbleText, isAI ? styles.aiBubbleText : styles.userBubbleText]}>
                     {renderMessageText(msg.text)}
@@ -243,7 +243,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
               </View>
             );
           })}
-          
+
           {/* MOCK TYPING INDICATOR BUBBLE */}
           {isLoading && (
             <View style={[styles.messageRowFlex, styles.messageRowLeft]}>
@@ -262,8 +262,8 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
           <View style={styles.suggestionsWrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
               {["What should I eat?", "Am I hitting my protein target?", "Cheap high-protein recipes", "Can I eat fast food today?"].map((chip, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
+                <TouchableOpacity
+                  key={idx}
                   style={styles.suggestionChip}
                   onPress={() => setInputText(chip)}
                   activeOpacity={0.7}
@@ -286,8 +286,8 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
               onChangeText={setInputText}
               multiline={true}
             />
-            <TouchableOpacity 
-              style={styles.sendActionButton} 
+            <TouchableOpacity
+              style={styles.sendActionButton}
               activeOpacity={0.8}
               onPress={handleSendMessage}
               disabled={isLoading}
@@ -308,50 +308,50 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   );
 }
 
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
+const baseColor = '#F0F4F2';
+const clearWhiteHighlight = '#FFFFFF';
+const softGreenShadow = '#AEC2B7';
+const logoGreen = '#4EA685';
+const logoDarkShadow = '#37745D';
+const logoLightHighlight = '#65D8AD';
 
 const styles = StyleSheet.create({
-  fullscreenOverlay: { 
+  fullscreenOverlay: {
     flex: 1,
-    width: screenWidth, 
-    height: screenHeight, 
+    width: screenWidth,
+    height: screenHeight,
     backgroundColor: baseColor,
   },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: Platform.OS === 'ios' ? 54 : 48,
-    marginBottom: 10, 
-    paddingHorizontal: 24, 
+    marginBottom: 10,
+    paddingHorizontal: 24,
     width: '100%',
   },
-  headerTextGroup: { 
+  headerTextGroup: {
     flex: 1,
   },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
+  appName: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: logoGreen,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
     marginBottom: 2,
   },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: '#21332A', 
+  greeting: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#21332A',
     letterSpacing: -0.5,
   },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: '#556B60', 
+  subGreeting: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#556B60',
     marginTop: 2,
   },
   keyboardContainer: {
@@ -411,22 +411,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   chatMessageFormCard: {
-    borderRadius: 24, 
+    borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 12,
     maxWidth: '75%',
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 5,
     elevation: 3,
   },
   aiMessageFormCard: {
     backgroundColor: baseColor,
     borderTopLeftRadius: 4,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
     borderLeftColor: clearWhiteHighlight,
   },
   userMessageFormCard: {
@@ -453,29 +453,34 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#7FA293',
     fontWeight: '700',
-    marginTop: 4,
+    marginTop: 5,
     alignSelf: 'flex-end',
   },
   suggestionsWrapper: {
     paddingVertical: 10,
     backgroundColor: baseColor,
+    overflow: 'visible'
   },
   suggestionsScroll: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     gap: 10,
+    overflow: 'visible',
   },
   suggestionChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: baseColor,
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
   },
   suggestionChipText: {
     color: '#41544B',
@@ -488,8 +493,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginHorizontal: 20,
-    marginBottom: Platform.OS === 'ios' ? 16 : 10,
-    marginTop: 6,
+    marginBottom: Platform.OS === 'ios' ? 6 : 0,
+    marginTop: 5,
     shadowColor: softGreenShadow,
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 1,
@@ -527,76 +532,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 3,
     elevation: 2,
-  },
-  navBarOuterEdge: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    height: 84, 
-    backgroundColor: baseColor, 
-    borderTopWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: -6 }, 
-    shadowOpacity: 0.7, 
-    shadowRadius: 10, 
-    elevation: 16, 
-    paddingHorizontal: 6, 
-    paddingBottom: Platform.OS === 'ios' ? 18 : 2,
-  },
-  navBarContentRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    height: '100%', 
-    position: 'relative',
-  },
-  navTabItem: { 
-    flex: 1.1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 6,
-  },
-  navTabText: { 
-    fontSize: 9, 
-    fontWeight: '800', 
-    color: '#7FA293', 
-    marginTop: 4, 
-    textAlign: 'center',
-  },
-  centerCameraContainer: { 
-    position: 'relative', 
-    width: 68, 
-    height: '100%', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  cameraCircleButton: { 
-    width: 62, 
-    height: 62, 
-    borderRadius: 31, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    position: 'absolute', 
-    top: -20,
-  },
-  cameraUnpressed: { 
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 2, 
-    borderLeftWidth: 2, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 0, height: 6 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 8, 
-    elevation: 8,
-  },
-  cameraPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    top: -18,
   },
 });

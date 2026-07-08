@@ -16,8 +16,7 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail } from 'lucide-react-native';
-import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
 import API_URL from '../config/api';
 
 const GcashLogo = require('../../images/Gcash.png');
@@ -47,6 +46,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // --- PASSWORD VISIBILITY STATE ---
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // --- PAYMENT FLOW STATE ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -573,12 +578,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         {/* NOTIFICATIONS SETTINGS CARD */}
         <Text style={styles.sectionLabelTitle}>Notification Settings</Text>
         <View style={styles.formCard}>
-          <View style={styles.settingSwitchRowItem}>
+          <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
               <Bell color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
-              <View>
+              <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Habit & Routine Reminders</Text>
-                <Text style={[styles.settingRowItemSubTitle, { width: 220 }]}>Automated reminders for meals, hydration, calories, and workouts</Text>
+                <Text style={styles.settingRowItemSubTitle}>Automated reminders for meals, hydration, calories, and workouts</Text>
               </View>
             </View>
             <Switch
@@ -592,12 +597,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.glassDivider} />
 
-          <View style={styles.settingSwitchRowItem}>
+          <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
               <Flame color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
-              <View>
+              <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Motivational Updates</Text>
-                <Text style={[styles.settingRowItemSubTitle, { width: 220 }]}>Updates on achievements, completed workouts, and step milestones</Text>
+                <Text style={styles.settingRowItemSubTitle}>Updates on achievements, completed workouts, and step milestones</Text>
               </View>
             </View>
             <Switch
@@ -611,12 +616,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.glassDivider} />
 
-          <View style={styles.settingSwitchRowItem}>
+          <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
               <Sparkles color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
-              <View>
+              <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Personalized Smart Alerts</Text>
-                <Text style={[styles.settingRowItemSubTitle, { width: 220 }]}>Adjusted based on your behavior, goals, and daily routines</Text>
+                <Text style={styles.settingRowItemSubTitle}>Adjusted based on your behavior, goals, and daily routines</Text>
               </View>
             </View>
             <Switch
@@ -735,6 +740,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           setShowEmailModal(false);
           setTempAuthEmail('');
           setEmailCurrentPassword('');
+          setShowEmailPassword(false);
         }}
       >
         <View style={styles.modalOverlay}>
@@ -751,16 +757,25 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             </View>
 
             <Text style={styles.inputLabel}>Current Password</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={emailCurrentPassword}
-              onChangeText={setEmailCurrentPassword}
-              placeholder="Enter current password"
-              placeholderTextColor="#AEC2B7"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={true}
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordTextInput}
+                value={emailCurrentPassword}
+                onChangeText={setEmailCurrentPassword}
+                placeholder="Enter current password"
+                placeholderTextColor="#AEC2B7"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={!showEmailPassword}
+              />
+              <TouchableOpacity onPress={() => setShowEmailPassword(!showEmailPassword)} activeOpacity={0.7}>
+                {showEmailPassword ? (
+                  <Eye color="#7FA293" size={20} />
+                ) : (
+                  <EyeOff color="#7FA293" size={20} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.inputLabel}>New Email Address</Text>
             <TextInput
@@ -781,6 +796,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                    setShowEmailModal(false);
                    setTempAuthEmail('');
                    setEmailCurrentPassword('');
+                   setShowEmailPassword(false);
                  }}
                >
                  <Text style={styles.modalCancelText}>Cancel</Text>
@@ -809,6 +825,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           setOldPassword('');
           setNewPassword('');
           setConfirmPassword('');
+          setShowOldPassword(false);
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
         }}
       >
         <View style={styles.modalOverlay}>
@@ -820,40 +839,67 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             <Text style={styles.modalSubtitle}>Enter password details below</Text>
 
             <Text style={styles.inputLabel}>Current Password</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={oldPassword}
-              onChangeText={setOldPassword}
-              placeholder="Enter current password"
-              placeholderTextColor="#AEC2B7"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={true}
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordTextInput}
+                value={oldPassword}
+                onChangeText={setOldPassword}
+                placeholder="Enter current password"
+                placeholderTextColor="#AEC2B7"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={!showOldPassword}
+              />
+              <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)} activeOpacity={0.7}>
+                {showOldPassword ? (
+                  <Eye color="#7FA293" size={20} />
+                ) : (
+                  <EyeOff color="#7FA293" size={20} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.inputLabel}>New Password</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="Enter new password"
-              placeholderTextColor="#AEC2B7"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={true}
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordTextInput}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="Enter new password"
+                placeholderTextColor="#AEC2B7"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={!showNewPassword}
+              />
+              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} activeOpacity={0.7}>
+                {showNewPassword ? (
+                  <Eye color="#7FA293" size={20} />
+                ) : (
+                  <EyeOff color="#7FA293" size={20} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.inputLabel}>Confirm New Password</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirm new password"
-              placeholderTextColor="#AEC2B7"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={true}
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordTextInput}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm new password"
+                placeholderTextColor="#AEC2B7"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
+                {showConfirmPassword ? (
+                  <Eye color="#7FA293" size={20} />
+                ) : (
+                  <EyeOff color="#7FA293" size={20} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.modalButtons}>
                <TouchableOpacity 
@@ -863,6 +909,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                    setOldPassword('');
                    setNewPassword('');
                    setConfirmPassword('');
+                   setShowOldPassword(false);
+                   setShowNewPassword(false);
+                   setShowConfirmPassword(false);
                  }}
                >
                  <Text style={styles.modalCancelText}>Cancel</Text>
@@ -973,8 +1022,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         </View>
       </Modal>
 
-      <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
-
       {/* --- BOTTOM NAVIGATION BAR --- */}
     </View>
   );
@@ -1067,9 +1114,9 @@ const getStyles = () => StyleSheet.create({
     marginBottom: 4,
   },
   avatarNeuOuterBox: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: logoGreen,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1085,9 +1132,9 @@ const getStyles = () => StyleSheet.create({
     borderLeftColor: logoLightHighlight,
   },
   avatarImageLarge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   profileMetadataTextGroup: {
     alignItems: 'center',
@@ -1184,14 +1231,15 @@ const getStyles = () => StyleSheet.create({
     marginBottom: 8, 
     backgroundColor: baseColor,
     shadowColor: softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 3, 
-    elevation: 2,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
+    shadowOffset: { width: 4, height: 4 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 4, 
+    elevation: 3,
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   filterChipInactive: { 
     backgroundColor: baseColor,
@@ -1199,10 +1247,10 @@ const getStyles = () => StyleSheet.create({
   filterChipActive: { 
     backgroundColor: '#FFFFFF', 
     shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 4, 
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.4, 
+    shadowRadius: 5, 
+    elevation: 3,
     borderWidth: 0,
   },
   filterChipText: { 
@@ -1348,10 +1396,11 @@ const getStyles = () => StyleSheet.create({
     shadowOpacity: 0.8, 
     shadowRadius: 4, 
     elevation: 3,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   systemActionBtnText: {
     fontSize: 14,
@@ -1375,10 +1424,11 @@ const getStyles = () => StyleSheet.create({
     shadowOpacity: 0.5, 
     shadowRadius: 4, 
     elevation: 2,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
+    borderWidth: 1.5, 
     borderTopColor: '#FFFFFF', 
     borderLeftColor: '#FFFFFF',
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   logOutSecondaryNeuButton: {
     flexDirection: 'row',
@@ -1394,10 +1444,11 @@ const getStyles = () => StyleSheet.create({
     shadowOpacity: 0.8, 
     shadowRadius: 4, 
     elevation: 3,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   logOutButtonText: {
     fontSize: 14,
@@ -1443,77 +1494,7 @@ const getStyles = () => StyleSheet.create({
     borderColor: logoDarkShadow, 
     transform: [{ scale: 0.95 }],
   },
-  navBarOuterEdge: {
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    height: 84, 
-    backgroundColor: baseColor, 
-    borderTopWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: -6 }, 
-    shadowOpacity: 0.7, 
-    shadowRadius: 10, 
-    elevation: 16, 
-    paddingHorizontal: 6, 
-    paddingBottom: Platform.OS === 'ios' ? 18 : 2,
-  },
-  navBarContentRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    height: '100%', 
-    position: 'relative',
-  },
-  navTabItem: { 
-    flex: 1.1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 6,
-  },
-  navTabText: { 
-    fontSize: 9, 
-    fontWeight: '800', 
-    color: '#7FA293', 
-    marginTop: 4, 
-    textAlign: 'center',
-  },
-  centerCameraContainer: { 
-    position: 'relative', 
-    width: 68, 
-    height: '100%', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  cameraCircleButton: {
-    width: 62, 
-    height: 62, 
-    borderRadius: 31, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    position: 'absolute', 
-    top: -20,
-  },
-  cameraUnpressed: { 
-    backgroundColor: logoGreen, 
-    borderTopWidth: 2, 
-    borderLeftWidth: 2, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 0, height: 6 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 8, 
-    elevation: 8,
-  },
-  cameraPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    top: -18,
-  },
+
   editProfileButton: {
     marginTop: 10,
     backgroundColor: '#FFFFFF',
@@ -1540,6 +1521,8 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
   modalTitle: { fontSize: 20, fontWeight: '800', color: logoGreen, marginBottom: 8, textAlign: 'center' },
   modalSubtitle: { fontSize: 14, color: '#7FA293', textAlign: 'center', marginBottom: 20 },
   modalInput: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC' },
+  passwordInputContainer: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC', paddingRight: 14 },
+  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23' },
   modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 8 },
   modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: clearWhiteHighlight, alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#D4E2DC' },
   modalCancelText: { color: '#7FA293', fontWeight: '700', fontSize: 14 },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,12 +8,15 @@ import {
   StatusBar,
   Platform,
   Dimensions,
-  Alert
+  Alert,
+  Modal,
+  ActivityIndicator
 } from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle } from 'lucide-react-native';
-import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle, Sparkles } from 'lucide-react-native';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
@@ -37,90 +40,55 @@ export default function WorkoutScreen({
 
   const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
 
-  // --- RE-ENGINEERED DATA STRUCTURE WITH EMBEDDED EXERCISE TUTORIALS ---
-  const workoutRoutines = [
-    {
-      id: 1,
-      title: 'Home Calisthenics Push & Core Mass',
-      intensity: 'Intense',
-      duration: '25 mins',
-      targetGains: 'Muscle Growth',
-      caloriesBurn: 290,
-      description: 'Decline push-ups, explosive push-ups, chair dips, planks, and leg raises for upper body muscle development.',
-      tutorials: [
-        {
-          name: 'Decline Bodyweight Push-Ups',
-          target: '3 Sets x 12 Reps',
-          setup: 'Elevate your feet on a stable household chair, sofa, or bed structure. Place your hands flat on the floor slightly wider than shoulder-width apart.',
-          form: 'Keep your body in a rigid straight line from head to heels. Lower your chest toward the floor slowly, control the descent, then push back up explosively.'
-        },
-        {
-          name: 'Tricep Chair Dips',
-          target: '3 Sets x 15 Reps',
-          setup: 'Sit on the edge of your chair or bed. Place hands right next to your hips, slide your glutes forward off the seat, extending legs out.',
-          form: 'Lower your body by bending your elbows down to a 90-degree angle. Press firmly through your palms to return to the starting lock position.'
-        },
-        {
-          name: 'Strict Isometric Floor Plank',
-          target: '3 Sets x 45 Seconds',
-          setup: 'Rest your forearms squarely on the floor with elbows aligned perfectly underneath your shoulders.',
-          form: 'Squeeze your core, glutes, and thighs intensely. Prevent your lower back from sagging toward the ground; maintain a flat table posture.'
+  // --- AI RECOMMENDATION SYSTEM STATE ---
+  const [workoutRoutines, setWorkoutRoutines] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCachedOrFetchWorkouts = async () => {
+      try {
+        setLoading(true);
+        const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
+        
+        // 1. Check local cache
+        const cachedRaw = await AsyncStorage.getItem('ms_workouts_cache');
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.workouts)) {
+            setWorkoutRoutines(parsed.workouts);
+            setLoading(false);
+            return; // Cache hit!
+          }
         }
-      ]
-    },
-    {
-      id: 2,
-      title: 'Full-Body High-Intensity Home Conditioning',
-      intensity: 'Moderate',
-      duration: '20 mins',
-      targetGains: 'Functional Strength',
-      caloriesBurn: 240,
-      description: 'Bodyweight squats, jumping jacks, mountain climbers, and lunges to burn energy without needing open space.',
-      tutorials: [
-        {
-          name: 'Air Squats (Tempo Focused)',
-          target: '4 Sets x 20 Reps',
-          setup: 'Stand tall with feet tracking shoulder-width apart, toes pointing slightly outward.',
-          form: 'Drive hips back and sit down deeply as if entering a chair until thighs go parallel to the floor. Drive hard through your heels to stand up.'
-        },
-        {
-          name: 'Alternating Reverse Lunges',
-          target: '3 Sets x 12 Reps Per Leg',
-          setup: 'Stand with hands secured on your hips or chest area for total balance control.',
-          form: 'Take a controlled step backward with one leg. Lower your hips until both knees bend at a 90-degree threshold, then drop straight up.'
-        },
-        {
-          name: 'Mountain Climbers (Pacing Core)',
-          target: '3 Sets x 30 Seconds',
-          setup: 'Assume a rigid high push-up plank position with palms locked underneath shoulders.',
-          form: 'Drive your knees forward toward your chest rapidly in an alternating pattern. Maintain hip stability without bouncing upwards.'
+        
+        // 2. Cache miss: Fetch from backend
+        const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
+        if (!res.ok) {
+          throw new Error("Failed to fetch custom workouts");
         }
-      ]
-    },
-    {
-      id: 3,
-      title: 'Living Room Mobility & Posture Alignment',
-      intensity: 'Light',
-      duration: '15 mins',
-      targetGains: 'Flexibility & Health',
-      caloriesBurn: 85,
-      description: 'Dynamic stretching sequences, yoga-inspired spinal decompression, and core stability activation patterns.',
-      tutorials: [
-        {
-          name: 'Quadruped Cat-Cow Flow',
-          target: '2 Sets x 10 Cycles',
-          setup: 'Get down on all fours on a comfortable mat or floor towel with knees under hips and hands under shoulders.',
-          form: 'Inhale deeply as you arch your back downwards and look up. Exhale smoothly while tucking your chin and rounding your spine up.'
-        },
-        {
-          name: 'Deep Living Room Yogi Squat Hold',
-          target: '2 Sets x 45 Seconds',
-          setup: 'Step your feet slightly wider than standard squat metrics with toes flared open.',
-          form: 'Drop your weight all the way down into a deep squat. Press elbows outwards against the inside of knees to decompress your groin and lower back safely.'
-        }
-      ]
-    },
-  ];
+        const data = await res.json();
+        setWorkoutRoutines(data);
+        
+        // 3. Save to local cache
+        const cachePayload = {
+          userId,
+          date: todayStr,
+          workouts: data
+        };
+        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify(cachePayload));
+      } catch (err) {
+        console.warn("WORKOUT LOAD/FETCH ERROR:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      loadCachedOrFetchWorkouts();
+    } else {
+      setLoading(false);
+    }
+  }, [userId]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -128,6 +96,24 @@ export default function WorkoutScreen({
   const handleStartTutorialEngine = (routine) => {
     setActiveRoutine(routine);
     setCurrentStepIndex(0);
+  };
+
+  const handleExitWorkout = () => {
+    Alert.alert(
+      "Don't Give Up Yet!",
+      "You are on your way to crushing your goals! You must finish the workout to log it.",
+      [
+        {
+          text: "Keep Going",
+          style: "cancel"
+        },
+        {
+          text: "Quit Workout",
+          style: "destructive",
+          onPress: () => setActiveRoutine(null)
+        }
+      ]
+    );
   };
 
   const handleNextStep = async () => {
@@ -216,199 +202,214 @@ export default function WorkoutScreen({
     return selectedIntensity === 'All' || workout.intensity === selectedIntensity;
   });
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: baseColor }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+        <View style={styles.loaderOuterNeu}>
+          <ActivityIndicator size="large" color={logoGreen} />
+        </View>
+        <Text style={styles.loaderTextTitle}>AI Trainer Active</Text>
+        <Text style={styles.loaderTextDesc}>Tailoring today's routines to help you crush your goal weight...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       
-      {/* ------------------------------------------------------------------ */}
-      {/* VIEWPORT MODE A: ACTIVE REAL-TIME INTERACTIVE TUTORIAL PLAYER */}
-      {/* ------------------------------------------------------------------ */}
-      {activeRoutine ? (
-        <View style={styles.playerWrapper}>
-          {/* PLAYER HEADER AREA */}
-          <View style={styles.playerHeaderRow}>
-            <TouchableOpacity 
-              style={styles.playerBackNeuButton}
-              activeOpacity={0.8}
-              onPress={() => setActiveRoutine(null)}
-            >
-              <ArrowLeft color={logoGreen} size={20} strokeWidth={2.5} />
-            </TouchableOpacity>
-            <View style={styles.playerHeaderCenterText}>
-              <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
-              <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
-            </View>
-            <HelpCircle color="#7FA293" size={22} />
-          </View>
-
-          {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
-          <View style={styles.playerMainCard}>
-            
-            {/* ANIMATION COMPONENT PLACEHOLDER FRAME */}
-            <View style={styles.animationPlaceholderFrame}>
-              <SportShoe color={logoGreen} size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
-              <View style={styles.liveActivityBadge}>
-                <View style={styles.pulseDot} />
-                <Text style={styles.liveBadgeText}>HOME TUTORIAL ACTIVE</Text>
-              </View>
-            </View>
-
-            {/* EXERCISE NAMES & METRIC SCORES */}
-            <Text style={styles.playerExerciseTitle}>{activeRoutine.tutorials[currentStepIndex].name}</Text>
-            <View style={styles.targetMetricChipBox}>
-              <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
-            </View>
-
-            <View style={styles.playerGlassDivider} />
-
-            {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
-              <Text style={styles.instructionSectionTitleLabel}>How to Set Up:</Text>
-              <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
-              
-              <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14 }]}>Proper Execution Form:</Text>
-              <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
-            </ScrollView>
-
-            <View style={styles.playerGlassDivider} />
-
-            {/* CONTROLS TOGGLE HUB BUTTONS */}
-            <View style={styles.playerControlActionRow}>
-              {currentStepIndex > 0 && (
-                <TouchableOpacity 
-                  style={styles.playerSecondaryNeuActionBtn} 
-                  activeOpacity={0.8}
-                  onPress={() => setCurrentStepIndex(currentStepIndex - 1)}
-                >
-                  <RotateCcw color="#556B60" size={16} style={{ marginRight: 4 }} />
-                  <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
-                </TouchableOpacity>
-              )}
-
+      {/* ── WORKOUT TUTORIAL PLAYER (FULL SCREEN MODAL) ── */}
+      <Modal 
+        visible={activeRoutine !== null} 
+        transparent={false} 
+        animationType="slide" 
+        onRequestClose={handleExitWorkout}
+      >
+        {activeRoutine && (
+          <View style={styles.playerWrapper}>
+            {/* PLAYER HEADER AREA */}
+            <View style={styles.playerHeaderRow}>
               <TouchableOpacity 
-                style={[styles.playerPrimaryActionBtn, { flex: currentStepIndex === 0 ? 1 : 1.3 }]} 
+                style={styles.playerBackNeuButton}
                 activeOpacity={0.8}
-                onPress={handleNextStep}
+                onPress={handleExitWorkout}
               >
-                <CheckCircle2 color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-                <Text style={styles.playerPrimaryActionBtnText}>
-                  {currentStepIndex === activeRoutine.tutorials.length - 1 ? 'Complete Workout' : 'Next Exercise Step'}
-                </Text>
+                <ArrowLeft color={logoGreen} size={20} strokeWidth={2.5} />
               </TouchableOpacity>
+              <View style={styles.playerHeaderCenterText}>
+                <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
+                <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
+              </View>
+              <HelpCircle color="#7FA293" size={22} />
             </View>
 
+            {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
+            <View style={styles.playerMainCard}>
+              
+              {/* ANIMATION COMPONENT PLACEHOLDER FRAME */}
+              <View style={styles.animationPlaceholderFrame}>
+                <SportShoe color={logoGreen} size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
+                <View style={styles.liveActivityBadge}>
+                  <View style={styles.pulseDot} />
+                  <Text style={styles.liveBadgeText}>HOME TUTORIAL ACTIVE</Text>
+                </View>
+              </View>
+
+              {/* EXERCISE NAMES & METRIC SCORES */}
+              <Text style={styles.playerExerciseTitle}>{activeRoutine.tutorials[currentStepIndex].name}</Text>
+              <View style={styles.targetMetricChipBox}>
+                <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
+              </View>
+
+              <View style={styles.playerGlassDivider} />
+
+              {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
+                <Text style={styles.instructionSectionTitleLabel}>How to Set Up:</Text>
+                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
+                
+                <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14 }]}>Proper Execution Form:</Text>
+                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+              </ScrollView>
+
+              <View style={styles.playerGlassDivider} />
+
+              {/* CONTROLS TOGGLE HUB BUTTONS */}
+              <View style={styles.playerControlActionRow}>
+                {currentStepIndex > 0 && (
+                  <TouchableOpacity 
+                    style={styles.playerSecondaryNeuActionBtn} 
+                    activeOpacity={0.8}
+                    onPress={() => setCurrentStepIndex(currentStepIndex - 1)}
+                  >
+                    <RotateCcw color="#556B60" size={16} style={{ marginRight: 4 }} />
+                    <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity 
+                  style={[styles.playerPrimaryActionBtn, { flex: currentStepIndex === 0 ? 1 : 1.3 }]} 
+                  activeOpacity={0.8}
+                  onPress={handleNextStep}
+                >
+                  <CheckCircle2 color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                  <Text style={styles.playerPrimaryActionBtnText}>
+                    {currentStepIndex === activeRoutine.tutorials.length - 1 ? 'Complete Workout' : 'Next Exercise Step'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+            </View>
+          </View>
+        )}
+      </Modal>
+
+      {/* STANDARD ROUTINES SELECTION HUB LIST VIEW */}
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* HEADER BRANDING SECTION */}
+        <View style={styles.header}>
+          <View style={styles.headerTextGroup}>
+            <Text style={styles.appName}>MacroSync</Text>
+            <Text style={styles.greeting}>Daily Home Workouts</Text>
+            <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Gemini AI</Text>
+            <View style={styles.aiBadgeRow}>
+              <Sparkles color={logoGreen} size={12} style={{ marginRight: 6 }} />
+              <Text style={styles.aiBadgeText}>AI RECOMMENDED WORKOUTS</Text>
+            </View>
           </View>
         </View>
-      ) : (
-        /* ------------------------------------------------------------------ */
-        /* VIEWPORT MODE B: STANDARD ROUTINES SELECTION HUB LIST VIEW */
-        /* ------------------------------------------------------------------ */
-        <>
-          <ScrollView 
-            style={styles.container} 
-            showsVerticalScrollIndicator={false} 
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* HEADER BRANDING SECTION */}
-            <View style={styles.header}>
-              <View style={styles.headerTextGroup}>
-                <Text style={styles.appName}>MacroSync</Text>
-                <Text style={styles.greeting}>Basic Home Workout</Text>
-                <Text style={styles.subGreeting}>Zero-equipment exercises built for busy schedules and zero cost</Text>
+
+        {/* WORKOUT INTENSITY FILTER CHOICES */}
+        <View style={styles.formCard}>
+          <Text style={styles.cardTitle}>Exercise Intensity Preferences</Text>
+          <View style={styles.filterButtonGroupRow}>
+            {intensityTiers.map((tier) => (
+              <TouchableOpacity
+                key={tier}
+                style={[
+                  styles.filterChipButton, 
+                  selectedIntensity === tier ? styles.filterChipActive : styles.filterChipInactive
+                ]}
+                onPress={() => setSelectedIntensity(tier)}
+              >
+                <Text style={[
+                  styles.filterChipText, 
+                  { color: selectedIntensity === tier ? '#FFFFFF' : '#21332A' }
+                ]}>
+                  {tier}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* WORKOUT PLAN CARD LISTINGS */}
+        <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
+
+        {filteredWorkouts.map((workout) => {
+          if (!workout) return null;
+          return (
+            <View key={workout.id} style={styles.workoutFormCard}>
+              <View style={styles.workoutHeaderRow}>
+                <View style={styles.workoutTitleContainer}>
+                  <Text style={styles.workoutMainTitle}>{workout.title}</Text>
+                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
+                </View>
               </View>
-            </View>
 
-            {/* WORKOUT INTENSITY FILTER CHOICES */}
-            <View style={styles.formCard}>
-              <Text style={styles.cardTitle}>Exercise Intensity Preferences</Text>
-              <View style={styles.filterButtonGroupRow}>
-                {intensityTiers.map((tier) => (
-                  <TouchableOpacity
-                    key={tier}
-                    style={[
-                      styles.filterChipButton, 
-                      selectedIntensity === tier ? styles.filterChipActive : styles.filterChipInactive
-                    ]}
-                    onPress={() => setSelectedIntensity(tier)}
-                  >
-                    <Text style={[
-                      styles.filterChipText, 
-                      { color: selectedIntensity === tier ? '#FFFFFF' : '#21332A' }
-                    ]}>
-                      {tier}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+              <View style={styles.glassDivider} />
 
-            {/* WORKOUT PLAN CARD LISTINGS */}
-            <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
-
-            {filteredWorkouts.map((workout) => {
-              if (!workout) return null;
-              return (
-              <View key={workout.id} style={styles.workoutFormCard}>
-                <View style={styles.workoutHeaderRow}>
-                  <View style={styles.workoutTitleContainer}>
-                    <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                    <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
+              {/* QUICK METRICS TILES */}
+              <View style={styles.workoutMetricsSummaryGrid}>
+                <View style={styles.metricItemBox}>
+                  <Clock color={logoGreen} size={14} style={styles.metricIconSpacer} />
+                  <View>
+                    <Text style={styles.metricTileLabel}>Duration</Text>
+                    <Text style={styles.metricTileValue}>{workout.duration}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.metricItemBox}>
+                  <Flame color="#E53E3E" size={14} style={styles.metricIconSpacer} />
+                  <View>
+                    <Text style={styles.metricTileLabel}>Est. Burn</Text>
+                    <Text style={styles.metricTileValue}>{workout?.caloriesBurn} kcal</Text>
                   </View>
                 </View>
 
-                <View style={styles.glassDivider} />
-
-                {/* QUICK METRICS TILES */}
-                <View style={styles.workoutMetricsSummaryGrid}>
-                  <View style={styles.metricItemBox}>
-                    <Clock color={logoGreen} size={14} style={styles.metricIconSpacer} />
-                    <View>
-                      <Text style={styles.metricTileLabel}>Duration</Text>
-                      <Text style={styles.metricTileValue}>{workout.duration}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.metricItemBox}>
-                    <Flame color="#E53E3E" size={14} style={styles.metricIconSpacer} />
-                    <View>
-                      <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                      <Text style={styles.metricTileValue}>{workout?.caloriesBurn} kcal</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.metricItemBox}>
-                    <Trophy color="#D69E2E" size={14} style={styles.metricIconSpacer} />
-                    <View>
-                      <Text style={styles.metricTileLabel}>Intensity</Text>
-                      <Text style={styles.metricTileValue}>{workout?.intensity}</Text>
-                    </View>
+                <View style={styles.metricItemBox}>
+                  <Trophy color="#D69E2E" size={14} style={styles.metricIconSpacer} />
+                  <View>
+                    <Text style={styles.metricTileLabel}>Intensity</Text>
+                    <Text style={styles.metricTileValue}>{workout?.intensity}</Text>
                   </View>
                 </View>
-
-                <View style={styles.glassDivider} />
-
-                {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
-                <TouchableOpacity 
-                  style={styles.startWorkoutActionButton} 
-                  activeOpacity={0.8}
-                  onPress={() => handleStartTutorialEngine(workout)}
-                >
-                  <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
-                </TouchableOpacity>
               </View>
-              );
-            })}
 
-          </ScrollView>
+              <View style={styles.glassDivider} />
 
-          {/* --- FLOATING AI CHATBOT SYSTEM --- */}
-          <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
+              {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
+              <TouchableOpacity 
+                style={styles.startWorkoutActionButton} 
+                activeOpacity={0.8}
+                onPress={() => handleStartTutorialEngine(workout)}
+              >
+                <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
 
-          {/* --- BOTTOM NAVIGATION BAR --- */}
-        </>
-      )}
+      </ScrollView>
+
+      {/* --- FLOATING AI CHATBOT SYSTEM --- */}
     </View>
   );
 }
@@ -514,25 +515,31 @@ const getStyles = () => StyleSheet.create({
     marginBottom: 8, 
     backgroundColor: baseColor,
     shadowColor: softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 3, 
-    elevation: 2,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
+    shadowOffset: { width: 4, height: 4 }, 
+    shadowOpacity: 1, 
+    shadowRadius: 4, 
+    elevation: 3,
+    borderWidth: 1.5, 
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   filterChipInactive: { 
     backgroundColor: baseColor,
   },
   filterChipActive: { 
-    backgroundColor: '#3E836A', 
-    borderTopColor: logoDarkShadow, 
-    borderLeftColor: logoDarkShadow,
-    borderWidth: 1,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: logoGreen, 
+    borderWidth: 1.5,
+    borderTopColor: logoLightHighlight, 
+    borderLeftColor: logoLightHighlight,
+    borderBottomColor: 'transparent',
+    borderRightColor: 'transparent',
+    shadowColor: logoDarkShadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 2,
   },
   filterChipText: { 
     fontSize: 12, 
@@ -618,6 +625,11 @@ const getStyles = () => StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 12,
     borderRadius: 16,
+    shadowColor: logoGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
   },
   startWorkoutButtonText: {
     fontSize: 13,
@@ -655,77 +667,7 @@ const getStyles = () => StyleSheet.create({
     borderColor: logoDarkShadow, 
     transform: [{ scale: 0.95 }],
   },
-  navBarOuterEdge: {
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    height: 84, 
-    backgroundColor: baseColor, 
-    borderTopWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: -6 }, 
-    shadowOpacity: 0.7, 
-    shadowRadius: 10, 
-    elevation: 16, 
-    paddingHorizontal: 6, 
-    paddingBottom: Platform.OS === 'ios' ? 18 : 2,
-  },
-  navBarContentRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    height: '100%', 
-    position: 'relative',
-  },
-  navTabItem: { 
-    flex: 1.1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 6,
-  },
-  navTabText: { 
-    fontSize: 9, 
-    fontWeight: '800', 
-    color: '#7FA293', 
-    marginTop: 4, 
-    textAlign: 'center',
-  },
-  centerCameraContainer: { 
-    position: 'relative', 
-    width: 68, 
-    height: '100%', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  cameraCircleButton: {
-    width: 62, 
-    height: 62, 
-    borderRadius: 31, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    position: 'absolute', 
-    top: -20,
-  },
-  cameraUnpressed: { 
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 2, 
-    borderLeftWidth: 2, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 0, height: 6 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 8, 
-    elevation: 8,
-  },
-  cameraPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    top: -18,
-  },
+
 
   // --- RE-ENGINEERED HOME ENGINE PLAYER COMPONENT STYLES ---
   playerWrapper: {
@@ -799,9 +741,17 @@ const getStyles = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
     overflow: 'hidden',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 0,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
   },
   placeholderAnimateIcon: {
     transform: [{ scale: 1.1 }],
@@ -816,8 +766,13 @@ const getStyles = () => StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: '#D4E2DC',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 3,
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   pulseDot: {
     width: 6,
@@ -896,9 +851,10 @@ const getStyles = () => StyleSheet.create({
     shadowOffset: { width: 2, height: 2 }, 
     shadowOpacity: 0.8, 
     shadowRadius: 3, 
-    elevation: 2,
+    elevation: 0,
     borderTopWidth: 1, 
     borderLeftWidth: 1, 
+    borderColor: '#FFFFFF',
     borderTopColor: clearWhiteHighlight, 
     borderLeftColor: clearWhiteHighlight,
   },
@@ -914,10 +870,63 @@ const getStyles = () => StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 14,
     borderRadius: 16,
+    shadowColor: logoGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
   },
   playerPrimaryActionBtnText: {
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  loaderOuterNeu: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: baseColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: clearWhiteHighlight,
+  },
+  loaderTextTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1A2B23',
+    marginBottom: 8,
+  },
+  loaderTextDesc: {
+    fontSize: 14,
+    color: '#7FA293',
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 20,
+  },
+  aiBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF5F0',
+    alignSelf: 'flex-start',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#C6E0D4',
+  },
+  aiBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#37745D',
+    letterSpacing: 0.5,
   },
 });

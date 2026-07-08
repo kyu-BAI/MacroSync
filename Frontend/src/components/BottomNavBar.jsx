@@ -4,11 +4,17 @@ import {
   Platform, Dimensions, Animated, Easing,
 } from 'react-native';
 import { Home, UtensilsCrossed, Camera, SportShoe, Settings } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 const { width: screenWidth } = Dimensions.get('window');
-const logoGreen = '#4EA685';
+
+// ── Neumorphic Design Tokens (matching app-wide theme) ──
 const baseColor = '#F0F4F2';
-const softShadow = '#AEC2B7';
+const clearWhiteHighlight = '#FFFFFF';
+const softGreenShadow = '#AEC2B7';
+const logoGreen = '#4EA685';
+const logoDarkShadow = '#37745D';
+const logoLightHighlight = '#65D8AD';
 
 const TABS = [
   { id: 'DASHBOARD', label: 'Home',    Icon: Home           },
@@ -68,6 +74,7 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
   }, []);
 
   const handlePress = (tabId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onTabChange && onTabChange(tabId);
   };
 
@@ -169,20 +176,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: baseColor,
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: Platform.OS === 'ios' ? 20 : 4,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    // Premium soft drop shadow
-    shadowColor: softShadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
+    // Neumorphic top/left highlight
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    // Neumorphic drop shadow
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.7,
     shadowRadius: 10,
-    elevation: 8,
+    elevation: 16,
     zIndex: 3,
   },
   // Curved background hump circle
@@ -192,12 +202,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    shadowColor: softShadow,
+    backgroundColor: baseColor,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    shadowColor: softGreenShadow,
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.5,
     shadowRadius: 6,
     elevation: 8,
     zIndex: 1,
@@ -208,7 +220,7 @@ const styles = StyleSheet.create({
     left: screenWidth / 2 - 33, // centered (66/2 = 33)
     width: 66,
     height: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: baseColor,
     zIndex: 4,
   },
   tabItem: {
@@ -258,16 +270,21 @@ const styles = StyleSheet.create({
     backgroundColor: logoGreen,
     alignItems: 'center',
     justifyContent: 'center',
-    // Lift shadow
-    shadowColor: '#37745D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: '#FFFFFF', // Clean border to pop
+    // Neumorphic shadow
+    shadowColor: logoDarkShadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 8,
+    // Neumorphic highlight border
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopColor: logoLightHighlight,
+    borderLeftColor: logoLightHighlight,
   },
   fabActive: {
-    backgroundColor: '#37745D',
+    backgroundColor: '#3E836A',
+    borderTopColor: logoGreen,
+    borderLeftColor: logoGreen,
   },
 });

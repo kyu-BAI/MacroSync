@@ -254,8 +254,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
   const handleLogFood = () => {
     if (onLogMeal && analysisResult) {
+      const displayWeight = analysisResult.serving_weight_g ? ` (${analysisResult.serving_weight_g}g)` : '';
       onLogMeal({
-        name: analysisResult.name,
+        name: `${analysisResult.name}${displayWeight}`,
         calories: analysisResult.calories,
         protein: analysisResult.protein,
         carbs: analysisResult.carbs,
@@ -287,6 +288,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             </View>
             
             <Text style={styles.foodName}>{analysisResult.name}</Text>
+            {analysisResult.serving_weight_g && (
+              <Text style={styles.portionText}>Estimated Portion: {analysisResult.serving_weight_g}g</Text>
+            )}
             
             <View style={styles.macroCardGrid}>
               <View style={styles.macroCard}>
@@ -588,6 +592,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#1A2E26',
+    marginBottom: 20,
+  },
+  portionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#7FA293',
+    marginTop: -14,
     marginBottom: 20,
   },
   macroCardGrid: {
