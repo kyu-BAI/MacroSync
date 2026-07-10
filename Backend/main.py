@@ -342,7 +342,7 @@ class VerifySignupRequest(BaseModel):
 @app.post("/verify-signup")
 async def verify_signup(data: VerifySignupRequest):
     try:
-        response = supabase.auth.verify_otp({
+        response = anon_supabase.auth.verify_otp({
             "email": data.email,
             "token": data.otp,
             "type": "signup"
