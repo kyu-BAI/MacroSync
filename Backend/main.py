@@ -956,5 +956,90 @@ def debug_key():
     except Exception as e:
         return {"error": f"Failed to parse key: {str(e)}"}
 
+# ---------------- PAYMONGO INTEGRATION ----------------
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    amount: int  # Amount in centavos (e.g., 50000 = PHP 500.00)
+    description: str = "Premium Subscription"
+
+@app.post("/create-checkout-session")
+async def create_checkout_session(data: CheckoutRequest):
+    if not PAYMONGO_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="PayMongo Secret Key not configured")
+        
+    import requests
+    url = "https://api.paymongo.com/v1/checkout_sessions"
+    
+    payload = {
+        "data": {
+            "attributes": {
+                "billing": {
+                    "name": "MacroSync User"
+                },
+                "send_email_receipt": True,
+                "show_description": True,
+                "show_line_items": True,
+                "cancel_url": "https://macrosync.app/cancel",
+                "success_url": "https://macrosync.app/success",
+                "description": data.description,
+                "line_items": [
+                    {
+                        "currency": "PHP",
+                        "amount": data.amount,
+                        "description": data.description,
+                        "name": "MacroSync Premium",
+                        "quantity": 1
+                    }
+                ],
+                "payment_method_types": ["gcash", "paymaya", "grab_pay", "dob"],
+                "reference_number": data.user_id,
+            }
+        }
+    }
+    
+    auth_string = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "authorization": f"Basic {auth_string}"
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail=response.json())
+        
+    return response.json()
+
+from fastapi import Request
+
+@app.post("/webhooks/paymongo")
+async def paymongo_webhook(request: Request):
+    # PayMongo sends a webhook when payment succeeds
+    payload = await request.json()
+    
+    try:
+        data = payload.get("data", {})
+        attributes = data.get("attributes", {})
+        event_type = attributes.get("type")
+        
+        if event_type == "checkout_session.payment.paid":
+            # Extract the user ID we passed as reference_number
+            data_resource = attributes.get("data", {})
+            checkout_attributes = data_resource.get("attributes", {})
+            user_id = checkout_attributes.get("reference_number")
+            
+            if user_id:
+                # Update the user's status in Supabase
+                supabase.table("users").update({"is_premium": True}).eq("id", user_id).execute()
+                print(f"User {user_id} successfully upgraded to premium via PayMongo.")
+                
+        return {"status": "success"}
+    except Exception as e:
+        print("Webhook Error:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 
 

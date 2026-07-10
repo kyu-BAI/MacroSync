@@ -13,7 +13,8 @@ import {
   Image,
   Modal,
   TextInput,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Linking
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity } from 'lucide-react-native';
@@ -257,20 +258,34 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           text: "Proceed to Pay",
           onPress: async () => {
             try {
-              const response = await fetch(`${API_URL}/update-subscription`, {
+              const amount_cents = planName === 'Monthly' ? 20000 : 214900; // Multiply by 100 to get cents
+              const response = await fetch(`${API_URL}/create-checkout-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, is_premium: true })
+                body: JSON.stringify({ 
+                  user_id: userId, 
+                  amount: amount_cents,
+                  description: `MacroSync Premium - ${planName} Plan`
+                })
               });
+              
               if (response.ok) {
-                setUserProfile(prev => ({ ...prev, isPremium: true }));
-                setAccountTier('Premium');
-                Alert.alert(
-                  "Success ✨",
-                  "Subscription initialized successfully. Welcome to MacroSync Premium!"
-                );
+                const data = await response.json();
+                const checkoutUrl = data?.data?.attributes?.checkout_url;
+                if (checkoutUrl) {
+                  // Open the PayMongo checkout page (GCash, Maya, Cards, etc.)
+                  Linking.openURL(checkoutUrl);
+                  
+                  Alert.alert(
+                    "Checkout Opened",
+                    "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
+                  );
+                } else {
+                  console.log("PayMongo response:", data);
+                  Alert.alert("Error", "Could not generate payment link.");
+                }
               } else {
-                Alert.alert("Error", "Failed to activate subscription on the server.");
+                Alert.alert("Error", "Failed to initiate payment on the server.");
                 setSelectedBillingCycle(null);
               }
             } catch (e) {
