@@ -30,11 +30,16 @@ app.add_middleware(
 # ---------------- ENV ----------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ---------------- INIT CLIENTS ----------------
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+if SUPABASE_ANON_KEY:
+    anon_supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+else:
+    anon_supabase = supabase
 
 resend.api_key = RESEND_API_KEY
 
@@ -154,7 +159,7 @@ class ProfilePictureUpdate(BaseModel):
 @app.post("/signup")
 async def signup(user: UserAuth):
     try:
-        auth = supabase.auth.sign_up({
+        auth = anon_supabase.auth.sign_up({
             "email": user.email,
             "password": user.password
         })
@@ -329,6 +334,27 @@ async def verify_reset_otp(data: VerifyOTPRequest):
 
     return {"success": True}
 
+# ---------------- VERIFY SIGNUP (EMAIL OTP) ----------------
+class VerifySignupRequest(BaseModel):
+    email: str
+    otp: str
+
+@app.post("/verify-signup")
+async def verify_signup(data: VerifySignupRequest):
+    try:
+        response = supabase.auth.verify_otp({
+            "email": data.email,
+            "token": data.otp,
+            "type": "signup"
+        })
+        
+        if not response.user:
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+            
+        return {"success": True, "user_id": response.user.id}
+    except Exception as e:
+        print("VERIFY SIGNUP ERROR:", repr(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ---------------- UPDATE PASSWORD ----------------
 @app.post("/update-password")

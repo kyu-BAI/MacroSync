@@ -22,6 +22,7 @@ import {
 import SplashScreen from "./src/screens/auth/SplashScreen"; // Cleanly imported matching your folder structure
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import SignUpScreen from "./src/screens/auth/SignUpScreen";
+import VerifyEmailScreen from "./src/screens/auth/VerifyEmailScreen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
 import OtpScreen from "./src/screens/auth/OtpScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
@@ -44,7 +45,7 @@ import API_URL from "./src/screens/config/api";
 
 
 function MainApp() {
-  // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
+  // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
 
@@ -297,8 +298,19 @@ function MainApp() {
         onSignUpSuccess={(newUserId, newName, newEmail) => {
           setUserId(newUserId); 
           setUserProfile({ name: newName || 'User', email: newEmail || '' });
-          setCurrentScreen("STEP_ONE");
+          setResetEmail(newEmail || '');
+          setCurrentScreen("VERIFY_SIGNUP");
         }}
+      />
+    );
+  }
+
+  if (currentScreen === "VERIFY_SIGNUP") {
+    return (
+      <VerifyEmailScreen
+        email={resetEmail}
+        onVerified={() => setCurrentScreen("STEP_ONE")}
+        onNavigateBack={() => setCurrentScreen("SIGNUP")}
       />
     );
   }
