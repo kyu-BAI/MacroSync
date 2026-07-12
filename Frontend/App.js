@@ -285,6 +285,7 @@ function MainApp() {
         if (params.email && params.name) {
           await handleGoogleLoginSuccess(params.email, params.name);
         }
+      }
     }
   };
 
