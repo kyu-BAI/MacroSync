@@ -287,7 +287,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           text: "Proceed to Pay",
           onPress: async () => {
             try {
-              const amount_cents = planName === 'Monthly' ? 20000 : 214900; // Multiply by 100 to get cents
+              const amount_cents = planName === 'Monthly' ? 19900 : 202980; // Multiply by 100 to get cents
               const response = await fetch(`${API_URL}/create-checkout-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -566,13 +566,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
                   { marginBottom: 12 }
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱200/mo')}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱199/mo')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
                   <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱200/mo</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱199/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -581,18 +581,18 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   styles.billingPlanSelectorRowItem,
                   selectedBillingCycle === 'Annual' && styles.billingPlanActive
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,149/yr')}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,029.80/yr')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
                     <View style={styles.bestValueBadge}>
-                      <Text style={styles.bestValueBadgeText}>SAVE 10%</Text>
+                      <Text style={styles.bestValueBadgeText}>SAVE 15%</Text>
                     </View>
                   </View>
                   <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱2,149/yr</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱2,029.80/yr</Text>
               </TouchableOpacity>
 
               {/* Premium Feature List */}
