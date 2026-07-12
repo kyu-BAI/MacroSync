@@ -13,7 +13,7 @@ import {
   Alert,
   Modal
 } from 'react-native';
-import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, DollarSign } from 'lucide-react-native';
+import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
@@ -917,7 +917,8 @@ export default function DietRecipesScreen({
                   <Clock color={logoGreen} size={12} />
                   <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
                 </View>
-                <View style={styles.recipeModalMetaBadge}>
+                <View style={[styles.recipeModalMetaBadge, { marginLeft: 8 }]}>
+                  <Text style={{ color: logoGreen, fontSize: 13, fontWeight: '700', marginRight: 3 }}>₱</Text>
                   <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
                 </View>
               </View>
@@ -968,86 +969,6 @@ export default function DietRecipesScreen({
               </TouchableOpacity>
             </>
           )}
-        </View>
-      </Modal>
-
-      {/* ── LOADING OVERLAY FOR RECIPE FETCHING ── */}
-      <Modal visible={isFetchingRecipe} transparent={true} animationType="fade">
-        <View style={styles.loadingModalOverlay}>
-          <View style={styles.loadingModalContent}>
-            <ActivityIndicator size="large" color={logoGreen} />
-            <Text style={styles.loadingModalText}>Consulting AI Nutritionist...</Text>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── RECIPE MODAL ── */}
-      <Modal visible={showRecipeModal} transparent={true} animationType="fade" onRequestClose={() => setShowRecipeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.recipeModalContent}>
-            {selectedRecipe && (
-              <>
-                <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
-                
-                {/* Meta Row */}
-                <View style={styles.recipeModalMetaRow}>
-                  <View style={styles.recipeModalMetaBadge}>
-                    <Clock color={logoGreen} size={12} />
-                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
-                  </View>
-                  <View style={styles.recipeModalMetaBadge}>
-                    <DollarSign color={logoGreen} size={12} />
-                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
-                  </View>
-                </View>
-
-                {/* Macro Details Grid */}
-                <View style={styles.recipeModalMacrosGrid}>
-                  <View style={styles.recipeModalMacroBox}>
-                    <Text style={styles.recipeModalMacroVal}>{selectedRecipe.calories}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: logoGreen }]}>{selectedRecipe.protein}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Protein</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: '#3B82F6' }]}>{selectedRecipe.carbs}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
-                  </View>
-                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
-                    <Text style={styles.recipeModalMacroLabel}>Fats</Text>
-                  </View>
-                </View>
-
-                {/* Ingredients & Instructions Scroll */}
-                <ScrollView showsVerticalScrollIndicator={false} style={styles.recipeModalScroll}>
-                  <View style={styles.recipeModalIngredientsBox}>
-                    <Text style={styles.recipeModalSecTitle}>Ingredients</Text>
-                    {(selectedRecipe.ingredients || []).map((ing, i) => (
-                      <Text key={i} style={styles.recipeModalListItem}>• {ing}</Text>
-                    ))}
-                  </View>
-
-                  <View style={styles.recipeModalInstructionsBox}>
-                    <Text style={styles.recipeModalSecTitle}>Instructions</Text>
-                    {(selectedRecipe.instructions || []).map((step, i) => (
-                      <View key={i} style={styles.recipeModalStepRow}>
-                        <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
-                        <Text style={styles.recipeModalStepText}>{step}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                {/* Close Button */}
-                <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={() => setShowRecipeModal(false)}>
-                  <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
         </View>
       </Modal>
 
