@@ -31,7 +31,8 @@ export default function DietRecipesScreen({
   setGlobalLoggedMeals,
   sessionRecipes,
   userId,
-  isOnline = true
+  isOnline = true,
+  setNotifications
 }) {
   // Static Recipes for Default Scheduled Meals (Offline Fallback)
   const DEFAULT_RECIPES = {
@@ -365,6 +366,17 @@ export default function DietRecipesScreen({
       // Optimistic UI updates
       const updatedLoggedMeals = [...loggedMeals, id];
       setLoggedMeals(updatedLoggedMeals);
+      
+      if (setNotifications && macros) {
+        setNotifications(prev => [{
+          id: `n-${Date.now()}`,
+          title: 'Meal Logged! 🍽️',
+          category: 'meal',
+          time: 'Just Now',
+          read: false,
+          message: `Successfully logged your meal: ${mealName} (${macros.calories || 0} Kcal). Keep it up!`
+        }, ...prev]);
+      }
       
       let newNutrition = null;
       if (setDailyNutrition && macros) {

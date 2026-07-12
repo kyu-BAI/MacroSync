@@ -45,6 +45,8 @@ import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import API_URL from "./src/screens/config/api";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NotificationService } from './src/services/NotificationService';
 
 
 function MainApp() {
@@ -271,6 +273,7 @@ function MainApp() {
     return () => unsubscribe();
   }, [userId]);
 
+  // ── Deep Link Handling ───────────────────────────────────────────────────
   useEffect(() => {
     // Check if the app was opened from a deep link initially
     Linking.getInitialURL().then((url) => {
@@ -290,28 +293,81 @@ function MainApp() {
       subscription.remove();
     };
   }, []);
-  // ── NetInfo: detect connectivity changes ─────────────────────────────────
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(async (state) => {
-      const online = state.isConnected && state.isInternetReachable !== false;
-      setIsOnline(online);
 
-      if (online && wasOfflineRef.current && userId) {
-        // Just came back online — sync queued actions then refresh dashboard
-        console.log('Back online! Syncing queue...');
-        const result = await syncQueueToBackend(API_URL);
-        if (result.synced > 0) {
-          Alert.alert(
-            '✅ Back Online',
-            `Synced ${result.synced} offline action${result.synced > 1 ? 's' : ''} to the server.`
-          );
+  // ── Initialize Native Status Bar Notifications ───────────────────────────
+  useEffect(() => {
+    const initNotifications = async () => {
+      try {
+        const granted = await NotificationService.requestPermissions();
+        if (granted) {
+          console.log("Native notifications permission granted. Scheduling daily reminders...");
+          await NotificationService.scheduleDailyReminders();
+        } else {
+          console.log("Native notifications permission denied.");
         }
-        await fetchDashboardData();
+      } catch (err) {
+        console.log("Failed to initialize native notifications:", err);
       }
-      wasOfflineRef.current = !online;
-    });
-    return () => unsubscribe();
+    };
+    initNotifications();
+  }, []);
+
+  // ── Load Notifications from AsyncStorage ─────────────────────────────────
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (userId) {
+        try {
+          const stored = await AsyncStorage.getItem(`notifications_${userId}`);
+          if (stored) {
+            setNotifications(JSON.parse(stored));
+          } else {
+            setNotifications([]);
+          }
+        } catch (err) {
+          console.log("Error loading notifications:", err);
+        }
+      } else {
+        setNotifications([]);
+      }
+    };
+    loadNotifications();
   }, [userId]);
+
+  // ── Save Notifications to AsyncStorage ───────────────────────────────────
+  useEffect(() => {
+    const saveNotifications = async () => {
+      if (userId && notifications) {
+        try {
+          await AsyncStorage.setItem(`notifications_${userId}`, JSON.stringify(notifications));
+        } catch (err) {
+          console.log("Error saving notifications:", err);
+        }
+      }
+    };
+    saveNotifications();
+  }, [notifications, userId]);
+
+  // ── Premium Status Upgrade Notification Listener ───────────────────────────
+  const prevIsPremiumRef = useRef(null);
+  useEffect(() => {
+    if (userProfile && prevIsPremiumRef.current !== null) {
+      const isPremium = userProfile.tier === 'Premium' || userProfile.isPremium || userProfile.is_premium;
+      if (isPremium && !prevIsPremiumRef.current) {
+        setNotifications(prev => [{
+          id: `premium-upgrade-${Date.now()}`,
+          title: 'Welcome to Premium! 🌟',
+          category: 'achievement',
+          time: 'Just Now',
+          read: false,
+          message: 'Thank you for upgrading! You now have unlimited access to recipes, food scanner scans, and AI chatbot support.'
+        }, ...prev]);
+      }
+    }
+    if (userProfile) {
+      const isPremium = userProfile.tier === 'Premium' || userProfile.isPremium || userProfile.is_premium;
+      prevIsPremiumRef.current = isPremium;
+    }
+  }, [userProfile]);
 
   useEffect(() => {
     if (userId && currentScreen === 'DASHBOARD') {
@@ -567,6 +623,7 @@ function MainApp() {
           sessionRecipes={sessionRecipes}
           userId={userId}
           isOnline={isOnline}
+          setNotifications={setNotifications}
         />
       )}
       {activeTab === 'CHATBOT' && (
@@ -610,6 +667,16 @@ function MainApp() {
                 fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
               }));
               setGlobalLoggedMeals(prev => [...prev, mealId]);
+              
+              setNotifications(prev => [{
+                id: `n-${Date.now()}`,
+                title: 'Food Scanned & Logged! 🔍',
+                category: 'meal',
+                time: 'Just Now',
+                read: false,
+                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
+              }, ...prev]);
+
               Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
               return;
             }
@@ -632,6 +699,15 @@ function MainApp() {
                 fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
               }));
               setGlobalLoggedMeals(prev => [...prev, mealId]);
+
+              setNotifications(prev => [{
+                id: `n-${Date.now()}`,
+                title: 'Food Scanned & Logged! 🔍',
+                category: 'meal',
+                time: 'Just Now',
+                read: false,
+                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
+              }, ...prev]);
             } catch (error) {
               console.error('Error logging scanned food:', error);
               Alert.alert('Error', error.message || 'Failed to log meal to server.');
@@ -647,6 +723,7 @@ function MainApp() {
           isOnline={isOnline}
           dailyExercise={dailyExercise}
           setDailyExercise={setDailyExercise}
+          setNotifications={setNotifications}
         />
       )}
       {activeTab === 'SETTINGS' && (

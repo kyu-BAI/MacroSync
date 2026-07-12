@@ -27,7 +27,8 @@ export default function WorkoutScreen({
   onRefreshDashboard, 
   isOnline = true, 
   dailyExercise, 
-  setDailyExercise 
+  setDailyExercise,
+  setNotifications
 }) {
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
@@ -137,6 +138,17 @@ export default function WorkoutScreen({
           newExercise = next;
           return next;
         });
+      }
+
+      if (setNotifications && activeRoutine) {
+        setNotifications(prev => [{
+          id: `n-${Date.now()}`,
+          title: 'Workout Complete! 🔥',
+          category: 'achievement',
+          time: 'Just Now',
+          read: false,
+          message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`
+        }, ...prev]);
       }
 
       const workoutPayload = {
