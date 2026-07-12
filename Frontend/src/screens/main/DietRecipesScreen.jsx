@@ -13,7 +13,7 @@ import {
   Alert,
   Modal
 } from 'react-native';
-import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
+import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, DollarSign } from 'lucide-react-native';
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
