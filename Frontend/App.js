@@ -110,48 +110,7 @@ function MainApp() {
   const [weightHistory, setWeightHistory] = useState(null);
 
 
-  const [notifications, setNotifications] = useState([
-    { 
-      id: 'n1', 
-      title: 'Hydration & Routine 💧', 
-      category: 'hydration', 
-      time: '10:00 AM', 
-      read: false, 
-      message: 'Automated reminder: Time to drink water! Staying hydrated is key to your healthy routine activities.' 
-    },
-    { 
-      id: 'n2', 
-      title: 'Workout Complete! 🔥', 
-      category: 'achievement', 
-      time: 'Yesterday', 
-      read: false, 
-      message: 'Motivational update: Awesome job! You burned 320 calories. Consistency in health monitoring is key.' 
-    },
-    { 
-      id: 'n3', 
-      title: 'Milestone Reached 🏃', 
-      category: 'achievement', 
-      time: 'Yesterday', 
-      read: true, 
-      message: 'You hit your calorie target and crushed your 10,000 step milestone! Great daily progress.' 
-    },
-    { 
-      id: 'n4', 
-      title: 'Dinner Logging 🍽️', 
-      category: 'meal', 
-      time: '2 Days Ago', 
-      read: true, 
-      message: 'Automated reminder: Don\'t forget to log your dinner macros to maintain diet tracking consistency.' 
-    },
-    { 
-      id: 'n5', 
-      title: 'Smart Goal Adjustment 🧠', 
-      category: 'workout', 
-      time: '3 Days Ago', 
-      read: true, 
-      message: 'Personalized notification: Adjusted based on your behavior and daily routines to improve long-term engagement and adherence.' 
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // ── Apply dashboard API response to all state variables ─────────────────
   const applyDashboardData = (data) => {
