@@ -1,2 +1,2 @@
-const API_URL = "https://macrosync-backend-api.vercel.app";
+const API_URL = "https://macro-sync.vercel.app";
 export default API_URL;
