@@ -10,13 +10,14 @@ import {
   Platform,
   Dimensions,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { Search, MapPin, DollarSign, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 import { recommendedRecipesPool } from '../../data/recipes';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import API_URL from '../config/api';
+import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function DietRecipesScreen({ 
@@ -28,8 +29,146 @@ export default function DietRecipesScreen({
   globalLoggedMeals = [], 
   setGlobalLoggedMeals,
   sessionRecipes,
-  userId
+  userId,
+  isOnline = true
 }) {
+  // Static Recipes for Default Scheduled Meals (Offline Fallback)
+  const DEFAULT_RECIPES = {
+    dp1: {
+      id: 'dp1',
+      title: 'Local Eggs & Pandesal',
+      calories: 320,
+      protein: '15g',
+      carbs: '35g',
+      fats: '12g',
+      time: '10 mins',
+      budget: 'Under ₱100',
+      location: 'San Remigio',
+      ingredients: [
+        '2 fresh local eggs',
+        '2 pieces whole-wheat or regular pandesal bread',
+        '1 tsp oil or butter for frying',
+        'Pinch of salt and black pepper'
+      ],
+      instructions: [
+        'Heat oil or butter in a non-stick pan over medium heat.',
+        'Crack the eggs in and cook scrambled or sunny-side-up as preferred.',
+        'Toast your pandesal slices lightly in a toaster or pan.',
+        'Plate the hot toasted pandesal, serve with the cooked eggs, and optionally season with salt and pepper.'
+      ]
+    },
+    dp2: {
+      id: 'dp2',
+      title: 'Chicken Adobo & Rice',
+      calories: 550,
+      protein: '35g',
+      carbs: '65g',
+      fats: '14g',
+      time: '35 mins',
+      budget: '₱100 - ₱300',
+      location: 'San Remigio',
+      ingredients: [
+        '150g skinless chicken thigh or breast, chopped',
+        '1 cup cooked white or brown rice',
+        '2 tbsp soy sauce',
+        '1 tbsp vinegar',
+        '2 cloves garlic, crushed',
+        '1 dried bay leaf',
+        '1/2 tsp whole black peppercorns'
+      ],
+      instructions: [
+        'Combine chicken, soy sauce, garlic, and peppercorns in a bowl. Marinate for 10-15 minutes.',
+        'Heat a pot over medium-high heat and sear the chicken pieces until lightly browned.',
+        'Pour in the marinade, vinegar, and add the bay leaf. Bring to a boil, then cover and lower the heat to simmer for 20 minutes.',
+        'Serve hot chicken adobo with its savory sauce over a cup of steamed rice.'
+      ]
+    },
+    dp3: {
+      id: 'dp3',
+      title: 'Banana & Peanut Butter',
+      calories: 220,
+      protein: '6g',
+      carbs: '28g',
+      fats: '11g',
+      time: '5 mins',
+      budget: 'Under ₱100',
+      location: 'San Remigio',
+      ingredients: [
+        '1 medium local banana (Lakatan or Latundan)',
+        '1.5 tbsp natural unsweetened peanut butter'
+      ],
+      instructions: [
+        'Peel the banana and slice it horizontally or into bite-sized coins.',
+        'Spread the natural peanut butter evenly across the banana slices.',
+        'Eat immediately for a quick pre-workout carb and healthy fat boost.'
+      ]
+    },
+    dp4: {
+      id: 'dp4',
+      title: 'Grilled Fish & Veggies',
+      calories: 410,
+      protein: '32g',
+      carbs: '12g',
+      fats: '9g',
+      time: '20 mins',
+      budget: '₱100 - ₱300',
+      location: 'San Remigio',
+      ingredients: [
+        '150g fresh local fish fillet (bangus, lapu-lapu, or tilapya)',
+        '1 cup chopped local vegetables (kangkong, sitaw, eggplant)',
+        '1 tsp calamansi juice',
+        '1 tsp olive or coconut oil',
+        'Salt and pepper to taste'
+      ],
+      instructions: [
+        'Season fish fillet with calamansi juice, salt, and pepper.',
+        'Brush a pan with oil, heat it, and grill the fish for 4-5 minutes on each side until cooked through.',
+        'Steam or blanch the mixed vegetables in boiling water for 3-5 minutes until tender-crisp.',
+        'Serve the grilled fish hot alongside the steamed local veggies.'
+      ]
+    }
+  };
+
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+
+  const handleViewRecipe = async (meal) => {
+    if (DEFAULT_RECIPES[meal.id]) {
+      setSelectedRecipe(DEFAULT_RECIPES[meal.id]);
+      setShowRecipeModal(true);
+      return;
+    }
+
+    setIsFetchingRecipe(true);
+    try {
+      const response = await fetch(`${API_URL}/generate-recipe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ingredients: meal.title,
+          budget: 'All',
+          location: selectedLocation || 'San Remigio'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate recipe');
+      }
+
+      const data = await response.json();
+      setSelectedRecipe(data);
+      setShowRecipeModal(true);
+    } catch (error) {
+      console.error("VIEW RECIPE ERROR:", error);
+      Alert.alert('Unable to load recipe', 'Failed to retrieve recipe from AI. Please check your network connection.');
+    } finally {
+      setIsFetchingRecipe(false);
+    }
+  };
+
   // Use global persisted state so logged meals survive tab switches
   const loggedMeals = globalLoggedMeals;
   const setLoggedMeals = setGlobalLoggedMeals || (() => {});
@@ -146,43 +285,123 @@ export default function DietRecipesScreen({
       return;
     }
 
+    const isRecipe = id.startsWith('recipe-');
+    const mealName = macros.name || (isRecipe ? recipes.find(r => `recipe-${r.id}` === id)?.title : null) || 'Meal';
+    const mealPayload = {
+      id,
+      user_id: userId,
+      name: mealName,
+      calories: macros.calories || 0,
+      protein: macros.protein || 0,
+      carbs: macros.carbs || 0,
+      fats: macros.fats || 0
+    };
+
     if (!loggedMeals.includes(id)) {
+      // Optimistic UI updates
+      const updatedLoggedMeals = [...loggedMeals, id];
+      setLoggedMeals(updatedLoggedMeals);
+      
+      let newNutrition = null;
+      if (setDailyNutrition && macros) {
+        setDailyNutrition(prev => {
+          const next = {
+            ...prev,
+            consumedCalories: prev.consumedCalories + macros.calories,
+            protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+            carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+            fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+          };
+          newNutrition = next;
+          return next;
+        });
+      }
+
+      // If offline
+      if (!isOnline) {
+        await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+        if (newNutrition) {
+          await updateCachedDashboardField(userId, {
+            loggedMealIds: updatedLoggedMeals,
+            nutrition: {
+              consumedCalories: newNutrition.consumedCalories,
+              protein: { ...newNutrition.protein },
+              carbs: { ...newNutrition.carbs },
+              fats: { ...newNutrition.fats }
+            }
+          });
+        }
+        Alert.alert('📴 Saved Offline', 'Meal logged locally. Will sync when back online.');
+        return;
+      }
+
+      // Online: call API but handle failure gracefully
       try {
         const response = await fetch(`${API_URL}/meals`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            id,
-            user_id: userId,
-            name: macros.name || 'Meal',
-            calories: macros.calories || 0,
-            protein: macros.protein || 0,
-            carbs: macros.carbs || 0,
-            fats: macros.fats || 0
-          }),
+          body: JSON.stringify(mealPayload),
         });
 
         if (!response.ok) {
           throw new Error('Failed to log meal on server');
         }
-
-        setLoggedMeals([...loggedMeals, id]);
-        if (setDailyNutrition && macros) {
-          setDailyNutrition(prev => ({
-            ...prev,
-            consumedCalories: prev.consumedCalories + macros.calories,
-            protein: { ...prev.protein, current: prev.protein.current + macros.protein },
-            carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
-            fats: { ...prev.fats, current: prev.fats.current + macros.fats }
-          }));
-        }
       } catch (error) {
-        console.error("LOG MEAL API ERROR:", error);
-        Alert.alert("Error", "Could not save logged meal to server. Please try again.");
+        console.warn("LOG MEAL API ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+        if (newNutrition) {
+          await updateCachedDashboardField(userId, {
+            loggedMealIds: updatedLoggedMeals,
+            nutrition: {
+              consumedCalories: newNutrition.consumedCalories,
+              protein: { ...newNutrition.protein },
+              carbs: { ...newNutrition.carbs },
+              fats: { ...newNutrition.fats }
+            }
+          });
+        }
       }
     } else {
+      // Optimistic UI updates
+      const updatedLoggedMeals = loggedMeals.filter(mealId => mealId !== id);
+      setLoggedMeals(updatedLoggedMeals);
+      
+      let newNutrition = null;
+      if (setDailyNutrition && macros) {
+        setDailyNutrition(prev => {
+          const next = {
+            ...prev,
+            consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
+            protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
+            carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
+            fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
+          };
+          newNutrition = next;
+          return next;
+        });
+      }
+
+      // If offline
+      if (!isOnline) {
+        await addToSyncQueue({ type: 'DELETE_MEAL', payload: { user_id: userId, id } });
+        if (newNutrition) {
+          await updateCachedDashboardField(userId, {
+            loggedMealIds: updatedLoggedMeals,
+            nutrition: {
+              consumedCalories: newNutrition.consumedCalories,
+              protein: { ...newNutrition.protein },
+              carbs: { ...newNutrition.carbs },
+              fats: { ...newNutrition.fats }
+            }
+          });
+        }
+        Alert.alert('📴 Saved Offline', 'Meal removed locally. Will sync when back online.');
+        return;
+      }
+
+      // Online: call API but handle failure gracefully
       try {
         const response = await fetch(`${API_URL}/meals/${userId}/${id}`, {
           method: 'DELETE',
@@ -191,25 +410,30 @@ export default function DietRecipesScreen({
         if (!response.ok) {
           throw new Error('Failed to delete meal on server');
         }
-
-        setLoggedMeals(loggedMeals.filter(mealId => mealId !== id));
-        if (setDailyNutrition && macros) {
-          setDailyNutrition(prev => ({
-            ...prev,
-            consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
-            protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
-            carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
-            fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
-          }));
-        }
       } catch (error) {
-        console.error("DELETE MEAL API ERROR:", error);
-        Alert.alert("Error", "Could not remove logged meal from server. Please try again.");
+        console.warn("DELETE MEAL API ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: 'DELETE_MEAL', payload: { user_id: userId, id } });
+        if (newNutrition) {
+          await updateCachedDashboardField(userId, {
+            loggedMealIds: updatedLoggedMeals,
+            nutrition: {
+              consumedCalories: newNutrition.consumedCalories,
+              protein: { ...newNutrition.protein },
+              carbs: { ...newNutrition.carbs },
+              fats: { ...newNutrition.fats }
+            }
+          });
+        }
       }
     }
   };
 
-  const filteredRecipes = recipes.filter(recipe => {
+  // Deduplicate recipes by ID to ensure no duplicate cards are shown in the Explore tab
+  const uniqueRecipes = recipes.filter((recipe, index, self) =>
+    recipe && index === self.findIndex((r) => r && r.id === recipe.id)
+  );
+
+  const filteredRecipes = uniqueRecipes.filter(recipe => {
     const matchesBudget = selectedBudget === 'All' || recipe.budget === selectedBudget;
     const matchesLocation = recipe.location === selectedLocation;
     const matchesAllergy = selectedAllergy === 'None' || !(recipe.allergies || []).includes(selectedAllergy);
@@ -303,7 +527,17 @@ export default function DietRecipesScreen({
                       </View>
                       <Text style={[styles.timelineTitle, isLogged && { color: '#41544B' }]}>{meal.title}</Text>
                       <View style={styles.timelineFooter}>
-                        <Text style={styles.timelineMacroText}>{meal.calories} kcal • {meal.protein} protein</Text>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text style={styles.timelineMacroText}>{meal.calories} kcal • {meal.protein} protein</Text>
+                          <TouchableOpacity 
+                            style={styles.viewRecipeTextBtn} 
+                            onPress={() => handleViewRecipe(meal)}
+                            activeOpacity={0.6}
+                          >
+                            <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
+                            <Text style={styles.viewRecipeTextBtnLabel}>View AI Recipe</Text>
+                          </TouchableOpacity>
+                        </View>
                         <TouchableOpacity 
                           style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
                           onPress={() => handleLogMeal(meal.id, { 
@@ -542,6 +776,7 @@ export default function DietRecipesScreen({
                 <View style={styles.glassDivider} />
 
                 <View style={styles.recipeFooterActions}>
+
                   <TouchableOpacity 
                     style={[styles.fullRecipeViewToggleButton, isExpanded && styles.fullRecipeViewToggleActiveButton]}
                     activeOpacity={0.8}
@@ -591,6 +826,86 @@ export default function DietRecipesScreen({
 
       {/* --- FLOATING AI CHATBOT SYSTEM (WIRED UP TOGGLE HUB) --- */}
       <DraggableChatbotButton onPress={() => onTabChange && onTabChange('CHATBOT')} />
+
+      {/* ── RECIPE MODAL ── */}
+      <Modal visible={showRecipeModal} transparent={true} animationType="fade" onRequestClose={() => setShowRecipeModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.recipeModalContent}>
+            {selectedRecipe && (
+              <>
+                <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
+                
+                {/* Meta Row */}
+                <View style={styles.recipeModalMetaRow}>
+                  <View style={styles.recipeModalMetaBadge}>
+                    <Clock color={logoGreen} size={12} />
+                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
+                  </View>
+                  <View style={styles.recipeModalMetaBadge}>
+                    <DollarSign color={logoGreen} size={12} />
+                    <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
+                  </View>
+                </View>
+
+                {/* Macro Details Grid */}
+                <View style={styles.recipeModalMacrosGrid}>
+                  <View style={styles.recipeModalMacroBox}>
+                    <Text style={styles.recipeModalMacroVal}>{selectedRecipe.calories}</Text>
+                    <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
+                  </View>
+                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                    <Text style={[styles.recipeModalMacroVal, { color: logoGreen }]}>{selectedRecipe.protein}</Text>
+                    <Text style={styles.recipeModalMacroLabel}>Protein</Text>
+                  </View>
+                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                    <Text style={[styles.recipeModalMacroVal, { color: '#3B82F6' }]}>{selectedRecipe.carbs}</Text>
+                    <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
+                  </View>
+                  <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                    <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
+                    <Text style={styles.recipeModalMacroLabel}>Fats</Text>
+                  </View>
+                </View>
+
+                {/* Ingredients & Instructions Scroll */}
+                <ScrollView showsVerticalScrollIndicator={false} style={styles.recipeModalScroll}>
+                  <View style={styles.recipeModalIngredientsBox}>
+                    <Text style={styles.recipeModalSecTitle}>Ingredients</Text>
+                    {(selectedRecipe.ingredients || []).map((ing, i) => (
+                      <Text key={i} style={styles.recipeModalListItem}>• {ing}</Text>
+                    ))}
+                  </View>
+
+                  <View style={styles.recipeModalInstructionsBox}>
+                    <Text style={styles.recipeModalSecTitle}>Instructions</Text>
+                    {(selectedRecipe.instructions || []).map((step, i) => (
+                      <View key={i} style={styles.recipeModalStepRow}>
+                        <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
+                        <Text style={styles.recipeModalStepText}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                {/* Close Button */}
+                <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={() => setShowRecipeModal(false)}>
+                  <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── LOADING OVERLAY FOR RECIPE FETCHING ── */}
+      <Modal visible={isFetchingRecipe} transparent={true} animationType="fade">
+        <View style={styles.loadingModalOverlay}>
+          <View style={styles.loadingModalContent}>
+            <ActivityIndicator size="large" color={logoGreen} />
+            <Text style={styles.loadingModalText}>Consulting AI Nutritionist...</Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* --- BOTTOM NAVIGATION BAR --- */}
     </View>
@@ -1306,5 +1621,171 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
+  },
+  // --- View Recipe Button Styles ---
+  viewRecipeTextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  viewRecipeTextBtnLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: logoGreen,
+  },
+  // --- View Recipe Modal Styles ---
+  recipeModalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: baseColor,
+    borderRadius: 32,
+    padding: 24,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: '#D4E2DC',
+  },
+  recipeModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1A2B23',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  recipeModalMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  recipeModalMetaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E2ECE7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginHorizontal: 6,
+  },
+  recipeModalMetaText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#37745D',
+    marginLeft: 4,
+  },
+  recipeModalMacrosGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    marginBottom: 16,
+  },
+  recipeModalMacroBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  recipeModalMacroVal: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#1A2B23',
+  },
+  recipeModalMacroLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7FA293',
+    marginTop: 2,
+  },
+  recipeModalScroll: {
+    marginBottom: 16,
+  },
+  recipeModalIngredientsBox: {
+    backgroundColor: '#EBF2EE',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  recipeModalInstructionsBox: {
+    backgroundColor: '#F4F7F5',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+  },
+  recipeModalSecTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#37745D',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  recipeModalListItem: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#21332A',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  recipeModalStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  recipeModalStepNum: {
+    backgroundColor: '#4EA685',
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginRight: 8,
+    marginTop: 2,
+  },
+  recipeModalStepText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#33443C',
+    lineHeight: 18,
+  },
+  recipeModalCloseBtn: {
+    backgroundColor: logoGreen,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeModalCloseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  loadingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 43, 35, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingModalContent: {
+    backgroundColor: baseColor,
+    padding: 24,
+    borderRadius: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+  },
+  loadingModalText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#37745D',
+    marginTop: 12,
   },
 });

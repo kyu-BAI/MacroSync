@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -16,10 +16,14 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail } from 'lucide-react-native';
 import DraggableChatbotButton from '../../components/DraggableChatbotButton';
+import API_URL from '../config/api';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const GcashLogo = require('../../images/Gcash.png');
+const MayaLogo = require('../../images/Maya.png');
+const CardLogo = require('../../images/CreditDebitCard.png');
+
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
@@ -29,14 +33,44 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   // --- EDIT PROFILE MODAL STATE ---
   const [showEditModal, setShowEditModal] = useState(false);
   const [tempName, setTempName] = useState('');
-  const [tempEmail, setTempEmail] = useState('');
   const [tempImage, setTempImage] = useState(null);
+
+  // --- CHANGE EMAIL STATE ---
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [tempAuthEmail, setTempAuthEmail] = useState('');
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+
+  // --- CHANGE PASSWORD STATE ---
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // --- PAYMENT FLOW STATE ---
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentPlan, setPaymentPlan] = useState({ name: '', price: '' });
+  const [selectedMethod, setSelectedMethod] = useState(null); // 'gcash' | 'maya' | 'card'
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const handleOpenEditModal = () => {
     setTempName(userProfile?.name || '');
-    setTempEmail(userProfile?.email || '');
     setTempImage(userProfile?.profileImage || null);
     setShowEditModal(true);
+  };
+
+  const handleOpenEmailModal = () => {
+    setTempAuthEmail('');
+    setEmailCurrentPassword('');
+    setShowEmailModal(true);
+  };
+
+  const handleOpenPasswordModal = () => {
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPasswordModal(true);
   };
 
   const handlePickTempImage = async () => {
@@ -73,12 +107,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       Alert.alert("Validation Error", "Name cannot be empty.");
       return;
     }
-    if (!tempEmail.trim()) {
-      Alert.alert("Validation Error", "Email cannot be empty.");
-      return;
-    }
 
     try {
+      const currentEmail = userProfile?.email || '';
       const response = await fetch(`${API_URL}/update-profile`, {
         method: 'POST',
         headers: {
@@ -87,7 +118,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         body: JSON.stringify({
           user_id: userId,
           name: tempName.trim(),
-          email: tempEmail.trim()
+          email: currentEmail
         }),
       });
 
@@ -113,11 +144,11 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
 
       if (setUserProfile) {
-        setUserProfile({
+        setUserProfile(prev => ({
+          ...prev,
           name: tempName.trim(),
-          email: tempEmail.trim(),
           profileImage: tempImage
-        });
+        }));
         setShowEditModal(false);
         Alert.alert("Success", "Profile updated successfully!");
       }
@@ -184,55 +215,187 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [personalizedAlerts, setPersonalizedAlerts] = useState(false);
 
   // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
-  const [accountTier, setAccountTier] = useState('Free');
+  const [accountTier, setAccountTier] = useState(userProfile?.isPremium ? 'Premium' : 'Free');
   const [showBillingOptions, setShowBillingOptions] = useState(false);
   
   // Tracks exactly which option ('Monthly' or 'Annual') has the active focus/outline
   const [selectedBillingCycle, setSelectedBillingCycle] = useState(null);
 
+  useEffect(() => {
+    setAccountTier(userProfile?.isPremium ? 'Premium' : 'Free');
+  }, [userProfile?.isPremium]);
+
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
 
   // --- ACCOUNT TIER MANAGER ACTIONS ---
-  const handleSelectTierOption = (tierType) => {
-    setAccountTier(tierType);
+  const handleSelectTierOption = async (tierType) => {
     if (tierType === 'Free') {
-      Alert.alert("Plan Updated", "You are currently on the Free Plan.");
+      if (userProfile?.isPremium) {
+        Alert.alert(
+          "Cancel Subscription",
+          "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
+          [
+            { text: "No", style: "cancel" },
+            { 
+              text: "Yes, Downgrade", 
+              onPress: async () => {
+                try {
+                  const response = await fetch(`${API_URL}/update-subscription`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, is_premium: false })
+                  });
+                  if (response.ok) {
+                    setUserProfile(prev => ({ ...prev, isPremium: false }));
+                    setAccountTier('Free');
+                    Alert.alert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
+                  } else {
+                    Alert.alert("Error", "Failed to cancel subscription on server.");
+                  }
+                } catch (e) {
+                  Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        setAccountTier('Free');
+      }
     } else {
-      Alert.alert("Coming Soon", "Premium plan details and pricing will be available soon. Stay tuned!");
+      setAccountTier('Premium');
     }
   };
 
   // --- TRIGGER PAYMENT HANDLER FOR FRONTEND FLOW ---
   const handleInitiatePaymentFlow = (planName, price) => {
-    // Instantly apply the selection outline indicator visually
     setSelectedBillingCycle(planName);
+    setPaymentPlan({ name: planName, price: price });
+    setSelectedMethod(null);
+    setShowPaymentModal(true);
+  };
 
-    Alert.alert(
-      "Confirm Payment Method",
-      `Would you like to proceed with the payment for the Premium ${planName} Plan (${price})?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => {
-            // Remove outline state focus if user backs out of the checkout modal
-            setSelectedBillingCycle(null);
-          }
+  const handleConfirmPayment = () => {
+    if (!selectedMethod) {
+      Alert.alert("Payment Method Required", "Please select a payment method to proceed.");
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    setTimeout(() => {
+      setUserProfile(prev => ({ ...prev, isPremium: true }));
+      setAccountTier('Premium');
+      setShowPaymentModal(false);
+      setIsProcessingPayment(false);
+    }, 1000);
+  };
+
+  const handleChangeEmail = async () => {
+    if (!tempAuthEmail.trim()) {
+      Alert.alert("Validation Error", "Please enter a new email address.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(tempAuthEmail.trim())) {
+      Alert.alert("Validation Error", "Please enter a valid email address.");
+      return;
+    }
+    if (tempAuthEmail.trim().toLowerCase() === (userProfile?.email || '').toLowerCase()) {
+      Alert.alert("Validation Error", "New email is the same as your current email.");
+      return;
+    }
+    if (!emailCurrentPassword.trim()) {
+      Alert.alert("Validation Error", "Please enter your current password to authorize this email update.");
+      return;
+    }
+
+    setIsChangingEmail(true);
+    try {
+      const response = await fetch(`${API_URL}/update-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        {
-          text: "Proceed to Pay",
-          onPress: () => {
-            setAccountTier(`Premium (${planName})`);
-            setShowBillingOptions(false);
-            Alert.alert(
-              "Processing Payment",
-              "Connecting to payment gateway handlers... Subscription initialized successfully."
-            );
-          }
-        }
-      ]
-    );
+        body: JSON.stringify({
+          user_id: userId,
+          new_email: tempAuthEmail.trim().toLowerCase(),
+          current_password: emailCurrentPassword.trim()
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to update email address');
+      }
+
+      if (setUserProfile) {
+        setUserProfile(prev => ({
+          ...prev,
+          email: tempAuthEmail.trim().toLowerCase()
+        }));
+      }
+
+      Alert.alert("Success", "Email address updated successfully! Please use this new email to log in next time.");
+      setTempAuthEmail('');
+      setEmailCurrentPassword('');
+      setShowEmailModal(false);
+    } catch (error) {
+      console.error("CHANGE EMAIL ERROR:", error);
+      Alert.alert("Error", error.message || "Failed to update email. Please try again.");
+    } finally {
+      setIsChangingEmail(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!oldPassword.trim()) {
+      Alert.alert("Validation Error", "Please enter your current password.");
+      return;
+    }
+    if (!newPassword.trim()) {
+      Alert.alert("Validation Error", "Please enter a new password.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert("Validation Error", "Password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Validation Error", "New passwords do not match.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const response = await fetch(`${API_URL}/update-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          password: newPassword.trim(),
+          current_password: oldPassword.trim()
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to update password');
+      }
+
+      Alert.alert("Success", "Password updated successfully!");
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordModal(false);
+    } catch (error) {
+      console.error("CHANGE PASSWORD ERROR:", error);
+      Alert.alert("Error", error.message || "Failed to change password. Please try again.");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSavePreferences = () => {
@@ -334,17 +497,75 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => handleSelectTierOption('Premium')}
             >
               <Text style={[styles.filterChipText, accountTier === 'Premium' && styles.filterChipTextActive]}>
-                Premium Tier ✨
+                Premium Tier
               </Text>
             </TouchableOpacity>
           </View>
 
           {accountTier === 'Premium' && (
-            <View style={{ marginTop: 12 }}>
+            <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
-              <Text style={[styles.premiumPanelHeading, { textAlign: 'center', color: '#7FA293' }]}>
-                🚀 Premium plan details coming soon!
-              </Text>
+              
+              <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
+              
+              {/* Monthly Plan */}
+              <TouchableOpacity 
+                style={[
+                  styles.billingPlanSelectorRowItem,
+                  selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
+                  { marginBottom: 12 }
+                ]}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱199/mo')}
+              >
+                <View style={styles.billingPlanTextGroup}>
+                  <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
+                  <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
+                </View>
+                <Text style={styles.billingPlanPriceBadgeText}>₱199/mo</Text>
+              </TouchableOpacity>
+
+              {/* Annual Plan */}
+              <TouchableOpacity 
+                style={[
+                  styles.billingPlanSelectorRowItem,
+                  selectedBillingCycle === 'Annual' && styles.billingPlanActive
+                ]}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,029/yr')}
+              >
+                <View style={styles.billingPlanTextGroup}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
+                    <View style={styles.bestValueBadge}>
+                      <Text style={styles.bestValueBadgeText}>SAVE 15%</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
+                </View>
+                <Text style={styles.billingPlanPriceBadgeText}>₱2,029/yr</Text>
+              </TouchableOpacity>
+
+              {/* Premium Feature List */}
+              <View style={styles.premiumFeatureDetailsBox}>
+                <View style={styles.featureDetailsHeadingFlexRow}>
+                  <Sparkles color={logoGreen} size={16} style={{ marginRight: 6 }} />
+                  <Text style={styles.premiumDetailsHeadingText}>Premium Benefits</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Unlimited smart food scanner usage (AI vision analysis)</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Unlimited chatbot queries & nutrition planning</Text>
+                </View>
+
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
+                  <Text style={styles.featureBulletBodyText}>Priority generation speeds and backup model availability</Text>
+                </View>
+              </View>
             </View>
           )}
         </View>
@@ -408,6 +629,42 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           </View>
         </View>
 
+        {/* SECURITY SETTINGS CARD */}
+        <Text style={styles.sectionLabelTitle}>Security & Account</Text>
+        <View style={styles.formCard}>
+          <TouchableOpacity 
+            style={styles.settingActionRowItem} 
+            onPress={handleOpenEmailModal}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingIconTextGroup}>
+              <Mail color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View>
+                <Text style={styles.settingRowItemMainTitle}>Change Email Address</Text>
+                <Text style={styles.settingRowItemSubTitle}>Update your login email address securely</Text>
+              </View>
+            </View>
+            <ChevronRight color={'#7FA293'} size={16} />
+          </TouchableOpacity>
+
+          <View style={styles.glassDivider} />
+
+          <TouchableOpacity 
+            style={styles.settingActionRowItem} 
+            onPress={handleOpenPasswordModal}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingIconTextGroup}>
+              <Shield color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View>
+                <Text style={styles.settingRowItemMainTitle}>Change Password</Text>
+                <Text style={styles.settingRowItemSubTitle}>Update your password securely</Text>
+              </View>
+            </View>
+            <ChevronRight color={'#7FA293'} size={16} />
+          </TouchableOpacity>
+        </View>
+
         {/* LOGOUT BUTTON */}
         <TouchableOpacity style={styles.logOutSecondaryNeuButton} onPress={handleLogOut}>
           <LogOut color={'#E53E3E'} size={18} style={{ marginRight: 8 }} />
@@ -455,16 +712,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               placeholderTextColor="#AEC2B7"
             />
 
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempEmail}
-              onChangeText={setTempEmail}
-              placeholder="email@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#AEC2B7"
-            />
+
 
             <View style={styles.modalButtons}>
                <TouchableOpacity style={styles.modalCancel} onPress={() => setShowEditModal(false)}>
@@ -475,6 +723,253 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- CHANGE EMAIL MODAL --- */}
+      <Modal
+        visible={showEmailModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowEmailModal(false);
+          setTempAuthEmail('');
+          setEmailCurrentPassword('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.modalContent}
+          >
+            <Text style={styles.modalTitle}>Change Email</Text>
+            <Text style={styles.modalSubtitle}>Enter details below to update your email address</Text>
+
+            <Text style={styles.inputLabel}>Current Email</Text>
+            <View style={[styles.modalInput, { backgroundColor: 'rgba(30, 60, 50, 0.6)', justifyContent: 'center' }]}>
+              <Text style={{ color: '#AEC2B7', fontSize: 14 }}>{userProfile?.email || 'No email set'}</Text>
+            </View>
+
+            <Text style={styles.inputLabel}>Current Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={emailCurrentPassword}
+              onChangeText={setEmailCurrentPassword}
+              placeholder="Enter current password"
+              placeholderTextColor="#AEC2B7"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={true}
+            />
+
+            <Text style={styles.inputLabel}>New Email Address</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempAuthEmail}
+              onChangeText={setTempAuthEmail}
+              placeholder="email@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholderTextColor="#AEC2B7"
+            />
+
+            <View style={styles.modalButtons}>
+               <TouchableOpacity 
+                 style={styles.modalCancel} 
+                 onPress={() => {
+                   setShowEmailModal(false);
+                   setTempAuthEmail('');
+                   setEmailCurrentPassword('');
+                 }}
+               >
+                 <Text style={styles.modalCancelText}>Cancel</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={styles.modalSave} 
+                 onPress={handleChangeEmail}
+                 disabled={isChangingEmail}
+               >
+                 <Text style={styles.modalSaveText}>
+                   {isChangingEmail ? "Saving..." : "Change"}
+                 </Text>
+               </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- CHANGE PASSWORD MODAL --- */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setOldPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.modalContent}
+          >
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <Text style={styles.modalSubtitle}>Enter password details below</Text>
+
+            <Text style={styles.inputLabel}>Current Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={oldPassword}
+              onChangeText={setOldPassword}
+              placeholder="Enter current password"
+              placeholderTextColor="#AEC2B7"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={true}
+            />
+
+            <Text style={styles.inputLabel}>New Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password"
+              placeholderTextColor="#AEC2B7"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={true}
+            />
+
+            <Text style={styles.inputLabel}>Confirm New Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm new password"
+              placeholderTextColor="#AEC2B7"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={true}
+            />
+
+            <View style={styles.modalButtons}>
+               <TouchableOpacity 
+                 style={styles.modalCancel} 
+                 onPress={() => {
+                   setShowPasswordModal(false);
+                   setOldPassword('');
+                   setNewPassword('');
+                   setConfirmPassword('');
+                 }}
+               >
+                 <Text style={styles.modalCancelText}>Cancel</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={styles.modalSave} 
+                 onPress={handleChangePassword}
+                 disabled={isChangingPassword}
+               >
+                 <Text style={styles.modalSaveText}>
+                   {isChangingPassword ? "Saving..." : "Change"}
+                 </Text>
+               </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- PAYMENT METHOD SELECTOR MODAL --- */}
+      <Modal
+        visible={showPaymentModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPaymentModal(false);
+          setSelectedBillingCycle(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Payment Method</Text>
+            <Text style={styles.modalSubtitle}>
+              Checkout for Premium {paymentPlan.name} Plan ({paymentPlan.price})
+            </Text>
+
+            {/* GCash Option */}
+            <TouchableOpacity 
+              style={[
+                styles.paymentMethodOption,
+                selectedMethod === 'gcash' && styles.paymentMethodActive
+              ]}
+              onPress={() => setSelectedMethod('gcash')}
+              activeOpacity={0.8}
+            >
+              <Image 
+                source={GcashLogo} 
+                style={styles.paymentLogoImage} 
+                resizeMode="contain"
+              />
+              <Text style={styles.paymentMethodText}>GCash</Text>
+            </TouchableOpacity>
+
+            {/* Maya Option */}
+            <TouchableOpacity 
+              style={[
+                styles.paymentMethodOption,
+                selectedMethod === 'maya' && styles.paymentMethodActive
+              ]}
+              onPress={() => setSelectedMethod('maya')}
+              activeOpacity={0.8}
+            >
+              <Image 
+                source={MayaLogo} 
+                style={styles.paymentLogoImage} 
+                resizeMode="contain"
+              />
+              <Text style={styles.paymentMethodText}>Maya</Text>
+            </TouchableOpacity>
+
+            {/* Card Option */}
+            <TouchableOpacity 
+              style={[
+                styles.paymentMethodOption,
+                selectedMethod === 'card' && styles.paymentMethodActive
+              ]}
+              onPress={() => setSelectedMethod('card')}
+              activeOpacity={0.8}
+            >
+              <Image 
+                source={CardLogo} 
+                style={styles.paymentLogoImage} 
+                resizeMode="contain"
+              />
+              <Text style={styles.paymentMethodText}>Credit or Debit Card</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalButtons}>
+               <TouchableOpacity 
+                 style={styles.modalCancel} 
+                 onPress={() => {
+                   setShowPaymentModal(false);
+                   setSelectedBillingCycle(null);
+                 }}
+               >
+                 <Text style={styles.modalCancelText}>Cancel</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={[styles.modalSave, !selectedMethod && styles.modalSaveDisabled]} 
+                 onPress={handleConfirmPayment}
+                 disabled={!selectedMethod || isProcessingPayment}
+               >
+                 <Text style={styles.modalSaveText}>
+                   {isProcessingPayment ? "Processing..." : "Pay Now"}
+                 </Text>
+               </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1067,5 +1562,52 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
+  },
+  settingActionRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  paymentMethodOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: clearWhiteHighlight,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#D4E2DC',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  paymentMethodActive: {
+    borderColor: logoGreen,
+    backgroundColor: '#E6EFEA',
+  },
+  paymentLogoImage: {
+    width: 60,
+    height: 24,
+    marginRight: 16,
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#21332A',
+  },
+  modalSaveDisabled: {
+    backgroundColor: '#AEC2B7',
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7FA293',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginLeft: 2,
   },
 });

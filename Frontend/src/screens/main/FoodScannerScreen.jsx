@@ -15,15 +15,15 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import API_URL from '../config/api';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 // High-Contrast System Theme Setup Tokens
 const logoGreen = '#4EA685';
 const baseColor = '#F0F4F2';
 
-export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
+export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState('off');
   const [isScanning, setIsScanning] = useState(false);
@@ -130,7 +130,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          image_base64: photo.base64
+          image_base64: photo.base64,
+          user_id: userId
         })
       });
 
@@ -138,6 +139,19 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
 
       setIsScanning(false);
       stopPulseAnimation();
+
+      if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
+        setCapturedImage(null);
+        Alert.alert(
+          "Scan Limit Reached",
+          "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+          [
+            { text: "Continue on Free Plan", style: "cancel" },
+            { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+          ]
+        );
+        return;
+      }
 
       if (response.ok) {
         if (data.error) {
@@ -193,7 +207,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            image_base64: selectedAsset.base64
+            image_base64: selectedAsset.base64,
+            user_id: userId
           })
         });
 
@@ -201,6 +216,19 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
 
         setIsScanning(false);
         stopPulseAnimation();
+
+        if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
+          setCapturedImage(null);
+          Alert.alert(
+            "Scan Limit Reached",
+            "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+            [
+              { text: "Continue on Free Plan", style: "cancel" },
+              { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+            ]
+          );
+          return;
+        }
 
         if (response.ok) {
           if (data.error) {
@@ -227,13 +255,14 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal }) {
   const handleLogFood = () => {
     if (onLogMeal && analysisResult) {
       onLogMeal({
+        name: analysisResult.name,
         calories: analysisResult.calories,
         protein: analysisResult.protein,
         carbs: analysisResult.carbs,
         fats: analysisResult.fats
       });
     }
-    onTabChange('DIET');
+    onTabChange('DASHBOARD');
   };
 
   // If we have a result, show the split screen layout (Photo Top, Macros Bottom)

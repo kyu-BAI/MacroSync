@@ -67,3 +67,92 @@
 - **Status**: Fixed
 
 ---
+
+## [2026-06-09 14:37] - Render.com Node.js Build Fail due to Missing Root package.json
+
+- **Type**: Process
+- **Severity**: High
+- **File**: `Render Dashboard Config`
+- **Agent**: Aura
+- **Root Cause**: Render.com auto-detected or was configured to run a Node.js project at the root level (`/opt/render/project/src`), but the repository has no `package.json` at the root. The project contains a Python FastAPI backend in `Backend/` and a React Native frontend in `Frontend/`. Since the user is trying to deploy the FastAPI backend, they need to configure Render to run a Python environment and target the `Backend` directory as the Root Directory.
+- **Error Message**: 
+  ```
+  npm error code ENOENT
+  npm error syscall open
+  npm error path /opt/render/project/src/package.json
+  npm error errno -2
+  npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
+  ```
+- **Fix Applied**: Provided clear step-by-step instructions to configure Render.com settings to use Python runtime, specify the `Backend` subdirectory as the Root Directory, use `pip install -r requirements.txt` as the Build Command, and use `uvicorn main:app --host 0.0.0.0 --port $PORT` as the Start Command.
+- **Prevention**: In multi-module projects, always set the correct **Root Directory** in host platforms to target the specific app being deployed, and select the correct runtime.
+- **Status**: Fixed (Awaiting User Action)
+
+---
+
+## [2026-06-09 14:54] - Metro Bundler Dev Server Crash: Cannot pipe to a closed or destroyed stream
+
+- **Type**: Process
+- **Severity**: Medium
+- **File**: `Frontend/node_modules/expo-server/src/vendor/http.ts`
+- **Agent**: Aura
+- **Root Cause**: The Metro bundler crashed during the web bundling process because of a broken pipe/stream closure issue in the HTTP dev server wrapper (often occurring on newer Node.js versions like v24 when connection drops or is closed mid-transfer).
+- **Error Message**: 
+  ```
+  Error: Cannot pipe to a closed or destroyed stream
+      at pipelineImpl (node:internal/streams/pipeline:264:15)
+      at node:stream/promises:31:5
+      at new Promise (<anonymous>)
+      at pipeline (node:stream/promises:20:10)
+      at respond (C:\Users\Dell\Desktop\MACRO_SYNC\MacroSync\Frontend\node_modules\expo-server\src\vendor\http.ts:138:19)
+  ```
+- **Fix Applied**: Advised clearing the Expo cache and starting the Metro server with the clear cache flag (`npx expo start -c`), and ensuring that the web build is not triggered since only the Android Expo Go target is needed.
+- **Prevention**: Start Expo with clean cache and ensure network stability.
+- **Status**: Fixed (Awaiting User Action)
+
+---
+
+## [2026-06-10 22:33] - Meal and Water Logging Progress Reset on Dashboard Reload / Re-authentication
+
+- **Type**: Logic
+- **Severity**: High
+- **File**: `Backend/main.py:412`
+- **Agent**: Aura
+- **Root Cause**: Database upserts for logged_meals and water_logs did not explicitly update the logged_at and updated_at fields. In Supabase/Postgres, default expressions like now() are only evaluated on INSERT, not UPDATE. As a result, subsequent logs/updates kept their old timestamps, causing get_dashboard_data to filter them out of today's progress calculations when reloading or logging in/out.
+- **Error Message**: N/A
+- **Fix Applied**: Updated /meals, /workouts, and /water backend endpoints to explicitly include updated UTC ISO-8601 timestamps in the payload dictionary sent to supabase table upsert.
+- **Prevention**: Always explicitly update timestamp fields like updated_at or logged_at when performing row upserts to ensure queries filtering by date remain accurate.
+- **Status**: Fixed
+
+---
+
+## [2026-07-07 03:06] - AuthApiError: User not allowed during settings password change
+
+- **Type**: Integration / Logic
+- **Severity**: High
+- **File**: `Backend/main.py:342`
+- **Agent**: Aura
+- **Root Cause**: The global supabase client is stateful and stores user session credentials when sign_in_with_password is executed. This overwrites the service_role key header with the user-scoped token, leading to a "User not allowed" permissions failure when subsequent admin API calls (e.g. `supabase.auth.admin.update_user_by_id`) are executed.
+- **Error Message**:
+  ```
+  UPDATE PASSWORD ERROR: AuthApiError: User not allowed
+  ```
+- **Fix Applied**: Initialized a separate, dedicated `supabase_admin` client instance that is never logged into, and redirected all admin operations to use `supabase_admin.auth.admin`.
+- **Prevention**: Keep admin operations strictly segregated on a dedicated client instance to avoid token pollution.
+- **Status**: Fixed
+
+---
+
+## [2026-07-07 03:13] - HTTPException: 404 User not found when updating password
+
+- **Type**: Logic / Integration
+- **Severity**: High
+- **File**: `Backend/main.py:344`
+- **Agent**: Aura
+- **Root Cause**: The user profiles database table ('user_profiles') and Supabase Auth email values can diverge if a user changes their profile email in settings. Because the password change request previously queried by `userProfile.email` (from the profiles table), it failed lookup in Supabase Auth, returning "User not found".
+- **Error Message**:
+  ```
+  CHANGE PASSWORD ERROR: [Error: User not found]
+  ```
+- **Fix Applied**: Updated the `/update-password` endpoint to accept optional `user_id` and updated `SettingsScreen.jsx` to send `user_id: userId` directly, bypassing email lookup entirely when the user is logged in.
+- **Prevention**: Identify users by their unique static identifiers (user ID) rather than dynamic identifiers (email) when performing authenticated state mutations.
+- **Status**: Fixed

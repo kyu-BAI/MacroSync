@@ -18,9 +18,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 // Import child lookup methods from your installed library
-import { regions, provinces, cities, barangays as fetchBarangays } from 'select-philippines-address';
+import { provinces, cities } from 'select-philippines-address';
 
-const ITEM_HEIGHT = 54; 
+const ITEM_HEIGHT = 54;
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [isPressed, setIsPressed] = useState(false);
@@ -29,34 +29,20 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [selectedAllergies, setSelectedAllergies] = useState([]);
 
   // Address Selector States
-  const [regionList, setRegionList] = useState([]);
-  const [region, setRegion] = useState(null);
   const [province, setProvince] = useState(null);
   const [city, setCity] = useState(null);
-  const [barangay, setBarangay] = useState(null);
 
   // Overlay Control States
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerType, setPickerType] = useState(''); 
+  const [pickerType, setPickerType] = useState('');
   const [pickerData, setPickerData] = useState([]);
-  
+
   // Custom Confirmation Modal Sheet State
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [compiledAddress, setCompiledAddress] = useState('');
   const [compiledAllergiesText, setCompiledAllergiesText] = useState('');
 
 
-
-  // References for layout tracking
-  const flatListRef = useRef(null);
-
-  const customRegions = [
-    { code: 'NCR', name: 'Metro Manila' },
-    { code: 'MIN', name: 'Mindanao' },
-    { code: 'NL', name: 'North Luzon' },
-    { code: 'SL', name: 'South Luzon' },
-    { code: 'VIS', name: 'Visayas' }
-  ];
 
   const presetAllergens = [
     { id: 'peanuts', title: 'Peanuts' },
@@ -67,13 +53,8 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     { id: 'nuts', title: 'Tree Nuts' }
   ];
 
-  useEffect(() => {
-    regions()
-      .then((response) => {
-        setRegionList(response);
-      })
-      .catch(err => console.log("Regions load fail: ", err));
-  }, []);
+  // References for layout tracking
+  const flatListRef = useRef(null);
 
   const toggleAllergen = (id) => {
     if (selectedAllergies.includes(id)) {
@@ -85,11 +66,11 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
   const getPsgcRegionCodes = (customCode) => {
     switch (customCode) {
-      case 'NCR': return ['13']; 
-      case 'VIS': return ['06', '07', '08']; 
-      case 'MIN': return ['09', '10', '11', '12', '13', '14', '15', '16', '19']; 
-      case 'NL': return ['01', '02', '03', '14']; 
-      case 'SL': return ['04', '05', '17']; 
+      case 'NCR': return ['13'];
+      case 'VIS': return ['06', '07', '08'];
+      case 'MIN': return ['09', '10', '11', '12', '13', '14', '15', '16', '19'];
+      case 'NL': return ['01', '02', '03', '14'];
+      case 'SL': return ['04', '05', '17'];
       default: return [];
     }
   };
@@ -104,47 +85,30 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
   const openPicker = async (type) => {
     if (isLoadingExternal || isLoading) return;
-    
+
     try {
-      if (type === 'region') {
-        const sortedRegions = [...customRegions].sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(sortedRegions);
-        setPickerType(type);
-        setPickerVisible(true);
-      } else if (type === 'province') {
-        if (!region) {
-          triggerCustomError("Sequence Interrupted", "Please specify your high-level Region sector boundary configuration rules before trying to parse provinces.");
-          return;
+      if (type === 'province') {
+        // select-philippines-address requires a region code - fetch all regions and merge
+        const ALL_REGION_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '19'];
+        let aggregated = [];
+        for (const code of ALL_REGION_CODES) {
+          try {
+            const res = await provinces(code);
+            aggregated = [...aggregated, ...res];
+          } catch (_) { /* skip regions with no provinces */ }
         }
-        const targetCodes = getPsgcRegionCodes(region.code);
-        let aggregatedProvinces = [];
-        for (const code of targetCodes) {
-          const res = await provinces(code);
-          aggregatedProvinces = [...aggregatedProvinces, ...res];
-        }
-        const formatted = aggregatedProvinces.map(p => ({ ...p, name: p.province_name || p.name }));
+        const formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setPickerType(type);
         setPickerVisible(true);
       } else if (type === 'city') {
         if (!province) {
-          triggerCustomError("Sequence Interrupted", "Please select a Province configuration mapping item first.");
+          triggerCustomError("Sequence Interrupted", "Please select a Province first.");
           return;
         }
         const res = await cities(province.province_code);
         const formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
-        formatted.sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(formatted);
-        setPickerType(type);
-        setPickerVisible(true);
-      } else if (type === 'barangay') {
-        if (!city) {
-          triggerCustomError("Sequence Interrupted", "Please complete your City/Municipality regional choice before extracting local barangay profiles.");
-          return;
-        }
-        const res = await fetchBarangays(city.city_code);
-        const formatted = res.map(b => ({ ...b, name: b.brgy_name || b.name }));
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setPickerType(type);
@@ -157,20 +121,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   };
 
   const handleSelectLocation = (item) => {
-    if (pickerType === 'region') {
-      if (region?.code !== item.code) {
-        setRegion(item); setProvince(null); setCity(null); setBarangay(null);
-      }
-    } else if (pickerType === 'province') {
+    if (pickerType === 'province') {
       if (province?.province_code !== item.province_code) {
-        setProvince(item); setCity(null); setBarangay(null);
+        setProvince(item); setCity(null);
       }
     } else if (pickerType === 'city') {
       if (city?.city_code !== item.city_code) {
-        setCity(item); setBarangay(null);
+        setCity(item);
       }
-    } else if (pickerType === 'barangay') {
-      setBarangay(item);
     }
     setPickerVisible(false);
   };
@@ -178,16 +136,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const handleTriggerConfirmationModal = () => {
     if (isLoading || isLoadingExternal) return;
 
-    // Premium UI Incomplete Check replacements
-    if (!region || !province || !city) {
+    if (!province || !city) {
       const missingFields = [];
-      if (!region) missingFields.push("Region");
       if (!province) missingFields.push("Province");
       if (!city) missingFields.push("City/Municipality");
 
       triggerCustomError(
         "Incomplete Location",
-        `Please complete the remaining geographic selectors to enable localized profiling filters:\n\nMissing fields: ${missingFields.join(', ')}`
+        `Please complete the remaining geographic selectors:\n\nMissing fields: ${missingFields.join(', ')}`
       );
       return;
     }
@@ -201,7 +157,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       return;
     }
 
-    const compiledAddressString = `${city.name}, ${province.name}, ${region.name}`;
+    const compiledAddressString = `${city.name}, ${province.name}`;
     const activeAllergies = [...selectedAllergies.map(id => presetAllergens.find(p => p.id === id).title)];
     if (trimmedCustomAllergy) activeAllergies.push(trimmedCustomAllergy);
 
@@ -217,7 +173,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       await onSubmit?.({
         address: compiledAddress,
         structuredLocation: {
-          region: region.name,
           province: province.name,
           city: city.name
         },
@@ -238,7 +193,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          
+
           <View style={styles.headerSection}>
             <Text style={styles.stepIndicator}>STEP 3 OF 3</Text>
             <Text style={styles.brandTitle}>Dietary Context</Text>
@@ -249,40 +204,28 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
           <View style={styles.formCard}>
             <Text style={styles.sectionInputLabel}>Local Food Availability & Region</Text>
-            
-            {/* REGION SELECTION INPUT BOX */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Region</Text>
-              <TouchableOpacity style={[styles.neumorphicInputInset, styles.selectorRow]} onPress={() => openPicker('region')} activeOpacity={0.7}>
-                <Text style={[styles.selectorValueText, !region && styles.placeholderText]}>
-                  {region ? region.name : "Select Region"}
-                </Text>
-                <Ionicons name="map-outline" size={16} color={logoGreen} />
-              </TouchableOpacity>
-            </View>
 
             {/* PROVINCE SELECTION INPUT BOX */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Province</Text>
-              <TouchableOpacity 
-                style={[styles.neumorphicInputInset, styles.selectorRow, !region && styles.disabledSelector]} 
-                onPress={() => openPicker('province')} 
+              <TouchableOpacity
+                style={[styles.neumorphicInputInset, styles.selectorRow]}
+                onPress={() => openPicker('province')}
                 activeOpacity={0.7}
-                disabled={!region}
               >
                 <Text style={[styles.selectorValueText, !province && styles.placeholderText]}>
                   {province ? province.name : "Select Province"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={region ? logoGreen : '#AEC2B7'} />
+                <Ionicons name="chevron-down" size={16} color={logoGreen} />
               </TouchableOpacity>
             </View>
 
             {/* CITY SELECTION INPUT BOX */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>City / Municipality</Text>
-              <TouchableOpacity 
-                style={[styles.neumorphicInputInset, styles.selectorRow, !province && styles.disabledSelector]} 
-                onPress={() => openPicker('city')} 
+              <TouchableOpacity
+                style={[styles.neumorphicInputInset, styles.selectorRow, !province && styles.disabledSelector]}
+                onPress={() => openPicker('city')}
                 activeOpacity={0.7}
                 disabled={!province}
               >
@@ -298,7 +241,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             {/* ALLERGENS SELECTION LAYERS */}
             <Text style={[styles.sectionInputLabel, { marginTop: 14 }]}>Allergies & Restrictions</Text>
             <Text style={styles.inputLabel}>Select Known Allergens</Text>
-            
+
             <View style={styles.chipGrid}>
               {presetAllergens.map((allergen) => {
                 const isSelected = selectedAllergies.includes(allergen.id);
@@ -322,7 +265,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Other Custom Food Allergy</Text>
               <View style={styles.neumorphicInputInset}>
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="e.g., Shrimp, Almonds (Optional)"
                   placeholderTextColor="#7FA293"
@@ -338,7 +281,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         </ScrollView>
 
         <View style={styles.fixedFooter}>
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={1}
             disabled={isLoading || isLoadingExternal}
             onPressIn={() => setIsPressed(true)}
@@ -367,7 +310,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
                 <Ionicons name="close" size={24} color="#21332A" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.pickerContentWrapper}>
               <FlatList
                 ref={flatListRef}
@@ -394,7 +337,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       <Modal visible={confirmVisible} transparent={true} animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmModalCard}>
-            
+
             <View style={styles.confirmIconContainer}>
               <Ionicons name="shield-checkmark-outline" size={32} color={logoGreen} />
             </View>
@@ -415,16 +358,16 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             </View>
 
             <View style={styles.confirmActionRow}>
-              <TouchableOpacity 
-                style={[styles.confirmButtonBase, styles.confirmButtonSecondary]} 
+              <TouchableOpacity
+                style={[styles.confirmButtonBase, styles.confirmButtonSecondary]}
                 onPress={() => setConfirmVisible(false)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.confirmButtonTextSecondary}>Edit Details</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.confirmButtonBase, styles.confirmButtonPrimary]} 
+              <TouchableOpacity
+                style={[styles.confirmButtonBase, styles.confirmButtonPrimary]}
                 onPress={handleFinalSubmitDispatch}
                 activeOpacity={0.8}
               >
@@ -454,45 +397,45 @@ const logoLightHighlight = '#65D8AD';
 
 const styles = StyleSheet.create({
   // --- BASE CONTAINER ARCHITECTURE ---
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: baseColor,
   },
-  scrollContainer: { 
-    flexGrow: 1, 
-    paddingHorizontal: 20, 
-    paddingBottom: 20, 
-    paddingTop: Platform.OS === 'ios' ? 35 : 25, 
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 35 : 25,
   },
 
   // --- TYPOGRAPHY HEADER SYSTEM ---
-  headerSection: { 
-    alignItems: 'center', 
+  headerSection: {
+    alignItems: 'center',
     width: '100%',
     marginTop: Platform.OS === 'ios' ? 20 : 15,
-    marginBottom: 20, 
+    marginBottom: 20,
   },
-  stepIndicator: { 
-    fontSize: 11, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    letterSpacing: 2, 
+  stepIndicator: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: logoGreen,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
-  brandTitle: { 
-    fontSize: 36, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    letterSpacing: -0.5, 
+  brandTitle: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#21332A',
+    letterSpacing: -0.5,
     marginTop: 4,
   },
-  brandSubtitle: { 
-    fontSize: 13, 
-    color: '#556B60', 
-    marginTop: 6, 
-    textAlign: 'center', 
-    lineHeight: 19, 
-    fontWeight: '700', 
+  brandSubtitle: {
+    fontSize: 13,
+    color: '#556B60',
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 19,
+    fontWeight: '700',
     paddingHorizontal: 10,
   },
 
@@ -512,201 +455,201 @@ const styles = StyleSheet.create({
     borderLeftColor: clearWhiteHighlight,
     marginBottom: 10,
   },
-  sectionInputLabel: { 
-    color: '#41544B', 
-    fontSize: 11, 
-    fontWeight: '800', 
-    marginBottom: 12, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
+  sectionInputLabel: {
+    color: '#41544B',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
     marginLeft: 4,
   },
 
   // --- FORMS & SELECTION MATRIX ---
-  inputGroup: { 
+  inputGroup: {
     marginBottom: 14,
   },
-  inputLabel: { 
-    color: '#41544B', 
-    fontSize: 11, 
-    fontWeight: '800', 
-    marginBottom: 6, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
+  inputLabel: {
+    color: '#41544B',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
     marginLeft: 4,
   },
-  neumorphicInputInset: { 
-    backgroundColor: baseColor, 
-    borderRadius: 18, 
-    borderWidth: 1.5, 
-    borderColor: '#D4E2DC', 
-    height: 48, 
+  neumorphicInputInset: {
+    backgroundColor: baseColor,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#D4E2DC',
+    height: 48,
     justifyContent: 'center',
   },
-  selectorRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
+  selectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
   },
-  selectorValueText: { 
-    fontSize: 14, 
-    fontWeight: '700', 
+  selectorValueText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#1A2B23',
   },
-  placeholderText: { 
-    color: '#7FA293', 
+  placeholderText: {
+    color: '#7FA293',
     fontWeight: '600',
   },
-  disabledSelector: { 
-    backgroundColor: '#E4ECE8', 
-    borderColor: '#E1E9E5', 
+  disabledSelector: {
+    backgroundColor: '#E4ECE8',
+    borderColor: '#E1E9E5',
     opacity: 0.6,
   },
-  input: { 
-    flex: 1, 
-    color: '#1A2B23', 
-    paddingHorizontal: 16, 
-    height: '100%', 
-    fontSize: 14, 
+  input: {
+    flex: 1,
+    color: '#1A2B23',
+    paddingHorizontal: 16,
+    height: '100%',
+    fontSize: 14,
     fontWeight: '700',
   },
 
   // --- ALLERGENS SELECTION CHIPS ---
-  chipGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    marginBottom: 14, 
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 14,
     marginLeft: 2,
   },
-  chip: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 8, 
-    paddingHorizontal: 14, 
-    borderRadius: 14, 
-    marginRight: 8, 
-    marginBottom: 8, 
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginRight: 8,
+    marginBottom: 8,
     borderWidth: 1.5,
   },
-  chipInactive: { 
-    backgroundColor: baseColor, 
-    borderColor: '#E1E9E5', 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 0.4, 
-    shadowRadius: 2, 
+  chipInactive: {
+    backgroundColor: baseColor,
+    borderColor: '#E1E9E5',
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
     elevation: 1,
   },
-  chipActive: { 
-    backgroundColor: logoGreen, 
+  chipActive: {
+    backgroundColor: logoGreen,
     borderColor: logoGreen,
   },
-  chipText: { 
-    fontSize: 12, 
-    fontWeight: '700', 
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#41544B',
   },
-  chipTextActive: { 
-    color: '#FFFFFF', 
+  chipTextActive: {
+    color: '#FFFFFF',
     fontWeight: '800',
   },
 
   // --- FIXED NAVIGATION BOTTOM HOOD ---
-  fixedFooter: { 
-    paddingHorizontal: 20, 
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16, 
-    paddingTop: 8, 
-    backgroundColor: baseColor, 
-    borderTopWidth: 1, 
+  fixedFooter: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    paddingTop: 8,
+    backgroundColor: baseColor,
+    borderTopWidth: 1,
     borderColor: '#E1E9E5',
   },
-  buttonBase: { 
-    paddingVertical: 14, 
-    borderRadius: 22, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    width: '100%', 
+  buttonBase: {
+    paddingVertical: 14,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
     height: 50,
   },
-  buttonUnpressed: { 
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 0.95, 
-    shadowRadius: 10, 
+  buttonUnpressed: {
+    backgroundColor: '#53B28E',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: logoLightHighlight,
+    borderLeftColor: logoLightHighlight,
+    shadowColor: logoDarkShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.95,
+    shadowRadius: 10,
     elevation: 6,
   },
-  buttonPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
+  buttonPressed: {
+    backgroundColor: '#3E836A',
+    borderWidth: 1.5,
+    borderColor: logoDarkShadow,
     transform: [{ translateY: 2 }],
   },
-  buttonText: { 
-    color: '#FFFFFF', 
-    fontSize: 15, 
-    fontWeight: '800', 
-    letterSpacing: 0.5, 
-    textShadowColor: logoDarkShadow, 
-    textShadowOffset: { width: 0, height: 1 }, 
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textShadowColor: logoDarkShadow,
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  buttonTextPressed: { 
+  buttonTextPressed: {
     color: '#9EDEC4',
   },
 
   // --- POPUP SELECTOR INTERFACES ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  pickerModalCard: { 
-    backgroundColor: baseColor, 
-    borderTopLeftRadius: 32, 
-    borderTopRightRadius: 32, 
+  pickerModalCard: {
+    backgroundColor: baseColor,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24, 
-    height: '75%', 
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    height: '75%',
     width: '100%',
   },
-  pickerHeaderRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 16, 
-    borderBottomWidth: 1, 
-    borderColor: '#D4E2DC', 
+  pickerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderColor: '#D4E2DC',
     paddingBottom: 12,
   },
-  pickerModalTitle: { 
-    fontSize: 15, 
-    fontWeight: '900', 
-    color: '#21332A', 
+  pickerModalTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#21332A',
     letterSpacing: 1,
   },
-  pickerContentWrapper: { 
-    flex: 1, 
-    flexDirection: 'row', 
+  pickerContentWrapper: {
+    flex: 1,
+    flexDirection: 'row',
     width: '100%',
   },
-  optionsList: { 
-    flex: 1, 
+  optionsList: {
+    flex: 1,
   },
   optionsListContent: {
-    paddingBottom: 60, 
+    paddingBottom: 60,
   },
-  pickerItemRow: { 
-    height: ITEM_HEIGHT, 
+  pickerItemRow: {
+    height: ITEM_HEIGHT,
     justifyContent: 'center',
-    borderBottomWidth: 1, 
+    borderBottomWidth: 1,
     borderColor: '#E1E9E5',
   },
-  pickerItemText: { 
-    fontSize: 15, 
-    fontWeight: '700', 
+  pickerItemText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1A2B23',
   },
 

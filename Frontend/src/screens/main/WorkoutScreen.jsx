@@ -15,9 +15,18 @@ import DraggableChatbotButton from '../../components/DraggableChatbotButton';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { recommendedRecipesPool } from '../../data/recipes';
+import API_URL from '../config/api';
+import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 
-export default function WorkoutScreen({ onTabChange, userId, onRefreshDashboard }) {
+export default function WorkoutScreen({ 
+  onTabChange, 
+  userId, 
+  onRefreshDashboard, 
+  isOnline = true, 
+  dailyExercise, 
+  setDailyExercise 
+}) {
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState('All');
@@ -130,19 +139,49 @@ export default function WorkoutScreen({ onTabChange, userId, onRefreshDashboard 
         return;
       }
 
+      // Optimistic UI updates
+      const workoutDuration = parseInt(activeRoutine.duration) || 15;
+      let newExercise = null;
+      if (setDailyExercise) {
+        setDailyExercise(prev => {
+          const next = {
+            caloriesBurned: (prev?.caloriesBurned || 0) + activeRoutine.caloriesBurn,
+            activeMinutes: (prev?.activeMinutes || 0) + workoutDuration,
+            recentExercise: activeRoutine.title
+          };
+          newExercise = next;
+          return next;
+        });
+      }
+
+      const workoutPayload = {
+        id: Date.now().toString(),
+        user_id: userId,
+        name: activeRoutine.title,
+        calories_burned: activeRoutine.caloriesBurn,
+        active_minutes: workoutDuration
+      };
+
+      if (!isOnline) {
+        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        if (newExercise) {
+          await updateCachedDashboardField(userId, { exercise: newExercise });
+        }
+        Alert.alert(
+          "Workout Complete! (Offline)",
+          `Awesome work! You crushed "${activeRoutine?.title}". Since you are offline, it was saved locally and will sync later.`,
+          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+        );
+        return;
+      }
+
       try {
         const response = await fetch(`${API_URL}/workouts`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            id: Date.now().toString(),
-            user_id: userId,
-            name: activeRoutine.title,
-            calories_burned: activeRoutine.caloriesBurn,
-            active_minutes: parseInt(activeRoutine.duration) || 15
-          }),
+          body: JSON.stringify(workoutPayload),
         });
 
         if (!response.ok) {
@@ -159,8 +198,16 @@ export default function WorkoutScreen({ onTabChange, userId, onRefreshDashboard 
           [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
         );
       } catch (error) {
-        console.error("LOG WORKOUT API ERROR:", error);
-        Alert.alert("Error", "Could not save workout to server. Please try again.");
+        console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        if (newExercise) {
+          await updateCachedDashboardField(userId, { exercise: newExercise });
+        }
+        Alert.alert(
+          "Workout Saved Locally",
+          `Could not reach the server. "${activeRoutine?.title}" has been saved locally and will sync later.`,
+          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+        );
       }
     }
   };

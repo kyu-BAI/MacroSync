@@ -15,6 +15,8 @@ import base64
 
 load_dotenv()
 
+# Verify that the service role key is set for admin operations (checked below after dotenv load)
+
 app = FastAPI()
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,11 +32,14 @@ app.add_middleware(
 # ---------------- ENV ----------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE_KEY not set. Ensure .env contains the service role key before starting the server.")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ---------------- INIT CLIENTS ----------------
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase_admin = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 resend.api_key = RESEND_API_KEY
 
@@ -66,7 +71,8 @@ class VerifyOTPRequest(BaseModel):
 
 
 class UpdatePasswordRequest(BaseModel):
-    email: str
+    email: str = None
+    user_id: str = None
     password: str
 
 
@@ -107,6 +113,12 @@ class RecipeRequest(BaseModel):
 
 class AnalyzeFoodRequest(BaseModel):
     image_base64: str
+    user_id: str = None
+
+
+class UpdateSubscriptionRequest(BaseModel):
+    user_id: str
+    is_premium: bool
 
 
 class UpdateProfileRequest(BaseModel):
@@ -177,6 +189,23 @@ def signin(user: UserLogin):
             "password": user.password
         })
 
+        user_id = auth.user.id
+        email = auth.user.email
+        # Ensure profile exists in user_profiles
+        try:
+            profile_response = supabase.table("user_profiles").select("id").eq("id", user_id).execute()
+            if not profile_response.data:
+                name = auth.user.user_metadata.get("full_name") if auth.user.user_metadata else None
+                if not name:
+                    name = email.split("@")[0]
+                supabase.table("user_profiles").insert({
+                    "id": user_id,
+                    "email": email,
+                    "name": name
+                }).execute()
+        except Exception as profile_err:
+            print("ERROR ENSURING PROFILE ON SIGNIN:", repr(profile_err))
+
         return {
             "user": auth.user,
             "session": auth.session
@@ -198,12 +227,12 @@ async def google_signin(data: GoogleSignInRequest):
             raise HTTPException(status_code=400, detail="Email and name are required")
 
         # Check if user already exists in Supabase Auth via Admin Client
-        users = supabase.auth.admin.list_users()
+        users = supabase_admin.auth.admin.list_users()
         user = next((u for u in users if u.email and u.email.lower() == email), None)
 
         if not user:
             # Create user in Supabase Auth using admin API to bypass confirmations
-            auth_user = supabase.auth.admin.create_user({
+            auth_user = supabase_admin.auth.admin.create_user({
                 "email": email,
                 "email_confirm": True,
                 "user_metadata": {"full_name": name}
@@ -312,22 +341,33 @@ async def verify_reset_otp(data: VerifyOTPRequest):
 async def update_password(data: UpdatePasswordRequest):
 
     try:
-        users = supabase.auth.admin.list_users()
+        target_user_id = None
+        if data.user_id:
+            target_user_id = data.user_id
+            print(f"UPDATE PASSWORD: Using user_id '{target_user_id}'")
+        elif data.email:
+            email_clean = data.email.strip()
+            print(f"UPDATE PASSWORD: Cleaned email is '{email_clean}'")
+            users = supabase_admin.auth.admin.list_users()
+            user = next((u for u in users if u.email and u.email.lower() == email_clean.lower()), None)
+            if not user:
+                print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in Supabase Auth list.")
+                raise HTTPException(404, "User not found")
+            target_user_id = user.id
+        else:
+            raise HTTPException(400, "Either email or user_id must be provided")
 
-        user = next((u for u in users if u.email and u.email.lower() == data.email.lower()), None)
-
-        if not user:
-            raise HTTPException(404, "User not found")
-
-        supabase.auth.admin.update_user_by_id(
-            user.id,
+        supabase_admin.auth.admin.update_user_by_id(
+            target_user_id,
             {"password": data.password}
         )
 
-        supabase.table("password_reset_otps") \
-            .delete() \
-            .eq("email", data.email) \
-            .execute()
+        # Clean up reset OTP if lookup was email-based
+        if data.email:
+            supabase.table("password_reset_otps") \
+                .delete() \
+                .eq("email", data.email) \
+                .execute()
 
         return {"success": True, "message": "Password updated"}
 
@@ -335,6 +375,34 @@ async def update_password(data: UpdatePasswordRequest):
         raise he
     except Exception as e:
         print("UPDATE PASSWORD ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------- UPDATE EMAIL ----------------
+class UpdateEmailRequest(BaseModel):
+    user_id: str
+    new_email: str
+    current_password: str
+
+@app.post("/update-email")
+async def update_email(data: UpdateEmailRequest):
+    try:
+        # Update email in Supabase Auth
+        supabase_admin.auth.admin.update_user_by_id(
+            data.user_id,
+            {"email": data.new_email.strip().lower()}
+        )
+
+        # Update email in user_profiles table
+        supabase.table("user_profiles") \
+            .update({"email": data.new_email.strip().lower()}) \
+            .eq("id", data.user_id) \
+            .execute()
+
+        return {"success": True, "message": "Email updated successfully"}
+
+    except Exception as e:
+        print("UPDATE EMAIL ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -391,6 +459,36 @@ async def update_profile(data: UpdateProfileRequest):
         raise HTTPException(status_code=500, detail="Failed to update profile info")
 
 
+@app.post("/update-subscription")
+async def update_subscription(data: UpdateSubscriptionRequest):
+    try:
+        # Fetch existing profile location/preferences JSON to preserve other keys
+        res = supabase.table("user_profiles").select("location").eq("id", data.user_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        prefs = {}
+        loc_str = res.data[0].get("location")
+        if loc_str:
+            try:
+                prefs = json.loads(loc_str)
+            except:
+                pass
+                
+        prefs["is_premium"] = data.is_premium
+        
+        supabase.table("user_profiles").update({
+            "location": json.dumps(prefs)
+        }).eq("id", data.user_id).execute()
+        
+        return {"success": True, "is_premium": data.is_premium}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("UPDATE SUBSCRIPTION ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------- MEALS LOGGING ----------------
 @app.post("/meals")
 async def log_meal(data: MealLog):
@@ -402,7 +500,8 @@ async def log_meal(data: MealLog):
             "calories": data.calories,
             "protein": data.protein,
             "carbs": data.carbs,
-            "fats": data.fats
+            "fats": data.fats,
+            "logged_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:
@@ -429,7 +528,8 @@ async def log_workout(data: WorkoutLog):
             "user_id": data.user_id,
             "name": data.name,
             "calories_burned": data.calories_burned,
-            "active_minutes": data.active_minutes
+            "active_minutes": data.active_minutes,
+            "logged_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:
@@ -443,12 +543,13 @@ async def log_water(data: WaterLog):
     try:
         supabase.table("water_logs").upsert({
             "user_id": data.user_id,
-            "glasses": data.glasses
+            "glasses": data.glasses,
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         return {"success": True}
     except Exception as e:
         print("LOG WATER ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to log water")
+        raise HTTPException(status_code=500, detail=f"Failed to log water: {repr(e)}")
 
 
 # ---------------- PROFILE PICTURE UPDATE ----------------
@@ -547,7 +648,18 @@ async def get_dashboard_data(user_id: str):
         
         glasses = 0
         if water_res.data:
-            glasses = water_res.data[0].get("glasses", 0)
+            record = water_res.data[0]
+            updated_at_str = record.get("updated_at")
+            if updated_at_str:
+                try:
+                    updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                    if updated_at >= today_start_utc:
+                        glasses = record.get("glasses", 0)
+                except Exception as ex:
+                    print("Error parsing water updated_at timestamp:", ex)
+                    glasses = record.get("glasses", 0)
+            else:
+                glasses = record.get("glasses", 0)
 
         # 3. Fetch workouts logged today
         workouts_res = supabase.table("logged_workouts") \
@@ -561,8 +673,8 @@ async def get_dashboard_data(user_id: str):
         active_minutes = sum(w["active_minutes"] for w in workouts_data)
         recent_exercise = workouts_data[-1]["name"] if workouts_data else "None"
 
-        # Premium status mocked to false for free tier UI demonstration
-        is_premium = False
+        # Premium status from user preferences JSON
+        is_premium = prefs.get("is_premium", False)
         
         return {
             "profile": {
@@ -645,7 +757,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
                 else:
                     break # Structural failure, don't retry, go to fallback model
                     
-    raise last_error
+    raise last_error or HTTPException(status_code=503, detail="Gemini API failed on all models with no captured exception")
 
 
 # ---------------- AI CHATBOT ----------------
@@ -666,6 +778,23 @@ async def chat_with_ai(data: ChatMessageRequest):
                 except:
                     pass
             
+            is_premium = prefs.get("is_premium", False)
+            if not is_premium:
+                manila_tz = timezone(timedelta(hours=8))
+                today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                usage = prefs.get("usage", {})
+                day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+                
+                if day_usage.get("chats", 0) >= 5:
+                    raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
+                
+                day_usage["chats"] = day_usage.get("chats", 0) + 1
+                usage[today_str] = day_usage
+                prefs["usage"] = usage
+                
+                # Save incremented count back to database
+                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+
             unit = prefs.get("unit", "kg")
             current_weight_kg = user.get("weight_kg")
             target_weight_kg = user.get("goalWeight")
@@ -705,6 +834,8 @@ async def chat_with_ai(data: ChatMessageRequest):
         response = generate_gemini_content(full_prompt)
         
         return {"response": response.text}
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("CHAT ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -760,6 +891,33 @@ async def generate_recipe(data: RecipeRequest):
 @app.post("/analyze-food")
 async def analyze_food(data: AnalyzeFoodRequest):
     try:
+        if data.user_id:
+            user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
+            if user_result.data:
+                user = user_result.data[0]
+                prefs = {}
+                if user.get("location"):
+                    try:
+                        prefs = json.loads(user["location"])
+                    except:
+                        pass
+                
+                is_premium = prefs.get("is_premium", False)
+                if not is_premium:
+                    manila_tz = timezone(timedelta(hours=8))
+                    today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                    usage = prefs.get("usage", {})
+                    day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+                    
+                    if day_usage.get("scans", 0) >= 3:
+                        raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
+                    
+                    day_usage["scans"] = day_usage.get("scans", 0) + 1
+                    usage[today_str] = day_usage
+                    prefs["usage"] = usage
+                    
+                    supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+
         image_bytes = base64.b64decode(data.image_base64)
         
         prompt = """
@@ -790,8 +948,29 @@ async def analyze_food(data: AnalyzeFoodRequest):
         
         return result_data
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("VISION ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to analyze image. Please try again.")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/debug-key")
+def debug_key():
+    try:
+        if not SUPABASE_KEY:
+            return {"error": "SUPABASE_KEY is missing"}
+        parts = SUPABASE_KEY.split(".")
+        if len(parts) != 3:
+            return {"error": "Invalid JWT format"}
+        payload_b64 = parts[1]
+        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload_json = json.loads(base64.b64decode(payload_b64).decode())
+        return {
+            "role": payload_json.get("role"),
+            "ref": payload_json.get("ref"),
+            "iss": payload_json.get("iss"),
+            "key_length": len(SUPABASE_KEY)
+        }
+    except Exception as e:
+        return {"error": f"Failed to parse key: {str(e)}"}

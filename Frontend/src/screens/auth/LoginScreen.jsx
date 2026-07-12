@@ -13,9 +13,15 @@ import {
   ActivityIndicator,
   Image,
   Alert,
-  Modal
+  Modal,
+  Linking
 } from 'react-native';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
+import API_URL from '../config/api';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
+
 
 export default function LoginScreen({
   onNavigateToSignUp,
@@ -32,12 +38,7 @@ export default function LoginScreen({
   const [isGooglePressed, setIsGooglePressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Google Account Selector Modal States
-  const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [customGoogleName, setCustomGoogleName] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [isSubmittingGoogle, setIsSubmittingGoogle] = useState(false);
+  // Google Sign-In interaction states are managed via deep linking now
 
   const showAlert = (message) => {
     Alert.alert(
@@ -58,7 +59,7 @@ export default function LoginScreen({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/signin`,
+        `${API_URL}/signin`,
         {
           method: "POST",
           headers: {
@@ -91,62 +92,13 @@ export default function LoginScreen({
   // GOOGLE OAUTH SECURITY AUTHENTICATION HANDLER
   const handleGoogleSignIn = async () => {
     if (isLoading) return;
-    setIsGoogleModalVisible(true);
-    setShowCustomInput(false);
-    setCustomGoogleEmail('');
-    setCustomGoogleName('');
-  };
-
-  const submitGoogleSignIn = async (selectedEmail, selectedName) => {
-    if (!selectedEmail || !selectedName) {
-      Alert.alert("Input Error", "Please provide both an email and a name.");
-      return;
-    }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(selectedEmail)) {
-      Alert.alert("Input Error", "Please enter a valid email address.");
-      return;
-    }
-
-    setIsGoogleModalVisible(false);
-    setIsLoading(true);
-    setIsGooglePressed(true);
-
     try {
-      console.log("GOOGLE OAUTH INITIALIZED WITH:", selectedEmail, selectedName);
-      // Simulate Google selection delay for premium user experience
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/auth/google-signin`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ email: selectedEmail, name: selectedName })
-        }
-      );
-
-      const data = await response.json();
-      console.log("Google Sign-In response:", data);
-
-      if (response.ok && data.success) {
-        const userId = data.user_id || data.user?.id;
-        if (setCurrentUserId && userId) {
-          setCurrentUserId(userId);
-        }
-        onLoginSuccess();
-      } else {
-        showAlert(data.detail || "Google authentication failed. Please try again.");
-      }
+      const url = `${API_URL}/auth/google-webpage`;
+      console.log("Opening Google Sign-In webpage modal:", url);
+      await WebBrowser.openBrowserAsync(url);
     } catch (error) {
-      console.log("GOOGLE SIGN IN ERROR:", error);
-      showAlert("Cannot connect to backend server. Check your network.");
-    } finally {
-      setIsLoading(false);
-      setIsGooglePressed(false);
+      console.log("ERROR OPENING GOOGLE SIGN-IN MODAL:", error);
+      Alert.alert("Google Sign-In Error", "Could not open the Google sign-in browser. Please try again.");
     }
   };
 
@@ -303,105 +255,7 @@ export default function LoginScreen({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* GOOGLE ACCOUNTS SELECTOR MODAL */}
-      <Modal
-        visible={isGoogleModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setIsGoogleModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContentCard}>
-            <Text style={styles.modalTitle}>Choose an account</Text>
-            <Text style={styles.modalSubtitle}>to continue to MacroSync</Text>
-            
-            <View style={styles.accountsList}>
-              {[
-                { name: "Alex Mercer", email: "alex.mercer@gmail.com" },
-                { name: "Jordan Brooks", email: "jordan.brooks@gmail.com" },
-                { name: "Taylor Vance", email: "taylor.vance@gmail.com" }
-              ].map((acc, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.accountItem}
-                  onPress={() => submitGoogleSignIn(acc.email, acc.name)}
-                >
-                  <Image
-                    source={require('../../images/google.png')}
-                    style={styles.accountGoogleIcon}
-                  />
-                  <View style={styles.accountTextContainer}>
-                    <Text style={styles.accountNameText}>{acc.name}</Text>
-                    <Text style={styles.accountEmailText}>{acc.email}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
 
-            {showCustomInput ? (
-              <View style={styles.customInputArea}>
-                <View style={styles.modalInputGroup}>
-                  <Text style={styles.modalInputLabel}>Google Full Name</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="Enter full name"
-                    placeholderTextColor="#7FA293"
-                    value={customGoogleName}
-                    onChangeText={setCustomGoogleName}
-                    autoCorrect={false}
-                  />
-                </View>
-
-                <View style={styles.modalInputGroup}>
-                  <Text style={styles.modalInputLabel}>Google Email Address</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="Enter Google email"
-                    placeholderTextColor="#7FA293"
-                    value={customGoogleEmail}
-                    onChangeText={setCustomGoogleEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-
-                <View style={styles.modalActionButtonsRow}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonCancel]}
-                    onPress={() => setShowCustomInput(false)}
-                  >
-                    <Text style={styles.modalButtonCancelText}>Back</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonSubmit]}
-                    onPress={() => submitGoogleSignIn(customGoogleEmail, customGoogleName)}
-                  >
-                    <Text style={styles.modalButtonSubmitText}>Sign In</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.useAnotherButton}
-                onPress={() => setShowCustomInput(true)}
-              >
-                <Text style={styles.useAnotherButtonText}>Use another account</Text>
-              </TouchableOpacity>
-            )}
-
-            {!showCustomInput && (
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setIsGoogleModalVisible(false)}
-              >
-                <Text style={styles.modalCloseButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -436,6 +290,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: logoGreen, 
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
   brandSubtitle: {
     fontSize: 14,
