@@ -1077,9 +1077,24 @@ async def paymongo_webhook(request: Request):
             user_id = checkout_attributes.get("reference_number")
             
             if user_id:
-                # Update the user's status in Supabase
-                supabase.table("users").update({"is_premium": True}).eq("id", user_id).execute()
-                print(f"User {user_id} successfully upgraded to premium via PayMongo.")
+                # Update the user's status in Supabase user_profiles location preferences
+                try:
+                    res = supabase.table("user_profiles").select("location").eq("id", user_id).execute()
+                    if res.data:
+                        prefs = {}
+                        loc_str = res.data[0].get("location")
+                        if loc_str:
+                            try:
+                                prefs = json.loads(loc_str)
+                            except:
+                                pass
+                        prefs["is_premium"] = True
+                        supabase.table("user_profiles").update({
+                            "location": json.dumps(prefs)
+                        }).eq("id", user_id).execute()
+                        print(f"User {user_id} successfully upgraded to premium via PayMongo.")
+                except Exception as ex:
+                    print("Failed to update premium status in webhook:", ex)
                 
         return {"status": "success"}
     except Exception as e:
