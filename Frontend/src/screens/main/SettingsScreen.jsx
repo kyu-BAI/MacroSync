@@ -17,6 +17,7 @@ import {
   Linking
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
 import API_URL from '../config/api';
 
@@ -302,8 +303,8 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 const data = await response.json();
                 const checkoutUrl = data?.data?.attributes?.checkout_url;
                 if (checkoutUrl) {
-                  // Open the PayMongo checkout page (GCash, Maya, Cards, etc.)
-                  Linking.openURL(checkoutUrl);
+                  // Open the PayMongo checkout page in an in-app browser overlay
+                  await WebBrowser.openBrowserAsync(checkoutUrl);
                   
                   Alert.alert(
                     "Checkout Opened",
