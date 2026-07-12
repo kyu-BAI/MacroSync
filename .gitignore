@@ -10,3 +10,4 @@ web-build/
 local_data/
 venv/
 .agent/
+.vercel

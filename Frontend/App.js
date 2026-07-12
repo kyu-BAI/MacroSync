@@ -24,6 +24,7 @@ import {
 import SplashScreen from "./src/screens/auth/SplashScreen"; // Cleanly imported matching your folder structure
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import SignUpScreen from "./src/screens/auth/SignUpScreen";
+import VerifyEmailScreen from "./src/screens/auth/VerifyEmailScreen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
 import OtpScreen from "./src/screens/auth/OtpScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
@@ -47,7 +48,7 @@ import API_URL from "./src/screens/config/api";
 
 
 function MainApp() {
-  // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
+  // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
 
@@ -284,9 +285,31 @@ function MainApp() {
         if (params.email && params.name) {
           await handleGoogleLoginSuccess(params.email, params.name);
         }
-      }
     }
   };
+
+  // ── NetInfo: detect connectivity changes ─────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(async (state) => {
+      const online = state.isConnected && state.isInternetReachable !== false;
+      setIsOnline(online);
+
+      if (online && wasOfflineRef.current && userId) {
+        // Just came back online — sync queued actions then refresh dashboard
+        console.log('Back online! Syncing queue...');
+        const result = await syncQueueToBackend(API_URL);
+        if (result.synced > 0) {
+          Alert.alert(
+            '✅ Back Online',
+            `Synced ${result.synced} offline action${result.synced > 1 ? 's' : ''} to the server.`
+          );
+        }
+        await fetchDashboardData();
+      }
+      wasOfflineRef.current = !online;
+    });
+    return () => unsubscribe();
+  }, [userId]);
 
   useEffect(() => {
     // Check if the app was opened from a deep link initially
@@ -377,8 +400,19 @@ function MainApp() {
         onSignUpSuccess={(newUserId, newName, newEmail) => {
           setUserId(newUserId); 
           setUserProfile({ name: newName || 'User', email: newEmail || '' });
-          setCurrentScreen("STEP_ONE");
+          setResetEmail(newEmail || '');
+          setCurrentScreen("VERIFY_SIGNUP");
         }}
+      />
+    );
+  }
+
+  if (currentScreen === "VERIFY_SIGNUP") {
+    return (
+      <VerifyEmailScreen
+        email={resetEmail}
+        onVerified={() => setCurrentScreen("STEP_ONE")}
+        onNavigateBack={() => setCurrentScreen("SIGNUP")}
       />
     );
   }

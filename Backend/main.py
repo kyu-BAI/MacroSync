@@ -34,12 +34,17 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 if not SUPABASE_KEY:
     raise RuntimeError("SUPABASE_KEY not set. Ensure .env contains the service role key before starting the server.")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ---------------- INIT CLIENTS ----------------
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 supabase_admin = create_client(SUPABASE_URL, SUPABASE_KEY)
+if SUPABASE_ANON_KEY:
+    anon_supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+else:
+    anon_supabase = supabase
 
 resend.api_key = RESEND_API_KEY
 
@@ -160,7 +165,7 @@ class ProfilePictureUpdate(BaseModel):
 @app.post("/signup")
 async def signup(user: UserAuth):
     try:
-        auth = supabase.auth.sign_up({
+        auth = anon_supabase.auth.sign_up({
             "email": user.email,
             "password": user.password
         })
@@ -335,6 +340,27 @@ async def verify_reset_otp(data: VerifyOTPRequest):
 
     return {"success": True}
 
+# ---------------- VERIFY SIGNUP (EMAIL OTP) ----------------
+class VerifySignupRequest(BaseModel):
+    email: str
+    otp: str
+
+@app.post("/verify-signup")
+async def verify_signup(data: VerifySignupRequest):
+    try:
+        response = anon_supabase.auth.verify_otp({
+            "email": data.email,
+            "token": data.otp,
+            "type": "signup"
+        })
+        
+        if not response.user:
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+            
+        return {"success": True, "user_id": response.user.id}
+    except Exception as e:
+        print("VERIFY SIGNUP ERROR:", repr(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ---------------- UPDATE PASSWORD ----------------
 @app.post("/update-password")
@@ -785,7 +811,7 @@ def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 10:
+                if day_usage.get("chats", 0) >= 5:
                     raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
@@ -909,7 +935,7 @@ def analyze_food(data: AnalyzeFoodRequest):
                     usage = prefs.get("usage", {})
                     day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                     
-                    if day_usage.get("scans", 0) >= 5:
+                    if day_usage.get("scans", 0) >= 3:
                         raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
                     
                     day_usage["scans"] = day_usage.get("scans", 0) + 1
@@ -954,6 +980,111 @@ def analyze_food(data: AnalyzeFoodRequest):
     except Exception as e:
         print("VISION ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/debug-key")
+def debug_key():
+    try:
+        if not SUPABASE_KEY:
+            return {"error": "SUPABASE_KEY is missing"}
+        parts = SUPABASE_KEY.split(".")
+        if len(parts) != 3:
+            return {"error": "Invalid JWT format"}
+        payload_b64 = parts[1]
+        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload_json = json.loads(base64.b64decode(payload_b64).decode())
+        return {
+            "role": payload_json.get("role"),
+            "ref": payload_json.get("ref"),
+            "iss": payload_json.get("iss"),
+            "key_length": len(SUPABASE_KEY)
+        }
+    except Exception as e:
+        return {"error": f"Failed to parse key: {str(e)}"}
+
+# ---------------- PAYMONGO INTEGRATION ----------------
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    amount: int  # Amount in centavos (e.g., 50000 = PHP 500.00)
+    description: str = "Premium Subscription"
+
+@app.post("/create-checkout-session")
+async def create_checkout_session(data: CheckoutRequest):
+    if not PAYMONGO_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="PayMongo Secret Key not configured")
+        
+    import requests
+    url = "https://api.paymongo.com/v1/checkout_sessions"
+    
+    payload = {
+        "data": {
+            "attributes": {
+                "billing": {
+                    "name": "MacroSync User"
+                },
+                "send_email_receipt": True,
+                "show_description": True,
+                "show_line_items": True,
+                "cancel_url": "https://macrosync.app/cancel",
+                "success_url": "https://macrosync.app/success",
+                "description": data.description,
+                "line_items": [
+                    {
+                        "currency": "PHP",
+                        "amount": data.amount,
+                        "description": data.description,
+                        "name": "MacroSync Premium",
+                        "quantity": 1
+                    }
+                ],
+                "payment_method_types": ["gcash", "paymaya", "grab_pay", "dob"],
+                "reference_number": data.user_id,
+            }
+        }
+    }
+    
+    auth_string = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "authorization": f"Basic {auth_string}"
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail=response.json())
+        
+    return response.json()
+
+from fastapi import Request
+
+@app.post("/webhooks/paymongo")
+async def paymongo_webhook(request: Request):
+    # PayMongo sends a webhook when payment succeeds
+    payload = await request.json()
+    
+    try:
+        data = payload.get("data", {})
+        attributes = data.get("attributes", {})
+        event_type = attributes.get("type")
+        
+        if event_type == "checkout_session.payment.paid":
+            # Extract the user ID we passed as reference_number
+            data_resource = attributes.get("data", {})
+            checkout_attributes = data_resource.get("attributes", {})
+            user_id = checkout_attributes.get("reference_number")
+            
+            if user_id:
+                # Update the user's status in Supabase
+                supabase.table("users").update({"is_premium": True}).eq("id", user_id).execute()
+                print(f"User {user_id} successfully upgraded to premium via PayMongo.")
+                
+        return {"status": "success"}
+    except Exception as e:
+        print("Webhook Error:", e)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def get_static_fallback_workouts(goal: str):

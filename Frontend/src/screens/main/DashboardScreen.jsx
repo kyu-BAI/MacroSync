@@ -20,6 +20,7 @@ import {
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 

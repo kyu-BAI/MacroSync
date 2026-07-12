@@ -13,7 +13,8 @@ import {
   Image,
   Modal,
   TextInput,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Linking
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
@@ -22,7 +23,6 @@ import API_URL from '../config/api';
 const GcashLogo = require('../../images/Gcash.png');
 const MayaLogo = require('../../images/Maya.png');
 const CardLogo = require('../../images/CreditDebitCard.png');
-
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
@@ -275,10 +275,56 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   // --- TRIGGER PAYMENT HANDLER FOR FRONTEND FLOW ---
   const handleInitiatePaymentFlow = (planName, price) => {
+    // Instantly apply the selection outline indicator visually
     setSelectedBillingCycle(planName);
-    setPaymentPlan({ name: planName, price: price });
-    setSelectedMethod(null);
-    setShowPaymentModal(true);
+
+    Alert.alert(
+      "Confirm Payment Method",
+      `Would you like to proceed with the ${planName} Plan (${price})?`,
+      [
+        { text: "Cancel", style: "cancel", onPress: () => setSelectedBillingCycle(null) },
+        {
+          text: "Proceed to Pay",
+          onPress: async () => {
+            try {
+              const amount_cents = planName === 'Monthly' ? 20000 : 214900; // Multiply by 100 to get cents
+              const response = await fetch(`${API_URL}/create-checkout-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  user_id: userId, 
+                  amount: amount_cents,
+                  description: `MacroSync Premium - ${planName} Plan`
+                })
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                const checkoutUrl = data?.data?.attributes?.checkout_url;
+                if (checkoutUrl) {
+                  // Open the PayMongo checkout page (GCash, Maya, Cards, etc.)
+                  Linking.openURL(checkoutUrl);
+                  
+                  Alert.alert(
+                    "Checkout Opened",
+                    "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
+                  );
+                } else {
+                  console.log("PayMongo response:", data);
+                  Alert.alert("Error", "Could not generate payment link.");
+                }
+              } else {
+                Alert.alert("Error", "Failed to initiate payment on the server.");
+                setSelectedBillingCycle(null);
+              }
+            } catch (e) {
+              Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+              setSelectedBillingCycle(null);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleConfirmPayment = () => {
@@ -520,13 +566,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
                   { marginBottom: 12 }
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱199/mo')}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱200/mo')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
                   <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱199/mo</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱200/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -535,18 +581,18 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   styles.billingPlanSelectorRowItem,
                   selectedBillingCycle === 'Annual' && styles.billingPlanActive
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,029/yr')}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,149/yr')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
                     <View style={styles.bestValueBadge}>
-                      <Text style={styles.bestValueBadgeText}>SAVE 15%</Text>
+                      <Text style={styles.bestValueBadgeText}>SAVE 10%</Text>
                     </View>
                   </View>
                   <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱2,029/yr</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱2,149/yr</Text>
               </TouchableOpacity>
 
               {/* Premium Feature List */}
