@@ -16,7 +16,7 @@ import {
 import { KeyRound, ChevronLeft } from 'lucide-react-native';
 import API_URL from '../config/api';
 
-export default function VerifyEmailScreen({ email, onVerified, onNavigateBack }) {
+export default function VerifyEmailScreen({ email, name, password, isLogin, onVerified, onNavigateBack }) {
   const [otp, setOtp] = useState("");
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,22 +32,29 @@ export default function VerifyEmailScreen({ email, onVerified, onNavigateBack })
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/verify-signup`, {
+      const endpoint = isLogin ? "/verify-login" : "/verify-signup";
+      const payload = isLogin 
+        ? { email: email.trim(), otp: otp.trim() }
+        : {
+            email: email.trim(),
+            otp: otp.trim(),
+            name: name ? name.trim() : "",
+            password: password ? password.trim() : ""
+          };
+
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          email: email.trim(),
-          otp: otp.trim()
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (response.ok) {
         Alert.alert("Success", "Email verified successfully.");
-        onVerified(); // Moves cleanly to onboarding
+        onVerified(data.user_id); // Moves cleanly to onboarding
       } else {
         Alert.alert("Error", data.detail || "Invalid or expired OTP. Please try again.");
       }

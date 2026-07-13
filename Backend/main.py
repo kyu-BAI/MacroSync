@@ -37,6 +37,8 @@ if not SUPABASE_KEY:
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+
 
 # ---------------- INIT CLIENTS ----------------
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -165,6 +167,14 @@ class ProfilePictureUpdate(BaseModel):
 @app.post("/signup")
 async def signup(user: UserAuth):
     try:
+        # Check if user already exists to prevent raw database foreign key errors
+        # (caused by Supabase User Enumeration Protection returning a mock ID)
+        email = user.email.strip().lower()
+        # Fast query via user_profiles table instead of slow list_users() API call
+        existing_profile = supabase.table("user_profiles").select("id").eq("email", email).execute()
+        if existing_profile.data:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
         auth = anon_supabase.auth.sign_up({
             "email": user.email,
             "password": user.password
@@ -172,7 +182,8 @@ async def signup(user: UserAuth):
 
         user_id = auth.user.id
 
-        supabase.table("user_profiles").insert({
+        # Insert or update profile (upsert to handle re-sends)
+        supabase.table("user_profiles").upsert({
             "id": user_id,
             "email": user.email,
             "name": user.name
@@ -181,8 +192,11 @@ async def signup(user: UserAuth):
         return {"user_id": user_id}
 
     except Exception as e:
+        err_msg = str(e)
         print("SIGNUP ERROR:", repr(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        if "violates foreign key constraint" in err_msg or "user_profiles_id_fkey" in err_msg:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail=err_msg)
 
 
 # ---------------- SIGNIN ----------------
@@ -221,7 +235,7 @@ def signin(user: UserLogin):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ---------------- GOOGLE SIGNIN (BYPASS/PRODUCTION) ----------------
+# ---------------- GOOGLE SIGNIN (OTP TRIGGER) ----------------
 @app.post("/auth/google-signin")
 async def google_signin(data: GoogleSignInRequest):
     try:
@@ -231,45 +245,81 @@ async def google_signin(data: GoogleSignInRequest):
         if not email or not name:
             raise HTTPException(status_code=400, detail="Email and name are required")
 
-        # Check if user already exists in Supabase Auth via Admin Client
-        users = supabase_admin.auth.admin.list_users()
-        user = next((u for u in users if u.email and u.email.lower() == email), None)
+        # Check if user already exists in Supabase Auth via profiles
+        profile_response = supabase.table("user_profiles").select("*").eq("email", email).execute()
+        
+        user_exists = False
+        is_profile_complete = False
+        
+        if profile_response.data:
+            user_exists = True
+            profile = profile_response.data[0]
+            if profile.get("weight_kg") is not None and profile.get("height_cm") is not None:
+                is_profile_complete = True
 
-        if not user:
+        # Send OTP via Supabase
+        if not user_exists:
             # Create user in Supabase Auth using admin API to bypass confirmations
-            auth_user = supabase_admin.auth.admin.create_user({
-                "email": email,
-                "email_confirm": True,
-                "user_metadata": {"full_name": name}
-            })
-            user_id = auth_user.user.id
-            
-            # Create corresponding user_profiles row
-            supabase.table("user_profiles").insert({
-                "id": user_id,
-                "email": email,
-                "name": name
-            }).execute()
-        else:
-            user_id = user.id
-            # Ensure the profile exists in user_profiles
-            profile_response = supabase.table("user_profiles").select("id").eq("id", user_id).execute()
-            if not profile_response.data:
-                supabase.table("user_profiles").insert({
-                    "id": user_id,
+            try:
+                auth_user = supabase_admin.auth.admin.create_user({
                     "email": email,
-                    "name": name
-                }).execute()
-
-        return {
-            "success": True,
-            "user_id": user_id,
-            "user": {
-                "id": user_id,
+                    "password": dummy_password,
+                    "options": {
+                        "data": {"full_name": name}
+                    }
+                })
+            except Exception as create_err:
+                err_msg = str(create_err)
+                if "already exists" in err_msg or "already registered" in err_msg:
+                    # Fallback check only if they exist in auth.users but didn't have a profile
+                    users = supabase_admin.auth.admin.list_users()
+                    auth_user = next((u for u in users if u.email and u.email.lower() == email), None)
+                    if not auth_user:
+                        raise create_err
+                else:
+                    raise create_err
+            
+            return {
+                "success": True,
+                "is_new_user": True,
+                "is_login_otp": False,
+                "email": email,
+                "name": name,
+                "dummy_password": dummy_password
+            }
+        elif not is_profile_complete:
+            # Case 2: Existing user but incomplete profile -> sign_in_with_otp (Login OTP but routes to onboarding)
+            anon_supabase.auth.sign_in_with_otp({
+                "email": email,
+                "options": {
+                    "shouldCreateUser": False
+                }
+            })
+            
+            return {
+                "success": True,
+                "is_new_user": True,
+                "is_login_otp": True,
                 "email": email,
                 "name": name
             }
-        }
+        else:
+            # Case 3: Existing user with complete profile -> sign_in_with_otp (Login OTP, goes to dashboard)
+            anon_supabase.auth.sign_in_with_otp({
+                "email": email,
+                "options": {
+                    "shouldCreateUser": False
+                }
+            })
+            
+            return {
+                "success": True,
+                "is_new_user": False,
+                "is_login_otp": True,
+                "email": email,
+                "name": name
+            }
+
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -344,6 +394,8 @@ async def verify_reset_otp(data: VerifyOTPRequest):
 class VerifySignupRequest(BaseModel):
     email: str
     otp: str
+    name: str = None
+    password: str = None
 
 @app.post("/verify-signup")
 async def verify_signup(data: VerifySignupRequest):
@@ -358,8 +410,28 @@ async def verify_signup(data: VerifySignupRequest):
             raise HTTPException(status_code=400, detail="Invalid OTP")
             
         return {"success": True, "user_id": response.user.id}
+
     except Exception as e:
         print("VERIFY SIGNUP ERROR:", repr(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ---------------- VERIFY LOGIN (EMAIL OTP) ----------------
+@app.post("/verify-login")
+async def verify_login(data: VerifySignupRequest):
+    try:
+        response = anon_supabase.auth.verify_otp({
+            "email": data.email,
+            "token": data.otp,
+            "type": "magiclink"
+        })
+        
+        if not response.user:
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+            
+        return {"success": True, "user_id": response.user.id}
+
+    except Exception as e:
+        print("VERIFY LOGIN ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 # ---------------- UPDATE PASSWORD ----------------
@@ -374,12 +446,19 @@ async def update_password(data: UpdatePasswordRequest):
         elif data.email:
             email_clean = data.email.strip()
             print(f"UPDATE PASSWORD: Cleaned email is '{email_clean}'")
-            users = supabase_admin.auth.admin.list_users()
-            user = next((u for u in users if u.email and u.email.lower() == email_clean.lower()), None)
-            if not user:
-                print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in Supabase Auth list.")
-                raise HTTPException(404, "User not found")
-            target_user_id = user.id
+            # Fast query via user_profiles first
+            profile_response = supabase.table("user_profiles").select("id").eq("email", email_clean.lower()).execute()
+            if not profile_response.data:
+                # Fallback to list_users if not in user_profiles
+                print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in user_profiles. Falling back to list_users...")
+                users = supabase_admin.auth.admin.list_users()
+                user = next((u for u in users if u.email and u.email.lower() == email_clean.lower()), None)
+                if not user:
+                    print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in Supabase Auth list.")
+                    raise HTTPException(404, "User not found")
+                target_user_id = user.id
+            else:
+                target_user_id = profile_response.data[0]["id"]
         else:
             raise HTTPException(400, "Either email or user_id must be provided")
 

@@ -54,11 +54,12 @@ function MainApp() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
 
-  // Core Account Identity State Management
   const [userId, setUserId] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: 'User', email: '' });
   const [resetEmail, setResetEmail] = useState('');
+  const [tempPassword, setTempPassword] = useState('');
   const [tempOnboardingData, setTempOnboardingData] = useState(null);
+  const [googleIsLoginOtp, setGoogleIsLoginOtp] = useState(false);
 
   // ── Offline / Connectivity State ──────────────────────────────────────────
   const [isOnline, setIsOnline] = useState(true);
@@ -405,6 +406,18 @@ function MainApp() {
         onLoginSuccess={() => setCurrentScreen("DASHBOARD")}
         onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
         setCurrentUserId={(id) => setUserId(id)} 
+        onGoogleOtpSent={(isNewUser, email, name, dummyPassword, isLoginOtp) => {
+          setGoogleIsLoginOtp(!!isLoginOtp);
+          if (isNewUser) {
+            setUserProfile({ name: name || 'User', email: email || '' });
+            setResetEmail(email || '');
+            setTempPassword(dummyPassword || '');
+            setCurrentScreen("VERIFY_SIGNUP");
+          } else {
+            setResetEmail(email || '');
+            setCurrentScreen("VERIFY_LOGIN");
+          }
+        }}
       />
     );
   }
@@ -413,11 +426,20 @@ function MainApp() {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(newUserId, newName, newEmail) => {
-          setUserId(newUserId); 
-          setUserProfile({ name: newName || 'User', email: newEmail || '' });
-          setResetEmail(newEmail || '');
-          setCurrentScreen("VERIFY_SIGNUP");
+        onSignUpSuccess={(newUserId, newName, newEmail, newPassword) => {
+          setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
+          if (newPassword === null) {
+            // Google Sign Up skips verification
+            setUserId(newUserId); 
+            setUserProfile({ name: newName || 'User', email: newEmail || '' });
+            setCurrentScreen("STEP_ONE");
+          } else {
+            // Normal Sign Up goes to Verify
+            setUserProfile({ name: newName || 'User', email: newEmail || '' });
+            setResetEmail(newEmail || '');
+            setTempPassword(newPassword || '');
+            setCurrentScreen("VERIFY_SIGNUP");
+          }
         }}
       />
     );
@@ -427,8 +449,28 @@ function MainApp() {
     return (
       <VerifyEmailScreen
         email={resetEmail}
-        onVerified={() => setCurrentScreen("STEP_ONE")}
+        name={userProfile.name}
+        password={tempPassword}
+        isLogin={googleIsLoginOtp}
+        onVerified={(newUserId) => {
+          setUserId(newUserId);
+          setCurrentScreen("STEP_ONE");
+        }}
         onNavigateBack={() => setCurrentScreen("SIGNUP")}
+      />
+    );
+  }
+
+  if (currentScreen === "VERIFY_LOGIN") {
+    return (
+      <VerifyEmailScreen
+        email={resetEmail}
+        isLogin={true}
+        onVerified={(newUserId) => {
+          setUserId(newUserId);
+          setCurrentScreen("DASHBOARD");
+        }}
+        onNavigateBack={() => setCurrentScreen("LOGIN")}
       />
     );
   }

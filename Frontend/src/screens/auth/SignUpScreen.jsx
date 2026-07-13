@@ -11,7 +11,9 @@ import {
   ScrollView,
   StatusBar,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image,
+  Modal
 } from 'react-native';
 import { Eye, EyeOff, User, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import API_URL from '../config/api';
@@ -26,6 +28,11 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [passwordTouched, setPasswordTouched] = useState(false); // Tracks if the user interacted with the password field
   const [isLoading, setIsLoading] = useState(false);
 
+  // Google Sign In States
+  const [isGooglePressed, setIsGooglePressed] = useState(false);
+  const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  
   // Evaluates validation rules for password length threshold
   const showPasswordWarning = passwordTouched && password.length > 0 && password.length < 8;
 
@@ -70,7 +77,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       const data = await response.json();
 
       if (response.ok) {
-        onSignUpSuccess(data.user_id, name.trim(), email.trim());
+        onSignUpSuccess(data.user_id, name.trim(), email.trim(), password.trim());
       } else {
         Alert.alert(
           "Registration Error",
@@ -87,6 +94,69 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isLoading) return;
+    setIsGoogleModalVisible(true);
+    setCustomGoogleEmail('');
+  };
+
+  const submitGoogleSignIn = async (selectedEmail) => {
+    if (!selectedEmail) {
+      Alert.alert("Input Error", "Please enter a Google email.");
+      return;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(selectedEmail)) {
+      Alert.alert("Input Error", "Please enter a valid email address.");
+      return;
+    }
+
+    const derivedName = selectedEmail
+      .split('@')[0]
+      .split(/[._-]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+    setIsGoogleModalVisible(false);
+    setIsLoading(true);
+    setIsGooglePressed(true);
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const generatedGooglePassword = "GUser!" + Math.random().toString(36).slice(2, 12);
+
+      const response = await fetch(
+        `${API_URL}/signup`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ 
+            email: selectedEmail, 
+            name: derivedName,
+            password: generatedGooglePassword
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        onSignUpSuccess(data.user_id || null, derivedName, selectedEmail, generatedGooglePassword);
+      } else {
+        Alert.alert("Registration Error", data.detail || "Google authentication failed.");
+      }
+    } catch (error) {
+      Alert.alert("Registration Error", "Cannot connect to backend server. Check your network.");
+    } finally {
+      setIsLoading(false);
+      setIsGooglePressed(false);
     }
   };
 
@@ -216,6 +286,42 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               )}
             </TouchableOpacity>
 
+            {/* INTER-STAGE VISUAL DIVIDER */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Or sign up with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* PREMIUM GOOGLE TRIGGER COMPONENT BUTTON */}
+            <TouchableOpacity 
+              activeOpacity={1}
+              disabled={isLoading}
+              onPressIn={() => setIsGooglePressed(true)}
+              onPressOut={() => setIsGooglePressed(false)}
+              onPress={handleGoogleSignIn}
+              style={[
+                styles.buttonBase,
+                styles.googleButtonBase,
+                isGooglePressed ? styles.googleButtonPressed : styles.googleButtonUnpressed
+              ]}
+            >
+              {isLoading && isGooglePressed ? (
+                <ActivityIndicator size="small" color="#41544B" />
+              ) : (
+                <View style={styles.googleContentRow}>
+                  <Image 
+                    source={require('../../images/google.png')} 
+                    style={styles.googleIconImage} 
+                    resizeMode="contain"
+                  />
+                  <Text style={[styles.googleButtonText, isGooglePressed && styles.googleButtonTextPressed]}>
+                    Continue with Google
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             {/* Footer Row */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Already have an account? </Text>
@@ -226,6 +332,54 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* GOOGLE ACCOUNTS SELECTOR MODAL */}
+      <Modal
+        visible={isGoogleModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsGoogleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentCard}>
+            <Text style={styles.modalTitle}>Google Sign Up</Text>
+            <Text style={styles.modalSubtitle}>to create an account on MacroSync</Text>
+            
+            <View style={styles.customInputArea}>
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalInputLabel}>Google Email Address</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  placeholder="Enter Google email"
+                  placeholderTextColor="#7FA293"
+                  value={customGoogleEmail}
+                  onChangeText={setCustomGoogleEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.modalActionButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setIsGoogleModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSubmit]}
+                  onPress={() => submitGoogleSignIn(customGoogleEmail)}
+                >
+                  <Text style={styles.modalButtonSubmitText}>Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -396,5 +550,157 @@ const styles = StyleSheet.create({
     color: logoGreen,
     fontSize: 14,
     fontWeight: '900',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: '#D4E2DC',
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7FA293',
+    paddingHorizontal: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  googleButtonBase: {
+    marginTop: 0,
+  },
+  googleButtonUnpressed: {
+    backgroundColor: baseColor,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderTopColor: clearWhiteHighlight,
+    borderLeftColor: clearWhiteHighlight,
+    shadowColor: softGreenShadow,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1.5,
+    borderColor: '#E1E9E5',
+  },
+  googleButtonPressed: {
+    backgroundColor: '#E4ECE8',
+    borderWidth: 1.5,
+    borderColor: '#D4E2DC',
+    transform: [{ translateY: 2 }],
+  },
+  googleContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleIconImage: {
+    width: 18,
+    height: 18,
+    marginRight: 10,
+  },
+  googleButtonText: {
+    color: '#41544B',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  googleButtonTextPressed: {
+    color: '#21332A',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 43, 35, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContentCard: {
+    backgroundColor: baseColor,
+    borderRadius: 36,
+    width: '100%',
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: '#D4E2DC',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1A2B23',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#556B60',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 20,
+    fontWeight: '600',
+  },
+  customInputArea: {
+    marginTop: 8,
+  },
+  modalInputGroup: {
+    marginBottom: 16,
+  },
+  modalInputLabel: {
+    color: '#41544B',
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  modalTextInput: {
+    backgroundColor: '#E4ECE8',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#1A2B23',
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+  },
+  modalActionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  modalButton: {
+    flex: 0.48,
+    paddingVertical: 14,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#E4ECE8',
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+  },
+  modalButtonCancelText: {
+    color: '#556B60',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  modalButtonSubmit: {
+    backgroundColor: '#53B28E',
+  },
+  modalButtonSubmitText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
   },
 });

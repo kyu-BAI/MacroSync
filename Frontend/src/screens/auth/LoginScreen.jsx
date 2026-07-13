@@ -27,7 +27,8 @@ export default function LoginScreen({
   onNavigateToSignUp,
   onLoginSuccess,
   onForgotPassword,
-  setCurrentUserId
+  setCurrentUserId,
+  onGoogleOtpSent
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -254,7 +255,6 @@ export default function LoginScreen({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
 
 
     </SafeAreaView>
