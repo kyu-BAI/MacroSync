@@ -951,11 +951,11 @@ def chat_with_ai(data: ChatMessageRequest):
 def generate_recipe(data: RecipeRequest):
     try:
         prompt = f"""
-        You are an expert local nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
+        You are an expert Filipino nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
         Their budget constraint is: {data.budget}.
-        Their location is: {data.location}.
+        Their location is: {data.location} (default to Philippines).
         
-        Generate a healthy, practical recipe that strictly fits these constraints. 
+        Generate a healthy, practical Filipino recipe (or a healthy adaptation of a local Filipino dish) that strictly fits these constraints and uses local ingredients commonly found in the Philippines. 
         Format your response as a valid JSON object with the following exact keys:
         - "title" (string, the name of the recipe)
         - "calories" (integer)
@@ -1663,14 +1663,15 @@ def recommend_meals(user_id: str):
         date_str = now_manila.strftime("%A, %B %d, %Y")
 
         prompt = f"""
-        You are an elite personal fitness dietitian. Recommend exactly 4 custom recipes (Breakfast, Lunch, Snack, Dinner) for this user profile:
+        You are an elite personal fitness dietitian in the Philippines. Recommend exactly 4 custom recipes (Breakfast, Lunch, Snack, Dinner) for this user profile:
         - Primary Fitness Goal: {goal}
         - Total Daily Nutritional Targets: {target_calories} kcal, {target_protein}g Protein, {target_carbs}g Carbs, {target_fats}g Fats.
         - Date Rotation Seed: {date_str}
 
         Guidelines:
         - Distribute the targets: Breakfast (25% calories), Lunch (35% calories), Snack (10% calories), Dinner (30% calories).
-        - Recommend distinct healthy recipes with clear, easy to procure ingredients and easy cooking instructions.
+        - Recommend exclusively healthy Filipino dishes or fitness-oriented adaptations of local Filipino cuisine.
+        - The recipes must use ingredients that are easily available in local Philippine wet markets (palengke) and grocery stores (e.g. calamansi, bangus, tilapia, chicken breast, kangkong, sitaw, squash, sweet potato/kamote, brown/white rice). Avoid expensive or hard-to-find western ingredients.
         - Do not use any currency symbols other than the Philippine Peso sign (₱).
 
         Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
