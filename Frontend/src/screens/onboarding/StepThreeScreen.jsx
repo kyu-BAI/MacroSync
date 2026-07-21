@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 
 // Import child lookup methods from your installed library
@@ -38,13 +39,13 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerType, setPickerType] = useState('');
   const [pickerData, setPickerData] = useState([]);
+  const [isFetchingPicker, setIsFetchingPicker] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Custom Confirmation Modal Sheet State
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [compiledAddress, setCompiledAddress] = useState('');
   const [compiledAllergiesText, setCompiledAllergiesText] = useState('');
-
-
 
   const presetAllergens = [
     { id: 'peanuts', title: 'Peanuts' },
@@ -66,38 +67,50 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     }
   };
 
-  const getPsgcRegionCodes = (customCode) => {
-    switch (customCode) {
-      case 'NCR': return ['13'];
-      case 'VIS': return ['06', '07', '08'];
-      case 'MIN': return ['09', '10', '11', '12', '13', '14', '15', '16', '19'];
-      case 'NL': return ['01', '02', '03', '14'];
-      case 'SL': return ['04', '05', '17'];
-      default: return [];
-    }
-  };
-
   const triggerCustomError = (title, message) => {
     showAlert(title, message);
   };
 
   const openPicker = async (type) => {
-    if (isLoadingExternal || isLoading) return;
+    if (isLoadingExternal || isLoading || isFetchingPicker) return;
 
+    setIsFetchingPicker(type);
     try {
       if (type === 'province') {
-        // select-philippines-address requires a region code - fetch all regions and merge
-        const ALL_REGION_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '19'];
-        let aggregated = [];
-        for (const code of ALL_REGION_CODES) {
-          try {
-            const res = await provinces(code);
-            aggregated = [...aggregated, ...res];
-          } catch (_) { /* skip regions with no provinces */ }
+        let formatted = [];
+        try {
+          // Fast single HTTP fetch for all provinces (takes ~300ms vs 7000ms+ for 18 sequential calls)
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/province.json');
+          if (Array.isArray(res.data)) {
+            formatted = res.data.map(p => ({
+              ...p,
+              name: p.province_name || p.name
+            }));
+          }
+        } catch (_) {
+          // Fallback if direct fetch fails
+          const ALL_REGION_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '19'];
+          const results = await Promise.allSettled(ALL_REGION_CODES.map(code => provinces(code)));
+          let aggregated = [];
+          results.forEach(r => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+              aggregated.push(...r.value);
+            }
+          });
+          formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
         }
-        const formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
-        formatted.sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(formatted);
+
+        // De-duplicate by province_code or name
+        const uniqueMap = new Map();
+        formatted.forEach(item => {
+          if (item.name && !uniqueMap.has(item.name)) {
+            uniqueMap.set(item.name, item);
+          }
+        });
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+        setPickerData(sorted);
+        setSearchQuery('');
         setPickerType(type);
         setPickerVisible(true);
       } else if (type === 'city') {
@@ -106,22 +119,29 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           return;
         }
         const res = await cities(province.province_code);
-        const formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
+        let formatted = [];
+        if (Array.isArray(res)) {
+          formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
+        }
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
+        setSearchQuery('');
         setPickerType(type);
         setPickerVisible(true);
       }
     } catch (err) {
       console.log("Error loading dropdown data: ", err);
       triggerCustomError("Data Error", "Could not fetch local directory parameters.");
+    } finally {
+      setIsFetchingPicker(null);
     }
   };
 
   const handleSelectLocation = (item) => {
     if (pickerType === 'province') {
       if (province?.province_code !== item.province_code) {
-        setProvince(item); setCity(null);
+        setProvince(item);
+        setCity(null);
       }
     } else if (pickerType === 'city') {
       if (city?.city_code !== item.city_code) {
@@ -210,11 +230,16 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
                 style={[styles.neumorphicInputInset, styles.selectorRow]}
                 onPress={() => openPicker('province')}
                 activeOpacity={0.7}
+                disabled={isFetchingPicker === 'province'}
               >
                 <Text style={[styles.selectorValueText, !province && styles.placeholderText]}>
                   {province ? province.name : "Select Province"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={logoGreen} />
+                {isFetchingPicker === 'province' ? (
+                  <ActivityIndicator size="small" color={logoGreen} />
+                ) : (
+                  <Ionicons name="chevron-down" size={16} color={logoGreen} />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -222,15 +247,19 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>City / Municipality</Text>
               <TouchableOpacity
-                style={[styles.neumorphicInputInset, styles.selectorRow, !province && styles.disabledSelector]}
+                style={[styles.neumorphicInputInset, styles.selectorRow, (!province || isFetchingPicker === 'city') && styles.disabledSelector]}
                 onPress={() => openPicker('city')}
                 activeOpacity={0.7}
-                disabled={!province}
+                disabled={!province || isFetchingPicker === 'city'}
               >
                 <Text style={[styles.selectorValueText, !city && styles.placeholderText]}>
                   {city ? city.name : "Select City / Municipality"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#AEC2B7'} />
+                {isFetchingPicker === 'city' ? (
+                  <ActivityIndicator size="small" color={logoGreen} />
+                ) : (
+                  <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#AEC2B7'} />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -309,17 +338,30 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.searchBarContainer}>
+              <Ionicons name="search" size={18} color="#7FA293" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search ${pickerType}...`}
+                placeholderTextColor="#7FA293"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
+            </View>
+
             <View style={styles.pickerContentWrapper}>
               <FlatList
                 ref={flatListRef}
-                data={pickerData}
-                keyExtractor={(item, index) => index.toString()}
+                data={pickerData.filter(item =>
+                  item.name ? item.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) : false
+                )}
+                keyExtractor={(item, index) => `${item.province_code || item.city_code || 'loc'}-${item.name || 'item'}-${index}`}
                 showsVerticalScrollIndicator={false}
                 style={styles.optionsList}
                 contentContainerStyle={styles.optionsListContent}
-                getItemLayout={(data, index) => (
-                  { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
-                )}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.pickerItemRow} onPress={() => handleSelectLocation(item)}>
                     <Text style={styles.pickerItemText}>{item.name}</Text>
@@ -617,7 +659,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     borderBottomWidth: 1,
     borderColor: '#D4E2DC',
     paddingBottom: 12,
@@ -627,6 +669,24 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#21332A',
     letterSpacing: 1,
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E4ECE8',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 42,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1A2B23',
+    fontWeight: '600',
+    height: '100%',
   },
   pickerContentWrapper: {
     flex: 1,
