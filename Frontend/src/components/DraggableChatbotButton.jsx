@@ -17,18 +17,25 @@ const logoDarkShadow = '#37745D';
 const logoLightHighlight = '#65D8AD';
 
 // Spacing bounds to clear header and absolute bottom navigation bar
-const NAV_BAR_HEIGHT = Platform.OS === 'ios' ? 116 : 98;
 const TOP_BOUND = Platform.OS === 'ios' ? 80 : 60;
-const BOTTOM_BOUND = screenHeight - NAV_BAR_HEIGHT - 65;
+const BOTTOM_BOUND = screenHeight - 105;
 const LEFT_BOUND = 16;
 const RIGHT_BOUND = screenWidth - 56 - 16;
 
 export default function DraggableChatbotButton({ onPress }) {
-  // Initialize position to bottom right
+  // Initialize position to bottom right, sitting neatly above bottom nav bar
   const pan = useRef(new Animated.ValueXY({
     x: RIGHT_BOUND,
-    y: BOTTOM_BOUND - 20
+    y: BOTTOM_BOUND
   })).current;
+
+  // Sync animation position whenever BOTTOM_BOUND changes
+  useEffect(() => {
+    pan.setValue({
+      x: RIGHT_BOUND,
+      y: BOTTOM_BOUND
+    });
+  }, [BOTTOM_BOUND]);
 
   const panResponder = useRef(
     PanResponder.create({

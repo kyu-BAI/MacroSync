@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,10 +12,13 @@ import {
   Alert,
   ActivityIndicator
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 export default function ResetPasswordScreen({ email, onResetSuccess }) {
+  const { showAlert } = useCustomAlert();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
@@ -34,12 +36,12 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   // --- PASSWORD UPDATE LIFE CYCLES ---
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert("Error", "Please fill all fields.");
+      showAlert("Error", "Please fill all fields.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      showAlert("Error", "Passwords do not match.");
       return;
     }
 
@@ -61,14 +63,14 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert("Success", "Password updated successfully.");
+        showAlert("Success", "Password updated successfully.");
         onResetSuccess();
       } else {
-        Alert.alert("Error", data.detail || "Failed to update password. Please try again.");
+        showAlert("Error", data.detail || "Failed to update password. Please try again.");
       }
     } catch (error) {
       console.log("UPDATE PASSWORD ERROR:", error);
-      Alert.alert(
+      showAlert(
         "Network Error",
         "Cannot connect to backend server. Make sure it is running and your IP is correct."
       );

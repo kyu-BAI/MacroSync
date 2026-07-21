@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { CustomAlertProvider } from './src/context/CustomAlertContext';
 import { 
   StyleSheet, 
   View,
   Alert,
   Text,
   Linking,
+  LogBox,
 } from 'react-native';
+
+LogBox.ignoreLogs([
+  'Cannot connect to Expo CLI',
+  'ImagePicker.MediaTypeOptions',
+  'The <CameraView> component does not support children',
+]);
 import { recommendedRecipesPool } from './src/data/recipes';
 import NetInfo from '@react-native-community/netinfo';
 import * as WebBrowser from 'expo-web-browser';
@@ -825,7 +833,9 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <ThemeProvider>
-      <MainApp />
+      <CustomAlertProvider>
+        <MainApp />
+      </CustomAlertProvider>
     </ThemeProvider>
   );
 }

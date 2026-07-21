@@ -5,13 +5,14 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 // ==========================================
 // THEME CONFIGURATION & BRANDING TOKENS
@@ -38,6 +39,7 @@ const COLORS = {
 };
 
 export default function StepOneScreen({ onNext }) {
+  const { showAlert } = useCustomAlert();
   // --- Core Inputs ---
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -57,11 +59,7 @@ export default function StepOneScreen({ onNext }) {
   // BUSINESS LOGIC & CONVERSIONS (DEBUG HUB)
   // ==========================================
   const triggerSafetyWarning = (title, message) => {
-    Alert.alert(
-      title,
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
+    showAlert(title, message);
   };
 
   const getWeightInKg = () => {

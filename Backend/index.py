@@ -896,9 +896,13 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
 @app.post("/chat")
 def chat_with_ai(data: ChatMessageRequest):
     try:
-        # Fetch user profile for context
-        user_result = supabase.table("user_profiles").select("*").eq("id", data.user_id).execute()
+        user_id = data.user_id
+        user_result = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        
         context_prompt = ""
+        is_premium = False
+        day_usage = {"scans": 0, "chats": 0}
+        
         if user_result.data:
             user = user_result.data[0]
             
@@ -911,61 +915,169 @@ def chat_with_ai(data: ChatMessageRequest):
                     pass
             
             is_premium = prefs.get("is_premium", False)
+            manila_tz = timezone(timedelta(hours=8))
+            now_manila = datetime.now(manila_tz)
+            today_str = now_manila.strftime("%Y-%m-%d")
+
             if not is_premium:
-                manila_tz = timezone(timedelta(hours=8))
-                today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 5:
-                    raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
+                if day_usage.get("chats", 0) >= 10:
+                    raise HTTPException(status_code=403, detail="Daily chat limit reached (10 messages/day). Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
                 usage[today_str] = day_usage
                 prefs["usage"] = usage
                 
-                # Save incremented count back to database
-                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
 
             unit = prefs.get("unit", "kg")
-            current_weight_kg = user.get("weight_kg")
-            target_weight_kg = user.get("goalWeight")
-            starting_weight_kg = prefs.get("starting_weight")
-            
-            current_weight_str = f"{current_weight_kg} kg" if current_weight_kg else "Not logged"
-            target_weight_str = f"{target_weight_kg} kg" if target_weight_kg else "Not set"
-            starting_weight_str = f"{starting_weight_kg} kg" if starting_weight_kg else "Not logged"
-            
+            current_weight_kg = user.get("weight_kg") or 70.0
+            target_weight_kg = user.get("goalWeight") or 65.0
+            starting_weight_kg = prefs.get("starting_weight") or current_weight_kg
+            goal = user.get("goal", "Maintain Weight")
+
+            # Calculate Macro Targets based on Goal
+            if "Lose" in goal:
+                target_calories = 1800
+                target_protein = int(current_weight_kg * 2.2)
+                target_carbs = 150
+                target_fats = 60
+                rec_workout = "Cardio & Fat-Burning Circuit (30 mins), Bodyweight Calisthenics, Walking 10,000 steps"
+                rec_diet = "High-protein lean meals: Kinilaw na Tangigue, Grilled Fish Sutukil, Boiled Eggs & Vegetables, Chicken Tinola"
+            elif "Gain" in goal:
+                target_calories = 2800
+                target_protein = int(current_weight_kg * 2.0)
+                target_carbs = 350
+                target_fats = 80
+                rec_workout = "Hypertrophy Resistance Training (Push/Pull/Legs), Heavy Compound Lifts, Dumbbell Press"
+                rec_diet = "Calorie & Protein-dense meals: Beef Sinigang with Rice, Grilled Chicken Breast with Brown Rice, Pinto Corn Snack"
+            else:
+                target_calories = 2200
+                target_protein = int(current_weight_kg * 1.8)
+                target_carbs = 250
+                target_fats = 70
+                rec_workout = "Balanced Resistance & Cardio Routine, Full Body Circuit (40 mins), Yoga & Mobility"
+                rec_diet = "Balanced Filipino Nutrition: Steamed Fish, Monggo with Malunggay, Oatmeal with Bananas, Fresh Fruits"
+
+            # Formatted weight strings
             if unit == "lbs":
-                if current_weight_kg:
-                    current_weight_str = f"{round(current_weight_kg * 2.20462, 1)} lbs ({current_weight_kg} kg)"
-                if target_weight_kg:
-                    target_weight_str = f"{round(target_weight_kg * 2.20462, 1)} lbs ({target_weight_kg} kg)"
-                if starting_weight_kg:
-                    starting_weight_str = f"{round(starting_weight_kg * 2.20462, 1)} lbs ({starting_weight_kg} kg)"
-            
+                current_weight_str = f"{round(current_weight_kg * 2.20462, 1)} lbs ({current_weight_kg} kg)"
+                target_weight_str = f"{round(target_weight_kg * 2.20462, 1)} lbs ({target_weight_kg} kg)"
+                starting_weight_str = f"{round(starting_weight_kg * 2.20462, 1)} lbs ({starting_weight_kg} kg)"
+            else:
+                current_weight_str = f"{current_weight_kg} kg"
+                target_weight_str = f"{target_weight_kg} kg"
+                starting_weight_str = f"{starting_weight_kg} kg"
+
+            # 1. Fetch Today's Logged Meals
+            today_start_manila = now_manila.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start_utc = today_start_manila.astimezone(timezone.utc)
+
+            meals_res = supabase.table("logged_meals") \
+                .select("*") \
+                .eq("user_id", user_id) \
+                .gte("logged_at", today_start_utc.isoformat()) \
+                .execute()
+            logged_meals_data = meals_res.data or []
+
+            consumed_calories = sum(m.get("calories", 0) for m in logged_meals_data)
+            consumed_protein = sum(m.get("protein", 0) for m in logged_meals_data)
+            consumed_carbs = sum(m.get("carbs", 0) for m in logged_meals_data)
+            consumed_fats = sum(m.get("fats", 0) for m in logged_meals_data)
+
+            if logged_meals_data:
+                meals_list_str = "\n".join([
+                    f"  - {m.get('name')}: {m.get('calories')} kcal, {m.get('protein')}g P, {m.get('carbs')}g C, {m.get('fats')}g F"
+                    for m in logged_meals_data
+                ])
+            else:
+                meals_list_str = "  - No meals logged yet today."
+
+            # 2. Fetch Today's Water Logs
+            water_res = supabase.table("water_logs").select("*").eq("user_id", user_id).execute()
+            glasses = 0
+            if water_res.data:
+                record = water_res.data[0]
+                updated_at_str = record.get("updated_at")
+                if updated_at_str:
+                    try:
+                        updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                        if updated_at >= today_start_utc:
+                            glasses = record.get("glasses", 0)
+                    except:
+                        glasses = record.get("glasses", 0)
+                else:
+                    glasses = record.get("glasses", 0)
+
+            # 3. Fetch Today's Logged Workouts
+            workouts_res = supabase.table("logged_workouts") \
+                .select("*") \
+                .eq("user_id", user_id) \
+                .gte("logged_at", today_start_utc.isoformat()) \
+                .execute()
+            workouts_data = workouts_res.data or []
+
+            calories_burned = sum(w.get("calories_burned", 0) for w in workouts_data)
+            active_minutes = sum(w.get("active_minutes", 0) for w in workouts_data)
+
+            if workouts_data:
+                workouts_list_str = "\n".join([
+                    f"  - {w.get('name')}: {w.get('calories_burned')} kcal burned, {w.get('active_minutes')} active mins"
+                    for w in workouts_data
+                ])
+            else:
+                workouts_list_str = "  - No workouts logged yet today."
+
             context_prompt = (
-                f"User Profile Context:\n"
-                f"- User Name: {user.get('name', 'User')}\n"
-                f"- Email: {user.get('email', 'N/A')}\n"
-                f"- Age: {user.get('age', 'N/A')}\n"
-                f"- Height: {user.get('height_cm', 'N/A')} cm\n"
-                f"- Preferred Unit: {unit}\n"
-                f"- Current Weight: {current_weight_str}\n"
-                f"- Starting Weight: {starting_weight_str}\n"
-                f"- Goal Weight: {target_weight_str}\n"
-                f"- Goal Type: {user.get('goal', 'N/A')}\n"
-                f"- Target Date for Goal: {user.get('targetDate', 'N/A')}\n\n"
-                f"You are MacroSync AI, a health and fitness assistant. Use this profile context when responding to the user. "
-                f"If the user asks about their weight, name, height, or progress, answer accurately using the values above in their preferred unit ({unit}). "
-                f"Respond concisely, friendly, and helpfully.\n\n"
+                f"=== MACROSYNC AI KNOWLEDGE BASE: COMPLETE USER HEALTH PROFILE & REAL-TIME PROGRESS ===\n\n"
+                f"1. USER PROFILE DETAILS:\n"
+                f"  - Name: {user.get('name', 'User')}\n"
+                f"  - Email: {user.get('email', 'N/A')}\n"
+                f"  - Age: {user.get('age', 'N/A')}\n"
+                f"  - Height: {user.get('height_cm', 'N/A')} cm\n"
+                f"  - Preferred Weight Unit: {unit}\n"
+                f"  - Current Weight: {current_weight_str}\n"
+                f"  - Starting Weight: {starting_weight_str}\n"
+                f"  - Goal Weight: {target_weight_str}\n"
+                f"  - Primary Fitness Goal: {goal}\n"
+                f"  - Target Date: {user.get('targetDate', 'N/A')}\n\n"
+
+                f"2. TODAY'S REAL-TIME NUTRITION & MACROS STATUS ({today_str}):\n"
+                f"  - Calories: Target {target_calories} kcal | Consumed {consumed_calories} kcal | Remaining {max(0, target_calories - consumed_calories)} kcal\n"
+                f"  - Protein: Target {target_protein}g | Consumed {consumed_protein}g | Remaining {max(0, target_protein - consumed_protein)}g\n"
+                f"  - Carbs: Target {target_carbs}g | Consumed {consumed_carbs}g | Remaining {max(0, target_carbs - consumed_carbs)}g\n"
+                f"  - Fats: Target {target_fats}g | Consumed {consumed_fats}g | Remaining {max(0, target_fats - consumed_fats)}g\n"
+                f"  - Water Consumed Today: {glasses} glass(es) of water\n\n"
+
+                f"3. TODAY'S LOGGED MEALS ({len(logged_meals_data)} total):\n"
+                f"{meals_list_str}\n\n"
+
+                f"4. TODAY'S LOGGED WORKOUTS ({len(workouts_data)} total, {calories_burned} kcal burned, {active_minutes} active mins):\n"
+                f"{workouts_list_str}\n\n"
+
+                f"5. EVERYDAY PERSONAL DIET RECOMMENDATIONS (Tailored for {goal}):\n"
+                f"  - Recommended Meals: {rec_diet}\n\n"
+
+                f"6. EVERYDAY PERSONAL WORKOUT RECOMMENDATIONS (Tailored for {goal}):\n"
+                f"  - Recommended Workouts: {rec_workout}\n\n"
+
+                f"=== INSTRUCTIONS FOR MACROSYNC AI ===\n"
+                f"You have full knowledge of the user's live health data listed above. "
+                f"When the user asks questions about their progress, meals logged today, workouts logged today, remaining macros, water intake, weight, diet recommendations, or workout advice, answer accurately using the exact numbers and items in this context. "
+                f"Be supportive, motivating, friendly, and structure your responses cleanly with bolding and bullet points.\n\n"
             )
-        
+
         full_prompt = context_prompt + f"User message: {data.message}"
-        
         response = generate_gemini_content(full_prompt)
         
-        return {"response": response.text}
+        remaining_count = "Unlimited" if is_premium else max(0, 10 - day_usage.get("chats", 0))
+        return {
+            "response": response.text,
+            "is_premium": is_premium,
+            "remaining_chats": remaining_count
+        }
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -1041,7 +1153,7 @@ def analyze_food(data: AnalyzeFoodRequest):
                     usage = prefs.get("usage", {})
                     day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                     
-                    if day_usage.get("scans", 0) >= 3:
+                    if day_usage.get("scans", 0) >= 5:
                         raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
                     
                     day_usage["scans"] = day_usage.get("scans", 0) + 1
@@ -1053,20 +1165,25 @@ def analyze_food(data: AnalyzeFoodRequest):
         image_bytes = base64.b64decode(data.image_base64)
         
         prompt = """
-        Analyze this food image. 
-        IMPORTANT: If the image is blurry, unclear, or you cannot confidently identify the food, you MUST return exactly this JSON:
-        {"error": "Image is too blurry or unclear"}
+        Analyze this image for nutritional food scanning.
         
-        Otherwise, return a JSON object with the following keys:
-        - "name" (string, the name of the food)
-        - "serving_weight_g" (integer, the estimated portion size/weight in grams)
-        - "confidence" (integer between 0 and 100)
-        - "calories" (integer)
-        - "protein" (integer, in grams)
-        - "carbs" (integer, in grams)
-        - "fats" (integer, in grams)
+        STRICT CLASSIFICATION RULES:
+        1. NON-FOOD DETECTION: If the image shows non-food objects (such as furniture, electronics, cars, animals, clothing, office supplies, random items, etc.) or no food/beverage at all, return EXACTLY this JSON:
+           {"error": "No food detected in image. Please scan a meal, dish, ingredient, or beverage."}
         
-        Do not include markdown code block formatting like ```json in the output, just the raw JSON object.
+        2. BLURRY/UNCLEAR DETECTION: If the image contains food but it is too blurry, dark, or out of focus to identify, return EXACTLY this JSON:
+           {"error": "Image is too blurry or unclear. Please take a clearer photo of your food."}
+        
+        3. VALID FOOD ITEM: If identifiable food/drink is present, return a JSON object with:
+           - "name" (string, descriptive food or meal name)
+           - "serving_weight_g" (integer, estimated portion weight in grams)
+           - "confidence" (integer between 0 and 100)
+           - "calories" (integer, total calories)
+           - "protein" (integer, in grams)
+           - "carbs" (integer, in grams)
+           - "fats" (integer, in grams)
+        
+        Do not include markdown code block formatting like ```json in the output, just raw JSON.
         """
         
         response = generate_gemini_content(prompt, image_bytes=image_bytes)
@@ -1079,6 +1196,11 @@ def analyze_food(data: AnalyzeFoodRequest):
             
         result_data = json.loads(result_json.strip())
         
+        # Attach scan usage metadata for frontend remaining scan badge
+        if isinstance(result_data, dict):
+            result_data["is_premium"] = is_premium
+            result_data["remaining_scans"] = "Unlimited" if is_premium else max(0, 5 - day_usage.get("scans", 0))
+
         return result_data
         
     except HTTPException as he:
@@ -1086,6 +1208,68 @@ def analyze_food(data: AnalyzeFoodRequest):
     except Exception as e:
         print("VISION ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/scan-status/{user_id}")
+def get_scan_status(user_id: str):
+    try:
+        user_result = supabase.table("user_profiles").select("location").eq("id", user_id).execute()
+        if not user_result.data:
+            return {"is_premium": False, "scans_used": 0, "remaining": 5}
+            
+        user = user_result.data[0]
+        prefs = {}
+        if user.get("location"):
+            try:
+                prefs = json.loads(user["location"])
+            except:
+                pass
+                
+        is_premium = prefs.get("is_premium", False)
+        if is_premium:
+            return {"is_premium": True, "scans_used": 0, "remaining": "Unlimited"}
+            
+        manila_tz = timezone(timedelta(hours=8))
+        today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+        usage = prefs.get("usage", {})
+        day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+        scans_used = day_usage.get("scans", 0)
+        remaining = max(0, 5 - scans_used)
+        
+        return {"is_premium": False, "scans_used": scans_used, "remaining": remaining}
+    except Exception as e:
+        return {"is_premium": False, "scans_used": 0, "remaining": 5}
+
+
+@app.get("/chat-status/{user_id}")
+def get_chat_status(user_id: str):
+    try:
+        user_result = supabase.table("user_profiles").select("location").eq("id", user_id).execute()
+        if not user_result.data:
+            return {"is_premium": False, "chats_used": 0, "remaining": 10}
+            
+        user = user_result.data[0]
+        prefs = {}
+        if user.get("location"):
+            try:
+                prefs = json.loads(user["location"])
+            except:
+                pass
+                
+        is_premium = prefs.get("is_premium", False)
+        if is_premium:
+            return {"is_premium": True, "chats_used": 0, "remaining": "Unlimited"}
+            
+        manila_tz = timezone(timedelta(hours=8))
+        today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+        usage = prefs.get("usage", {})
+        day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+        chats_used = day_usage.get("chats", 0)
+        remaining = max(0, 10 - chats_used)
+        
+        return {"is_premium": False, "chats_used": chats_used, "remaining": remaining}
+    except Exception as e:
+        return {"is_premium": False, "chats_used": 0, "remaining": 10}
 
 
 @app.get("/debug-key")

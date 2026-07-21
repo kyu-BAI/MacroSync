@@ -8,14 +8,15 @@ import {
   StatusBar,
   Platform,
   Dimensions,
-  Alert,
   Animated,
 } from 'react-native';
 import { ChevronLeft, Award, Droplets, Utensils, Activity, Bell, CheckCheck, Trash2 } from 'lucide-react-native';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function NotificationsScreen({ onTabChange, notifications: propNotifications, setNotifications: propSetNotifications }) {
+  const { showAlert } = useCustomAlert();
   const [localNotifications, setLocalNotifications] = useState([]);
 
   const emptyAnim = useRef(new Animated.Value(0)).current;
@@ -41,7 +42,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
   };
 
   const clearAllNotifications = () => {
-    Alert.alert(
+    showAlert(
       'Clear All Notifications',
       'This will permanently remove all notifications. Are you sure?',
       [

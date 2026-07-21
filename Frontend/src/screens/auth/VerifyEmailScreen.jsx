@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,10 +12,13 @@ import {
   Alert,
   ActivityIndicator
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyRound, ChevronLeft } from 'lucide-react-native';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 export default function VerifyEmailScreen({ email, name, password, isLogin, onVerified, onNavigateBack }) {
+  const { showAlert } = useCustomAlert();
   const [otp, setOtp] = useState("");
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +26,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
   // --- OTP VERIFICATION LIFE CYCLES ---
   const handleVerifyOTP = async () => {
     if (!otp.trim()) {
-      Alert.alert("Missing OTP", "Please enter the OTP code.");
+      showAlert("Missing OTP", "Please enter the OTP code.");
       return;
     }
 
@@ -53,14 +55,14 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert("Success", "Email verified successfully.");
+        showAlert("Success", "Email verified successfully.");
         onVerified(data.user_id); // Moves cleanly to onboarding
       } else {
-        Alert.alert("Error", data.detail || "Invalid or expired OTP. Please try again.");
+        showAlert("Error", data.detail || "Invalid or expired OTP. Please try again.");
       }
     } catch (error) {
       console.log("VERIFY OTP ERROR:", error);
-      Alert.alert(
+      showAlert(
         "Network Error",
         "Cannot connect to backend server. Make sure it is running and your IP is correct."
       );

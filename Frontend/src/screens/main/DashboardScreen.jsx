@@ -23,6 +23,7 @@ import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -141,6 +142,7 @@ export default function DashboardScreen({
   setWeightHistory,
 }) {
   const { theme, isDarkMode } = useTheme();
+  const { showAlert } = useCustomAlert();
   const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [showWeightModal, setShowWeightModal] = useState(false);
@@ -165,7 +167,7 @@ export default function DashboardScreen({
   const handleAddGlass = async () => {
     const newAmount = consumedGlasses + 1;
     if (!userId) {
-      Alert.alert("Authentication Error", "You must be logged in to log water.");
+      showAlert("Authentication Error", "You must be logged in to log water.");
       return;
     }
 
@@ -207,7 +209,7 @@ export default function DashboardScreen({
     };
 
     if (consumedGlasses >= targetGlasses) {
-      Alert.alert(
+      showAlert(
         "Hydration Target Reached 💧",
         "You have already reached your daily water intake quota. Drinking too much water can be harmful. Do you want to log another glass?",
         [
@@ -386,7 +388,7 @@ export default function DashboardScreen({
                 {userProfile?.profileImage ? (
                   <Image source={{ uri: userProfile.profileImage }} style={styles.avatarImage} />
                 ) : (
-                  <User color="#4EA685" size={22} strokeWidth={2.5} />
+                  <User color="#FFFFFF" size={22} strokeWidth={2.5} />
                 )}
               </View>
             </TouchableOpacity>
@@ -652,12 +654,12 @@ export default function DashboardScreen({
                     }, ...prev]);
                   }
 
-                  if (!isOnline) {
-                    await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
-                    await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
-                    Alert.alert('📴 Saved Offline', 'Weight saved locally. Will sync when back online.');
-                    return;
-                  }
+                    if (!isOnline) {
+                      await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
+                      await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
+                      showAlert('📴 Saved Offline', 'Weight saved locally. Will sync when back online.');
+                      return;
+                    }
 
                   try {
                     const response = await fetch(`${API_URL}/update-weight`, {
@@ -669,7 +671,7 @@ export default function DashboardScreen({
                       onRefreshDashboard();
                     } else if (!response.ok) {
                       const errData = await response.json().catch(() => ({}));
-                      Alert.alert("Error Logging Weight", errData.detail || "Failed to log weight to server.");
+                      showAlert("Error Logging Weight", errData.detail || "Failed to log weight to server.");
                     }
                   } catch (error) {
                     console.log("LOG WEIGHT ERROR:", error);
@@ -677,7 +679,7 @@ export default function DashboardScreen({
                     await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
                   }
                 } else {
-                  Alert.alert('Invalid input', 'Please enter a valid number for your weight.');
+                  showAlert('Invalid input', 'Please enter a valid number for your weight.');
                 }
               }}>
                 <Text style={styles.modalSaveText}>Save</Text>
@@ -746,7 +748,7 @@ const getStyles = (theme) => StyleSheet.create({
   subGreeting: { fontSize: 13, fontWeight: '700', color: '#7FA293', marginTop: 2 },
 
   avatarContainer: { borderRadius: 24, borderWidth: 1, borderColor: '#D4E2DC' },
-  avatarGlass:     { width: 44, height: 44, borderRadius: 22, backgroundColor: baseColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarGlass:     { width: 44, height: 44, borderRadius: 22, backgroundColor: logoGreen, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarText:      { fontWeight: '900', color: logoGreen, fontSize: 16 },
   avatarImage:     { width: 44, height: 44, borderRadius: 22 },
 

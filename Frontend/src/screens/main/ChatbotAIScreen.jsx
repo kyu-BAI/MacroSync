@@ -14,16 +14,22 @@ import {
   Keyboard,
   Alert
 } from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User, Sparkles, Zap, Lightbulb, AlertTriangle, X, Info } from 'lucide-react-native';
 
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
+  const { showAlert } = useCustomAlert();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // Chat remaining limits tracking state
+  const [chatInfo, setChatInfo] = useState({ isPremium: false, remaining: 10 });
+  const [showTipsCard, setShowTipsCard] = useState(true);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
@@ -40,6 +46,23 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       hideSubscription.remove();
     };
   }, []);
+
+  // Fetch initial chat count status on mount
+  useEffect(() => {
+    if (userId) {
+      fetch(`${API_URL}/chat-status/${userId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.remaining !== undefined) {
+            setChatInfo({
+              isPremium: !!data.is_premium,
+              remaining: data.remaining,
+            });
+          }
+        })
+        .catch((err) => console.log("Chat status fetch error:", err));
+    }
+  }, [userId]);
 
   // --- DYNAMIC AI GREETING ---
   useEffect(() => {
@@ -89,9 +112,10 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
       if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
         setIsLoading(false);
-        Alert.alert(
+        setChatInfo(prev => ({ ...prev, remaining: 0 }));
+        showAlert(
           "Chat Limit Reached",
-          "You've reached your daily limit of 5 chatbot messages on the Free Plan. You can continue using MacroSync without the AI chatbot, or upgrade to Premium for unlimited chatbot usage and scans.",
+          "You've reached your daily limit of 10 chatbot messages on the Free Plan. You can continue using MacroSync without the AI chatbot, or upgrade to Premium for unlimited chatbot usage and scans.",
           [
             { text: "Continue on Free Plan", style: "cancel" },
             { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
@@ -101,6 +125,15 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       }
 
       if (response.ok) {
+        if (data.remaining_chats !== undefined) {
+          setChatInfo({
+            isPremium: !!data.is_premium,
+            remaining: data.remaining_chats
+          });
+        } else if (!chatInfo.isPremium && typeof chatInfo.remaining === 'number') {
+          setChatInfo(prev => ({ ...prev, remaining: Math.max(0, prev.remaining - 1) }));
+        }
+
         setMessages((prev) => [
           ...prev,
           {
@@ -177,6 +210,14 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
     });
   };
 
+  const handleShowTipsModal = () => {
+    showAlert(
+      "AI Chatbot Guidance & Limits 💡",
+      "• Ask tailored questions about your macros, local Filipino recipes, or workout routine.\n\n⚠️ Note: On the Free Plan, every message sent deducts 1 count from your 10 daily free messages.",
+      [{ text: "Got it!", style: "cancel" }]
+    );
+  };
+
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
@@ -184,7 +225,33 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       {/* HEADER BRANDING SECTION */}
       <View style={styles.header}>
         <View style={styles.headerTextGroup}>
-          <Text style={styles.appName}>MacroSync</Text>
+          <View style={styles.appNameRow}>
+            <Text style={styles.appName}>MacroSync</Text>
+
+            {/* REMAINING CHAT COUNT BADGE WITH INFO TRIGGER */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleShowTipsModal}
+              style={[
+                styles.chatBadgePill, 
+                chatInfo.isPremium ? styles.premiumBadgePill : (chatInfo.remaining <= 2 ? styles.warningBadgePill : styles.normalBadgePill)
+              ]}
+            >
+              {chatInfo.isPremium ? (
+                <Sparkles color="#92400E" size={11} style={{ marginRight: 4 }} />
+              ) : (
+                <Zap color={chatInfo.remaining <= 2 ? "#C53030" : "#2E7D32"} size={11} style={{ marginRight: 4 }} />
+              )}
+              <Text style={[
+                styles.chatBadgeText, 
+                chatInfo.isPremium ? styles.premiumBadgeText : (chatInfo.remaining <= 2 ? styles.warningBadgeText : styles.normalBadgeText)
+              ]}>
+                {chatInfo.isPremium ? "Unlimited Messages ✨" : `${chatInfo.remaining} / 10 Messages Left`}
+              </Text>
+              <Info color={chatInfo.isPremium ? "#92400E" : (chatInfo.remaining <= 2 ? "#C53030" : "#2E7D32")} size={11} style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
+
           <Text style={styles.greeting}>AI Guidance Hub</Text>
           <Text style={styles.subGreeting}>Real-time health assistance synced to your user profile</Text>
         </View>
@@ -302,8 +369,6 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
         </View>
       </KeyboardAvoidingView>
 
-      {/* --- BOTTOM NAVIGATION BAR --- */}
-
     </View>
   );
 }
@@ -334,13 +399,53 @@ const styles = StyleSheet.create({
   headerTextGroup: {
     flex: 1,
   },
+  appNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   appName: {
     fontSize: 12,
     fontWeight: '900',
     color: logoGreen,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: 2,
+  },
+  chatBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  normalBadgePill: {
+    backgroundColor: '#E8F5EE',
+    borderWidth: 1,
+    borderColor: '#C6E6D6',
+  },
+  warningBadgePill: {
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FEB2B2',
+  },
+  premiumBadgePill: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  chatBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  normalBadgeText: {
+    color: '#2E7D32',
+  },
+  warningBadgeText: {
+    color: '#C53030',
+  },
+  premiumBadgeText: {
+    color: '#92400E',
   },
   greeting: {
     fontSize: 28,
@@ -456,15 +561,75 @@ const styles = StyleSheet.create({
     marginTop: 5,
     alignSelf: 'flex-end',
   },
+  visualTipsCard: {
+    marginHorizontal: 20,
+    marginVertical: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 12,
+    shadowColor: '#4EA685',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E1E9E5',
+  },
+  tipsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  tipsIconBg: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#E8F5EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  tipsCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1A2E26',
+    flex: 1,
+  },
+  closeTipsBtn: {
+    padding: 4,
+  },
+  tipsBulletPoint: {
+    fontSize: 11,
+    color: '#556B60',
+    lineHeight: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  warningAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF5F5',
+    borderRadius: 10,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#FED7D7',
+  },
+  warningAlertText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#9B2C2C',
+    lineHeight: 14,
+    fontWeight: '600',
+  },
   suggestionsWrapper: {
-    paddingVertical: 10,
+    paddingVertical: 6,
     backgroundColor: baseColor,
     overflow: 'visible'
   },
   suggestionsScroll: {
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    gap: 10,
+    paddingVertical: 4,
+    gap: 8,
     overflow: 'visible',
   },
   suggestionChip: {

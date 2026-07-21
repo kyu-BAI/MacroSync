@@ -17,6 +17,7 @@ import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportSh
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,6 +35,7 @@ export default function DietRecipesScreen({
   isOnline = true,
   setNotifications
 }) {
+  const { showAlert } = useCustomAlert();
   // Static Recipes for Default Scheduled Meals (Offline Fallback)
   const DEFAULT_RECIPES = {
     dp1: {
@@ -165,7 +167,7 @@ export default function DietRecipesScreen({
       setShowRecipeModal(true);
     } catch (error) {
       console.error("VIEW RECIPE ERROR:", error);
-      Alert.alert('Unable to load recipe', 'Failed to retrieve recipe from AI. Please check your network connection.');
+      showAlert('Unable to load recipe', 'Failed to retrieve recipe from AI. Please check your network connection.');
     } finally {
       setIsFetchingRecipe(false);
     }
@@ -313,7 +315,7 @@ export default function DietRecipesScreen({
 
   const handleGenerateRecipe = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert('Ingredients Required', 'Please enter some ingredients in the search bar first.');
+      showAlert('Ingredients Required', 'Please enter some ingredients in the search bar first.');
       return;
     }
     setIsGenerating(true);
@@ -335,10 +337,10 @@ export default function DietRecipesScreen({
       const data = await response.json();
       setRecipes(prev => [data, ...prev]);
       setExpandedRecipeId(data.id);
-      Alert.alert('Success', 'AI generated a healthy recipe matching your preferences!');
+      showAlert('Success', 'AI generated a healthy recipe matching your preferences!');
     } catch (error) {
       console.error("GENERATE RECIPE ERROR:", error);
-      Alert.alert('Generation Failed', 'Failed to generate recipe with AI. Please check your network and try again.');
+      showAlert('Generation Failed', 'Failed to generate recipe with AI. Please check your network and try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -346,7 +348,7 @@ export default function DietRecipesScreen({
   
   const handleLogMeal = async (id, macros) => {
     if (!userId) {
-      Alert.alert("Authentication Error", "You must be logged in to log meals.");
+      showAlert("Authentication Error", "You must be logged in to log meals.");
       return;
     }
 
@@ -407,7 +409,7 @@ export default function DietRecipesScreen({
             }
           });
         }
-        Alert.alert('📴 Saved Offline', 'Meal logged locally. Will sync when back online.');
+        showAlert('📴 Saved Offline', 'Meal logged locally. Will sync when back online.');
         return;
       }
 
@@ -473,7 +475,7 @@ export default function DietRecipesScreen({
             }
           });
         }
-        Alert.alert('📴 Saved Offline', 'Meal removed locally. Will sync when back online.');
+        showAlert('📴 Saved Offline', 'Meal removed locally. Will sync when back online.');
         return;
       }
 

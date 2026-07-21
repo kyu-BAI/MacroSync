@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,26 +13,28 @@ import {
   Image,
   Alert,
   Modal,
-  Linking
-} from 'react-native';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
-import API_URL from '../config/api';
-import * as WebBrowser from 'expo-web-browser';
+  Linking,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Eye, EyeOff, Mail, Lock } from "lucide-react-native";
+import API_URL from "../config/api";
+import * as WebBrowser from "expo-web-browser";
+import { useCustomAlert } from "../../context/CustomAlertContext";
 
 WebBrowser.maybeCompleteAuthSession();
-
 
 export default function LoginScreen({
   onNavigateToSignUp,
   onLoginSuccess,
   onForgotPassword,
   setCurrentUserId,
-  onGoogleOtpSent
+  onGoogleOtpSent,
 }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { showAlert: triggerCustomAlert } = useCustomAlert();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
-  
+
   // Interaction & Loading State Tracking
   const [isPressed, setIsPressed] = useState(false);
   const [isGooglePressed, setIsGooglePressed] = useState(false);
@@ -41,12 +42,8 @@ export default function LoginScreen({
 
   // Google Sign-In interaction states are managed via deep linking now
 
-  const showAlert = (message) => {
-    Alert.alert(
-      "Login Error",
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
+  const showAlert = (message, title = "Login Error") => {
+    triggerCustomAlert(title, message);
   };
 
   // STANDARD EMAIL/PASSWORD AUTHENTICATION FLOW
@@ -59,16 +56,13 @@ export default function LoginScreen({
 
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${API_URL}/signin`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ email, password })
-        }
-      );
+      const response = await fetch(`${API_URL}/signin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await response.json();
       console.log("Response:", data);
@@ -80,7 +74,9 @@ export default function LoginScreen({
         }
         onLoginSuccess();
       } else {
-        showAlert(data.detail || "Incorrect email or password. Please try again.");
+        showAlert(
+          data.detail || "Incorrect email or password. Please try again.",
+        );
       }
     } catch (error) {
       console.log("LOGIN ERROR:", error);
@@ -99,7 +95,10 @@ export default function LoginScreen({
       await WebBrowser.openBrowserAsync(url);
     } catch (error) {
       console.log("ERROR OPENING GOOGLE SIGN-IN MODAL:", error);
-      Alert.alert("Google Sign-In Error", "Could not open the Google sign-in browser. Please try again.");
+      showAlert(
+        "Could not open the Google sign-in browser. Please try again.",
+        "Google Sign-In Error",
+      );
     }
   };
 
@@ -119,20 +118,19 @@ export default function LoginScreen({
           <View style={styles.headerSection}>
             <Text style={styles.brandTitle}>MacroSync</Text>
             <Text style={styles.brandSubtitle}>
-              Optimize your nutrition and achieve your fitness goals.
-              {"\n"}Sign in to manage your daily macro targets.
+              Scan meals with AI & track daily macros.
+              {"\n"}Get custom diet recipes & workout plans.
             </Text>
           </View>
 
           {/* Form Card Group */}
           <View style={styles.formCard}>
-            
             {/* Email Field */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
                 <Mail color="#7FA293" size={20} style={styles.leadingIcon} />
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
                   placeholderTextColor="#7FA293"
@@ -151,7 +149,7 @@ export default function LoginScreen({
               <Text style={styles.inputLabel}>Password</Text>
               <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
                 <Lock color="#7FA293" size={20} style={styles.leadingIcon} />
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
                   placeholderTextColor="#7FA293"
@@ -162,8 +160,8 @@ export default function LoginScreen({
                   autoCorrect={false}
                   editable={!isLoading}
                 />
-                <TouchableOpacity 
-                  style={styles.toggleButton} 
+                <TouchableOpacity
+                  style={styles.toggleButton}
                   onPress={() => setSecureTextEntry(!secureTextEntry)}
                   activeOpacity={0.6}
                   disabled={isLoading}
@@ -178,8 +176,8 @@ export default function LoginScreen({
             </View>
 
             {/* Forgot Password Link */}
-            <TouchableOpacity 
-              style={styles.forgotPassword} 
+            <TouchableOpacity
+              style={styles.forgotPassword}
               onPress={onForgotPassword}
               activeOpacity={0.7}
               disabled={isLoading}
@@ -188,7 +186,7 @@ export default function LoginScreen({
             </TouchableOpacity>
 
             {/* Sign In Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={1}
               disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
@@ -196,13 +194,18 @@ export default function LoginScreen({
               onPress={handleLogin}
               style={[
                 styles.buttonBase,
-                isPressed ? styles.buttonPressed : styles.buttonUnpressed
+                isPressed ? styles.buttonPressed : styles.buttonUnpressed,
               ]}
             >
               {isLoading && !isGooglePressed ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
+                <Text
+                  style={[
+                    styles.buttonText,
+                    isPressed && styles.buttonTextPressed,
+                  ]}
+                >
                   Sign In
                 </Text>
               )}
@@ -211,12 +214,12 @@ export default function LoginScreen({
             {/* INTER-STAGE VISUAL DIVIDER */}
             <View style={styles.dividerContainer}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Or sign in with</Text>
+              <Text style={styles.dividerText}>Or</Text>
               <View style={styles.dividerLine} />
             </View>
 
             {/* PREMIUM GOOGLE TRIGGER COMPONENT BUTTON */}
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={1}
               disabled={isLoading}
               onPressIn={() => setIsGooglePressed(true)}
@@ -225,7 +228,9 @@ export default function LoginScreen({
               style={[
                 styles.buttonBase,
                 styles.googleButtonBase,
-                isGooglePressed ? styles.googleButtonPressed : styles.googleButtonUnpressed
+                isGooglePressed
+                  ? styles.googleButtonPressed
+                  : styles.googleButtonUnpressed,
               ]}
             >
               {isLoading && isGooglePressed ? (
@@ -233,13 +238,18 @@ export default function LoginScreen({
               ) : (
                 <View style={styles.googleContentRow}>
                   {/* Fixed relative path jump parameter */}
-                  <Image 
-                    source={require('../../images/google.png')} 
-                    style={styles.googleIconImage} 
+                  <Image
+                    source={require("../../images/google.png")}
+                    style={styles.googleIconImage}
                     resizeMode="contain"
                   />
-                  <Text style={[styles.googleButtonText, isGooglePressed && styles.googleButtonTextPressed]}>
-                    Continue with Google
+                  <Text
+                    style={[
+                      styles.googleButtonText,
+                      isGooglePressed && styles.googleButtonTextPressed,
+                    ]}
+                  >
+                    Sign in with Google
                   </Text>
                 </View>
               )}
@@ -248,26 +258,28 @@ export default function LoginScreen({
             {/* Footer Navigation */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={onNavigateToSignUp} activeOpacity={0.7} disabled={isLoading}>
+              <TouchableOpacity
+                onPress={onNavigateToSignUp}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
                 <Text style={styles.linkText}>Sign Up</Text>
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-
     </SafeAreaView>
   );
 }
 
 // --- Neumorphic Theme Setup ---
-const baseColor = '#F0F4F2';          
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
+const baseColor = "#F0F4F2";
+const clearWhiteHighlight = "#FFFFFF";
+const softGreenShadow = "#AEC2B7";
+const logoGreen = "#4EA685";
+const logoDarkShadow = "#37745D";
+const logoLightHighlight = "#65D8AD";
 
 const styles = StyleSheet.create({
   container: {
@@ -282,33 +294,33 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 35,
-    alignItems: 'center',
-    width: '100%',
+    alignItems: "center",
+    width: "100%",
   },
   brandTitle: {
     fontSize: 42,
-    fontWeight: '900',
-    color: logoGreen, 
+    fontWeight: "900",
+    color: logoGreen,
     letterSpacing: -0.5,
-    textAlign: 'center',
+    textAlign: "center",
   },
   brandSubtitle: {
     fontSize: 14,
-    color: '#556B60',
+    color: "#556B60",
     marginTop: 10,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   formCard: {
     backgroundColor: baseColor,
-    borderRadius: 40, 
+    borderRadius: 40,
     padding: 24,
     shadowColor: softGreenShadow,
-    shadowOffset: { width: 14, height: 14 }, 
+    shadowOffset: { width: 14, height: 14 },
     shadowOpacity: 1,
-    shadowRadius: 16, 
-    elevation: 12,    
+    shadowRadius: 16,
+    elevation: 12,
     borderTopWidth: 2,
     borderLeftWidth: 2,
     borderTopColor: clearWhiteHighlight,
@@ -318,23 +330,23 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   inputLabel: {
-    color: '#41544B',
+    color: "#41544B",
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1.2,
     marginLeft: 6,
   },
   neumorphicInputInset: {
     backgroundColor: baseColor,
-    borderRadius: 24, 
-    borderWidth: 1.5, 
-    borderColor: '#D4E2DC',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#D4E2DC",
   },
   fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
   },
   leadingIcon: {
@@ -342,38 +354,38 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#1A2B23',
+    color: "#1A2B23",
     paddingVertical: 15,
     paddingHorizontal: 8,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   toggleButton: {
     paddingLeft: 10,
     paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   forgotPassword: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginBottom: 26,
     marginTop: 2,
   },
   forgotText: {
     color: logoGreen,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   buttonBase: {
     paddingVertical: 16,
     borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
     height: 54,
   },
   buttonUnpressed: {
-    backgroundColor: '#53B28E', 
+    backgroundColor: "#53B28E",
     borderTopWidth: 1.5,
     borderLeftWidth: 1.5,
     borderTopColor: logoLightHighlight,
@@ -385,38 +397,38 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   buttonPressed: {
-    backgroundColor: '#3E836A', 
+    backgroundColor: "#3E836A",
     borderWidth: 1.5,
     borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }], 
+    transform: [{ translateY: 2 }],
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.5,
   },
   buttonTextPressed: {
-    color: '#9EDEC4',
+    color: "#9EDEC4",
   },
   dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     marginVertical: 20,
     paddingHorizontal: 10,
   },
   dividerLine: {
     flex: 1,
     height: 1.5,
-    backgroundColor: '#D4E2DC',
+    backgroundColor: "#D4E2DC",
   },
   dividerText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#7FA293',
+    fontWeight: "800",
+    color: "#7FA293",
     paddingHorizontal: 12,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   googleButtonBase: {
@@ -434,18 +446,18 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
     borderWidth: 1.5,
-    borderColor: '#E1E9E5',
+    borderColor: "#E1E9E5",
   },
   googleButtonPressed: {
-    backgroundColor: '#E4ECE8',
+    backgroundColor: "#E4ECE8",
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
+    borderColor: "#D4E2DC",
     transform: [{ translateY: 2 }],
   },
   googleContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   googleIconImage: {
     width: 18,
@@ -453,76 +465,76 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   googleButtonText: {
-    color: '#41544B',
+    color: "#41544B",
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.2,
   },
   googleButtonTextPressed: {
-    color: '#21332A',
+    color: "#21332A",
   },
   footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 32,
   },
   footerText: {
-    color: '#556B60',
+    color: "#556B60",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   linkText: {
     color: logoGreen,
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(26, 43, 35, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(26, 43, 35, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   modalContentCard: {
     backgroundColor: baseColor,
     borderRadius: 36,
-    width: '100%',
+    width: "100%",
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 15,
     elevation: 10,
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
+    borderColor: "#D4E2DC",
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: '900',
-    color: '#1A2B23',
-    textAlign: 'center',
+    fontWeight: "900",
+    color: "#1A2B23",
+    textAlign: "center",
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#556B60',
-    textAlign: 'center',
+    color: "#556B60",
+    textAlign: "center",
     marginTop: 4,
     marginBottom: 20,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   accountsList: {
     marginBottom: 16,
   },
   accountItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: baseColor,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 20,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: "#E1E9E5",
   },
   accountGoogleIcon: {
     width: 24,
@@ -534,35 +546,35 @@ const styles = StyleSheet.create({
   },
   accountNameText: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#1A2B23',
+    fontWeight: "800",
+    color: "#1A2B23",
   },
   accountEmailText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#556B60',
+    fontWeight: "600",
+    color: "#556B60",
     marginTop: 2,
   },
   useAnotherButton: {
     paddingVertical: 14,
     borderRadius: 20,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1.5,
-    borderColor: '#53B28E',
+    borderColor: "#53B28E",
     marginBottom: 12,
   },
   useAnotherButtonText: {
-    color: '#4EA685',
-    fontWeight: '800',
+    color: "#4EA685",
+    fontWeight: "800",
     fontSize: 15,
   },
   modalCloseButton: {
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalCloseButtonText: {
-    color: '#7FA293',
-    fontWeight: '800',
+    color: "#7FA293",
+    fontWeight: "800",
     fontSize: 15,
   },
   customInputArea: {
@@ -572,27 +584,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalInputLabel: {
-    color: '#41544B',
+    color: "#41544B",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   modalTextInput: {
-    backgroundColor: '#E4ECE8',
+    backgroundColor: "#E4ECE8",
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#1A2B23',
-    fontWeight: '700',
+    color: "#1A2B23",
+    fontWeight: "700",
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: "#D4E2DC",
   },
   modalActionButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 10,
     marginBottom: 4,
   },
@@ -600,26 +612,25 @@ const styles = StyleSheet.create({
     flex: 0.48,
     paddingVertical: 14,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalButtonCancel: {
-    backgroundColor: '#E4ECE8',
+    backgroundColor: "#E4ECE8",
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: "#D4E2DC",
   },
   modalButtonCancelText: {
-    color: '#556B60',
-    fontWeight: '800',
+    color: "#556B60",
+    fontWeight: "800",
     fontSize: 15,
   },
   modalButtonSubmit: {
-    backgroundColor: '#53B28E',
+    backgroundColor: "#53B28E",
   },
   modalButtonSubmitText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
     fontSize: 15,
   },
-
 });

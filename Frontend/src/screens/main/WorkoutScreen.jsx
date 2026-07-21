@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 export default function WorkoutScreen({ 
   onTabChange, 
   userId, 
@@ -30,6 +31,7 @@ export default function WorkoutScreen({
   setDailyExercise,
   setNotifications
 }) {
+  const { showAlert } = useCustomAlert();
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState('All');
@@ -99,9 +101,9 @@ export default function WorkoutScreen({
   };
 
   const handleExitWorkout = () => {
-    Alert.alert(
-      "Don't Give Up Yet!",
-      "You are on your way to crushing your goals! You must finish the workout to log it.",
+    showAlert(
+      "End Workout Early?",
+      "Are you sure you want to exit? Your current workout progress will not be logged.",
       [
         {
           text: "Keep Going",
@@ -121,7 +123,7 @@ export default function WorkoutScreen({
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
       if (!userId) {
-        Alert.alert("Authentication Error", "You must be logged in to log workouts.");
+        showAlert("Authentication Error", "You must be logged in to log workouts.");
         return;
       }
 
@@ -143,8 +145,8 @@ export default function WorkoutScreen({
       if (setNotifications && activeRoutine) {
         setNotifications(prev => [{
           id: `n-${Date.now()}`,
-          title: 'Workout Complete! 🔥',
-          category: 'achievement',
+          title: 'Workout Completed! 🏋️‍♂️',
+          category: 'workout',
           time: 'Just Now',
           read: false,
           message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`
@@ -164,10 +166,10 @@ export default function WorkoutScreen({
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
-        Alert.alert(
+        showAlert(
           "Workout Complete! (Offline)",
           `Awesome work! You crushed "${activeRoutine?.title}". Since you are offline, it was saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
         );
         return;
       }
@@ -189,10 +191,10 @@ export default function WorkoutScreen({
           onRefreshDashboard();
         }
 
-        Alert.alert(
+        showAlert(
           "Workout Complete!",
           `Awesome work! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
         );
       } catch (error) {
         console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
@@ -200,10 +202,10 @@ export default function WorkoutScreen({
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
-        Alert.alert(
+        showAlert(
           "Workout Saved Locally",
           `Could not reach the server. "${activeRoutine?.title}" has been saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
         );
       }
     }

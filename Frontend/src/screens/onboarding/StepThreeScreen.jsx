@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,7 +14,9 @@ import {
   FlatList,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 // Import child lookup methods from your installed library
 import { provinces, cities } from 'select-philippines-address';
@@ -23,6 +24,7 @@ import { provinces, cities } from 'select-philippines-address';
 const ITEM_HEIGHT = 54;
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
+  const { showAlert } = useCustomAlert();
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [customAllergy, setCustomAllergy] = useState('');
@@ -76,11 +78,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   };
 
   const triggerCustomError = (title, message) => {
-    Alert.alert(
-      title,
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
+    showAlert(title, message);
   };
 
   const openPicker = async (type) => {

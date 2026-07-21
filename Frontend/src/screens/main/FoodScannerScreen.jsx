@@ -13,9 +13,10 @@ import {
   Alert
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -24,16 +25,38 @@ const logoGreen = '#4EA685';
 const baseColor = '#F0F4F2';
 
 export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile }) {
+  const { showAlert } = useCustomAlert();
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState('off');
   const [isScanning, setIsScanning] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   
+  // Scan limits tracking state
+  const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
+  const [showTipsCard, setShowTipsCard] = useState(true);
+
   const cameraRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
+
+  // Fetch initial scan count status on mount
+  useEffect(() => {
+    if (userId) {
+      fetch(`${API_URL}/scan-status/${userId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.remaining !== undefined) {
+            setScanInfo({
+              isPremium: !!data.is_premium,
+              remaining: data.remaining,
+            });
+          }
+        })
+        .catch((err) => console.log("Scan status fetch error:", err));
+    }
+  }, [userId]);
 
   // Handle Permissions
   if (!permission) {
@@ -142,9 +165,10 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
         setCapturedImage(null);
-        Alert.alert(
+        setScanInfo(prev => ({ ...prev, remaining: 0 }));
+        showAlert(
           "Scan Limit Reached",
-          "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+          "You've reached your daily limit of 5 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
           [
             { text: "Continue on Free Plan", style: "cancel" },
             { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
@@ -154,15 +178,25 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       }
 
       if (response.ok) {
+        if (data.remaining_scans !== undefined) {
+          setScanInfo({
+            isPremium: !!data.is_premium,
+            remaining: data.remaining_scans
+          });
+        } else if (!scanInfo.isPremium && typeof scanInfo.remaining === 'number') {
+          setScanInfo(prev => ({ ...prev, remaining: Math.max(0, prev.remaining - 1) }));
+        }
+
         if (data.error) {
-          Alert.alert("Analysis Result", data.error);
+          const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
+          showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
           setCapturedImage(null);
         } else {
           setAnalysisResult(data);
           openBottomSheet();
         }
       } else {
-        Alert.alert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
+        showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
         setCapturedImage(null);
       }
 
@@ -170,7 +204,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       setIsScanning(false);
       stopPulseAnimation();
       console.error("Scanning Error:", error);
-      Alert.alert("Analysis Error", "Cannot connect to server. Check your network.");
+      showAlert("Analysis Error", "Cannot connect to server. Check your network.");
       setCapturedImage(null);
     }
   };
@@ -181,7 +215,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "You need to allow gallery access to select an image."
         );
@@ -189,7 +223,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.7,
         base64: true,
@@ -219,9 +253,10 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
         if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
           setCapturedImage(null);
-          Alert.alert(
+          setScanInfo(prev => ({ ...prev, remaining: 0 }));
+          showAlert(
             "Scan Limit Reached",
-            "You've reached your daily limit of 3 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
+            "You've reached your daily limit of 5 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
             [
               { text: "Continue on Free Plan", style: "cancel" },
               { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
@@ -231,15 +266,25 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         }
 
         if (response.ok) {
+          if (data.remaining_scans !== undefined) {
+            setScanInfo({
+              isPremium: !!data.is_premium,
+              remaining: data.remaining_scans
+            });
+          } else if (!scanInfo.isPremium && typeof scanInfo.remaining === 'number') {
+            setScanInfo(prev => ({ ...prev, remaining: Math.max(0, prev.remaining - 1) }));
+          }
+
           if (data.error) {
-            Alert.alert("Analysis Result", data.error);
+            const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
+            showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
             setCapturedImage(null);
           } else {
             setAnalysisResult(data);
             openBottomSheet();
           }
         } else {
-          Alert.alert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
+          showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
           setCapturedImage(null);
         }
       }
@@ -247,7 +292,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       setIsScanning(false);
       stopPulseAnimation();
       console.error("Gallery Upload Error:", error);
-      Alert.alert("Upload Error", "Failed to choose image from gallery.");
+      showAlert("Upload Error", "Failed to choose image from gallery.");
       setCapturedImage(null);
     }
   };
@@ -345,7 +390,27 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           <X color="#41544B" size={24} />
         </TouchableOpacity>
         
-        <Text style={styles.headerTitle}>AI Food Scanner</Text>
+        <View style={styles.headerTitleCenter}>
+          <Text style={styles.headerTitle}>AI Food Scanner</Text>
+          
+          {/* REMAINING SCAN COUNT BADGE */}
+          <View style={[
+            styles.scanBadgePill, 
+            scanInfo.isPremium ? styles.premiumBadgePill : (scanInfo.remaining <= 1 ? styles.warningBadgePill : styles.normalBadgePill)
+          ]}>
+            {scanInfo.isPremium ? (
+              <Sparkles color="#92400E" size={11} style={{ marginRight: 4 }} />
+            ) : (
+              <Zap color={scanInfo.remaining <= 1 ? "#C53030" : "#2E7D32"} size={11} style={{ marginRight: 4 }} />
+            )}
+            <Text style={[
+              styles.scanBadgeText, 
+              scanInfo.isPremium ? styles.premiumBadgeText : (scanInfo.remaining <= 1 ? styles.warningBadgeText : styles.normalBadgeText)
+            ]}>
+              {scanInfo.isPremium ? "Unlimited Scans ✨" : `${scanInfo.remaining} / 5 Scans Left Today`}
+            </Text>
+          </View>
+        </View>
 
         <TouchableOpacity 
           style={styles.headerIconBtn} 
@@ -363,29 +428,70 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           facing="back"
           enableTorch={flashMode === 'on'}
           ref={cameraRef}
-        >
-          {/* Captured Image Freeze Frame Overlay */}
-          {capturedImage && (
-            <Image 
-              source={{ uri: capturedImage }} 
-              style={StyleSheet.absoluteFillObject} 
-            />
-          )}
+        />
 
-          {/* Viewfinder Guide Overlay */}
-          <View style={styles.viewfinderContainer}>
-            <View style={styles.viewfinderBox}>
-              <View style={[styles.corner, styles.topLeft]} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
-              {isScanning && (
-                <Animated.View style={[styles.scanningLine, { transform: [{ translateY: scanLineAnim }] }]} />
-              )}
-            </View>
+        {/* Captured Image Freeze Frame Overlay */}
+        {capturedImage && (
+          <Image 
+            source={{ uri: capturedImage }} 
+            style={[StyleSheet.absoluteFillObject, { zIndex: 3 }]} 
+          />
+        )}
+
+        {/* Viewfinder Guide Overlay */}
+        <View style={styles.viewfinderContainer} pointerEvents="none">
+          <View style={styles.viewfinderBox}>
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+            {isScanning && (
+              <Animated.View style={[styles.scanningLine, { transform: [{ translateY: scanLineAnim }] }]} />
+            )}
           </View>
-        </CameraView>
+        </View>
       </View>
+
+      {/* VISUAL TIPS CARD & DAILY LIMIT WARNING */}
+      {showTipsCard && !isScanning && (
+        <View style={styles.visualTipsCard}>
+          <View style={styles.tipsHeaderRow}>
+            <View style={styles.tipsIconBg}>
+              <Lightbulb color="#4EA685" size={15} />
+            </View>
+            <Text style={styles.tipsCardTitle}>Scanning Tips & Limit Notice</Text>
+            <TouchableOpacity 
+              onPress={() => setShowTipsCard(false)} 
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.closeTipsBtn}
+            >
+              <X color="#7FA293" size={14} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.tipsBulletPoint}>
+            • Align food in good lighting inside the frame for best accuracy.
+          </Text>
+
+          <View style={styles.warningAlertBox}>
+            <AlertTriangle color="#C53030" size={14} style={{ marginRight: 6, marginTop: 1 }} />
+            <Text style={styles.warningAlertText}>
+              <Text style={{ fontWeight: '800', color: '#9B2C2C' }}>Important:</Text> Every scan attempt (including blurry or non-food photos) deducts 1 count from your 5 daily free scans.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {!showTipsCard && !isScanning && (
+        <TouchableOpacity 
+          style={styles.reopenTipsBtn} 
+          onPress={() => setShowTipsCard(true)}
+          activeOpacity={0.7}
+        >
+          <Lightbulb color="#4EA685" size={13} style={{ marginRight: 5 }} />
+          <Text style={styles.reopenTipsText}>Scan Tips & Limit Info</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Bottom Controls Area (outside camera) */}
       <View style={styles.bottomControlsArea}>
@@ -426,12 +532,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 14,
+  },
+  headerTitleCenter: {
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '800',
     color: '#41544B'
+  },
+  scanBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  normalBadgePill: {
+    backgroundColor: '#E8F5EE',
+    borderWidth: 1,
+    borderColor: '#C6E6D6',
+  },
+  warningBadgePill: {
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FEB2B2',
+  },
+  premiumBadgePill: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  scanBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  normalBadgeText: {
+    color: '#2E7D32',
+  },
+  warningBadgeText: {
+    color: '#C53030',
+  },
+  premiumBadgeText: {
+    color: '#92400E',
   },
   headerIconBtn: {
     width: 44,
@@ -452,18 +597,27 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: 'hidden',
     backgroundColor: '#000',
+    position: 'relative',
     shadowColor: '#4EA685',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 10,
-    marginBottom: 20,
+    marginBottom: 14,
   },
-  camera: { flex: 1 },
+  camera: {
+    width: '100%',
+    height: '100%',
+  },
   viewfinderContainer: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
   },
   viewfinderBox: {
     width: 280,
@@ -493,16 +647,93 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  visualTipsCard: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    shadowColor: '#4EA685',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E1E9E5',
+  },
+  tipsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tipsIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#E8F5EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  tipsCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1A2E26',
+    flex: 1,
+  },
+  closeTipsBtn: {
+    padding: 4,
+  },
+  tipsBulletPoint: {
+    fontSize: 12,
+    color: '#556B60',
+    lineHeight: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  warningAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#FED7D7',
+  },
+  warningAlertText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#9B2C2C',
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  reopenTipsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E1E9E5',
+  },
+  reopenTipsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4EA685',
+  },
   bottomControlsArea: {
-    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   instructionText: {
     color: '#41544B',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   shutterContainer: {
     flexDirection: 'row',
@@ -510,7 +741,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     position: 'relative',
-    height: 80,
+    height: 76,
   },
   galleryButton: {
     width: 52,
@@ -544,25 +775,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4EA685',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 20,
-  },
-  sheetHeader: {
-    alignItems: 'center',
-    paddingVertical: 12,
   },
   resultTitleRow: {
     flexDirection: 'row',

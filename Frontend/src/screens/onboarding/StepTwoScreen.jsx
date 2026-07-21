@@ -4,7 +4,6 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
@@ -14,7 +13,9 @@ import {
   StatusBar,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 // ==========================================
 // SYSTEM COLOR SCHEME ENVIRONMENT DESIGN SYSTEM
@@ -35,6 +36,7 @@ const CONFIG = {
 };
 
 export default function StepTwoScreen({ onNext, currentWeight, height, weightUnit }) {
+  const { showAlert } = useCustomAlert();
   // --- Form Controls States ---
   const [selectedActivity, setSelectedActivity] = useState('moderate');
   const [selectedGoal, setSelectedGoal] = useState('muscle');
@@ -77,11 +79,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
   // LOCAL WARNING UTILITY DISPATCHER
   // ==========================================
   const triggerSafetyWarning = (title, message) => {
-    Alert.alert(
-      title,
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
+    showAlert(title, message);
   };
 
   // ==========================================

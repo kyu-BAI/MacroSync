@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 const GcashLogo = require('../../images/Gcash.png');
 const MayaLogo = require('../../images/Maya.png');
@@ -27,6 +28,7 @@ const CardLogo = require('../../images/CreditDebitCard.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
+  const { showAlert } = useCustomAlert();
   const styles = getStyles();
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
@@ -83,7 +85,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "You need to allow gallery access to select a profile picture."
         );
@@ -91,7 +93,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
@@ -104,63 +106,59 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
     } catch (error) {
       console.log("Error picking image:", error);
-      Alert.alert("Error", "Could not pick image from gallery.");
+      showAlert("Error", "Could not pick image from gallery.");
     }
   };
 
   const handleSaveProfile = async () => {
     if (!tempName.trim()) {
-      Alert.alert("Validation Error", "Name cannot be empty.");
+      showAlert("Validation Error", "Name cannot be empty.");
       return;
     }
 
     try {
       const currentEmail = userProfile?.email || '';
-      const response = await fetch(`${API_URL}/update-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          name: tempName.trim(),
-          email: currentEmail
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile on server');
-      }
-
-      if (tempImage && tempImage !== userProfile?.profileImage) {
-        const picResponse = await fetch(`${API_URL}/update-profile-picture`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            profile_image: tempImage
-          }),
-        });
-
-        if (!picResponse.ok) {
-          throw new Error('Failed to update profile picture on server');
-        }
-      }
-
+      // ⚡ INSTANT OPTIMISTIC UI UPDATE
       if (setUserProfile) {
         setUserProfile(prev => ({
           ...prev,
           name: tempName.trim(),
           profileImage: tempImage
         }));
-        setShowEditModal(false);
-        Alert.alert("Success", "Profile updated successfully!");
       }
+      setShowEditModal(false);
+      showAlert("Success", "Profile updated!");
+
+      // Background network sync
+      (async () => {
+        try {
+          await fetch(`${API_URL}/update-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: userId,
+              name: tempName.trim(),
+              email: userProfile?.email
+            }),
+          });
+
+          if (tempImage && tempImage !== userProfile?.profileImage) {
+            await fetch(`${API_URL}/update-profile-picture`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: userId,
+                profile_image: tempImage
+              }),
+            });
+          }
+        } catch (e) {
+          console.log("Background profile sync error:", e);
+        }
+      })();
     } catch (error) {
       console.error("UPDATE PROFILE ERROR:", error);
-      Alert.alert("Error", "Failed to update profile. Please check your network and try again.");
+      showAlert("Error", "Failed to update profile. Please try again.");
     }
   };
 
@@ -168,7 +166,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "You need to allow gallery access to select a profile picture."
         );
@@ -176,17 +174,28 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        const localUri = result.assets[0].uri;
         const selectedUri = 'data:image/jpeg;base64,' + result.assets[0].base64;
-        
-        const response = await fetch(`${API_URL}/update-profile-picture`, {
+
+        // ⚡ INSTANT OPTIMISTIC UI UPDATE
+        if (setUserProfile) {
+          setUserProfile(prev => ({
+            ...prev,
+            profileImage: localUri
+          }));
+          showAlert("Success", "Profile picture updated!");
+        }
+
+        // Background sync to backend server
+        fetch(`${API_URL}/update-profile-picture`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -195,23 +204,11 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             user_id: userId,
             profile_image: selectedUri
           }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update profile picture on server');
-        }
-
-        if (setUserProfile) {
-          setUserProfile(prev => ({
-            ...prev,
-            profileImage: selectedUri
-          }));
-          Alert.alert("Success", "Profile picture updated successfully!");
-        }
+        }).catch(err => console.log("Background profile pic sync error:", err));
       }
     } catch (error) {
       console.log("Error picking profile image:", error);
-      Alert.alert("Error", "Could not pick image from gallery.");
+      showAlert("Error", "Could not pick image from gallery.");
     }
   };
 
@@ -238,7 +235,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const handleSelectTierOption = async (tierType) => {
     if (tierType === 'Free') {
       if (userProfile?.isPremium) {
-        Alert.alert(
+        showAlert(
           "Cancel Subscription",
           "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
           [
@@ -255,12 +252,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   if (response.ok) {
                     setUserProfile(prev => ({ ...prev, isPremium: false }));
                     setAccountTier('Free');
-                    Alert.alert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
+                    showAlert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
                   } else {
-                    Alert.alert("Error", "Failed to cancel subscription on server.");
+                    showAlert("Error", "Failed to cancel subscription on server.");
                   }
                 } catch (e) {
-                  Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+                  showAlert("Error", "Network connection failed. Cannot connect to server.");
                 }
               }
             }
@@ -279,7 +276,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     // Instantly apply the selection outline indicator visually
     setSelectedBillingCycle(planName);
 
-    Alert.alert(
+    showAlert(
       "Confirm Payment Method",
       `Would you like to proceed with the ${planName} Plan (${price})?`,
       [
@@ -306,20 +303,20 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   // Open the PayMongo checkout page in an in-app browser overlay
                   await WebBrowser.openBrowserAsync(checkoutUrl);
                   
-                  Alert.alert(
+                  showAlert(
                     "Checkout Opened",
                     "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
                   );
                 } else {
                   console.log("PayMongo response:", data);
-                  Alert.alert("Error", "Could not generate payment link.");
+                  showAlert("Error", "Could not generate payment link.");
                 }
               } else {
-                Alert.alert("Error", "Failed to initiate payment on the server.");
+                showAlert("Error", "Failed to initiate payment on the server.");
                 setSelectedBillingCycle(null);
               }
             } catch (e) {
-              Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+              showAlert("Error", "Network connection failed. Cannot connect to server.");
               setSelectedBillingCycle(null);
             }
           }
@@ -330,7 +327,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   const handleConfirmPayment = () => {
     if (!selectedMethod) {
-      Alert.alert("Payment Method Required", "Please select a payment method to proceed.");
+      showAlert("Payment Method Required", "Please select a payment method to proceed.");
       return;
     }
 
@@ -345,20 +342,20 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   const handleChangeEmail = async () => {
     if (!tempAuthEmail.trim()) {
-      Alert.alert("Validation Error", "Please enter a new email address.");
+      showAlert("Validation Error", "Please enter a new email address.");
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(tempAuthEmail.trim())) {
-      Alert.alert("Validation Error", "Please enter a valid email address.");
+      showAlert("Validation Error", "Please enter a valid email address.");
       return;
     }
     if (tempAuthEmail.trim().toLowerCase() === (userProfile?.email || '').toLowerCase()) {
-      Alert.alert("Validation Error", "New email is the same as your current email.");
+      showAlert("Validation Error", "New email is the same as your current email.");
       return;
     }
     if (!emailCurrentPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter your current password to authorize this email update.");
+      showAlert("Validation Error", "Please enter your current password to authorize this email update.");
       return;
     }
 
@@ -388,13 +385,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         }));
       }
 
-      Alert.alert("Success", "Email address updated successfully! Please use this new email to log in next time.");
+      showAlert("Success", "Email address updated successfully! Please use this new email to log in next time.");
       setTempAuthEmail('');
       setEmailCurrentPassword('');
       setShowEmailModal(false);
     } catch (error) {
       console.error("CHANGE EMAIL ERROR:", error);
-      Alert.alert("Error", error.message || "Failed to update email. Please try again.");
+      showAlert("Error", error.message || "Failed to update email. Please try again.");
     } finally {
       setIsChangingEmail(false);
     }
@@ -402,19 +399,19 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   const handleChangePassword = async () => {
     if (!oldPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter your current password.");
+      showAlert("Validation Error", "Please enter your current password.");
       return;
     }
     if (!newPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter a new password.");
+      showAlert("Validation Error", "Please enter a new password.");
       return;
     }
     if (newPassword.length < 8) {
-      Alert.alert("Validation Error", "Password must be at least 8 characters long.");
+      showAlert("Validation Error", "Password must be at least 8 characters long.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Validation Error", "New passwords do not match.");
+      showAlert("Validation Error", "New passwords do not match.");
       return;
     }
 
@@ -437,30 +434,29 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         throw new Error(data.detail || 'Failed to update password');
       }
 
-      Alert.alert("Success", "Password updated successfully!");
+      showAlert("Success", "Password updated successfully!");
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordModal(false);
     } catch (error) {
       console.error("CHANGE PASSWORD ERROR:", error);
-      Alert.alert("Error", error.message || "Failed to change password. Please try again.");
+      showAlert("Error", error.message || "Failed to change password. Please try again.");
     } finally {
       setIsChangingPassword(false);
     }
   };
 
   const handleSavePreferences = () => {
-    Alert.alert(
+    showAlert(
       "Preferences Saved",
-      "Your profile metrics and notification thresholds have been synced successfully.",
-      [{ text: "Done", fontWeight: '800' }]
+      "Your profile metrics and notification thresholds have been synced successfully."
     );
   };
 
   // --- FULL LOGOUT SYSTEM WITH CONFIRMATION AND LOGIN REDIRECT ---
   const handleLogOut = () => {
-    Alert.alert(
+    showAlert(
       "Log Out",
       "Are you sure you want to exit your active tracking session?",
       [

@@ -5,18 +5,19 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, ChevronLeft } from 'lucide-react-native';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
+  const { showAlert } = useCustomAlert();
   const [email, setEmail] = useState('');
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +25,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   // --- RECOVERY LOGIC CONTROLLERS ---
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      Alert.alert(
+      showAlert(
         'Missing Email',
         'Please enter your email address.'
       );
@@ -46,22 +47,22 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert(
+        showAlert(
           "OTP Sent",
           "A verification OTP code has been sent to your email."
         );
         onOtpSent(email.trim());
       } else {
-        Alert.alert(
+        showAlert(
           "Error",
           data.detail || "Failed to send OTP. Please check your email and try again."
         );
       }
     } catch (error) {
       console.log("FORGOT PASSWORD ERROR:", error);
-      Alert.alert(
+      showAlert(
         "Network Error",
-        "Cannot connect to backend server. Make sure it is running and your IP is correct."
+        "Cannot connect to backend server. Please try again."
       );
     } finally {
       setIsLoading(false);
