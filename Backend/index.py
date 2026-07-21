@@ -11,6 +11,9 @@ import resend
 from google import genai
 from google.genai import types
 import base64
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 
 load_dotenv()
@@ -38,6 +41,8 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 
 
 # ---------------- INIT CLIENTS ----------------
@@ -342,17 +347,39 @@ async def forgot_password(data: ForgotPasswordRequest):
             "expires_at": expiry
         }).execute()
 
-        # send email via Resend (CORRECT SDK USAGE)
-        resend.Emails.send({
-            "from": "MacroSync <onboarding@resend.dev>",
-            "to": data.email,
-            "subject": "MacroSync Password Reset OTP",
-            "html": f"""
+        # Send OTP email
+        if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() != "" and GMAIL_SENDER_EMAIL.strip() != "your-gmail@gmail.com":
+            # Send via Gmail SMTP
+            msg = MIMEMultipart()
+            msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL}>"
+            msg['To'] = data.email
+            msg['Subject'] = "MacroSync Password Reset OTP"
+            
+            html = f"""
                 <h2>Your OTP Code</h2>
                 <h1>{otp}</h1>
                 <p>This code expires in 10 minutes.</p>
             """
-        })
+            msg.attach(MIMEText(html, 'html'))
+            
+            # Remove any whitespace from app password
+            app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
+            
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
+                server.sendmail(GMAIL_SENDER_EMAIL.strip(), data.email, msg.as_string())
+        else:
+            # Fallback to Resend
+            resend.Emails.send({
+                "from": "MacroSync <onboarding@resend.dev>",
+                "to": data.email,
+                "subject": "MacroSync Password Reset OTP",
+                "html": f"""
+                    <h2>Your OTP Code</h2>
+                    <h1>{otp}</h1>
+                    <p>This code expires in 10 minutes.</p>
+                """
+            })
 
         return {
             "success": True,
