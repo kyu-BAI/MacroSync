@@ -10,31 +10,107 @@ import {
   Animated,
   StatusBar,
   Image,
+  ScrollView,
   Alert
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle, History, PlusCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 // High-Contrast System Theme Setup Tokens
-const logoGreen = '#4EA685';
-const baseColor = '#F0F4F2';
+const logoGreen = '#10B981';
+const baseColor = '#F8FAFC';
 
-export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile }) {
+export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile, dailyNutrition }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme, isDarkMode);
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState('off');
   const [isScanning, setIsScanning] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [selectedMealType, setSelectedMealType] = useState('Lunch');
+  const [portionScale, setPortionScale] = useState(1.0);
+  const [scanHistory, setScanHistory] = useState([]);
+
+  // Load persistent scan history from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem('ms_scan_history')
+      .then((data) => {
+        if (data) {
+          try { setScanHistory(JSON.parse(data)); } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveToHistory = async (mealItem) => {
+    try {
+      const updated = [mealItem, ...scanHistory.filter(h => h.name !== mealItem.name)].slice(0, 10);
+      setScanHistory(updated);
+      await AsyncStorage.setItem('ms_scan_history', JSON.stringify(updated));
+    } catch (err) {
+      console.warn("Failed to save scan history:", err);
+    }
+  };
+
+  const handleRelogHistoryItem = (item) => {
+    const currentConsumed = dailyNutrition?.consumedCalories || 0;
+    const targetCalories = dailyNutrition?.targetCalories || 2500;
+    const mealCalories = item.calories || 0;
+    const newTotal = currentConsumed + mealCalories;
+    const excess = newTotal - targetCalories;
+
+    const performRelog = () => {
+      if (onLogMeal) {
+        onLogMeal({
+          name: item.name,
+          calories: item.calories,
+          protein: item.protein,
+          carbs: item.carbs,
+          fats: item.fats,
+          mealType: item.mealType || 'Lunch'
+        });
+        showAlert('⚡ Meal Logged!', `Successfully re-logged "${item.rawName || item.name}" without consuming scan quota.`);
+      }
+    };
+
+    if (excess > 0) {
+      showAlert(
+        "Calorie Target Exceeded ⚠️",
+        `Logging this meal (${mealCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Proceed & Log", style: "destructive", onPress: performRelog }
+        ]
+      );
+    } else {
+      performRelog();
+    }
+  };
   
   // Scan limits tracking state
   const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
   const [showTipsCard, setShowTipsCard] = useState(true);
+
+  // Auto-detect meal type based on current time of day when scan completes
+  useEffect(() => {
+    if (analysisResult) {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 11) setSelectedMealType('Breakfast');
+      else if (hour >= 11 && hour < 16) setSelectedMealType('Lunch');
+      else if (hour >= 16 && hour < 18) setSelectedMealType('Snack');
+      else setSelectedMealType('Dinner');
+      setPortionScale(1.0);
+    }
+  }, [analysisResult]);
 
   const cameraRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
@@ -62,8 +138,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   if (!permission) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#4EA685" />
-        <Text style={{ marginTop: 10, color: '#41544B' }}>Loading camera permissions...</Text>
+        <ActivityIndicator size="large" color="#10B981" />
+        <Text style={{ marginTop: 10, color: '#64748B' }}>Loading camera permissions...</Text>
       </View>
     );
   }
@@ -145,6 +221,12 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         quality: 0.7,
         base64: true,
       });
+
+      // Freeze the camera preview AFTER the photo is taken (not before — would break capture)
+      if (cameraRef.current && cameraRef.current.pausePreview) {
+        try { cameraRef.current.pausePreview(); } catch (e) {}
+      }
+
       setCapturedImage(photo.uri);
 
       const response = await fetch(`${API_URL}/analyze-food`, {
@@ -165,6 +247,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
         setCapturedImage(null);
+        if (cameraRef.current && cameraRef.current.resumePreview) {
+          try { cameraRef.current.resumePreview(); } catch (e) {}
+        }
         setScanInfo(prev => ({ ...prev, remaining: 0 }));
         showAlert(
           "Scan Limit Reached",
@@ -191,6 +276,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
           showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
           setCapturedImage(null);
+          if (cameraRef.current && cameraRef.current.resumePreview) {
+            try { cameraRef.current.resumePreview(); } catch (e) {}
+          }
         } else {
           setAnalysisResult(data);
           openBottomSheet();
@@ -198,11 +286,17 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       } else {
         showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
         setCapturedImage(null);
+        if (cameraRef.current && cameraRef.current.resumePreview) {
+          try { cameraRef.current.resumePreview(); } catch (e) {}
+        }
       }
 
     } catch (error) {
       setIsScanning(false);
       stopPulseAnimation();
+      if (cameraRef.current && cameraRef.current.resumePreview) {
+        try { cameraRef.current.resumePreview(); } catch (e) {}
+      }
       console.error("Scanning Error:", error);
       showAlert("Analysis Error", "Cannot connect to server. Check your network.");
       setCapturedImage(null);
@@ -297,88 +391,201 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     }
   };
 
-  const handleLogFood = () => {
-    if (onLogMeal && analysisResult) {
-      const displayWeight = analysisResult.serving_weight_g ? ` (${analysisResult.serving_weight_g}g)` : '';
-      onLogMeal({
-        name: `${analysisResult.name}${displayWeight}`,
-        calories: analysisResult.calories,
-        protein: analysisResult.protein,
-        carbs: analysisResult.carbs,
-        fats: analysisResult.fats
-      });
+  const resetScan = () => {
+    if (cameraRef.current && cameraRef.current.resumePreview) {
+      try {
+        cameraRef.current.resumePreview();
+      } catch (err) {
+        console.log("Error resuming camera preview:", err);
+      }
     }
-    onTabChange('DASHBOARD');
+    setAnalysisResult(null);
+    setCapturedImage(null);
+    setIsScanning(false);
+    setPortionScale(1.0);
+  };
+
+  const scaledCalories = Math.round((analysisResult?.calories || 0) * portionScale);
+  const scaledProtein = Math.round((analysisResult?.protein || 0) * portionScale);
+  const scaledCarbs = Math.round((analysisResult?.carbs || 0) * portionScale);
+  const scaledFats = Math.round((analysisResult?.fats || 0) * portionScale);
+  const scaledWeight = analysisResult?.serving_weight_g ? Math.round(analysisResult.serving_weight_g * portionScale) : null;
+
+  const handleLogFood = () => {
+    if (!analysisResult) return;
+
+    const currentConsumed = dailyNutrition?.consumedCalories || 0;
+    const targetCalories = dailyNutrition?.targetCalories || 2500;
+    const newTotal = currentConsumed + scaledCalories;
+    const excess = newTotal - targetCalories;
+
+    const performLog = () => {
+      if (onLogMeal && analysisResult) {
+        const displayWeight = scaledWeight ? ` (${scaledWeight}g)` : '';
+        const mealItem = {
+          id: `scan-${Date.now()}`,
+          name: `${analysisResult.name}${displayWeight}`,
+          rawName: analysisResult.name,
+          calories: scaledCalories,
+          protein: scaledProtein,
+          carbs: scaledCarbs,
+          fats: scaledFats,
+          mealType: selectedMealType,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        saveToHistory(mealItem);
+        onLogMeal(mealItem);
+      }
+      onTabChange('DASHBOARD');
+    };
+
+    if (excess > 0) {
+      showAlert(
+        "Calorie Target Exceeded ⚠️",
+        `Logging this meal (${scaledCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Proceed & Log", style: "destructive", onPress: performLog }
+        ]
+      );
+    } else {
+      performLog();
+    }
   };
 
   // If we have a result, show the split screen layout (Photo Top, Macros Bottom)
   if (analysisResult && capturedImage) {
+    const mealTypeColors = {
+      Breakfast: '#F59E0B',
+      Lunch: '#10B981',
+      Snack: '#0EA5E9',
+      Dinner: '#8B5CF6'
+    };
+
     return (
       <View style={styles.container}>
         <StatusBar hidden={true} />
         
-        {/* Full Photo on top half */}
-        <View style={{ height: screenHeight * 0.55, width: '100%', backgroundColor: '#000' }}>
+        {/* Full Photo on top half with floating translucent close button */}
+        <View style={{ height: screenHeight * 0.40, width: '100%', backgroundColor: '#000', position: 'relative' }}>
           <Image source={{ uri: capturedImage }} style={{ flex: 1 }} resizeMode="cover" />
+          <TouchableOpacity 
+            style={styles.floatingCloseBtn}
+            onPress={resetScan}
+            activeOpacity={0.8}
+          >
+            <X color="#FFFFFF" size={20} />
+          </TouchableOpacity>
         </View>
 
         {/* Results on bottom half */}
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, marginTop: -32, paddingHorizontal: 24, paddingTop: 32 }}>
-            <View style={styles.resultTitleRow}>
-              <View style={styles.aiBadge}>
-                <Scan color={logoGreen} size={14} style={{ marginRight: 4 }} />
-                <Text style={styles.aiBadgeText}>AI Vision Match</Text>
-              </View>
-              <Text style={styles.confidenceText}>{analysisResult.confidence}% match</Text>
+        <ScrollView 
+          style={{ flex: 1, backgroundColor: theme?.surface || '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, marginTop: -28 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}
+        >
+          <View style={styles.resultTitleRow}>
+            <View style={styles.aiBadge}>
+              <Scan color={logoGreen} size={14} style={{ marginRight: 4 }} />
+              <Text style={styles.aiBadgeText}>AI Vision Match</Text>
             </View>
-            
-            <Text style={styles.foodName}>{analysisResult.name}</Text>
-            {analysisResult.serving_weight_g && (
-              <Text style={styles.portionText}>Estimated Portion: {analysisResult.serving_weight_g}g</Text>
-            )}
-            
-            <View style={styles.macroCardGrid}>
-              <View style={styles.macroCard}>
-                <Text style={styles.macroValue}>{analysisResult.calories}</Text>
-                <Text style={styles.macroLabel}>Kcal</Text>
-              </View>
-              <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: '#D4E2DC' }]}>
-                <Text style={[styles.macroValue, { color: logoGreen }]}>{analysisResult.protein}g</Text>
-                <Text style={styles.macroLabel}>Protein</Text>
-              </View>
-              <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: '#D4E2DC' }]}>
-                <Text style={[styles.macroValue, { color: '#3B82F6' }]}>{analysisResult.carbs}g</Text>
-                <Text style={styles.macroLabel}>Carbs</Text>
-              </View>
-              <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: '#D4E2DC' }]}>
-                <Text style={[styles.macroValue, { color: '#EC4899' }]}>{analysisResult.fats}g</Text>
-                <Text style={styles.macroLabel}>Fats</Text>
-              </View>
+            <Text style={styles.confidenceText}>{analysisResult.confidence}% match</Text>
+          </View>
+          
+          <Text style={styles.foodName}>{analysisResult.name}</Text>
+          {scaledWeight ? (
+            <Text style={styles.portionText}>Estimated Portion: {scaledWeight}g ({portionScale}x serving)</Text>
+          ) : null}
+
+          {/* ── PORTION SCALE CHIPS ── */}
+          <Text style={styles.subTitleLabel}>Adjust Portion Scale</Text>
+          <View style={styles.portionScaleRow}>
+            {[0.5, 1.0, 1.5, 2.0].map((scale) => (
+              <TouchableOpacity
+                key={scale}
+                style={[
+                  styles.scaleChip,
+                  portionScale === scale && styles.scaleChipActive
+                ]}
+                onPress={() => setPortionScale(scale)}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.scaleChipText,
+                  portionScale === scale && styles.scaleChipTextActive
+                ]}>
+                  {scale}x
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* ── MEAL TYPE SELECTOR ── */}
+          <Text style={styles.subTitleLabel}>Log to Meal Category</Text>
+          <View style={styles.mealTypeRow}>
+            {['Breakfast', 'Lunch', 'Snack', 'Dinner'].map((type) => {
+              const activeColor = mealTypeColors[type];
+              const isActive = selectedMealType === type;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.mealTypeChip,
+                    isActive ? { backgroundColor: `${activeColor}20`, borderColor: activeColor, borderWidth: 1.5 } : { backgroundColor: theme?.cardBg || '#F1F5F9' }
+                  ]}
+                  onPress={() => setSelectedMealType(type)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.mealTypeChipText,
+                    isActive ? { color: activeColor, fontWeight: '900' } : { color: theme?.textSecondary || '#64748B' }
+                  ]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ── MACRO BREAKDOWN GRID ── */}
+          <View style={styles.macroCardGrid}>
+            <View style={styles.macroCard}>
+              <Text style={[styles.macroValue, { color: '#F97316' }]}>{scaledCalories}</Text>
+              <Text style={styles.macroLabel}>Kcal</Text>
             </View>
-            
-            <TouchableOpacity style={styles.logButton} onPress={handleLogFood} activeOpacity={0.8}>
-              <CheckCircle2 color="#FFFFFF" size={18} style={{ marginRight: 8 }} />
-              <Text style={styles.logButtonText}>Log to Daily Tracker</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.retakeButton} 
-              onPress={() => {
-                setAnalysisResult(null);
-                setCapturedImage(null);
-                setIsScanning(false);
-              }}
-            >
-              <Text style={styles.retakeButtonText}>Retake Photo</Text>
-            </TouchableOpacity>
-        </View>
+            <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: theme?.border || '#E2E8F0' }]}>
+              <Text style={[styles.macroValue, { color: '#10B981' }]}>{scaledProtein}g</Text>
+              <Text style={styles.macroLabel}>Protein</Text>
+            </View>
+            <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: theme?.border || '#E2E8F0' }]}>
+              <Text style={[styles.macroValue, { color: '#F59E0B' }]}>{scaledCarbs}g</Text>
+              <Text style={styles.macroLabel}>Carbs</Text>
+            </View>
+            <View style={[styles.macroCard, { borderLeftWidth: 1, borderColor: theme?.border || '#E2E8F0' }]}>
+              <Text style={[styles.macroValue, { color: '#EC4899' }]}>{scaledFats}g</Text>
+              <Text style={styles.macroLabel}>Fats</Text>
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.logButton} onPress={handleLogFood} activeOpacity={0.8}>
+            <CheckCircle2 color="#FFFFFF" size={18} style={{ marginRight: 8 }} />
+            <Text style={styles.logButtonText}>Log {selectedMealType} ({scaledCalories} kcal)</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.retakeButton} 
+            onPress={resetScan}
+          >
+            <Text style={styles.retakeButtonText}>Retake Photo</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <StatusBar hidden={false} barStyle="dark-content" />
+      <StatusBar hidden={false} barStyle={isDarkMode ? "light-content" : "dark-content"} />
       
       {/* Header Area */}
       <View style={styles.headerArea}>
@@ -387,7 +594,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           onPress={() => onTabChange('DASHBOARD')}
           activeOpacity={0.7}
         >
-          <X color="#41544B" size={24} />
+          <X color="#64748B" size={24} />
         </TouchableOpacity>
         
         <View style={styles.headerTitleCenter}>
@@ -399,9 +606,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             scanInfo.isPremium ? styles.premiumBadgePill : (scanInfo.remaining <= 1 ? styles.warningBadgePill : styles.normalBadgePill)
           ]}>
             {scanInfo.isPremium ? (
-              <Sparkles color="#92400E" size={11} style={{ marginRight: 4 }} />
+              <Sparkles color="#8B5CF6" size={11} style={{ marginRight: 4 }} />
             ) : (
-              <Zap color={scanInfo.remaining <= 1 ? "#C53030" : "#2E7D32"} size={11} style={{ marginRight: 4 }} />
+              <Zap color={scanInfo.remaining <= 1 ? "#EF4444" : "#10B981"} size={11} style={{ marginRight: 4 }} />
             )}
             <Text style={[
               styles.scanBadgeText, 
@@ -417,7 +624,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           onPress={() => setFlashMode(flashMode === 'off' ? 'on' : 'off')}
           activeOpacity={0.7}
         >
-          {flashMode === 'on' ? <Zap color="#4EA685" size={24} /> : <ZapOff color="#41544B" size={24} />}
+          {flashMode === 'on' ? <Zap color="#10B981" size={24} /> : <ZapOff color="#64748B" size={24} />}
         </TouchableOpacity>
       </View>
 
@@ -434,7 +641,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         {capturedImage && (
           <Image 
             source={{ uri: capturedImage }} 
-            style={[StyleSheet.absoluteFillObject, { zIndex: 3 }]} 
+            style={[StyleSheet.absoluteFillObject, { zIndex: 5 }]} 
           />
         )}
 
@@ -457,7 +664,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         <View style={styles.visualTipsCard}>
           <View style={styles.tipsHeaderRow}>
             <View style={styles.tipsIconBg}>
-              <Lightbulb color="#4EA685" size={15} />
+              <Lightbulb color="#F59E0B" size={15} />
             </View>
             <Text style={styles.tipsCardTitle}>Scanning Tips & Limit Notice</Text>
             <TouchableOpacity 
@@ -465,7 +672,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.closeTipsBtn}
             >
-              <X color="#7FA293" size={14} />
+              <X color="#94A3B8" size={14} />
             </TouchableOpacity>
           </View>
 
@@ -474,9 +681,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           </Text>
 
           <View style={styles.warningAlertBox}>
-            <AlertTriangle color="#C53030" size={14} style={{ marginRight: 6, marginTop: 1 }} />
+            <AlertTriangle color="#F59E0B" size={14} style={{ marginRight: 6, marginTop: 1 }} />
             <Text style={styles.warningAlertText}>
-              <Text style={{ fontWeight: '800', color: '#9B2C2C' }}>Important:</Text> Every scan attempt (including blurry or non-food photos) deducts 1 count from your 5 daily free scans.
+              <Text style={{ fontWeight: '900', color: '#D97706' }}>Important:</Text> Every scan attempt (including blurry or non-food photos) deducts 1 count from your 5 daily free scans.
             </Text>
           </View>
         </View>
@@ -488,9 +695,42 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           onPress={() => setShowTipsCard(true)}
           activeOpacity={0.7}
         >
-          <Lightbulb color="#4EA685" size={13} style={{ marginRight: 5 }} />
+          <Lightbulb color="#10B981" size={13} style={{ marginRight: 5 }} />
           <Text style={styles.reopenTipsText}>Scan Tips & Limit Info</Text>
         </TouchableOpacity>
+      )}
+
+      {/* ── RECENT AI SCANS HISTORY SECTION ── */}
+      {scanHistory.length > 0 && !isScanning && (
+        <View style={styles.historySection}>
+          <View style={styles.historyHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <History color={logoGreen} size={14} style={{ marginRight: 4 }} />
+              <Text style={styles.historyTitle}>Recent Scans</Text>
+            </View>
+            <Text style={styles.historySubText}>Tap to re-log without using scan quota</Text>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyScroll}>
+            {scanHistory.map((item, idx) => (
+              <TouchableOpacity
+                key={item.id || idx}
+                style={styles.historyChipCard}
+                onPress={() => handleRelogHistoryItem(item)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.historyChipHeader}>
+                  <Text numberOfLines={1} style={styles.historyChipTitle}>{item.rawName || item.name}</Text>
+                  <View style={styles.relogPillBtn}>
+                    <PlusCircle color="#FFFFFF" size={10} style={{ marginRight: 2 }} />
+                    <Text style={styles.relogPillText}>Re-log</Text>
+                  </View>
+                </View>
+                <Text style={styles.historyChipMacros}>{item.calories} kcal • {item.protein}g P • {item.carbs}g C</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {/* Bottom Controls Area (outside camera) */}
@@ -505,7 +745,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             disabled={isScanning}
             activeOpacity={0.7}
           >
-            <Upload color="#4EA685" size={22} />
+            <Upload color="#10B981" size={22} />
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -524,8 +764,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F4F2' },
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme?.background || '#F8FAFC' },
   headerArea: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -540,56 +780,55 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#41544B'
+    color: theme?.textPrimary || '#64748B'
   },
   scanBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 12,
     marginTop: 4,
   },
   normalBadgePill: {
-    backgroundColor: '#E8F5EE',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
     borderWidth: 1,
-    borderColor: '#C6E6D6',
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
   },
   warningBadgePill: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.16)' : 'rgba(254, 242, 242, 1)',
     borderWidth: 1,
-    borderColor: '#FEB2B2',
+    borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.35)' : 'rgba(252, 165, 165, 0.8)',
   },
   premiumBadgePill: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.16)' : 'rgba(245, 243, 255, 1)',
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.35)' : 'rgba(221, 214, 254, 0.8)',
   },
   scanBadgeText: {
     fontSize: 11,
     fontWeight: '800',
   },
   normalBadgeText: {
-    color: '#2E7D32',
+    color: '#10B981',
   },
   warningBadgeText: {
-    color: '#C53030',
+    color: '#EF4444',
   },
   premiumBadgeText: {
-    color: '#92400E',
+    color: '#8B5CF6',
   },
   headerIconBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   cameraContainer: {
     flex: 1,
@@ -598,16 +837,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000',
     position: 'relative',
-    shadowColor: '#4EA685',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0,
+    elevation: 0,
     marginBottom: 14,
   },
   camera: {
     width: '100%',
     height: '100%',
+    zIndex: 1,
   },
   viewfinderContainer: {
     position: 'absolute',
@@ -617,7 +854,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
+    zIndex: 10,
   },
   viewfinderBox: {
     width: 280,
@@ -637,29 +874,42 @@ const styles = StyleSheet.create({
   scanningLine: {
     position: 'absolute',
     top: 0,
-    left: 20,
-    right: 20,
-    height: 2,
-    backgroundColor: logoGreen,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 5,
+    left: 10,
+    right: 10,
+    height: 3,
+    backgroundColor: '#10B981',
+    borderRadius: 2,
+  },
+  scanningHudBadge: {
+    position: 'absolute',
+    bottom: 24,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  scanningHudText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   visualTipsCard: {
     marginHorizontal: 24,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     borderRadius: 20,
     padding: 14,
-    shadowColor: '#4EA685',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   tipsHeaderRow: {
     flexDirection: 'row',
@@ -670,7 +920,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#E8F5EE',
+    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.18)' : 'rgba(245, 158, 11, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -678,7 +928,7 @@ const styles = StyleSheet.create({
   tipsCardTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1A2E26',
+    color: theme?.textPrimary || '#0F172A',
     flex: 1,
   },
   closeTipsBtn: {
@@ -686,7 +936,7 @@ const styles = StyleSheet.create({
   },
   tipsBulletPoint: {
     fontSize: 12,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 16,
     fontWeight: '600',
     marginBottom: 8,
@@ -694,16 +944,16 @@ const styles = StyleSheet.create({
   warningAlertBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFF5F5',
+    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : 'rgba(254, 243, 199, 0.4)',
     borderRadius: 12,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#FED7D7',
+    borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.25)' : 'rgba(253, 230, 138, 0.7)',
   },
   warningAlertText: {
     flex: 1,
     fontSize: 11,
-    color: '#9B2C2C',
+    color: theme?.textSecondary || '#475569',
     lineHeight: 15,
     fontWeight: '600',
   },
@@ -711,18 +961,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: theme?.border || '#E2E8F0',
   },
   reopenTipsText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#4EA685',
+    color: '#10B981',
   },
   bottomControlsArea: {
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
@@ -730,7 +980,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   instructionText: {
-    color: '#41544B',
+    color: theme?.textPrimary || '#64748B',
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 14,
@@ -747,14 +997,13 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
     position: 'absolute',
     left: '10%',
   },
@@ -763,16 +1012,16 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#4EA685',
+    borderColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E8F5EE'
+    backgroundColor: '#F1F5F9'
   },
   shutterInner: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#4EA685',
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -785,10 +1034,12 @@ const styles = StyleSheet.create({
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5EE',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
   },
   aiBadgeText: {
     color: logoGreen,
@@ -796,29 +1047,161 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   confidenceText: {
-    color: '#7FA293',
+    color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
+  },
+  historySection: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  historyTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historySubText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme?.textSecondary || '#94A3B8',
+  },
+  historyScroll: {
+    gap: 8,
+  },
+  historyChipCard: {
+    backgroundColor: theme?.surface || '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    minWidth: 150,
+  },
+  historyChipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  historyChipTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    maxWidth: 90,
+  },
+  relogPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: logoGreen,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  relogPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  historyChipMacros: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme?.textSecondary || '#64748B',
+  },
+  floatingCloseBtn: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  subTitleLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  portionScaleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  scaleChip: {
+    flex: 1,
+    paddingVertical: 8,
+    marginHorizontal: 3,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  scaleChipActive: {
+    backgroundColor: logoGreen,
+    borderColor: logoGreen,
+  },
+  scaleChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+  },
+  scaleChipTextActive: {
+    color: '#FFFFFF',
+  },
+  mealTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  mealTypeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 3,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  mealTypeChipText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   foodName: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#1A2E26',
-    marginBottom: 20,
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 12,
   },
   portionText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     marginTop: -14,
     marginBottom: 20,
   },
   macroCardGrid: {
     flexDirection: 'row',
-    backgroundColor: '#F7FAF9',
+    backgroundColor: theme?.cardBg || '#F8FAFC',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8F1EC',
+    borderColor: theme?.border || '#F1F5F9',
     paddingVertical: 16,
     marginBottom: 24,
   },
@@ -830,12 +1213,12 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1A2E26',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 4,
   },
   macroLabel: {
     fontSize: 12,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '600',
   },
   logButton: {
@@ -858,13 +1241,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retakeButtonText: {
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontSize: 16,
     fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -872,12 +1255,12 @@ const styles = StyleSheet.create({
   permissionTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1A2E26',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 12,
   },
   permissionText: {
     fontSize: 15,
-    color: '#41544B',
+    color: theme?.textSecondary || '#64748B',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 30,
@@ -900,13 +1283,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   }
 });

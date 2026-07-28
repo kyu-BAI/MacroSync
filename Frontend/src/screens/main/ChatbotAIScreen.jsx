@@ -18,10 +18,13 @@ import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, S
 
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -170,26 +173,28 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
     }
   };
 
-  // Helper to parse markdown-like bold (**text**) and bullet points (* item)
-  const renderMessageText = (text) => {
+  // Helper to parse markdown-like bold (**text**) and bullet points, stripping raw ## headers and * symbols
+  const renderMessageText = (text, isAI = false) => {
     if (!text) return null;
 
     const lines = text.split('\n');
     return lines.map((line, lineIdx) => {
       let isBullet = false;
-      let cleanLine = line;
+      // Strip ALL markdown header symbols (##, ###, etc.) anywhere in the line
+      let cleanLine = line.replace(/#{1,6}\s*/g, '').trim();
 
-      // Check if the line starts with a bullet point '*'
-      if (line.trim().startsWith('*')) {
+      // Check if the line starts with a bullet point '*' or '-'
+      if (cleanLine.trim().startsWith('*') || cleanLine.trim().startsWith('- ')) {
         isBullet = true;
-        // Strip the leading '*' and any spaces following it
-        cleanLine = line.replace(/^\s*\*\s*/, '');
+        // Strip the leading '*' / '-' and any spaces following it
+        cleanLine = cleanLine.replace(/^\s*[\*\-]\s*/, '');
       }
 
-      // Split by '**' to find bold text
+      // Strip any remaining lone asterisks (* not part of **bold**)
+      // First split by ** to preserve bold markers, then clean lone * from plain parts
       const parts = cleanLine.split('**');
       const textElements = parts.map((part, partIdx) => {
-        // Odd indices represent text inside '**'
+        // Odd indices represent text inside '**' (bold) — keep as is
         if (partIdx % 2 === 1) {
           return (
             <Text key={partIdx} style={{ fontWeight: '800' }}>
@@ -197,11 +202,13 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             </Text>
           );
         }
-        return <Text key={partIdx}>{part}</Text>;
+        // Even indices are plain text — strip stray lone asterisks
+        const cleanPart = part.replace(/\*/g, '');
+        return <Text key={partIdx}>{cleanPart}</Text>;
       });
 
       return (
-        <Text key={lineIdx} style={{ lineHeight: 22 }}>
+        <Text key={lineIdx} style={{ lineHeight: 22, textAlign: 'left' }}>
           {isBullet && <Text style={{ color: logoGreen, fontWeight: '900' }}>• </Text>}
           {textElements}
           {lineIdx < lines.length - 1 ? '\n' : ''}
@@ -220,7 +227,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
 
       {/* HEADER BRANDING SECTION */}
       <View style={styles.header}>
@@ -238,9 +245,9 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
               ]}
             >
               {chatInfo.isPremium ? (
-                <Sparkles color="#92400E" size={11} style={{ marginRight: 4 }} />
+                <Sparkles color="#8B5CF6" size={11} style={{ marginRight: 4 }} />
               ) : (
-                <Zap color={chatInfo.remaining <= 2 ? "#C53030" : "#2E7D32"} size={11} style={{ marginRight: 4 }} />
+                <Zap color={chatInfo.remaining <= 2 ? "#EF4444" : "#10B981"} size={11} style={{ marginRight: 4 }} />
               )}
               <Text style={[
                 styles.chatBadgeText, 
@@ -248,7 +255,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
               ]}>
                 {chatInfo.isPremium ? "Unlimited Messages ✨" : `${chatInfo.remaining} / 10 Messages Left`}
               </Text>
-              <Info color={chatInfo.isPremium ? "#92400E" : (chatInfo.remaining <= 2 ? "#C53030" : "#2E7D32")} size={11} style={{ marginLeft: 4 }} />
+              <Info color={chatInfo.isPremium ? "#8B5CF6" : (chatInfo.remaining <= 2 ? "#EF4444" : "#10B981")} size={11} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
 
@@ -290,12 +297,12 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
                 <View
                   style={[
-                    styles.chatMessageFormCard,
+                    styles.chatBubble,
                     isAI ? styles.aiMessageFormCard : styles.userMessageFormCard
                   ]}
                 >
                   <Text style={[styles.messageBubbleText, isAI ? styles.aiBubbleText : styles.userBubbleText]}>
-                    {renderMessageText(msg.text)}
+                    {renderMessageText(msg.text, isAI)}
                   </Text>
                   <Text style={styles.messageTimeStampText}>
                     {msg.time}
@@ -317,7 +324,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
               <View style={styles.aiIconAvatarNeuBox}>
                 <BotMessageSquare color={logoGreen} size={16} strokeWidth={2.5} />
               </View>
-              <View style={[styles.chatMessageFormCard, styles.aiMessageFormCard, { paddingVertical: 14, width: 60, alignItems: 'center' }]}>
+              <View style={[styles.chatBubble, styles.aiMessageFormCard, { paddingVertical: 14, width: 60, alignItems: 'center' }]}>
                 <ActivityIndicator size="small" color={logoGreen} />
               </View>
             </View>
@@ -348,7 +355,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             <TextInput
               style={styles.chatTextInputField}
               placeholder="Ask about diet, meals, or workout..."
-              placeholderTextColor="#7FA293"
+              placeholderTextColor="#94A3B8"
               value={inputText}
               onChangeText={setInputText}
               multiline={true}
@@ -373,19 +380,15 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   );
 }
 
-const baseColor = '#F0F4F2';
-const clearWhiteHighlight = '#FFFFFF';
-const softGreenShadow = '#AEC2B7';
-const logoGreen = '#4EA685';
-const logoDarkShadow = '#37745D';
-const logoLightHighlight = '#65D8AD';
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
-const styles = StyleSheet.create({
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
   fullscreenOverlay: {
     flex: 1,
     width: screenWidth,
     height: screenHeight,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   header: {
     flexDirection: 'row',
@@ -416,47 +419,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 12,
   },
   normalBadgePill: {
-    backgroundColor: '#E8F5EE',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
     borderWidth: 1,
-    borderColor: '#C6E6D6',
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
   },
   warningBadgePill: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.16)' : 'rgba(254, 242, 242, 1)',
     borderWidth: 1,
-    borderColor: '#FEB2B2',
+    borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.35)' : 'rgba(252, 165, 165, 0.8)',
   },
   premiumBadgePill: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.16)' : 'rgba(245, 243, 255, 1)',
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.35)' : 'rgba(221, 214, 254, 0.8)',
   },
   chatBadgeText: {
     fontSize: 11,
     fontWeight: '800',
   },
   normalBadgeText: {
-    color: '#2E7D32',
+    color: '#10B981',
   },
   warningBadgeText: {
-    color: '#C53030',
+    color: '#EF4444',
   },
   premiumBadgeText: {
-    color: '#92400E',
+    color: '#8B5CF6',
   },
   greeting: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     letterSpacing: -0.5,
   },
   subGreeting: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     marginTop: 2,
   },
   keyboardContainer: {
@@ -487,19 +490,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: baseColor,
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 3,
-    elevation: 2,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
   },
   userIconAvatarNeuBox: {
     width: 32,
@@ -509,54 +505,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  chatMessageFormCard: {
-    borderRadius: 24,
+  chatBubble: {
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     maxWidth: '75%',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 5,
-    elevation: 3,
   },
   aiMessageFormCard: {
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderTopLeftRadius: 4,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
   },
   userMessageFormCard: {
-    backgroundColor: '#E2ECE7',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.08)',
     borderTopRightRadius: 4,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.2)',
   },
   messageBubbleText: {
     fontSize: 14,
     lineHeight: 20,
   },
   aiBubbleText: {
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     fontWeight: '600',
+    textAlign: 'justify',
   },
   userBubbleText: {
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     fontWeight: '700',
   },
   messageTimeStampText: {
     fontSize: 9,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '700',
     marginTop: 5,
     alignSelf: 'flex-end',
@@ -564,16 +547,11 @@ const styles = StyleSheet.create({
   visualTipsCard: {
     marginHorizontal: 20,
     marginVertical: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     borderRadius: 18,
     padding: 12,
-    shadowColor: '#4EA685',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: theme?.border || '#E2E8F0',
   },
   tipsHeaderRow: {
     flexDirection: 'row',
@@ -584,7 +562,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#E8F5EE',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
@@ -592,7 +570,7 @@ const styles = StyleSheet.create({
   tipsCardTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#1A2E26',
+    color: theme?.textPrimary || '#0F172A',
     flex: 1,
   },
   closeTipsBtn: {
@@ -600,7 +578,7 @@ const styles = StyleSheet.create({
   },
   tipsBulletPoint: {
     fontSize: 11,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 15,
     fontWeight: '600',
     marginBottom: 6,
@@ -608,22 +586,22 @@ const styles = StyleSheet.create({
   warningAlertBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#F8FAFC',
     borderRadius: 10,
     padding: 6,
     borderWidth: 1,
-    borderColor: '#FED7D7',
+    borderColor: '#F1F5F9',
   },
   warningAlertText: {
     flex: 1,
     fontSize: 11,
-    color: '#9B2C2C',
+    color: '#059669',
     lineHeight: 14,
     fontWeight: '600',
   },
   suggestionsWrapper: {
     paddingVertical: 6,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
     overflow: 'visible'
   },
   suggestionsScroll: {
@@ -633,42 +611,28 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   suggestionChip: {
-    backgroundColor: baseColor,
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.10)' : 'rgba(16, 185, 129, 0.06)',
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.18)',
   },
   suggestionChipText: {
-    color: '#41544B',
+    color: logoGreen,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   chatInputFormCard: {
-    backgroundColor: baseColor,
-    borderRadius: 24,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginHorizontal: 20,
     marginBottom: Platform.OS === 'ios' ? 6 : 0,
     marginTop: 5,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   chatInputInnerLayoutRow: {
     flexDirection: 'row',
@@ -679,7 +643,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     maxHeight: 60,
     paddingTop: Platform.OS === 'ios' ? 8 : 4,
     paddingBottom: Platform.OS === 'ios' ? 8 : 4,
@@ -692,10 +656,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-    elevation: 2,
   },
 });

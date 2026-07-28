@@ -13,33 +13,33 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 
 // ==========================================
 // THEME CONFIGURATION & BRANDING TOKENS
 // ==========================================
 const COLORS = {
-  base: '#F0F4F2',
+  base: '#F8FAFC',
   whiteHighlight: '#FFFFFF',
-  softGreenShadow: '#AEC2B7',
-  logoGreen: '#4EA685',
-  logoDarkShadow: '#37745D',
-  logoLightHighlight: '#65D8AD',
-  textDark: '#1A2B23',
-  textMuted: '#556B60',
-  textPlaceholder: '#7FA293',
-  borderLight: '#D4E2DC',
-  borderItem: '#E1E9E5',
-  bgPill: '#E4ECE8',
+  logoGreen: '#10B981',
+  textDark: '#0F172A',
+  textMuted: '#64748B',
+  textPlaceholder: '#94A3B8',
+  borderLight: '#E2E8F0',
+  borderItem: '#E2E8F0',
+  bgPill: '#F1F5F9',
   
   // BMI Status Colors
-  underweight: '#2B6CB0',
-  normal: '#4EA685',
-  overweight: '#C05621',
-  obese: '#C53030'
+  underweight: '#10B981',
+  normal: '#10B981',
+  overweight: '#64748B',
+  obese: '#64748B'
 };
 
 export default function StepOneScreen({ onNext }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   // --- Core Inputs ---
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -169,7 +169,7 @@ export default function StepOneScreen({ onNext }) {
             {/* FIELD BLOCK: AGE */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Age</Text>
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your age"
@@ -189,7 +189,7 @@ export default function StepOneScreen({ onNext }) {
               </View>
 
               <View style={styles.splitInputRow}>
-                <View style={[styles.neumorphicInputInset, { flex: 1, marginRight: 10 }]}>
+                <View style={[styles.flatInputField, { flex: 1, marginRight: 10 }]}>
                   <TextInput
                     style={styles.input}
                     placeholder="ft"
@@ -200,7 +200,7 @@ export default function StepOneScreen({ onNext }) {
                     autoCorrect={false}
                   />
                 </View>
-                <View style={[styles.neumorphicInputInset, { flex: 1 }]}>
+                <View style={[styles.flatInputField, { flex: 1 }]}>
                   <TextInput
                     style={styles.input}
                     placeholder="in"
@@ -220,7 +220,7 @@ export default function StepOneScreen({ onNext }) {
                 <Text style={styles.inputLabel}>Weight (kg)</Text>
               </View>
               
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter weight in kg"
@@ -275,11 +275,11 @@ export default function StepOneScreen({ onNext }) {
 // ==========================================
 // STYLE DEFINITIONS SYSTEM Namespace Architecture
 // ==========================================
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   // --- Architectural Core Blocks ---
   container: { 
     flex: 1, 
-    backgroundColor: COLORS.base 
+    backgroundColor: theme?.background || COLORS.base 
   },
   scrollContainer: { 
     flexGrow: 1, 
@@ -304,13 +304,13 @@ const styles = StyleSheet.create({
   brandTitle: { 
     fontSize: 42, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5, 
     marginTop: 6 
   },
   brandSubtitle: { 
     fontSize: 14, 
-    color: COLORS.textMuted, 
+    color: theme?.textSecondary || COLORS.textMuted, 
     marginTop: 10, 
     textAlign: 'center', 
     lineHeight: 22, 
@@ -319,18 +319,13 @@ const styles = StyleSheet.create({
   
   // --- Surface Panel Structures ---
   formCard: {
-    backgroundColor: COLORS.base,
-    borderRadius: 40, 
+    backgroundColor: theme?.surface || COLORS.base,
+    borderRadius: 28, 
     padding: 24,
-    shadowColor: COLORS.softGreenShadow,
-    shadowOffset: { width: 14, height: 14 }, 
-    shadowOpacity: 1,
-    shadowRadius: 16, 
-    elevation: 12,    
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: COLORS.whiteHighlight,
-    borderLeftColor: COLORS.whiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || COLORS.borderLight,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   inputGroup: { 
     marginBottom: 22 
@@ -343,7 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4 
   },
   inputLabel: { 
-    color: '#41544B', 
+    color: theme?.textPrimary || '#64748B', 
     fontSize: 11, 
     fontWeight: '800', 
     textTransform: 'uppercase', 
@@ -358,11 +353,11 @@ const styles = StyleSheet.create({
   // --- Unit Selector Controls ---
   togglePillContainer: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgPill,
+    backgroundColor: theme?.cardBg || COLORS.bgPill,
     borderRadius: 12,
     padding: 3,
     borderWidth: 1,
-    borderColor: COLORS.borderLight
+    borderColor: theme?.border || COLORS.borderLight
   },
   toggleBtn: { 
     paddingVertical: 4, 
@@ -375,26 +370,22 @@ const styles = StyleSheet.create({
   toggleBtnText: { 
     fontSize: 10, 
     fontWeight: '800', 
-    color: COLORS.textMuted 
+    color: theme?.textSecondary || COLORS.textMuted 
   },
   toggleBtnTextActive: { 
     color: COLORS.whiteHighlight 
   },
 
   // --- Core Form Elements ---
-  neumorphicInputInset: {
-    backgroundColor: COLORS.base,
-    borderRadius: 24, 
-    borderWidth: 1.5, 
-    borderColor: COLORS.borderLight,
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
+  flatInputField: {
+    backgroundColor: theme?.inputBg || COLORS.base,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme?.inputBorder || COLORS.borderLight,
   },
   input: { 
     flex: 1, 
-    color: COLORS.textDark, 
+    color: theme?.textPrimary || COLORS.textDark, 
     paddingHorizontal: 18, 
     paddingVertical: 15, 
     fontSize: 16, 
@@ -403,17 +394,13 @@ const styles = StyleSheet.create({
   
   // --- Metrics Display Panel Layouts ---
   bmiPanelRecess: {
-    backgroundColor: COLORS.base,
-    borderRadius: 24,
+    backgroundColor: theme?.inputBg || COLORS.base,
+    borderRadius: 16,
     padding: 20,
     marginTop: 6,
     marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: -3, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    borderColor: theme?.inputBorder || COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: 110,
@@ -425,14 +412,14 @@ const styles = StyleSheet.create({
   bmiLabel: { 
     fontSize: 11, 
     fontWeight: '800', 
-    color: COLORS.textMuted, 
+    color: theme?.textSecondary || COLORS.textMuted, 
     textTransform: 'uppercase', 
     letterSpacing: 1 
   },
   bmiNumber: { 
     fontSize: 38, 
     fontWeight: '900', 
-    color: COLORS.textDark, 
+    color: theme?.textPrimary || COLORS.textDark, 
     marginVertical: 4 
   },
   bmiCategory: { 
@@ -440,7 +427,7 @@ const styles = StyleSheet.create({
     fontWeight: '800' 
   },
   bmiPlaceholder: { 
-    color: COLORS.textPlaceholder, 
+    color: theme?.textSecondary || COLORS.textPlaceholder, 
     fontSize: 13, 
     fontWeight: '700', 
     textAlign: 'center', 
@@ -457,33 +444,20 @@ const styles = StyleSheet.create({
     marginTop: 16 
   },
   buttonUnpressed: {
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: COLORS.logoLightHighlight,
-    borderLeftColor: COLORS.logoLightHighlight,
-    shadowColor: COLORS.logoDarkShadow,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: COLORS.logoGreen,
+    borderRadius: 20,
   },
   buttonPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: COLORS.logoDarkShadow, 
-    transform: [{ translateY: 2 }] 
+    backgroundColor: '#059669',
+    opacity: 0.85,
   },
   buttonText: { 
     color: COLORS.whiteHighlight, 
     fontSize: 16, 
     fontWeight: '800', 
     letterSpacing: 0.5, 
-    textShadowColor: COLORS.logoDarkShadow, 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2 
   },
   buttonTextPressed: { 
-    color: '#9EDEC4' 
+    color: '#E2E8F0' 
   },
 });

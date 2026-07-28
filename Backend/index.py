@@ -1066,7 +1066,7 @@ def chat_with_ai(data: ChatMessageRequest):
                 f"=== INSTRUCTIONS FOR MACROSYNC AI ===\n"
                 f"You have full knowledge of the user's live health data listed above. "
                 f"When the user asks questions about their progress, meals logged today, workouts logged today, remaining macros, water intake, weight, diet recommendations, or workout advice, answer accurately using the exact numbers and items in this context. "
-                f"Be supportive, motivating, friendly, and structure your responses cleanly with bolding and bullet points.\n\n"
+                f"Be supportive, motivating, friendly, and structure your responses cleanly with bolding (**text**) and bullet points. Do NOT use markdown header symbols like ## or ### under any circumstances.\n\n"
             )
 
         full_prompt = context_prompt + f"User message: {data.message}"

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Image, View, StatusBar, Dimensions, Animated, Easing } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -8,6 +9,8 @@ const TOTAL_SPINNER_DOTS = 8;
 const BASE_SPEED_MS = 900; // Derived directly from --uib-speed: .9s
 
 export default function SplashScreen({ onAppReady }) {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   // Generates 8 independent animation reference tracking timelines
   const dotTimelines = useRef(
     Array.from({ length: TOTAL_SPINNER_DOTS }, () => new Animated.Value(0))
@@ -51,7 +54,7 @@ export default function SplashScreen({ onAppReady }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme?.background || baseColor} translucent={true} />
       
       {/* Central Brand Canvas Viewport */}
       <View style={styles.imagePresenterFrame}>
@@ -104,15 +107,14 @@ export default function SplashScreen({ onAppReady }) {
   );
 }
 
-// Global System Accent Tokens
-const baseColor = '#F0F4F2';           
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
+// Flat Design Tokens
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -147,16 +149,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pulsingCoreBead: {
-    width: 6.5, // Scaled proportionally from 9 down to 6.5 to look balanced
+    width: 6.5,
     height: 6.5,
     borderRadius: 3.25,
-    backgroundColor: logoGreen, 
-    
-    // Smooth Neon Glow Simulation Styles
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: logoGreen,
   },
 });

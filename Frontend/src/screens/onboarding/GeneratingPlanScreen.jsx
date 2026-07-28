@@ -11,16 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import API_URL from '../config/api';
 
-// Neumorphic Theme Tokens
+// Flat Design Tokens
 const COLORS = {
-  base: '#F0F4F2',
-  logoGreen: '#4EA685',
-  logoDarkShadow: '#37745D',
-  logoLightHighlight: '#65D8AD',
-  textDark: '#1A2B23',
-  textMuted: '#556B60',
-  whiteHighlight: '#FFFFFF',
-  softGreenShadow: '#AEC2B7',
+  base: '#F8FAFC',
+  logoGreen: '#10B981',
+  textDark: '#0F172A',
+  textMuted: '#64748B',
+  white: '#FFFFFF',
 };
 
 const LOADING_MESSAGES = [
@@ -31,7 +28,11 @@ const LOADING_MESSAGES = [
   "Finalizing your personalized dashboard..."
 ];
 
+import { useTheme } from '../../context/ThemeContext';
+
 export default function GeneratingPlanScreen({ profileData, onComplete }) {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   const [messageIndex, setMessageIndex] = useState(0);
   
   // Animation Values
@@ -42,20 +43,20 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
   const rotateAnim3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Pulse Animation for the Neumorphic Engine Core
+    // Pulse animation for the core icon
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.15,
+          toValue: 1.1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         })
       ])
     ).start();
@@ -163,10 +164,10 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.base,
+    backgroundColor: theme?.background || COLORS.base,
   },
   content: {
     flex: 1,
@@ -199,8 +200,8 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     borderWidth: 4,
     borderColor: 'transparent',
-    borderBottomColor: COLORS.logoLightHighlight,
-    borderLeftColor: COLORS.logoLightHighlight,
+    borderBottomColor: '#CBD5E1',
+    borderLeftColor: '#CBD5E1',
     opacity: 0.6,
   },
   ring3: {
@@ -210,8 +211,8 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 3,
     borderColor: 'transparent',
-    borderTopColor: COLORS.logoDarkShadow,
-    borderBottomColor: COLORS.logoDarkShadow,
+    borderTopColor: '#64748B',
+    borderBottomColor: '#64748B',
     opacity: 0.4,
   },
   coreIcon: {
@@ -219,14 +220,11 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#E4ECE8',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   textContainer: {
     alignItems: 'center',
@@ -235,13 +233,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '900',
-    color: COLORS.textDark,
+    color: theme?.textPrimary || COLORS.textDark,
     marginBottom: 12,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textMuted,
+    color: theme?.textSecondary || COLORS.textMuted,
     fontWeight: '700',
     textAlign: 'center',
     lineHeight: 24,
@@ -249,7 +247,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: '100%',
     height: 8,
-    backgroundColor: '#E1E9E5',
+    backgroundColor: theme?.border || '#E2E8F0',
     borderRadius: 4,
     marginTop: 40,
     overflow: 'hidden',

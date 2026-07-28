@@ -18,18 +18,19 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard } from 'lucide-react-native';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const GcashLogo = require('../../images/Gcash.png');
-const MayaLogo = require('../../images/Maya.png');
 const CardLogo = require('../../images/CreditDebitCard.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
   const { showAlert } = useCustomAlert();
-  const styles = getStyles();
+  const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
+  const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
   // --- EDIT PROFILE MODAL STATE ---
@@ -479,7 +480,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
       
       <ScrollView 
         style={styles.container} 
@@ -529,7 +530,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         {/* INTERACTIVE SUBSCRIPTION CONFIGURATION TIER CARD */}
         <Text style={styles.sectionLabelTitle}>Account Subscription Tier</Text>
         <View style={styles.formCard}>
-          <Text style={styles.cardTitle}>Select Target Membership Level</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 6, marginRight: 10 }}>
+              <Sparkles color="#8B5CF6" size={18} />
+            </View>
+            <Text style={styles.cardTitle}>Select Target Membership Level</Text>
+          </View>
           <View style={styles.filterButtonGroupRow}>
             <TouchableOpacity
               style={[styles.filterChipButton, accountTier === 'Free' ? styles.filterChipActive : styles.filterChipInactive]}
@@ -541,9 +547,15 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterChipButton, accountTier === 'Premium' ? styles.filterChipActive : styles.filterChipInactive]}
+              style={[
+                styles.filterChipButton,
+                accountTier === 'Premium'
+                  ? { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1.5 }
+                  : styles.filterChipInactive
+              ]}
               onPress={() => handleSelectTierOption('Premium')}
             >
+              <Sparkles color={accountTier === 'Premium' ? '#FFFFFF' : '#8B5CF6'} size={12} style={{ marginRight: 4 }} />
               <Text style={[styles.filterChipText, accountTier === 'Premium' && styles.filterChipTextActive]}>
                 Premium Tier
               </Text>
@@ -618,21 +630,81 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           )}
         </View>
 
+        {/* APP THEME SETTINGS CARD */}
+        <Text style={styles.sectionLabelTitle}>App Appearance</Text>
+        <View style={styles.formCard}>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.settingRowItemMainTitle}>Theme Mode</Text>
+            <Text style={styles.settingRowItemSubTitle}>
+              {themeMode === 'system'
+                ? `System Default (${isDarkMode ? 'Dark' : 'Light'})`
+                : themeMode === 'dark'
+                ? 'Dark Theme Enabled'
+                : 'Light Theme Enabled'}
+            </Text>
+          </View>
+
+          {/* 3-Option Segmented Selector */}
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: theme?.inputBg || '#F1F5F9',
+            borderRadius: 14,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: theme?.border || '#E2E8F0',
+          }}>
+            {[
+              { id: 'system', label: 'System', icon: <Smartphone size={15} color={themeMode === 'system' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+              { id: 'light',  label: 'Light',  icon: <Sun size={15} color={themeMode === 'light' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+              { id: 'dark',   label: 'Dark',   icon: <Moon size={15} color={themeMode === 'dark' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+            ].map((mode) => {
+              const isActive = themeMode === mode.id;
+              return (
+                <TouchableOpacity
+                  key={mode.id}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={() => setThemeMode(mode.id)}
+                >
+                  <View style={{ marginRight: 6 }}>{mode.icon}</View>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
+                  }}>
+                    {mode.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* NOTIFICATIONS SETTINGS CARD */}
         <Text style={styles.sectionLabelTitle}>Notification Settings</Text>
         <View style={styles.formCard}>
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Bell color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Bell color={'#10B981'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Habit & Routine Reminders</Text>
                 <Text style={styles.settingRowItemSubTitle}>Automated reminders for meals, hydration, calories, and workouts</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={habitReminders ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={habitReminders ? '#10B981' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
               onValueChange={setHabitReminders}
               value={habitReminders}
             />
@@ -642,16 +714,18 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Flame color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Flame color={'#F97316'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Motivational Updates</Text>
                 <Text style={styles.settingRowItemSubTitle}>Updates on achievements, completed workouts, and step milestones</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={motivationalUpdates ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
+              trackColor={{ false: '#E2E8F0', true: '#F97316' }}
+              thumbColor={motivationalUpdates ? '#F97316' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
               onValueChange={setMotivationalUpdates}
               value={motivationalUpdates}
             />
@@ -661,16 +735,18 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Sparkles color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Sparkles color={'#8B5CF6'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Personalized Smart Alerts</Text>
                 <Text style={styles.settingRowItemSubTitle}>Adjusted based on your behavior, goals, and daily routines</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={personalizedAlerts ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
+              trackColor={{ false: '#E2E8F0', true: '#8B5CF6' }}
+              thumbColor={personalizedAlerts ? '#8B5CF6' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
               onValueChange={setPersonalizedAlerts}
               value={personalizedAlerts}
             />
@@ -686,13 +762,15 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             activeOpacity={0.7}
           >
             <View style={styles.settingIconTextGroup}>
-              <Mail color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(14, 165, 233, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Mail color={'#0EA5E9'} size={16} />
+              </View>
               <View>
                 <Text style={styles.settingRowItemMainTitle}>Change Email Address</Text>
                 <Text style={styles.settingRowItemSubTitle}>Update your login email address securely</Text>
               </View>
             </View>
-            <ChevronRight color={'#7FA293'} size={16} />
+            <ChevronRight color={'#94A3B8'} size={16} />
           </TouchableOpacity>
 
           <View style={styles.glassDivider} />
@@ -703,20 +781,22 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             activeOpacity={0.7}
           >
             <View style={styles.settingIconTextGroup}>
-              <Shield color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Shield color={'#F59E0B'} size={16} />
+              </View>
               <View>
                 <Text style={styles.settingRowItemMainTitle}>Change Password</Text>
                 <Text style={styles.settingRowItemSubTitle}>Update your password securely</Text>
               </View>
             </View>
-            <ChevronRight color={'#7FA293'} size={16} />
+            <ChevronRight color={'#94A3B8'} size={16} />
           </TouchableOpacity>
         </View>
 
         {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={styles.logOutSecondaryNeuButton} onPress={handleLogOut}>
-          <LogOut color={'#E53E3E'} size={18} style={{ marginRight: 8 }} />
-          <Text style={styles.logOutButtonText}>Log Out</Text>
+        <TouchableOpacity style={[styles.logOutSecondaryNeuButton, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1.2 }]} onPress={handleLogOut}>
+          <LogOut color={'#EF4444'} size={18} style={{ marginRight: 8 }} />
+          <Text style={[styles.logOutButtonText, { color: '#EF4444', fontWeight: '800' }]}>Log Out</Text>
         </TouchableOpacity>
         
       </ScrollView>
@@ -757,7 +837,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               value={tempName}
               onChangeText={setTempName}
               placeholder="Username"
-              placeholderTextColor="#AEC2B7"
+              placeholderTextColor="#CBD5E1"
             />
 
 
@@ -796,7 +876,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
             <Text style={styles.inputLabel}>Current Email</Text>
             <View style={[styles.modalInput, { backgroundColor: 'rgba(30, 60, 50, 0.6)', justifyContent: 'center' }]}>
-              <Text style={{ color: '#AEC2B7', fontSize: 14 }}>{userProfile?.email || 'No email set'}</Text>
+              <Text style={{ color: '#CBD5E1', fontSize: 14 }}>{userProfile?.email || 'No email set'}</Text>
             </View>
 
             <Text style={styles.inputLabel}>Current Password</Text>
@@ -806,16 +886,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={emailCurrentPassword}
                 onChangeText={setEmailCurrentPassword}
                 placeholder="Enter current password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showEmailPassword}
               />
               <TouchableOpacity onPress={() => setShowEmailPassword(!showEmailPassword)} activeOpacity={0.7}>
                 {showEmailPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -829,7 +909,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              placeholderTextColor="#AEC2B7"
+              placeholderTextColor="#CBD5E1"
             />
 
             <View style={styles.modalButtons}>
@@ -888,16 +968,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={oldPassword}
                 onChangeText={setOldPassword}
                 placeholder="Enter current password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showOldPassword}
               />
               <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)} activeOpacity={0.7}>
                 {showOldPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -909,16 +989,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Enter new password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showNewPassword}
               />
               <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} activeOpacity={0.7}>
                 {showNewPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -930,16 +1010,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Confirm new password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showConfirmPassword}
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
                 {showConfirmPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -1016,11 +1096,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('maya')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={MayaLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <Wallet color="#10B981" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>Maya</Text>
             </TouchableOpacity>
 
@@ -1077,14 +1155,10 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
    
  
 
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';        
 
-const getStyles = () => StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   fullscreenOverlay: { 
     position: 'absolute', 
     top: 0, 
@@ -1093,7 +1167,7 @@ const getStyles = () => StyleSheet.create({
     right: 0, 
     width: screenWidth, 
     height: screenHeight, 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   container: { 
     flex: 1,
@@ -1101,7 +1175,7 @@ const getStyles = () => StyleSheet.create({
   scrollContent: { 
     paddingHorizontal: 20, 
     paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115,
+    paddingBottom: 85,
   },
   header: { 
     flexDirection: 'row', 
@@ -1126,29 +1200,24 @@ const getStyles = () => StyleSheet.create({
   greeting: { 
     fontSize: 28, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5,
   },
   subGreeting: { 
     fontSize: 13, 
     fontWeight: '700', 
-    color: '#556B60', 
+    color: theme?.textSecondary || '#64748B', 
     marginTop: 2,
   },
   profileFormCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 24, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
     padding: 16, 
     marginBottom: 24, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   profileUserRow: {
     flexDirection: 'column',
@@ -1164,15 +1233,8 @@ const getStyles = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 2, height: 4 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 5, 
-    elevation: 4,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
+    borderWidth: 2,
+    borderColor: theme?.border || '#E2E8F0',
   },
   avatarImageLarge: {
     width: 120,
@@ -1185,24 +1247,24 @@ const getStyles = () => StyleSheet.create({
   profileUserNameText: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 2,
     textAlign: 'center',
   },
   profileUserSubText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textAlign: 'center',
   },
   glassDivider: { 
     height: 1, 
-    backgroundColor: '#D4E2DC', 
+    backgroundColor: theme?.border || '#E2E8F0', 
     marginVertical: 12,
   },
   innerGlassDivider: {
     height: 1,
-    backgroundColor: '#D4E2DC',
+    backgroundColor: theme?.border || '#E2E8F0',
     marginBottom: 12,
     marginTop: 4,
   },
@@ -1220,42 +1282,37 @@ const getStyles = () => StyleSheet.create({
   profileMetricMiniValue: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 2,
   },
   profileMetricMiniLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   sectionLabelTitle: { 
     fontSize: 14, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 12, 
     marginLeft: 4, 
     letterSpacing: -0.2,
   },
   formCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 24, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
     padding: 16, 
     marginBottom: 24, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   cardTitle: { 
     fontSize: 11, 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     textTransform: 'uppercase', 
     letterSpacing: 1.2, 
     marginBottom: 12, 
@@ -1272,34 +1329,28 @@ const getStyles = () => StyleSheet.create({
     borderRadius: 16, 
     marginRight: 8, 
     marginBottom: 8, 
-    backgroundColor: baseColor,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    backgroundColor: theme?.surface || baseColor,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   filterChipInactive: { 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
   },
   filterChipActive: { 
-    backgroundColor: '#FFFFFF', 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.4, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderWidth: 0,
+    backgroundColor: theme?.cardBg || '#FFFFFF', 
+    borderWidth: 1.5,
+    borderColor: logoGreen,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   filterChipText: { 
     fontSize: 12, 
     fontWeight: '800',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
   },
   filterChipTextActive: {
     color: logoGreen,
@@ -1311,22 +1362,22 @@ const getStyles = () => StyleSheet.create({
   premiumPanelHeading: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     marginBottom: 10,
   },
   billingPlanSelectorRowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     padding: 14,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   billingPlanActive: {
     borderColor: logoGreen,
-    backgroundColor: '#E6EFEA',
+    backgroundColor: theme?.cardBg || '#EBEBEB',
     borderWidth: 1.5,
   },
   billingPlanTextGroup: {
@@ -1336,40 +1387,42 @@ const getStyles = () => StyleSheet.create({
   billingPlanMainTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 4,
   },
   billingPlanSubDescription: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 16,
   },
   billingPlanPriceBadgeText: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
   },
   bestValueBadge: {
-    backgroundColor: '#E53E3E',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
   },
   bestValueBadgeText: {
-    color: '#FFFFFF',
+    color: '#F59E0B',
     fontSize: 8,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   premiumFeatureDetailsBox: {
     marginTop: 16,
-    backgroundColor: '#E8F1EC',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   featureDetailsHeadingFlexRow: {
     flexDirection: 'row',
@@ -1379,7 +1432,7 @@ const getStyles = () => StyleSheet.create({
   premiumDetailsHeadingText: {
     fontSize: 12,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1396,7 +1449,7 @@ const getStyles = () => StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 18,
   },
   settingSwitchRowItem: {
@@ -1405,7 +1458,7 @@ const getStyles = () => StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#D4E2DC',
+    borderBottomColor: theme?.border || '#E2E8F0',
   },
   settingIconTextGroup: {
     flexDirection: 'row',
@@ -1418,91 +1471,71 @@ const getStyles = () => StyleSheet.create({
   settingRowItemMainTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 2,
   },
   settingRowItemSubTitle: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
   },
   systemActionNeuBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     paddingVertical: 16,
     borderRadius: 20,
     marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 4, 
-    elevation: 3,
     borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: theme?.border || '#E2E8F0',
   },
   systemActionBtnText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginLeft: 8,
   },
   dangerActionBtnText: {
-    color: '#E53E3E',
+    color: '#64748B',
   },
   dangerActionNeuBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFEEEE',
+    backgroundColor: theme?.cardBg || '#F8FAFC',
     paddingVertical: 16,
     borderRadius: 20,
     marginBottom: 14,
-    shadowColor: '#F5A8A8', 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.5, 
-    shadowRadius: 4, 
-    elevation: 2,
     borderWidth: 1.5, 
-    borderTopColor: '#FFFFFF', 
-    borderLeftColor: '#FFFFFF',
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   logOutSecondaryNeuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     paddingVertical: 16,
     borderRadius: 20,
     marginBottom: 14,
     marginTop: 12,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 4, 
-    elevation: 3,
     borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   logOutButtonText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#E53E3E',
+    color: theme?.error || '#64748B',
   },
   versionInfoFooterText: {
     textAlign: 'center',
     fontSize: 10,
     fontWeight: '700',
-    color: '#AEC2B7',
+    color: theme?.textSecondary || '#CBD5E1',
     marginBottom: 24,
     letterSpacing: 1,
   },
@@ -1520,55 +1553,41 @@ const getStyles = () => StyleSheet.create({
     justifyContent: 'center',
   },
   chatbotUnpressed: { 
-    backgroundColor: logoGreen, 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 3, height: 4 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 6, 
-    elevation: 5,
+    backgroundColor: logoGreen,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   chatbotPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
+    backgroundColor: '#059669',
     transform: [{ scale: 0.95 }],
   },
 
   editProfileButton: {
     marginTop: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme?.surface || '#FFFFFF',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1.2,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-    elevation: 2,
   },
   editProfileButtonText: {
     color: logoGreen,
     fontSize: 12,
     fontWeight: '800',
   },
-modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: baseColor, borderRadius: 20, padding: 24, shadowColor: softGreenShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '85%', backgroundColor: theme?.surface || baseColor, borderRadius: 20, padding: 24, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: logoGreen, marginBottom: 8, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, color: '#7FA293', textAlign: 'center', marginBottom: 20 },
-  modalInput: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC' },
-  passwordInputContainer: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC', paddingRight: 14 },
-  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23' },
+  modalSubtitle: { fontSize: 14, color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginBottom: 20 },
+  modalInput: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0' },
+  passwordInputContainer: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0', paddingRight: 14 },
+  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A' },
   modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 8 },
-  modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: clearWhiteHighlight, alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#D4E2DC' },
-  modalCancelText: { color: '#7FA293', fontWeight: '700', fontSize: 14 },
+  modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: theme?.cardBg || '#FFFFFF', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: theme?.border || '#E2E8F0' },
+  modalCancelText: { color: theme?.textSecondary || '#94A3B8', fontWeight: '700', fontSize: 14 },
   modalSave: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
   modalSaveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   cameraIconBadge: {
@@ -1582,12 +1601,9 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: theme?.surface || '#FFFFFF',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   settingActionRowItem: {
     flexDirection: 'row',
@@ -1598,21 +1614,18 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
   paymentMethodOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: clearWhiteHighlight,
+    backgroundColor: theme?.inputBg || '#FFFFFF',
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   paymentMethodActive: {
     borderColor: logoGreen,
-    backgroundColor: '#E6EFEA',
+    backgroundColor: theme?.cardBg || '#EBEBEB',
   },
   paymentLogoImage: {
     width: 60,
@@ -1622,15 +1635,15 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'ce
   paymentMethodText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
   },
   modalSaveDisabled: {
-    backgroundColor: '#AEC2B7',
+    backgroundColor: '#CBD5E1',
   },
   inputLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,

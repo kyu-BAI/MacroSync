@@ -18,6 +18,7 @@ import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,6 +37,8 @@ export default function DietRecipesScreen({
   setNotifications
 }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   // Static Recipes for Default Scheduled Meals (Offline Fallback)
   const DEFAULT_RECIPES = {
     dp1: {
@@ -240,11 +243,11 @@ export default function DietRecipesScreen({
 
   const getMealAccentColor = (mealType) => {
     switch (mealType) {
-      case 'Breakfast': return '#F28D52';
-      case 'Lunch': return '#E4B53D';
-      case 'Snack': return '#5FB496';
-      case 'Dinner': return '#6A82E6';
-      default: return '#4EA685';
+      case 'Breakfast': return '#F59E0B'; // Amber Gold
+      case 'Lunch':     return '#10B981'; // Emerald Green
+      case 'Snack':     return '#0EA5E9'; // Sky Blue
+      case 'Dinner':    return '#8B5CF6'; // Royal Purple
+      default:          return '#10B981';
     }
   };
 
@@ -365,81 +368,112 @@ export default function DietRecipesScreen({
     };
 
     if (!loggedMeals.includes(id)) {
-      // Optimistic UI updates
-      const updatedLoggedMeals = [...loggedMeals, id];
-      setLoggedMeals(updatedLoggedMeals);
-      
-      if (setNotifications && macros) {
-        setNotifications(prev => [{
-          id: `n-${Date.now()}`,
-          title: 'Meal Logged! 🍽️',
-          category: 'meal',
-          time: 'Just Now',
-          read: false,
-          message: `Successfully logged your meal: ${mealName} (${macros.calories || 0} Kcal). Keep it up!`
-        }, ...prev]);
-      }
-      
-      let newNutrition = null;
-      if (setDailyNutrition && macros) {
-        setDailyNutrition(prev => {
-          const next = {
-            ...prev,
-            consumedCalories: prev.consumedCalories + macros.calories,
-            protein: { ...prev.protein, current: prev.protein.current + macros.protein },
-            carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
-            fats: { ...prev.fats, current: prev.fats.current + macros.fats }
-          };
-          newNutrition = next;
-          return next;
-        });
-      }
+      const currentConsumed = dailyNutrition?.consumedCalories || 0;
+      const targetCalories = dailyNutrition?.targetCalories || 2500;
+      const mealCalories = macros.calories || 0;
+      const newTotal = currentConsumed + mealCalories;
+      const excess = newTotal - targetCalories;
 
-      // If offline
-      if (!isOnline) {
-        await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-        if (newNutrition) {
-          await updateCachedDashboardField(userId, {
-            loggedMealIds: updatedLoggedMeals,
-            nutrition: {
-              consumedCalories: newNutrition.consumedCalories,
-              protein: { ...newNutrition.protein },
-              carbs: { ...newNutrition.carbs },
-              fats: { ...newNutrition.fats }
-            }
+      const executeMealLog = async () => {
+        // Optimistic UI updates
+        const updatedLoggedMeals = [...loggedMeals, id];
+        setLoggedMeals(updatedLoggedMeals);
+        
+        if (setNotifications && macros) {
+          setNotifications(prev => [{
+            id: `n-${Date.now()}`,
+            title: 'Meal Logged! 🍽️',
+            category: 'meal',
+            time: 'Just Now',
+            read: false,
+            message: `Successfully logged your meal: ${mealName} (${macros.calories || 0} Kcal). Keep it up!`
+          }, ...prev]);
+        }
+        
+        let newNutrition = null;
+        if (setDailyNutrition && macros) {
+          setDailyNutrition(prev => {
+            const next = {
+              ...prev,
+              consumedCalories: prev.consumedCalories + macros.calories,
+              protein: { ...prev.protein, current: prev.protein.current + macros.protein },
+              carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
+              fats: { ...prev.fats, current: prev.fats.current + macros.fats }
+            };
+            newNutrition = next;
+            return next;
           });
         }
-        showAlert('📴 Saved Offline', 'Meal logged locally. Will sync when back online.');
-        return;
-      }
 
-      // Online: call API but handle failure gracefully
-      try {
-        const response = await fetch(`${API_URL}/meals`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(mealPayload),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to log meal on server');
+        // If offline
+        if (!isOnline) {
+          await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+          if (newNutrition) {
+            await updateCachedDashboardField(userId, {
+              loggedMealIds: updatedLoggedMeals,
+              nutrition: {
+                consumedCalories: newNutrition.consumedCalories,
+                protein: { ...newNutrition.protein },
+                carbs: { ...newNutrition.carbs },
+                fats: { ...newNutrition.fats }
+              }
+            });
+          }
+          showAlert("📴 Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
+          return;
         }
-      } catch (error) {
-        console.warn("LOG MEAL API ERROR (falling back to queue):", error);
-        await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-        if (newNutrition) {
-          await updateCachedDashboardField(userId, {
-            loggedMealIds: updatedLoggedMeals,
-            nutrition: {
-              consumedCalories: newNutrition.consumedCalories,
-              protein: { ...newNutrition.protein },
-              carbs: { ...newNutrition.carbs },
-              fats: { ...newNutrition.fats }
-            }
+
+        try {
+          const res = await fetch(`${API_URL}/meals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mealPayload)
           });
+          
+          if (!res.ok) {
+            console.log("Failed to persist meal log upstream:", res.status);
+          } else {
+            if (newNutrition) {
+              await updateCachedDashboardField(userId, {
+                loggedMealIds: updatedLoggedMeals,
+                nutrition: {
+                  consumedCalories: newNutrition.consumedCalories,
+                  protein: { ...newNutrition.protein },
+                  carbs: { ...newNutrition.carbs },
+                  fats: { ...newNutrition.fats }
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("Offline or network issue while logging meal:", err);
+          await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+          if (newNutrition) {
+            await updateCachedDashboardField(userId, {
+              loggedMealIds: updatedLoggedMeals,
+              nutrition: {
+                consumedCalories: newNutrition.consumedCalories,
+                protein: { ...newNutrition.protein },
+                carbs: { ...newNutrition.carbs },
+                fats: { ...newNutrition.fats }
+              }
+            });
+          }
+          showAlert("📴 Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
         }
+      };
+
+      if (excess > 0) {
+        showAlert(
+          "Calorie Target Exceeded ⚠️",
+          `Logging this meal (${mealCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Proceed & Log", style: "destructive", onPress: executeMealLog }
+          ]
+        );
+      } else {
+        await executeMealLog();
       }
     } else {
       // Optimistic UI updates
@@ -526,8 +560,8 @@ export default function DietRecipesScreen({
 
   if (loadingMeals) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: baseColor }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme?.background || baseColor }]}>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
         <View style={styles.loaderOuterNeu}>
           <ActivityIndicator size="large" color={logoGreen} />
         </View>
@@ -539,7 +573,7 @@ export default function DietRecipesScreen({
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
       
       <ScrollView 
         style={styles.container} 
@@ -586,14 +620,23 @@ export default function DietRecipesScreen({
             <View style={styles.dailyProgressCard}>
               <View style={styles.macroRowInline}>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, isOverCalories && { color: '#C53030' }]}>
+                  <Text style={[styles.macroMiniVal, { color: isOverCalories ? '#EF4444' : '#F97316' }]}>
                     {consumedCalories} / {targetCalories}
                   </Text>
                   <Text style={styles.macroMiniLabel}>Kcal</Text>
                 </View>
-                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.protein?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Protein</Text></View>
-                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.carbs?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Carbs</Text></View>
-                <View style={styles.macroMiniBox}><Text style={styles.macroMiniVal}>{dailyNutrition?.fats?.current || 0}g</Text><Text style={styles.macroMiniLabel}>Fats</Text></View>
+                <View style={styles.macroMiniBox}>
+                  <Text style={[styles.macroMiniVal, { color: '#10B981' }]}>{dailyNutrition?.protein?.current || 0}g</Text>
+                  <Text style={styles.macroMiniLabel}>Protein</Text>
+                </View>
+                <View style={styles.macroMiniBox}>
+                  <Text style={[styles.macroMiniVal, { color: '#F59E0B' }]}>{dailyNutrition?.carbs?.current || 0}g</Text>
+                  <Text style={styles.macroMiniLabel}>Carbs</Text>
+                </View>
+                <View style={styles.macroMiniBox}>
+                  <Text style={[styles.macroMiniVal, { color: '#EC4899' }]}>{dailyNutrition?.fats?.current || 0}g</Text>
+                  <Text style={styles.macroMiniLabel}>Fats</Text>
+                </View>
               </View>
             </View>
 
@@ -601,6 +644,7 @@ export default function DietRecipesScreen({
             <View style={styles.timelineContainer}>
               {dailyPlan.map((meal, index) => {
                 const IconComponent = getMealIconComponent(meal.mealType);
+                const accentColor = getMealAccentColor(meal.mealType);
                 const isLogged = loggedMeals.includes(meal.id);
                 return (
                   <View key={meal.id} style={styles.timelineItem}>
@@ -608,17 +652,25 @@ export default function DietRecipesScreen({
                       style={[
                         styles.timelineCard, 
                         isLogged && styles.timelineCardLogged,
-                        { borderLeftColor: getMealAccentColor(meal.mealType), borderLeftWidth: 5 }
+                        { borderLeftColor: accentColor, borderLeftWidth: 5 }
                       ]}
                     >
                       <View style={styles.timelineHeader}>
-                        <View style={[styles.mealTypeBadge, isLogged && { backgroundColor: '#37745D' }]}>
-                          <IconComponent color={isLogged ? '#FFFFFF' : logoGreen} size={12} />
-                          <Text style={[styles.mealTypeBadgeText, isLogged && { color: '#FFFFFF' }]}>{meal.mealType}</Text>
+                        <View style={[
+                          styles.mealTypeBadge, 
+                          isLogged ? { backgroundColor: '#64748B' } : { backgroundColor: `${accentColor}1F` }
+                        ]}>
+                          <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
+                          <Text style={[
+                            styles.mealTypeBadgeText, 
+                            isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+                          ]}>
+                            {meal.mealType}
+                          </Text>
                         </View>
                         <Text style={styles.timelineTime}>{meal.time}</Text>
                       </View>
-                      <Text style={[styles.timelineTitle, isLogged && { color: '#41544B' }]}>{meal.title}</Text>
+                      <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>{meal.title}</Text>
                       <View style={styles.timelineFooter}>
                         <View style={{ flex: 1, paddingRight: 8 }}>
                           <Text style={styles.timelineMacroText}>{meal.calories} kcal • {meal.protein} protein</Text>
@@ -666,11 +718,11 @@ export default function DietRecipesScreen({
           <View style={styles.exploreSection}>
             <View style={styles.searchFormCard}>
               <View style={styles.searchBarInnerContainer}>
-                <Search color="#556B60" size={20} style={styles.searchIcon} />
+                <Search color="#64748B" size={20} style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchTextInput}
                   placeholder="Search ingredients or meals..."
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor="#94A3B8"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -703,7 +755,7 @@ export default function DietRecipesScreen({
                     style={[styles.filterChipButton, selectedBudget === tier ? styles.filterChipActive : styles.filterChipInactive]}
                     onPress={() => setSelectedBudget(tier)}
                   >
-                    <Text style={[styles.filterChipText, { color: selectedBudget === tier ? '#FFFFFF' : '#41544B' }]}>{tier}</Text>
+                    <Text style={[styles.filterChipText, { color: selectedBudget === tier ? '#FFFFFF' : '#64748B' }]}>{tier}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -725,7 +777,7 @@ export default function DietRecipesScreen({
                   activeOpacity={0.8}
                 >
                   <MapPin 
-                    color={selectedLocation === 'Daanbantayan' ? logoGreen : '#7FA293'} 
+                    color={selectedLocation === 'Daanbantayan' ? logoGreen : '#94A3B8'} 
                     size={selectedLocation === 'Daanbantayan' ? 32 : 24} 
                   />
                   <Text style={[styles.mapPinLabel, selectedLocation === 'Daanbantayan' && styles.mapPinLabelActive]}>Daanbantayan</Text>
@@ -738,7 +790,7 @@ export default function DietRecipesScreen({
                   activeOpacity={0.8}
                 >
                   <MapPin 
-                    color={selectedLocation === 'San Remigio' ? logoGreen : '#7FA293'} 
+                    color={selectedLocation === 'San Remigio' ? logoGreen : '#94A3B8'} 
                     size={selectedLocation === 'San Remigio' ? 32 : 24} 
                   />
                   <Text style={[styles.mapPinLabel, selectedLocation === 'San Remigio' && styles.mapPinLabelActive]}>San Remigio</Text>
@@ -751,7 +803,7 @@ export default function DietRecipesScreen({
                   activeOpacity={0.8}
                 >
                   <MapPin 
-                    color={selectedLocation === 'Bogo City' ? logoGreen : '#7FA293'} 
+                    color={selectedLocation === 'Bogo City' ? logoGreen : '#94A3B8'} 
                     size={selectedLocation === 'Bogo City' ? 32 : 24} 
                   />
                   <Text style={[styles.mapPinLabel, selectedLocation === 'Bogo City' && styles.mapPinLabelActive]}>Bogo City</Text>
@@ -765,7 +817,7 @@ export default function DietRecipesScreen({
                     style={[styles.filterChipButton, selectedLocation === loc ? styles.filterChipActive : styles.filterChipInactive]}
                     onPress={() => setSelectedLocation(loc)}
                   >
-                    <Text style={[styles.filterChipText, { color: selectedLocation === loc ? '#FFFFFF' : '#41544B' }]}>{loc}</Text>
+                    <Text style={[styles.filterChipText, { color: selectedLocation === loc ? '#FFFFFF' : '#64748B' }]}>{loc}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -781,7 +833,7 @@ export default function DietRecipesScreen({
                       style={[styles.filterChipButton, selectedAllergy === allergy ? styles.filterChipActive : styles.filterChipInactive]}
                       onPress={() => setSelectedAllergy(allergy)}
                     >
-                      <Text style={[styles.filterChipText, { color: selectedAllergy === allergy ? '#FFFFFF' : '#41544B' }]}>{allergy}</Text>
+                      <Text style={[styles.filterChipText, { color: selectedAllergy === allergy ? '#FFFFFF' : '#64748B' }]}>{allergy}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -804,16 +856,16 @@ export default function DietRecipesScreen({
                   <View style={styles.recipeTitleContainer}>
                     <Text style={styles.recipeMainTitle}>{recipe.title}</Text>
                     <View style={styles.metaBadgeRow}>
-                      <View style={styles.metaBadge}>
-                        <Clock color={logoGreen} size={12} />
-                        <Text style={styles.metaBadgeText}>{recipe.time}</Text>
+                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)' }]}>
+                        <Clock color="#10B981" size={12} strokeWidth={2.2} />
+                        <Text style={[styles.metaBadgeText, { color: '#10B981' }]}>{recipe.time}</Text>
                       </View>
-                      <View style={styles.metaBadge}>
-                        <Text style={styles.metaBadgeText}>{recipe.budget}</Text>
+                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.10)' }]}>
+                        <Text style={[styles.metaBadgeText, { color: '#F59E0B' }]}>{recipe.budget}</Text>
                       </View>
-                      <View style={styles.metaBadge}>
-                        <MapPin color={logoGreen} size={12} />
-                        <Text style={styles.metaBadgeText}>{recipe.location}</Text>
+                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(14, 165, 233, 0.16)' : 'rgba(14, 165, 233, 0.10)' }]}>
+                        <MapPin color="#0EA5E9" size={12} strokeWidth={2.2} />
+                        <Text style={[styles.metaBadgeText, { color: '#0EA5E9' }]}>{recipe.location}</Text>
                       </View>
                     </View>
                   </View>
@@ -823,18 +875,18 @@ export default function DietRecipesScreen({
 
                 <View style={styles.macroMetricsSummaryGrid}>
                   <View style={styles.macroTileBox}>
-                    <Text style={styles.macroTileValue}>{recipe.calories}</Text>
+                    <Text style={[styles.macroTileValue, { color: '#F97316' }]}>{recipe.calories}</Text>
                     <Text style={styles.macroTileLabel}>Kcal</Text>
                   </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.macroTileValue, { color: '#4EA685' }]}>{recipe.protein}</Text>
+                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
+                    <Text style={[styles.macroTileValue, { color: '#10B981' }]}>{recipe.protein}</Text>
                     <Text style={styles.macroTileLabel}>Protein</Text>
                   </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                    <Text style={[styles.macroTileValue, { color: '#3B82F6' }]}>{recipe.carbs}</Text>
+                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
+                    <Text style={[styles.macroTileValue, { color: '#F59E0B' }]}>{recipe.carbs}</Text>
                     <Text style={styles.macroTileLabel}>Carbs</Text>
                   </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
                     <Text style={[styles.macroTileValue, { color: '#EC4899' }]}>{recipe.fats}</Text>
                     <Text style={styles.macroTileLabel}>Fats</Text>
                   </View>
@@ -940,18 +992,18 @@ export default function DietRecipesScreen({
               {/* Macro Details Grid */}
               <View style={styles.recipeModalMacrosGrid}>
                 <View style={styles.recipeModalMacroBox}>
-                  <Text style={styles.recipeModalMacroVal}>{selectedRecipe.calories}</Text>
+                  <Text style={[styles.recipeModalMacroVal, { color: '#F97316' }]}>{selectedRecipe.calories}</Text>
                   <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
                 </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                  <Text style={[styles.recipeModalMacroVal, { color: logoGreen }]}>{selectedRecipe.protein}</Text>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
+                  <Text style={[styles.recipeModalMacroVal, { color: '#10B981' }]}>{selectedRecipe.protein}</Text>
                   <Text style={styles.recipeModalMacroLabel}>Protein</Text>
                 </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
-                  <Text style={[styles.recipeModalMacroVal, { color: '#3B82F6' }]}>{selectedRecipe.carbs}</Text>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
+                  <Text style={[styles.recipeModalMacroVal, { color: '#F59E0B' }]}>{selectedRecipe.carbs}</Text>
                   <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
                 </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: '#D4E2DC' }]}>
+                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
                   <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
                   <Text style={styles.recipeModalMacroLabel}>Fats</Text>
                 </View>
@@ -1001,14 +1053,10 @@ export default function DietRecipesScreen({
   );
 }
 
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';        
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   fullscreenOverlay: { 
     position: 'absolute', 
     top: 0, 
@@ -1017,7 +1065,7 @@ const styles = StyleSheet.create({
     right: 0, 
     width: screenWidth, 
     height: screenHeight, 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   container: { 
     flex: 1,
@@ -1025,7 +1073,7 @@ const styles = StyleSheet.create({
   scrollContent: { 
     paddingHorizontal: 20, 
     paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115,
+    paddingBottom: 85,
   },
   header: { 
     flexDirection: 'row', 
@@ -1049,30 +1097,25 @@ const styles = StyleSheet.create({
   greeting: { 
     fontSize: 28, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5,
   },
   subGreeting: { 
     fontSize: 13, 
     fontWeight: '700', 
-    color: '#556B60', 
+    color: theme?.textSecondary || '#64748B', 
     marginTop: 2,
   },
   searchFormCard: {
-    backgroundColor: baseColor, 
+    backgroundColor: theme?.surface || baseColor, 
     borderRadius: 20, 
     paddingHorizontal: 16, 
     paddingVertical: 4, 
     marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   searchBarInnerContainer: { 
     flexDirection: 'row', 
@@ -1086,26 +1129,21 @@ const styles = StyleSheet.create({
     flex: 1, 
     fontSize: 14, 
     fontWeight: '700', 
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
   },
   formCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 28, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
     padding: 18, 
     marginBottom: 16,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 6, height: 6 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 8, 
-    elevation: 4,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   cardTitle: { 
     fontSize: 11, 
-    color: '#41544B', 
+    color: theme?.textPrimary || '#64748B', 
     textTransform: 'uppercase', 
     letterSpacing: 1.2, 
     marginBottom: 10, 
@@ -1115,7 +1153,7 @@ const styles = StyleSheet.create({
   sectionLabelTitle: { 
     fontSize: 14, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 12, 
     marginLeft: 4, 
     letterSpacing: -0.2,
@@ -1131,10 +1169,10 @@ const styles = StyleSheet.create({
     marginRight: 8, 
     marginBottom: 8, 
     borderWidth: 1, 
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   filterChipInactive: { 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
   },
   filterChipActive: { 
     backgroundColor: logoGreen, 
@@ -1146,23 +1184,18 @@ const styles = StyleSheet.create({
   },
   glassDivider: { 
     height: 1, 
-    backgroundColor: '#D4E2DC', 
+    backgroundColor: theme?.border || '#E2E8F0', 
     marginVertical: 12,
   },
   recipeFormCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 28, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
     padding: 16, 
     marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 6, height: 6 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 8, 
-    elevation: 4,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   recipeHeaderRow: { 
     flexDirection: 'row', 
@@ -1174,7 +1207,7 @@ const styles = StyleSheet.create({
   recipeMainTitle: { 
     fontSize: 16, 
     fontWeight: '900', 
-    color: '#1A2B23', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 6, 
     lineHeight: 20,
   },
@@ -1186,7 +1219,7 @@ const styles = StyleSheet.create({
   metaBadge: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#E2ECE7', 
+    backgroundColor: theme?.cardBg || '#EBEBEB', 
     paddingHorizontal: 8, 
     paddingVertical: 4, 
     borderRadius: 10, 
@@ -1196,7 +1229,7 @@ const styles = StyleSheet.create({
   metaBadgeText: { 
     fontSize: 11, 
     fontWeight: '700', 
-    color: '#37745D', 
+    color: theme?.primary || '#64748B', 
     marginLeft: 4,
   },
   macroMetricsSummaryGrid: { 
@@ -1212,19 +1245,19 @@ const styles = StyleSheet.create({
   macroTileValue: { 
     fontSize: 14, 
     fontWeight: '900', 
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
   },
   macroTileLabel: { 
     fontSize: 10, 
     fontWeight: '700', 
-    color: '#7FA293', 
+    color: theme?.textSecondary || '#94A3B8', 
     marginTop: 2,
   },
   expandedRecipeContentAnimation: { 
     marginTop: 4,
   },
   ingredientsBox: { 
-    backgroundColor: '#EBF2EE', 
+    backgroundColor: theme?.cardBg || '#F1F5F9', 
     padding: 14, 
     borderRadius: 18, 
     marginBottom: 12,
@@ -1232,7 +1265,7 @@ const styles = StyleSheet.create({
   extendedSectionHeaderLabel: { 
     fontSize: 12, 
     fontWeight: '800', 
-    color: '#37745D', 
+    color: theme?.primary || '#64748B', 
     textTransform: 'uppercase', 
     letterSpacing: 0.5, 
     marginBottom: 8,
@@ -1240,15 +1273,15 @@ const styles = StyleSheet.create({
   recipeListItemRowText: { 
     fontSize: 13, 
     fontWeight: '600', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 4,
   },
   instructionsBox: { 
-    backgroundColor: '#F4F7F5', 
+    backgroundColor: theme?.cardBg || '#F8FAFC', 
     padding: 14, 
     borderRadius: 18, 
     borderWidth: 1, 
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   instructionHeaderFlexTitle: { 
     flexDirection: 'row', 
@@ -1261,7 +1294,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   stepIndexMarkerBadgeText: { 
-    backgroundColor: '#4EA685', 
+    backgroundColor: '#10B981', 
     color: '#FFFFFF', 
     fontSize: 10, 
     fontWeight: '900', 
@@ -1277,7 +1310,7 @@ const styles = StyleSheet.create({
     flex: 1, 
     fontSize: 13, 
     fontWeight: '600', 
-    color: '#33443C', 
+    color: theme?.textPrimary || '#10B981', 
     lineHeight: 18,
   },
   fullRecipeViewToggleButton: { 
@@ -1285,21 +1318,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    backgroundColor: baseColor, 
+    backgroundColor: theme?.surface || baseColor, 
     paddingVertical: 12, 
     borderRadius: 16, 
     borderWidth: 1, 
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
     marginRight: 8,
   },
   fullRecipeViewToggleActiveButton: { 
-    backgroundColor: '#4EA685', 
-    borderColor: '#4EA685',
+    backgroundColor: '#10B981', 
+    borderColor: '#10B981',
   },
   fullRecipeToggleButtonText: { 
     fontSize: 12, 
     fontWeight: '800', 
-    color: '#4EA685', 
+    color: '#10B981', 
     marginRight: 6,
   },
   recipeFooterActions: {
@@ -1315,16 +1348,9 @@ const styles = StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 12,
     borderRadius: 16,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
   },
   logRecipeBtnLogged: {
-    backgroundColor: '#37745D',
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: '#64748B',
   },
   logRecipeBtnText: {
     color: '#FFFFFF',
@@ -1338,26 +1364,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 6,
   },
+  aiGenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  aiGenerateBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+  },
   warningBadge: {
-    backgroundColor: '#FED7D7',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
   },
   warningBadgeText: {
-    color: '#C53030',
+    color: '#EF4444',
     fontSize: 10,
     fontWeight: '800',
   },
   // --- TAB SWITCHER UI ---
   tabSwitcherContainer: {
     flexDirection: 'row',
-    backgroundColor: '#E5ECE8',
+    backgroundColor: theme?.cardBg || '#EBEBEB',
     borderRadius: 20,
     padding: 4,
     marginBottom: 20,
     borderWidth: 1.2,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   tabButton: {
     flex: 1,
@@ -1366,17 +1410,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   tabButtonActive: {
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: theme?.border || '#E2E8F0',
   },
   tabButtonInactive: {
     backgroundColor: 'transparent',
@@ -1389,7 +1425,7 @@ const styles = StyleSheet.create({
   tabTextInactive: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
   },
   // --- DAILY PLAN UI ---
   dailyProgressCard: {
@@ -1404,32 +1440,24 @@ const styles = StyleSheet.create({
   },
   macroMiniBox: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     marginHorizontal: 4,
     paddingVertical: 12,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: theme?.border || '#E2E8F0',
   },
   macroMiniVal: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
   },
   macroMiniLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     marginTop: 2,
   },
   timelineContainer: {
@@ -1442,29 +1470,19 @@ const styles = StyleSheet.create({
 
   timelineCard: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderRadius: 20,
     padding: 14,
     borderWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 5,
-    elevation: 3,
+    borderColor: theme?.border || '#E2E8F0',
   },
   timelineCardLogged: {
-    backgroundColor: '#E6EFEA',
+    backgroundColor: theme?.cardBg || '#EBEBEB',
     borderWidth: 1.5,
-    borderTopColor: '#C2D6CE',
-    borderLeftColor: '#C2D6CE',
+    borderTopColor: theme?.border || '#E2E8F0',
+    borderLeftColor: theme?.border || '#E2E8F0',
     borderBottomColor: 'transparent',
     borderRightColor: 'transparent',
-    shadowOpacity: 0,
-    elevation: 0,
     opacity: 0.85,
   },
   timelineHeader: {
@@ -1476,7 +1494,7 @@ const styles = StyleSheet.create({
   mealTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF2EE',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -1490,12 +1508,12 @@ const styles = StyleSheet.create({
   timelineTime: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
   },
   timelineTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 10,
   },
   timelineFooter: {
@@ -1503,13 +1521,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#F0F4F2',
+    borderTopColor: theme?.border || '#F8FAFC',
     paddingTop: 10,
   },
   timelineMacroText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
   },
   logMealMiniBtn: {
     flexDirection: 'row',
@@ -1520,7 +1538,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   logMealMiniBtnLogged: {
-    backgroundColor: '#7FA293',
+    backgroundColor: '#94A3B8',
   },
   logMealMiniBtnText: {
     color: '#FFFFFF',
@@ -1542,7 +1560,7 @@ const styles = StyleSheet.create({
   emptyStateText: { 
     fontSize: 14, 
     fontWeight: '700', 
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
   },
   floatingChatbotContainer: { 
     position: 'absolute', 
@@ -1558,31 +1576,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chatbotUnpressed: { 
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 3, height: 4 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 6, 
-    elevation: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   chatbotPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
+    backgroundColor: '#059669',
     transform: [{ scale: 0.95 }],
   },
 
   staticMapContainer: {
     height: 220,
     width: '100%',
-    backgroundColor: '#E8F1EC', 
+    backgroundColor: '#F1F5F9', 
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: '#E2E8F0',
     marginBottom: 16,
     overflow: 'hidden',
     position: 'relative',
@@ -1593,7 +1602,7 @@ const styles = StyleSheet.create({
     left: -20,
     width: 200,
     height: 300,
-    backgroundColor: '#D1E5DB',
+    backgroundColor: '#E2E8F0',
     borderRadius: 100,
     opacity: 0.5,
   },
@@ -1603,7 +1612,7 @@ const styles = StyleSheet.create({
     left: '48%',
     width: 2,
     height: '60%',
-    backgroundColor: '#B5D3C5',
+    backgroundColor: '#E2E8F0',
     transform: [{ rotate: '15deg' }],
   },
   mapPinContainer: {
@@ -1613,15 +1622,12 @@ const styles = StyleSheet.create({
   },
   mapPinLabel: {
     fontSize: 10,
-    color: '#7FA293',
+    color: '#94A3B8',
     fontWeight: '600',
     marginTop: 2,
-    textShadowColor: '#FFFFFF',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   mapPinLabelActive: {
-    color: '#41544B',
+    color: '#64748B',
     fontWeight: '800',
     fontSize: 11,
   },
@@ -1634,11 +1640,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: 8,
     marginBottom: 8,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   aiGenerateBtnText: {
     color: '#FFFFFF',
@@ -1667,7 +1670,7 @@ const styles = StyleSheet.create({
   recipeModalTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: '#0F172A',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -1679,7 +1682,7 @@ const styles = StyleSheet.create({
   recipeModalMetaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E2ECE7',
+    backgroundColor: '#EBEBEB',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -1688,7 +1691,7 @@ const styles = StyleSheet.create({
   recipeModalMetaText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#37745D',
+    color: '#64748B',
     marginLeft: 4,
   },
   recipeModalMacrosGrid: {
@@ -1698,7 +1701,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2ECE7',
+    borderColor: '#EBEBEB',
     marginBottom: 16,
   },
   recipeModalMacroBox: {
@@ -1708,12 +1711,12 @@ const styles = StyleSheet.create({
   recipeModalMacroVal: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: '#0F172A',
   },
   recipeModalMacroLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7FA293',
+    color: '#94A3B8',
     marginTop: 2,
   },
   recipeModalScroll: {
@@ -1721,22 +1724,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   recipeModalIngredientsBox: {
-    backgroundColor: '#EBF2EE',
+    backgroundColor: '#F1F5F9',
     padding: 16,
     borderRadius: 20,
     marginBottom: 12,
   },
   recipeModalInstructionsBox: {
-    backgroundColor: '#F4F7F5',
+    backgroundColor: '#F8FAFC',
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: '#E2E8F0',
   },
   recipeModalSecTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#37745D',
+    color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -1744,7 +1747,7 @@ const styles = StyleSheet.create({
   recipeModalListItem: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#21332A',
+    color: '#0F172A',
     marginBottom: 6,
     lineHeight: 18,
   },
@@ -1754,7 +1757,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   recipeModalStepNum: {
-    backgroundColor: '#4EA685',
+    backgroundColor: '#10B981',
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '900',
@@ -1770,7 +1773,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: '#33443C',
+    color: '#10B981',
     lineHeight: 18,
   },
   recipeModalCloseBtn: {
@@ -1797,12 +1800,12 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: '#E2E8F0',
   },
   loadingModalText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#37745D',
+    color: '#64748B',
     marginTop: 12,
   },
   loaderOuterNeu: {
@@ -1813,23 +1816,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
     borderWidth: 1.5,
-    borderColor: clearWhiteHighlight,
+    borderColor: '#FFFFFF',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   loaderTextTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: '#0F172A',
     marginBottom: 8,
   },
   loaderTextDesc: {
     fontSize: 14,
-    color: '#7FA293',
+    color: '#94A3B8',
     fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: 40,

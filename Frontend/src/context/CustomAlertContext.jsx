@@ -13,16 +13,28 @@ export function CustomAlertProvider({ children }) {
   });
 
   const showAlert = useCallback((title, message, buttons = [], type = 'info') => {
-    // Deduce type automatically if title contains keywords like "Error", "Success", "Warning", etc.
     let alertType = type;
     const lowerTitle = (title || '').toLowerCase();
-    const lowerMsg = (message || '').toLowerCase();
+    const lowerMsg   = (message || '').toLowerCase();
+    const combined   = lowerTitle + ' ' + lowerMsg;
 
-    if (lowerTitle.includes('error') || lowerMsg.includes('error') || lowerTitle.includes('failed')) {
+    if (lowerTitle.includes('error') || lowerTitle.includes('failed') || lowerMsg.includes('error')) {
       alertType = 'error';
-    } else if (lowerTitle.includes('success') || lowerMsg.includes('success') || lowerTitle.includes('saved')) {
+    } else if (
+      lowerTitle.includes('success') || lowerTitle.includes('saved') || lowerTitle.includes('logged') ||
+      lowerTitle.includes('tracked') || lowerTitle.includes('added') || lowerTitle.includes('complete') ||
+      lowerMsg.includes('success') || lowerMsg.includes('successfully')
+    ) {
       alertType = 'success';
-    } else if (lowerTitle.includes('warning') || lowerTitle.includes('confirm')) {
+    } else if (
+      lowerTitle.includes('warning') || lowerTitle.includes('limit') || lowerTitle.includes('over') ||
+      lowerTitle.includes('invalid') || lowerTitle.includes('exceed') || combined.includes('over your')
+    ) {
+      alertType = 'warning';
+    } else if (
+      lowerTitle.includes('confirm') || lowerTitle.includes('sure') || lowerTitle.includes('proceed') ||
+      lowerMsg.includes('are you sure') || lowerMsg.includes('proceed')
+    ) {
       alertType = 'confirm';
     }
 

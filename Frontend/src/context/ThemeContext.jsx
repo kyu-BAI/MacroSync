@@ -1,40 +1,92 @@
-import React, { createContext, useState, useContext, useMemo } from 'react';
+import React, { createContext, useState, useContext, useMemo, useEffect } from 'react';
+import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const THEME_STORAGE_KEY = '@user_theme_mode';
 
 const lightPalette = {
-  background: '#FAFAFA',
+  background: '#F8FAFC',
   surface: '#FFFFFF',
-  primary: '#00D084',
-  primaryHover: '#00B875',
-  textPrimary: '#1A1D1E',
-  textSecondary: '#8A959E',
-  border: '#EAEAEA',
-  error: '#FF6B6B',
-  success: '#00D084',
-  divider: '#F0F0F0',
-  navbar: '#FFFFFF'
+  cardBg: '#FFFFFF',
+  primary: '#10B981',
+  primaryHover: '#059669',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  border: '#E2E8F0',
+  error: '#EF4444',
+  success: '#10B981',
+  divider: 'rgba(0, 0, 0, 0.06)',
+  navbar: '#FFFFFF',
+  inputBg: '#F1F5F9',
+  inputBorder: '#E2E8F0',
+  placeholderText: '#94A3B8',
+  iconBg: '#ECFDF5',
+  shadowColor: 'transparent',
 };
 
 const darkPalette = {
-  background: '#121417',
-  surface: '#1E2126',
-  primary: '#00E676',
-  primaryHover: '#00C853',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A0AAB2',
-  border: '#2A2F35',
-  error: '#FF5252',
-  success: '#00E676',
-  divider: '#2A2F35',
-  navbar: '#1E2126'
+  background: '#0F172A',
+  surface: '#1E293B',
+  cardBg: '#1E293B',
+  primary: '#34D399',
+  primaryHover: '#10B981',
+  textPrimary: '#F8FAFC',
+  textSecondary: '#94A3B8',
+  border: '#334155',
+  error: '#F87171',
+  success: '#34D399',
+  divider: 'rgba(255, 255, 255, 0.1)',
+  navbar: '#0F172A',
+  inputBg: '#334155',
+  inputBorder: '#475569',
+  placeholderText: '#64748B',
+  iconBg: '#064E3B',
+  shadowColor: 'transparent',
 };
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const systemColorScheme = useColorScheme(); // 'dark' | 'light' | null
+  const [themeMode, setThemeModeState] = useState('system'); // 'system' | 'light' | 'dark'
 
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
+  useEffect(() => {
+    const loadSavedThemeMode = async () => {
+      try {
+        const savedMode = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (savedMode === 'dark' || savedMode === 'light' || savedMode === 'system') {
+          setThemeModeState(savedMode);
+        } else if (savedMode === 'true') {
+          setThemeModeState('dark');
+        } else if (savedMode === 'false') {
+          setThemeModeState('light');
+        }
+      } catch (err) {
+        console.log('Error loading saved theme mode:', err);
+      }
+    };
+    loadSavedThemeMode();
+  }, []);
+
+  const setThemeMode = async (newMode) => {
+    try {
+      setThemeModeState(newMode);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, newMode);
+    } catch (err) {
+      console.log('Error saving theme mode:', err);
+    }
+  };
+
+  const isDarkMode = useMemo(() => {
+    if (themeMode === 'system') {
+      return systemColorScheme === 'dark';
+    }
+    return themeMode === 'dark';
+  }, [themeMode, systemColorScheme]);
+
+  const toggleTheme = async () => {
+    const nextMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
+    await setThemeMode(nextMode);
   };
 
   const theme = useMemo(() => {
@@ -42,7 +94,7 @@ export const ThemeProvider = ({ children }) => {
   }, [isDarkMode]);
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme }}>
+    <ThemeContext.Provider value={{ isDarkMode, themeMode, setThemeMode, toggleTheme, theme }}>
       {children}
     </ThemeContext.Provider>
   );

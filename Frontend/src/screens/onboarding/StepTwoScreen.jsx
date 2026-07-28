@@ -21,22 +21,22 @@ import { useCustomAlert } from '../../context/CustomAlertContext';
 // SYSTEM COLOR SCHEME ENVIRONMENT DESIGN SYSTEM
 // ==========================================
 const CONFIG = {
-  baseColor: '#F0F4F2',
-  clearWhiteHighlight: '#FFFFFF',
-  softGreenShadow: '#AEC2B7',
-  logoGreen: '#4EA685',
-  logoDarkShadow: '#37745D',
-  logoLightHighlight: '#65D8AD',
-  textDark: '#1A2B23',
-  textGrey: '#556B60',
-  textMuted: '#7FA293',
-  borderLight: '#D4E2DC',
-  borderItem: '#E1E9E5',
-  bgPill: '#E4ECE8'
+  baseColor: '#F8FAFC',
+  logoGreen: '#10B981',
+  textDark: '#0F172A',
+  textGrey: '#64748B',
+  textMuted: '#94A3B8',
+  borderLight: '#E2E8F0',
+  borderItem: '#E2E8F0',
+  bgPill: '#F1F5F9'
 };
+
+import { useTheme } from '../../context/ThemeContext';
 
 export default function StepTwoScreen({ onNext, currentWeight, height, weightUnit }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   // --- Form Controls States ---
   const [selectedActivity, setSelectedActivity] = useState('moderate');
   const [selectedGoal, setSelectedGoal] = useState('muscle');
@@ -337,7 +337,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                   <Text style={styles.inputLabel}>Target Goal Weight (kg)</Text>
                 </View>
 
-                <View style={[styles.neumorphicInputInset, selectedGoal === 'maintain' && styles.neumorphicInputDisabled]}>
+                <View style={[styles.flatInputField, selectedGoal === 'maintain' && styles.flatInputFieldDisabled]}>
                   <TextInput 
                     style={[styles.input, selectedGoal === 'maintain' && styles.inputDisabled]}
                     placeholder="Enter target weight in kg"
@@ -353,7 +353,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
               {/* TARGET CALENDAR CHRONO SECTOR AREA INPUT GROUP */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Target Goal Date</Text>
-                <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
+                <View style={[styles.flatInputField, styles.fieldRow]}>
                   <TextInput 
                     style={styles.input}
                     placeholder="MM/DD/YYYY"
@@ -388,7 +388,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
               ]}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color={CONFIG.clearWhiteHighlight} />
+                <ActivityIndicator size="small" color={'#FFFFFF'} />
               ) : (
                 <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
                   Continue
@@ -446,11 +446,11 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
 // ==========================================
 // STYLE SHEET DEFINITIONS DESIGN SYSTEM TOKENS
 // ==========================================
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   // --- Structural Architecture Framework Bases ---
   container: { 
     flex: 1, 
-    backgroundColor: CONFIG.baseColor 
+    backgroundColor: theme?.background || CONFIG.baseColor 
   },
   scrollContainer: { 
     flexGrow: 1, 
@@ -474,13 +474,13 @@ const styles = StyleSheet.create({
   brandTitle: { 
     fontSize: 38, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5, 
     marginTop: 4 
   },
   brandSubtitle: { 
     fontSize: 13, 
-    color: CONFIG.textGrey, 
+    color: theme?.textSecondary || CONFIG.textGrey, 
     marginTop: 8, 
     textAlign: 'center', 
     lineHeight: 20, 
@@ -490,21 +490,16 @@ const styles = StyleSheet.create({
   
   // --- Main Panel Surfacings Cards UI Architecture Layers ---
   formCard: {
-    backgroundColor: CONFIG.baseColor,
-    borderRadius: 36, 
+    backgroundColor: theme?.surface || CONFIG.baseColor,
+    borderRadius: 28, 
     padding: 20,
-    shadowColor: CONFIG.softGreenShadow,
-    shadowOffset: { width: 12, height: 12 }, 
-    shadowOpacity: 1,
-    shadowRadius: 14, 
-    elevation: 10,    
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: CONFIG.clearWhiteHighlight,
-    borderLeftColor: CONFIG.clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || CONFIG.borderItem,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   sectionInputLabel: { 
-    color: '#41544B', 
+    color: theme?.textPrimary || '#64748B', 
     fontSize: 11, 
     fontWeight: '800', 
     marginBottom: 12, 
@@ -529,21 +524,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5 
   },
   gridCardInactive: { 
-    backgroundColor: CONFIG.baseColor, 
-    borderColor: CONFIG.borderItem, 
-    shadowColor: CONFIG.softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 0.6, 
-    shadowRadius: 4, 
-    elevation: 2 
+    backgroundColor: theme?.surface || CONFIG.baseColor, 
+    borderColor: theme?.border || CONFIG.borderItem, 
+    shadowOpacity: 0,
+    elevation: 0,
   },
   gridCardActive: { 
-    backgroundColor: '#E2EFEA', 
+    backgroundColor: theme?.cardBg || '#EBEBEB', 
     borderColor: CONFIG.logoGreen, 
-    shadowColor: CONFIG.logoGreen, 
-    shadowOffset: { width: -1, height: -1 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 3 
+    shadowOpacity: 0,
+    elevation: 0,
   },
   iconWrapper: { 
     width: 36, 
@@ -554,7 +544,7 @@ const styles = StyleSheet.create({
     marginBottom: 8 
   },
   iconWrapperInactive: { 
-    backgroundColor: '#E4ECE8' 
+    backgroundColor: theme?.cardBg || '#F1F5F9' 
   },
   iconWrapperActive: { 
     backgroundColor: CONFIG.logoGreen 
@@ -566,14 +556,14 @@ const styles = StyleSheet.create({
     marginBottom: 2 
   },
   gridTitleInactive: { 
-    color: '#21332A' 
+    color: theme?.textPrimary || '#0F172A' 
   },
   gridTitleActive: { 
     color: CONFIG.logoGreen 
   },
   gridSubTitle: { 
     fontSize: 10, 
-    color: CONFIG.textMuted, 
+    color: theme?.textSecondary || CONFIG.textMuted, 
     fontWeight: '700', 
     textAlign: 'center' 
   },
@@ -584,7 +574,7 @@ const styles = StyleSheet.create({
     marginTop: 2 
   },
   tagBadgeInactive: { 
-    backgroundColor: '#E4ECE8' 
+    backgroundColor: theme?.cardBg || '#F1F5F9' 
   },
   tagBadgeActive: { 
     backgroundColor: CONFIG.logoGreen 
@@ -592,10 +582,10 @@ const styles = StyleSheet.create({
   tagText: { 
     fontSize: 9, 
     fontWeight: '800', 
-    color: '#556B60' 
+    color: theme?.textSecondary || '#64748B' 
   },
   tagTextActive: { 
-    color: CONFIG.clearWhiteHighlight 
+    color: '#FFFFFF' 
   },
   
   // --- Form Controls Inputs & Segmented Buttons Switch Panels Row Items ---
@@ -616,7 +606,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4 
   },
   inputLabel: { 
-    color: '#41544B', 
+    color: theme?.textPrimary || '#64748B', 
     fontSize: 11, 
     fontWeight: '800', 
     textTransform: 'uppercase', 
@@ -624,11 +614,11 @@ const styles = StyleSheet.create({
   },
   togglePillContainer: { 
     flexDirection: 'row', 
-    backgroundColor: CONFIG.bgPill, 
+    backgroundColor: theme?.cardBg || CONFIG.bgPill, 
     borderRadius: 12, 
     padding: 3, 
     borderWidth: 1, 
-    borderColor: CONFIG.borderLight 
+    borderColor: theme?.border || CONFIG.borderLight 
   },
   toggleBtn: { 
     paddingVertical: 4, 
@@ -641,27 +631,22 @@ const styles = StyleSheet.create({
   toggleBtnText: { 
     fontSize: 10, 
     fontWeight: '800', 
-    color: CONFIG.textGrey 
+    color: theme?.textSecondary || CONFIG.textGrey 
   },
   toggleBtnTextActive: { 
-    color: CONFIG.clearWhiteHighlight 
+    color: '#FFFFFF' 
   },
-  neumorphicInputInset: {
-    backgroundColor: CONFIG.baseColor,
-    borderRadius: 20, 
-    borderWidth: 1.5, 
-    borderColor: CONFIG.borderLight,
-    shadowColor: CONFIG.logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
-    height: 50, 
+  flatInputField: {
+    backgroundColor: theme?.inputBg || CONFIG.baseColor,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme?.inputBorder || CONFIG.borderLight,
+    height: 50,
     justifyContent: 'center',
   },
-  neumorphicInputDisabled: {
-    backgroundColor: '#E4ECE8',
-    borderColor: '#D4E2DC',
-    shadowOpacity: 0.1,
+  flatInputFieldDisabled: {
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    borderColor: theme?.border || '#E2E8F0',
   },
   fieldRow: { 
     flexDirection: 'row', 
@@ -670,14 +655,14 @@ const styles = StyleSheet.create({
   },
   input: { 
     flex: 1, 
-    color: CONFIG.textDark, 
+    color: theme?.textPrimary || CONFIG.textDark, 
     paddingHorizontal: 16, 
     height: '100%', 
     fontSize: 15, 
     fontWeight: '700' 
   },
   inputDisabled: {
-    color: CONFIG.textMuted,
+    color: theme?.textSecondary || CONFIG.textMuted,
   },
   calendarIconBtn: { 
     height: '100%', 
@@ -690,18 +675,11 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalFormCard: {
     width: '100%',
-    backgroundColor: CONFIG.baseColor,
-    borderRadius: 32, 
+    backgroundColor: theme?.surface || CONFIG.baseColor,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: CONFIG.logoDarkShadow,
-    shadowOffset: { width: 10, height: 14 },
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 12,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: CONFIG.clearWhiteHighlight,
-    borderLeftColor: CONFIG.clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || CONFIG.borderItem,
   },
   calendarHeaderRow: { 
     flexDirection: 'row', 
@@ -713,19 +691,14 @@ const styles = StyleSheet.create({
   calendarMonthTitle: { 
     fontSize: 17, 
     fontWeight: '900', 
-    color: '#21332A' 
+    color: theme?.textPrimary || '#0F172A' 
   },
   arrowButton: { 
     padding: 8, 
-    backgroundColor: CONFIG.baseColor, 
+    backgroundColor: theme?.surface || CONFIG.baseColor, 
     borderRadius: 14, 
     borderWidth: 1.5, 
-    borderColor: CONFIG.borderLight, 
-    shadowColor: CONFIG.softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 3, 
-    elevation: 2 
+    borderColor: theme?.border || CONFIG.borderLight, 
   },
   weekHeaderRow: { 
     flexDirection: 'row', 
@@ -735,7 +708,7 @@ const styles = StyleSheet.create({
   weekDayLabel: { 
     flex: 1, 
     textAlign: 'center', 
-    color: CONFIG.textMuted, 
+    color: theme?.textSecondary || CONFIG.textMuted, 
     fontWeight: '800', 
     fontSize: 11, 
     textTransform: 'uppercase' 
@@ -760,7 +733,7 @@ const styles = StyleSheet.create({
     marginVertical: 2 
   },
   calendarDayText: { 
-    color: CONFIG.textDark, 
+    color: theme?.textPrimary || CONFIG.textDark, 
     fontWeight: '700', 
     fontSize: 13 
   },
@@ -769,7 +742,7 @@ const styles = StyleSheet.create({
     borderRadius: 12 
   },
   calendarDayTextSelected: { 
-    color: CONFIG.clearWhiteHighlight, 
+    color: '#FFFFFF', 
     fontWeight: '900' 
   },
   calendarDayToday: {
@@ -777,7 +750,7 @@ const styles = StyleSheet.create({
     borderColor: CONFIG.logoGreen,
   },
   calendarDayTextPast: {
-    color: '#AEC2B7',
+    color: '#CBD5E1',
   },
   
   // --- Operational Lower Buttons Triggers Elements Base Setup ---
@@ -791,33 +764,20 @@ const styles = StyleSheet.create({
     marginTop: 10 
   },
   buttonUnpressed: {
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: CONFIG.logoLightHighlight,
-    borderLeftColor: CONFIG.logoLightHighlight,
-    shadowColor: CONFIG.logoDarkShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.95,
-    shadowRadius: 10,
-    elevation: 6,
+    backgroundColor: CONFIG.logoGreen,
+    borderRadius: 20,
   },
   buttonPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: CONFIG.logoDarkShadow, 
-    transform: [{ translateY: 2 }] 
+    backgroundColor: '#059669',
+    opacity: 0.85,
   },
   buttonText: { 
-    color: CONFIG.clearWhiteHighlight, 
+    color: '#FFFFFF', 
     fontSize: 15, 
     fontWeight: '800', 
     letterSpacing: 0.5, 
-    textShadowColor: CONFIG.logoDarkShadow, 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2 
   },
   buttonTextPressed: { 
-    color: '#9EDEC4' 
+    color: '#E2E8F0' 
   }
 });

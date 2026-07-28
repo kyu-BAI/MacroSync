@@ -27,9 +27,12 @@ import {
 } from "lucide-react-native";
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme, isDarkMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -196,7 +199,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme?.background || baseColor} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -215,17 +218,17 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
             </Text>
           </View>
 
-          {/* Form Card Group - High Intensity Neumorphic Extrusion */}
+          {/* Form Card Group */}
           <View style={styles.formCard}>
             {/* Username Field Group */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Username</Text>
-              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
-                <User color="#7FA293" size={20} style={styles.leadingIcon} />
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <User color="#94A3B8" size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your username"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={name}
                   onChangeText={setName}
                   autoCorrect={false}
@@ -236,12 +239,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
             {/* Email Field Group */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
-                <Mail color="#7FA293" size={20} style={styles.leadingIcon} />
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Mail color="#94A3B8" size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -256,20 +259,20 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               <Text style={styles.inputLabel}>Password</Text>
               <View
                 style={[
-                  styles.neumorphicInputInset,
+                  styles.flatInputField,
                   styles.fieldRow,
                   showPasswordWarning && styles.inputWarningBorder,
                 ]}
               >
                 <Lock
-                  color={showPasswordWarning ? "#C53030" : "#7FA293"}
+                  color={showPasswordWarning ? "#64748B" : "#94A3B8"}
                   size={20}
                   style={styles.leadingIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Create a password"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
@@ -287,12 +290,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 >
                   {secureTextEntry ? (
                     <EyeOff
-                      color={showPasswordWarning ? "#C53030" : "#7FA293"}
+                      color={showPasswordWarning ? "#64748B" : "#94A3B8"}
                       size={22}
                     />
                   ) : (
                     <Eye
-                      color={showPasswordWarning ? "#C53030" : "#4EA685"}
+                      color={showPasswordWarning ? "#64748B" : "#10B981"}
                       size={22}
                     />
                   )}
@@ -304,7 +307,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 <View style={styles.criteriaContainer}>
                   {showPasswordWarning && (
                     <View style={styles.warningHeaderRow}>
-                      <AlertCircle color="#C53030" size={14} />
+                      <AlertCircle color="#64748B" size={14} />
                       <Text style={styles.criteriaHeaderWarning}>
                         Password must contain:
                       </Text>
@@ -317,13 +320,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                       <View key={index} style={styles.criteriaRow}>
                         {isSuccess ? (
                           <Check
-                            color="#2E7D32"
+                            color="#10B981"
                             size={16}
                             style={styles.criteriaIcon}
                           />
                         ) : (
                           <X
-                            color={isError ? "#C53030" : "#94A3B8"}
+                            color={isError ? "#64748B" : "#CBD5E1"}
                             size={16}
                             style={styles.criteriaIcon}
                           />
@@ -394,7 +397,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               ]}
             >
               {isLoading && isGooglePressed ? (
-                <ActivityIndicator size="small" color="#41544B" />
+                <ActivityIndicator size="small" color="#64748B" />
               ) : (
                 <View style={styles.googleContentRow}>
                   <Image
@@ -445,7 +448,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 <TextInput
                   style={styles.modalTextInput}
                   placeholder="Enter Google email"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={customGoogleEmail}
                   onChangeText={setCustomGoogleEmail}
                   keyboardType="email-address"
@@ -477,20 +480,14 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   );
 }
 
-// Intensified Hybrid Neumorphic Theme Constants
-const baseColor = "#F0F4F2";
-const clearWhiteHighlight = "#FFFFFF";
-const softGreenShadow = "#AEC2B7";
+// Flat Design Tokens
+const baseColor = "#F8FAFC";
+const logoGreen = "#10B981";
 
-// Logo Branding Metrics
-const logoGreen = "#4EA685";
-const logoDarkShadow = "#37745D";
-const logoLightHighlight = "#65D8AD";
-
-const styles = StyleSheet.create({
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -512,31 +509,24 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 14,
-    color: "#556B60",
+    color: theme?.textSecondary || "#64748B",
     marginTop: 10,
     textAlign: "center",
     lineHeight: 22,
     fontWeight: "700",
   },
   formCard: {
-    backgroundColor: baseColor,
-    borderRadius: 40,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 28,
     padding: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 14, height: 14 },
-    shadowOpacity: 1,
-    shadowRadius: 16,
-    elevation: 12,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || "#E2E8F0",
   },
   inputGroup: {
     marginBottom: 22,
   },
   inputLabel: {
-    color: "#41544B",
+    color: theme?.textPrimary || "#64748B",
     fontSize: 11,
     fontWeight: "800",
     marginBottom: 8,
@@ -544,19 +534,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginLeft: 6,
   },
-  neumorphicInputInset: {
-    backgroundColor: baseColor,
-    borderRadius: 24,
+  flatInputField: {
+    backgroundColor: theme?.inputBg || baseColor,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#D4E2DC",
-    shadowColor: logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
+    borderColor: theme?.inputBorder || "#E2E8F0",
   },
   inputWarningBorder: {
-    borderColor: "#FEB2B2",
-    shadowColor: "#C53030",
+    borderColor: "#E2E8F0",
   },
   criteriaContainer: {
     marginTop: 10,
@@ -568,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   criteriaHeaderWarning: {
-    color: "#C53030",
+    color: "#64748B",
     fontSize: 12,
     fontWeight: "800",
     marginLeft: 5,
@@ -584,14 +569,14 @@ const styles = StyleSheet.create({
   criteriaText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: theme?.textSecondary || "#CBD5E1",
   },
   criteriaTextSuccess: {
-    color: "#2E7D32",
+    color: "#10B981",
     fontWeight: "700",
   },
   criteriaTextError: {
-    color: "#C53030",
+    color: "#64748B",
     fontWeight: "700",
   },
   fieldRow: {
@@ -604,7 +589,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: "#1A2B23",
+    color: theme?.textPrimary || "#0F172A",
     paddingVertical: 15,
     paddingHorizontal: 8,
     fontSize: 16,
@@ -624,34 +609,21 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   buttonUnpressed: {
-    backgroundColor: "#53B28E",
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: logoGreen,
+    borderRadius: 20,
   },
   buttonPressed: {
-    backgroundColor: "#3E836A",
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }],
+    backgroundColor: "#059669",
+    opacity: 0.85,
   },
   buttonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   buttonTextPressed: {
-    color: "#9EDEC4",
+    color: "#E2E8F0",
   },
   footerRow: {
     flexDirection: "row",
@@ -659,7 +631,7 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   footerText: {
-    color: "#556B60",
+    color: theme?.textSecondary || "#64748B",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -678,12 +650,12 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1.5,
-    backgroundColor: "#D4E2DC",
+    backgroundColor: theme?.border || "#E2E8F0",
   },
   dividerText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#7FA293",
+    color: theme?.textSecondary || "#94A3B8",
     paddingHorizontal: 12,
     textTransform: "uppercase",
     letterSpacing: 1,
@@ -692,24 +664,16 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   googleButtonUnpressed: {
-    backgroundColor: baseColor,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: "#E1E9E5",
+    borderColor: theme?.border || "#E2E8F0",
   },
   googleButtonPressed: {
-    backgroundColor: "#E4ECE8",
+    backgroundColor: theme?.cardBg || "#F1F5F9",
     borderWidth: 1.5,
-    borderColor: "#D4E2DC",
-    transform: [{ translateY: 2 }],
+    borderColor: theme?.border || "#E2E8F0",
+    opacity: 0.85,
   },
   googleContentRow: {
     flexDirection: "row",
@@ -722,13 +686,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   googleButtonText: {
-    color: "#41544B",
+    color: theme?.textPrimary || "#64748B",
     fontSize: 15,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
   googleButtonTextPressed: {
-    color: "#21332A",
+    color: theme?.textPrimary || "#0F172A",
   },
   modalOverlay: {
     flex: 1,
@@ -738,27 +702,22 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContentCard: {
-    backgroundColor: baseColor,
-    borderRadius: 36,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 24,
     width: "100%",
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
     borderWidth: 1.5,
-    borderColor: "#D4E2DC",
+    borderColor: theme?.border || "#E2E8F0",
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: "900",
-    color: "#1A2B23",
+    color: theme?.textPrimary || "#0F172A",
     textAlign: "center",
   },
   modalSubtitle: {
     fontSize: 14,
-    color: "#556B60",
+    color: theme?.textSecondary || "#64748B",
     textAlign: "center",
     marginTop: 4,
     marginBottom: 20,
@@ -771,7 +730,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalInputLabel: {
-    color: "#41544B",
+    color: theme?.textPrimary || "#64748B",
     fontSize: 10,
     fontWeight: "800",
     marginBottom: 6,
@@ -779,15 +738,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   modalTextInput: {
-    backgroundColor: "#E4ECE8",
+    backgroundColor: theme?.inputBg || "#F1F5F9",
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: "#1A2B23",
+    color: theme?.textPrimary || "#0F172A",
     fontWeight: "700",
     borderWidth: 1,
-    borderColor: "#D4E2DC",
+    borderColor: theme?.inputBorder || "#E2E8F0",
   },
   modalActionButtonsRow: {
     flexDirection: "row",
@@ -803,17 +762,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalButtonCancel: {
-    backgroundColor: "#E4ECE8",
+    backgroundColor: theme?.cardBg || "#F1F5F9",
     borderWidth: 1,
-    borderColor: "#D4E2DC",
+    borderColor: theme?.border || "#E2E8F0",
   },
   modalButtonCancelText: {
-    color: "#556B60",
+    color: theme?.textSecondary || "#64748B",
     fontWeight: "800",
     fontSize: 15,
   },
   modalButtonSubmit: {
-    backgroundColor: "#53B28E",
+    backgroundColor: "#64748B",
   },
   modalButtonSubmitText: {
     color: "#FFFFFF",

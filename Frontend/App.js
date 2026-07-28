@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { CustomAlertProvider } from './src/context/CustomAlertContext';
 import { 
   StyleSheet, 
@@ -55,9 +55,11 @@ import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import API_URL from "./src/screens/config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from './src/services/NotificationService';
+import { Pedometer } from 'expo-sensors';
 
 
 function MainApp() {
+  const { theme } = useTheme();
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
@@ -98,10 +100,65 @@ function MainApp() {
   });
 
   const [dailyExercise, setDailyExercise] = useState({
-    caloriesBurned: 320,
-    activeMinutes: 45,
-    recentExercise: 'Full Body HIIT - 45 mins'
+    caloriesBurned: 0,
+    activeMinutes: 0,
+    steps: 0,
+    targetSteps: 10000,
+    recentExercise: 'None'
   });
+
+  // ── Real Pedometer Step Tracking ─────────────────────────────────────────
+  useEffect(() => {
+    let subscription = null;
+
+    const startPedometer = async () => {
+      const isAvailable = await Pedometer.isAvailableAsync();
+      if (!isAvailable) {
+        console.log('Pedometer not available on this device/emulator.');
+        return;
+      }
+
+      // Count steps from midnight today
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(0, 0, 0, 0);
+
+      // Get the total steps since midnight on mount
+      try {
+        const result = await Pedometer.getStepCountAsync(midnight, now);
+        if (result?.steps !== undefined) {
+          setDailyExercise(prev => ({ ...prev, steps: result.steps }));
+        }
+      } catch (e) {
+        console.log('Could not get historic step count:', e);
+      }
+
+      // Subscribe to live updates
+      subscription = Pedometer.watchStepCount(result => {
+        if (result?.steps !== undefined) {
+          // watchStepCount gives cumulative steps since subscription start — add to midnight baseline
+          setDailyExercise(prev => {
+            const baseSteps = prev._midnightBase || 0;
+            return { ...prev, steps: baseSteps + result.steps };
+          });
+        }
+      });
+
+      // Store midnight baseline separately
+      try {
+        const baseResult = await Pedometer.getStepCountAsync(midnight, now);
+        if (baseResult?.steps !== undefined) {
+          setDailyExercise(prev => ({ ...prev, _midnightBase: baseResult.steps, steps: baseResult.steps }));
+        }
+      } catch (e) {}
+    };
+
+    startPedometer();
+
+    return () => {
+      if (subscription) subscription.remove();
+    };
+  }, []);
 
   // Persisted Dashboard Local State
   const [globalLoggedWeight, setGlobalLoggedWeight] = useState(null);
@@ -630,7 +687,7 @@ function MainApp() {
   };
 
   return (
-    <View style={styles.appContainerRoot}>
+    <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
       <OfflineBanner />
       {activeTab === 'DASHBOARD' && (
         <DashboardScreen 
@@ -639,6 +696,7 @@ function MainApp() {
           userGoals={userGoals}
           dailyNutrition={dailyNutrition}
           dailyExercise={dailyExercise}
+          setDailyExercise={setDailyExercise}
           notifications={notifications}
           setNotifications={setNotifications}
           globalLoggedWeight={globalLoggedWeight}
@@ -690,6 +748,7 @@ function MainApp() {
           onTabChange={(tab) => setActiveTab(tab)} 
           userId={userId}
           userProfile={userProfile}
+          dailyNutrition={dailyNutrition}
           onLogMeal={async (macros) => {
             if (!userId) {
               Alert.alert('Authentication Error', 'You must be logged in to log meals.');

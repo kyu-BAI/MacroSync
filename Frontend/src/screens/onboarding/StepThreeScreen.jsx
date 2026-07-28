@@ -22,10 +22,14 @@ import { useCustomAlert } from '../../context/CustomAlertContext';
 // Import child lookup methods from your installed library
 import { provinces, cities } from 'select-philippines-address';
 
+import { useTheme } from '../../context/ThemeContext';
+
 const ITEM_HEIGHT = 54;
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [customAllergy, setCustomAllergy] = useState('');
@@ -227,7 +231,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Province</Text>
               <TouchableOpacity
-                style={[styles.neumorphicInputInset, styles.selectorRow]}
+                style={[styles.flatInputField, styles.selectorRow]}
                 onPress={() => openPicker('province')}
                 activeOpacity={0.7}
                 disabled={isFetchingPicker === 'province'}
@@ -247,7 +251,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>City / Municipality</Text>
               <TouchableOpacity
-                style={[styles.neumorphicInputInset, styles.selectorRow, (!province || isFetchingPicker === 'city') && styles.disabledSelector]}
+                style={[styles.flatInputField, styles.selectorRow, (!province || isFetchingPicker === 'city') && styles.disabledSelector]}
                 onPress={() => openPicker('city')}
                 activeOpacity={0.7}
                 disabled={!province || isFetchingPicker === 'city'}
@@ -258,7 +262,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
                 {isFetchingPicker === 'city' ? (
                   <ActivityIndicator size="small" color={logoGreen} />
                 ) : (
-                  <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#AEC2B7'} />
+                  <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#CBD5E1'} />
                 )}
               </TouchableOpacity>
             </View>
@@ -291,11 +295,11 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Other Custom Food Allergy</Text>
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Shrimp, Almonds (Optional)"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor="#94A3B8"
                   value={customAllergy}
                   onChangeText={setCustomAllergy}
                   autoCorrect={true}
@@ -334,16 +338,16 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.pickerHeaderRow}>
               <Text style={styles.pickerModalTitle}>Select {pickerType.toUpperCase()}</Text>
               <TouchableOpacity onPress={() => setPickerVisible(false)}>
-                <Ionicons name="close" size={24} color="#21332A" />
+                <Ionicons name="close" size={24} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.searchBarContainer}>
-              <Ionicons name="search" size={18} color="#7FA293" style={{ marginRight: 8 }} />
+              <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.searchInput}
                 placeholder={`Search ${pickerType}...`}
-                placeholderTextColor="#7FA293"
+                placeholderTextColor="#94A3B8"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCorrect={false}
@@ -392,7 +396,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
               <View style={styles.confirmDivider} />
 
               <Text style={styles.confirmDataLabel}>⚠️ Profile Exclusions & Allergies</Text>
-              <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#7FA293' } : { color: '#C05621' }]}>
+              <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#94A3B8' } : { color: '#64748B' }]}>
                 {compiledAllergiesText}
               </Text>
             </View>
@@ -425,21 +429,17 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   );
 }
 
-// Global Core Neumorphic Theme Tokens
-const baseColor = '#F0F4F2';
-const clearWhiteHighlight = '#FFFFFF';
-const softGreenShadow = '#AEC2B7';
+// Global Core Flat Design Tokens
+const baseColor = '#F8FAFC';
 
 // Logo Corporate Branding Elements
-const logoGreen = '#4EA685';
-const logoDarkShadow = '#37745D';
-const logoLightHighlight = '#65D8AD';
+const logoGreen = '#10B981';
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   // --- BASE CONTAINER ARCHITECTURE ---
   container: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -465,13 +465,13 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 36,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     letterSpacing: -0.5,
     marginTop: 4,
   },
   brandSubtitle: {
     fontSize: 13,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     marginTop: 6,
     textAlign: 'center',
     lineHeight: 19,
@@ -481,22 +481,17 @@ const styles = StyleSheet.create({
 
   // --- SURFACE PANEL MATRIX ---
   formCard: {
-    backgroundColor: baseColor,
-    borderRadius: 32,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 10, height: 10 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 8,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
     marginBottom: 10,
   },
   sectionInputLabel: {
-    color: '#41544B',
+    color: theme?.textPrimary || '#64748B',
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 12,
@@ -510,7 +505,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   inputLabel: {
-    color: '#41544B',
+    color: theme?.textPrimary || '#64748B',
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 6,
@@ -518,11 +513,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginLeft: 4,
   },
-  neumorphicInputInset: {
-    backgroundColor: baseColor,
-    borderRadius: 18,
+  flatInputField: {
+    backgroundColor: theme?.inputBg || baseColor,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.inputBorder || '#E2E8F0',
     height: 48,
     justifyContent: 'center',
   },
@@ -535,20 +530,20 @@ const styles = StyleSheet.create({
   selectorValueText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
   },
   placeholderText: {
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '600',
   },
   disabledSelector: {
-    backgroundColor: '#E4ECE8',
-    borderColor: '#E1E9E5',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    borderColor: theme?.border || '#E2E8F0',
     opacity: 0.6,
   },
   input: {
     flex: 1,
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     paddingHorizontal: 16,
     height: '100%',
     fontSize: 14,
@@ -573,13 +568,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   chipInactive: {
-    backgroundColor: baseColor,
-    borderColor: '#E1E9E5',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: theme?.surface || baseColor,
+    borderColor: theme?.border || '#E2E8F0',
   },
   chipActive: {
     backgroundColor: logoGreen,
@@ -588,7 +578,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#41544B',
+    color: theme?.textSecondary || '#64748B',
   },
   chipTextActive: {
     color: '#FFFFFF',
@@ -600,9 +590,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 24 : 16,
     paddingTop: 8,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
     borderTopWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: theme?.border || '#E2E8F0',
   },
   buttonBase: {
     paddingVertical: 14,
@@ -613,40 +603,27 @@ const styles = StyleSheet.create({
     height: 50,
   },
   buttonUnpressed: {
-    backgroundColor: '#53B28E',
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.95,
-    shadowRadius: 10,
-    elevation: 6,
+    backgroundColor: logoGreen,
+    borderRadius: 20,
   },
   buttonPressed: {
-    backgroundColor: '#3E836A',
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }],
+    backgroundColor: '#059669',
+    opacity: 0.85,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   buttonTextPressed: {
-    color: '#9EDEC4',
+    color: '#E2E8F0',
   },
 
   // --- POPUP SELECTOR INTERFACES ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   pickerModalCard: {
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: 24,
@@ -661,30 +638,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
     paddingBottom: 12,
   },
   pickerModalTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     letterSpacing: 1,
   },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E4ECE8',
+    backgroundColor: theme?.inputBg || '#F1F5F9',
     borderRadius: 14,
     paddingHorizontal: 12,
     height: 42,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.inputBorder || '#E2E8F0',
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     fontWeight: '600',
     height: '100%',
   },
@@ -703,12 +680,12 @@ const styles = StyleSheet.create({
     height: ITEM_HEIGHT,
     justifyContent: 'center',
     borderBottomWidth: 1,
-    borderColor: '#E1E9E5',
+    borderColor: theme?.border || '#E2E8F0',
   },
   pickerItemText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
   },
 
   // --- PREMIUM OVERLAY DIALOGUE (CONFIRMATION SHEET STYLE) ---
@@ -721,23 +698,20 @@ const styles = StyleSheet.create({
   },
   confirmModalCard: {
     width: '100%',
-    backgroundColor: baseColor,
-    borderRadius: 30,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 24,
     padding: 24,
     alignItems: 'center',
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   confirmIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 22,
-    backgroundColor: '#E2EFEA',
+    backgroundColor: theme?.cardBg || '#EBEBEB',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -745,12 +719,12 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 6,
   },
   confirmSubtitle: {
     fontSize: 13,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 18,
@@ -759,17 +733,17 @@ const styles = StyleSheet.create({
   },
   confirmDataBlock: {
     width: '100%',
-    backgroundColor: '#E4ECE8',
+    backgroundColor: theme?.inputBg || '#F1F5F9',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.inputBorder || '#E2E8F0',
     marginBottom: 24,
   },
   confirmDataLabel: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#41544B',
+    color: theme?.textSecondary || '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
@@ -777,12 +751,12 @@ const styles = StyleSheet.create({
   confirmDataValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     lineHeight: 20,
   },
   confirmDivider: {
     height: 1,
-    backgroundColor: '#D4E2DC',
+    backgroundColor: theme?.border || '#E2E8F0',
     marginVertical: 12,
   },
   confirmActionRow: {
@@ -798,10 +772,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmButtonSecondary: {
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     marginRight: 12,
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
+    borderColor: theme?.border || '#E2E8F0',
   },
   confirmButtonPrimary: {
     backgroundColor: logoGreen,
@@ -809,7 +783,7 @@ const styles = StyleSheet.create({
   confirmButtonTextSecondary: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
   },
   confirmButtonTextPrimary: {
     fontSize: 14,

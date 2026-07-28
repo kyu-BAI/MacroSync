@@ -15,9 +15,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, ChevronLeft } from 'lucide-react-native';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   const [email, setEmail] = useState('');
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +75,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
       
-      {/* Lowered Upper Left Neumorphic Back Button Row */}
+      {/* Back Button Row */}
       <View style={styles.topNavigationRow}>
         <TouchableOpacity 
           style={styles.backArrowButton} 
@@ -106,12 +109,12 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
             {/* Email Field Group with Functional Vector Icon */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
-                <Mail color="#7FA293" size={20} style={styles.leadingIcon} />
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Mail color="#94A3B8" size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor="#94A3B8"
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -149,20 +152,14 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   );
 }
 
-// Intensified Neumorphic Theme Token Specifications
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
+// Flat Design Tokens
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
-// Logo Branding Metrics
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
-
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   flexContainer: {
     flex: 1,
@@ -177,17 +174,12 @@ const styles = StyleSheet.create({
   },
   backArrowButton: {
     padding: 10,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 5,
-    elevation: 3,
-    marginTop: 30,  
-    marginLeft: 5,  
+    borderColor: theme?.border || '#E2E8F0',
+    marginTop: 30,
+    marginLeft: 5,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -209,31 +201,24 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 14,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     marginTop: 10,
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '700',
   },
   formCard: {
-    backgroundColor: baseColor,
-    borderRadius: 40, 
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 28,
     padding: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 14, height: 14 }, 
-    shadowOpacity: 1,
-    shadowRadius: 16, 
-    elevation: 12,    
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   inputGroup: {
     marginBottom: 26,
   },
   inputLabel: {
-    color: '#41544B',
+    color: theme?.textPrimary || '#64748B',
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 8,
@@ -241,15 +226,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginLeft: 6,
   },
-  neumorphicInputInset: {
-    backgroundColor: baseColor,
-    borderRadius: 24, 
-    borderWidth: 1.5, 
-    borderColor: '#D4E2DC',
-    shadowColor: logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
+  flatInputField: {
+    backgroundColor: theme?.inputBg || baseColor,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme?.inputBorder || '#E2E8F0',
   },
   fieldRow: {
     flexDirection: 'row',
@@ -261,7 +242,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     paddingVertical: 15,
     paddingHorizontal: 8,
     fontSize: 16,
@@ -275,33 +256,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   buttonUnpressed: {
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: logoGreen,
+    borderRadius: 20,
   },
   buttonPressed: {
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }], 
+    backgroundColor: '#059669',
+    opacity: 0.85,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   buttonTextPressed: {
-    color: '#9EDEC4',
+    color: '#E2E8F0',
   },
 });

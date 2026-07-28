@@ -12,9 +12,7 @@ import { BotMessageSquare } from 'lucide-react-native';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Logo colors
-const logoGreen = '#4EA685';
-const logoDarkShadow = '#37745D';
-const logoLightHighlight = '#65D8AD';
+const logoGreen = '#10B981';
 
 // Spacing bounds to clear header and absolute bottom navigation bar
 const TOP_BOUND = Platform.OS === 'ios' ? 80 : 60;
@@ -115,12 +113,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: logoGreen,
     borderWidth: 1.5,
-    borderColor: logoLightHighlight,
-    // Premium soft Neumorphic shadow styling
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
+    borderColor: '#CBD5E1',
   }
 });

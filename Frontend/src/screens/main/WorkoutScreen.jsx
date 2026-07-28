@@ -22,6 +22,7 @@ import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 export default function WorkoutScreen({ 
   onTabChange, 
   userId, 
@@ -32,7 +33,8 @@ export default function WorkoutScreen({
   setNotifications
 }) {
   const { showAlert } = useCustomAlert();
-  const styles = getStyles();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState('All');
   
@@ -129,12 +131,16 @@ export default function WorkoutScreen({
 
       // Optimistic UI updates
       const workoutDuration = parseInt(activeRoutine.duration) || 15;
+      const workoutSteps = workoutDuration * 100;
       let newExercise = null;
       if (setDailyExercise) {
         setDailyExercise(prev => {
           const next = {
+            ...prev,
             caloriesBurned: (prev?.caloriesBurned || 0) + activeRoutine.caloriesBurn,
             activeMinutes: (prev?.activeMinutes || 0) + workoutDuration,
+            steps: (prev?.steps || 0) + workoutSteps,
+            targetSteps: prev?.targetSteps || 10000,
             recentExercise: activeRoutine.title
           };
           newExercise = next;
@@ -217,8 +223,8 @@ export default function WorkoutScreen({
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: baseColor }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme?.background || baseColor }]}>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
         <View style={styles.loaderOuterNeu}>
           <ActivityIndicator size="large" color={logoGreen} />
         </View>
@@ -230,7 +236,7 @@ export default function WorkoutScreen({
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
       
       {/* ── WORKOUT TUTORIAL PLAYER (FULL SCREEN MODAL) ── */}
       <Modal 
@@ -254,7 +260,7 @@ export default function WorkoutScreen({
                 <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
                 <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
               </View>
-              <HelpCircle color="#7FA293" size={22} />
+              <HelpCircle color={theme?.textSecondary || "#94A3B8"} size={22} />
             </View>
 
             {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
@@ -280,10 +286,10 @@ export default function WorkoutScreen({
 
               {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
               <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
-                <Text style={styles.instructionSectionTitleLabel}>How to Set Up:</Text>
+                <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen }]}>How to Set Up:</Text>
                 <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
                 
-                <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14 }]}>Proper Execution Form:</Text>
+                <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14, color: logoGreen }]}>Proper Execution Form:</Text>
                 <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
               </ScrollView>
 
@@ -297,7 +303,7 @@ export default function WorkoutScreen({
                     activeOpacity={0.8}
                     onPress={() => setCurrentStepIndex(currentStepIndex - 1)}
                   >
-                    <RotateCcw color="#556B60" size={16} style={{ marginRight: 4 }} />
+                    <RotateCcw color={theme?.textSecondary || "#64748B"} size={16} style={{ marginRight: 4 }} />
                     <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
                   </TouchableOpacity>
                 )}
@@ -332,8 +338,8 @@ export default function WorkoutScreen({
             <Text style={styles.greeting}>Daily Home Workouts</Text>
             <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Gemini AI</Text>
             <View style={styles.aiBadgeRow}>
-              <Sparkles color={logoGreen} size={12} style={{ marginRight: 6 }} />
-              <Text style={styles.aiBadgeText}>AI RECOMMENDED WORKOUTS</Text>
+              <Sparkles color={'#10B981'} size={12} style={{ marginRight: 6 }} />
+              <Text style={[styles.aiBadgeText, { color: logoGreen }]}>AI RECOMMENDED WORKOUTS</Text>
             </View>
           </View>
         </View>
@@ -353,7 +359,7 @@ export default function WorkoutScreen({
               >
                 <Text style={[
                   styles.filterChipText, 
-                  { color: selectedIntensity === tier ? '#FFFFFF' : '#21332A' }
+                  { color: selectedIntensity === tier ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }
                 ]}>
                   {tier}
                 </Text>
@@ -381,26 +387,32 @@ export default function WorkoutScreen({
               {/* QUICK METRICS TILES */}
               <View style={styles.workoutMetricsSummaryGrid}>
                 <View style={styles.metricItemBox}>
-                  <Clock color={logoGreen} size={14} style={styles.metricIconSpacer} />
+                  <View style={{ backgroundColor: 'rgba(14, 165, 233, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Clock color={'#0EA5E9'} size={13} />
+                  </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Duration</Text>
-                    <Text style={styles.metricTileValue}>{workout.duration}</Text>
+                    <Text style={[styles.metricTileValue, { color: '#0EA5E9' }]}>{workout.duration}</Text>
                   </View>
                 </View>
                 
                 <View style={styles.metricItemBox}>
-                  <Flame color="#E53E3E" size={14} style={styles.metricIconSpacer} />
+                  <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Flame color={'#F97316'} size={13} />
+                  </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                    <Text style={styles.metricTileValue}>{workout?.caloriesBurn} kcal</Text>
+                    <Text style={[styles.metricTileValue, { color: '#F97316' }]}>{workout?.caloriesBurn} kcal</Text>
                   </View>
                 </View>
 
                 <View style={styles.metricItemBox}>
-                  <Trophy color="#D69E2E" size={14} style={styles.metricIconSpacer} />
+                  <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Trophy color={'#F59E0B'} size={13} />
+                  </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Intensity</Text>
-                    <Text style={styles.metricTileValue}>{workout?.intensity}</Text>
+                    <Text style={[styles.metricTileValue, { color: '#F59E0B' }]}>{workout?.intensity}</Text>
                   </View>
                 </View>
               </View>
@@ -434,14 +446,10 @@ export default function WorkoutScreen({
    
  
 
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
+const baseColor = '#F8FAFC';           
+const logoGreen = '#10B981';        
 
-const getStyles = () => StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   fullscreenOverlay: { 
     position: 'absolute', 
     top: 0, 
@@ -450,7 +458,7 @@ const getStyles = () => StyleSheet.create({
     right: 0, 
     width: screenWidth, 
     height: screenHeight, 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   container: { 
     flex: 1,
@@ -458,7 +466,7 @@ const getStyles = () => StyleSheet.create({
   scrollContent: { 
     paddingHorizontal: 20, 
     paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115,
+    paddingBottom: 85,
   },
   header: { 
     flexDirection: 'row', 
@@ -483,33 +491,28 @@ const getStyles = () => StyleSheet.create({
   greeting: { 
     fontSize: 28, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5,
   },
   subGreeting: { 
     fontSize: 13, 
     fontWeight: '700', 
-    color: '#556B60', 
+    color: theme?.textSecondary || '#64748B', 
     marginTop: 2,
   },
   formCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 32, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 24, 
     padding: 18, 
     marginBottom: 16, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   cardTitle: { 
     fontSize: 11, 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     textTransform: 'uppercase', 
     letterSpacing: 1.2, 
     marginBottom: 12, 
@@ -526,33 +529,21 @@ const getStyles = () => StyleSheet.create({
     borderRadius: 16, 
     marginRight: 8, 
     marginBottom: 8, 
-    backgroundColor: baseColor,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    backgroundColor: theme?.surface || baseColor,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   filterChipInactive: { 
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
   },
   filterChipActive: { 
     backgroundColor: logoGreen, 
     borderWidth: 1.5,
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: logoGreen,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   filterChipText: { 
     fontSize: 12, 
@@ -561,25 +552,20 @@ const getStyles = () => StyleSheet.create({
   sectionLabelTitle: { 
     fontSize: 14, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 12, 
     marginLeft: 4, 
     letterSpacing: -0.2,
   },
   workoutFormCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 28, 
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
     padding: 16, 
     marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   workoutHeaderRow: { 
     flexDirection: 'row', 
@@ -591,19 +577,19 @@ const getStyles = () => StyleSheet.create({
   workoutMainTitle: { 
     fontSize: 16, 
     fontWeight: '900', 
-    color: '#21332A', 
+    color: theme?.textPrimary || '#0F172A', 
     marginBottom: 6, 
     lineHeight: 20,
   },
   workoutDescriptionText: {
     fontSize: 13,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     fontWeight: '600',
     lineHeight: 18,
   },
   glassDivider: { 
     height: 1, 
-    backgroundColor: '#D4E2DC', 
+    backgroundColor: theme?.border || '#E2E8F0', 
     marginVertical: 12,
   },
   workoutMetricsSummaryGrid: {
@@ -623,12 +609,12 @@ const getStyles = () => StyleSheet.create({
   metricTileLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
   },
   metricTileValue: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginTop: 1,
   },
   startWorkoutActionButton: {
@@ -638,11 +624,8 @@ const getStyles = () => StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 12,
     borderRadius: 16,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   startWorkoutButtonText: {
     fontSize: 13,
@@ -663,21 +646,12 @@ const getStyles = () => StyleSheet.create({
     justifyContent: 'center',
   },
   chatbotUnpressed: { 
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 3, height: 4 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 6, 
-    elevation: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
   },
   chatbotPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
+    backgroundColor: '#059669',
     transform: [{ scale: 0.95 }],
   },
 
@@ -688,7 +662,7 @@ const getStyles = () => StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 54 : 48,
     paddingBottom: 24,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   playerHeaderRow: {
     flexDirection: 'row',
@@ -701,18 +675,13 @@ const getStyles = () => StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   playerHeaderCenterText: {
     flex: 1,
@@ -722,49 +691,38 @@ const getStyles = () => StyleSheet.create({
   playerRoutineSubTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textAlign: 'center',
     textTransform: 'uppercase',
   },
   playerStepIndicator: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginTop: 1,
   },
   playerMainCard: {
     flex: 1,
-    backgroundColor: baseColor,
-    borderRadius: 36,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 5, height: 5 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 6, 
-    elevation: 4,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
+    borderWidth: 1.5, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   animationPlaceholderFrame: {
     height: '42%',
-    backgroundColor: '#E8F1EC',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
     elevation: 0,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderColor: '#FFFFFF',
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
   },
   placeholderAnimateIcon: {
     transform: [{ scale: 1.1 }],
@@ -775,35 +733,32 @@ const getStyles = () => StyleSheet.create({
     left: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: theme?.surface || 'rgba(255, 255, 255, 0.85)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
-    elevation: 0,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#E53E3E',
+    backgroundColor: '#10B981',
     marginRight: 6,
   },
   liveBadgeText: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#21332A',
+    color: '#10B981',
     letterSpacing: 0.5,
   },
   playerExerciseTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     marginTop: 16,
     textAlign: 'center',
   },
@@ -824,7 +779,7 @@ const getStyles = () => StyleSheet.create({
   },
   playerGlassDivider: {
     height: 1,
-    backgroundColor: '#D4E2DC',
+    backgroundColor: theme?.border || '#E2E8F0',
     marginVertical: 14,
   },
   instructionsTextScroll: {
@@ -834,7 +789,7 @@ const getStyles = () => StyleSheet.create({
   instructionSectionTitleLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#21332A',
+    color: theme?.textPrimary || '#0F172A',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
@@ -842,7 +797,7 @@ const getStyles = () => StyleSheet.create({
   instructionParagraphText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 19,
   },
   playerControlActionRow: {
@@ -856,25 +811,19 @@ const getStyles = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     paddingVertical: 14,
     borderRadius: 16,
     marginRight: 10,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 3, 
+    borderWidth: 1, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
     elevation: 0,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
-    borderColor: '#FFFFFF',
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
   },
   playerSecondaryActionBtnText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
   },
   playerPrimaryActionBtn: {
     flexDirection: 'row',
@@ -883,11 +832,8 @@ const getStyles = () => StyleSheet.create({
     backgroundColor: logoGreen,
     paddingVertical: 14,
     borderRadius: 16,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   playerPrimaryActionBtnText: {
     fontSize: 13,
@@ -898,27 +844,24 @@ const getStyles = () => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
     borderWidth: 1.5,
-    borderColor: clearWhiteHighlight,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   loaderTextTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 8,
   },
   loaderTextDesc: {
     fontSize: 14,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: 40,
@@ -927,19 +870,19 @@ const getStyles = () => StyleSheet.create({
   aiBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF5F0',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
     alignSelf: 'flex-start',
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#C6E0D4',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   aiBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#37745D',
+    color: theme?.textSecondary || '#64748B',
     letterSpacing: 0.5,
   },
 });

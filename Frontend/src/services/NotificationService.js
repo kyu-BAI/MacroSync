@@ -42,7 +42,7 @@ export const NotificationService = {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#4EA685',
+        lightColor: '#10B981',
       });
     }
 

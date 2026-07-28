@@ -12,11 +12,14 @@ import {
 } from 'react-native';
 import { ChevronLeft, Award, Droplets, Utensils, Activity, Bell, CheckCheck, Trash2 } from 'lucide-react-native';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function NotificationsScreen({ onTabChange, notifications: propNotifications, setNotifications: propSetNotifications }) {
   const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme, isDarkMode);
   const [localNotifications, setLocalNotifications] = useState([]);
 
   const emptyAnim = useRef(new Animated.Value(0)).current;
@@ -26,11 +29,36 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
 
   const getCategoryStyles = (category) => {
     switch (category) {
-      case 'achievement': return { icon: Award,    color: '#D69E2E', bgColor: '#FEFCBF' };
-      case 'hydration':   return { icon: Droplets, color: '#3182CE', bgColor: '#BEE3F8' };
-      case 'meal':        return { icon: Utensils, color: '#4EA685', bgColor: '#C6F6D5' };
-      case 'workout':     return { icon: Activity, color: '#E53E3E', bgColor: '#FED7D7' };
-      default:            return { icon: Bell,     color: '#4A5568', bgColor: '#EDF2F7' };
+      case 'achievement': 
+        return { 
+          icon: Award,    
+          color: '#F59E0B', 
+          bgColor: isDarkMode ? 'rgba(245, 158, 11, 0.18)' : 'rgba(245, 158, 11, 0.12)' 
+        };
+      case 'hydration':   
+        return { 
+          icon: Droplets, 
+          color: '#0EA5E9', 
+          bgColor: isDarkMode ? 'rgba(14, 165, 233, 0.18)' : 'rgba(14, 165, 233, 0.12)' 
+        };
+      case 'meal':        
+        return { 
+          icon: Utensils, 
+          color: '#10B981', 
+          bgColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)' 
+        };
+      case 'workout':     
+        return { 
+          icon: Activity, 
+          color: '#F97316', 
+          bgColor: isDarkMode ? 'rgba(249, 115, 22, 0.18)' : 'rgba(249, 115, 22, 0.12)' 
+        };
+      default:            
+        return { 
+          icon: Bell,     
+          color: '#8B5CF6', 
+          bgColor: isDarkMode ? 'rgba(139, 92, 246, 0.18)' : 'rgba(139, 92, 246, 0.12)' 
+        };
     }
   };
 
@@ -71,7 +99,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
 
       {/* ── HEADER ── */}
       <View style={styles.header}>
@@ -80,7 +108,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
           activeOpacity={0.7}
           onPress={() => onTabChange && onTabChange('DASHBOARD')}
         >
-          <ChevronLeft color="#1A2B23" size={28} />
+          <ChevronLeft color={theme?.textPrimary || '#0F172A'} size={24} />
         </TouchableOpacity>
         
         <View style={styles.headerTitleGroup}>
@@ -107,7 +135,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
             transform: [{ scale: emptyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }]
           }]}>
             <View style={styles.emptyIconCircle}>
-              <Bell color="#AEC2B7" size={40} strokeWidth={1.5} />
+              <Bell color="#10B981" size={42} strokeWidth={2} />
             </View>
             <Text style={styles.emptyTitle}>You're all caught up!</Text>
             <Text style={styles.emptySubtitle}>
@@ -125,7 +153,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
                     activeOpacity={0.7}
                     onPress={markAllAsRead}
                   >
-                    <CheckCheck color="#4EA685" size={14} strokeWidth={2.5} />
+                    <CheckCheck color="#10B981" size={14} strokeWidth={2.5} />
                     <Text style={styles.markReadText}>Mark Read</Text>
                   </TouchableOpacity>
                 )}
@@ -134,7 +162,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
                   activeOpacity={0.7}
                   onPress={clearAllNotifications}
                 >
-                  <Trash2 color="#E53E3E" size={14} strokeWidth={2.5} />
+                  <Trash2 color="#EF4444" size={14} strokeWidth={2.5} />
                   <Text style={styles.clearAllText}>Clear All</Text>
                 </TouchableOpacity>
               </View>
@@ -145,12 +173,15 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
               return (
                 <TouchableOpacity 
                   key={notif.id}
-                  style={[styles.notificationCard, !notif.read && styles.unreadCard]}
+                  style={[
+                    styles.notificationCard,
+                    !notif.read && [styles.unreadCard, { borderLeftWidth: 4, borderLeftColor: color }]
+                  ]}
                   activeOpacity={0.7}
                   onPress={() => handleNotificationPress(notif.id)}
                 >
                   <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-                    <IconComponent color={color} size={24} />
+                    <IconComponent color={color} size={22} strokeWidth={2.2} />
                   </View>
                   
                   <View style={styles.notifContent}>
@@ -167,7 +198,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
 
                   {/* Right-side: unread dot + dismiss button */}
                   <View style={styles.rightActions}>
-                    {!notif.read && <View style={styles.unreadDot} />}
+                    {!notif.read && <View style={[styles.unreadDot, { backgroundColor: '#EF4444' }]} />}
                     <TouchableOpacity
                       style={styles.dismissBtn}
                       onPress={() => handleDismissOne(notif.id)}
@@ -181,7 +212,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
             })}
 
             <View style={styles.footerInfo}>
-              <Bell color="#7FA293" size={32} opacity={0.5} />
+              <Bell color="#10B981" size={28} opacity={0.7} strokeWidth={2} />
               <Text style={styles.footerText}>
                 Notifications are personalized based on your behavior, goals, and daily routines to help you maintain consistency.
               </Text>
@@ -194,14 +225,12 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
   );
 }
 
-const baseColor           = '#F0F4F2';
-const clearWhiteHighlight = '#FFFFFF';
-const softGreenShadow     = '#AEC2B7';
+const baseColor           = '#F8FAFC';
 
-const styles = StyleSheet.create({
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
   fullscreenOverlay: { 
     flex: 1,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.background || baseColor,
   },
   header: { 
     flexDirection: 'row', 
@@ -209,28 +238,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 20,
-    backgroundColor: baseColor,
+    backgroundColor: theme?.surface || baseColor,
     borderBottomWidth: 1,
-    borderBottomColor: '#D4E2DC',
+    borderBottomColor: theme?.border || '#E2E8F0',
     gap: 8,
   },
   backButton: { 
     width: 44, 
     height: 44, 
     borderRadius: 22, 
-    backgroundColor: baseColor, 
+    backgroundColor: theme?.surface || baseColor, 
     alignItems: 'center', 
     justifyContent: 'center',
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3, 
     borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   headerTitleGroup: {
     flexDirection: 'row',
@@ -240,20 +263,20 @@ const styles = StyleSheet.create({
   headerTitle: { 
     fontSize: 22, 
     fontWeight: '900', 
-    color: '#1A2B23', 
+    color: theme?.textPrimary || '#0F172A', 
     letterSpacing: -0.5,
   },
   badge: {
-    backgroundColor: '#E53E3E',
+    backgroundColor: '#EF4444',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
     marginLeft: 8,
   },
   badgeText: {
     color: '#FFF',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
     textTransform: 'uppercase',
   },
   headerActions: {
@@ -270,20 +293,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   markReadBtn: {
-    backgroundColor: '#E8F5F0',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
   },
   markReadText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#4EA685',
+    fontWeight: '800',
+    color: '#10B981',
   },
   clearAllBtn: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
   },
   clearAllText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#E53E3E',
+    fontWeight: '800',
+    color: '#EF4444',
   },
   container: { flex: 1 },
   scrollContent: { 
@@ -294,7 +317,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -313,24 +336,18 @@ const styles = StyleSheet.create({
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: baseColor,
-    borderRadius: 24,
+    backgroundColor: theme?.surface || baseColor,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 0.7, 
-    shadowRadius: 6, 
-    elevation: 4,    
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   unreadCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E4ECE8',
+    backgroundColor: theme?.cardBg || '#FFFFFF',
+    borderColor: theme?.border || '#F1F5F9',
     borderWidth: 1,
   },
   iconBox: {
@@ -351,22 +368,22 @@ const styles = StyleSheet.create({
   notifTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#41544B',
+    color: theme?.textPrimary || '#64748B',
     flex: 1,
     marginRight: 8,
   },
   unreadText: {
     fontWeight: '900',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
   },
   notifTime: {
     fontSize: 11,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '600',
   },
   notifMessage: {
     fontSize: 13,
-    color: '#556B60',
+    color: theme?.textSecondary || '#64748B',
     lineHeight: 18,
     fontWeight: '500',
   },
@@ -379,19 +396,19 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#E53E3E',
+    backgroundColor: '#64748B',
   },
   dismissBtn: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#E4ECE8',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dismissX: {
     fontSize: 10,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     fontWeight: '800',
     lineHeight: 14,
   },
@@ -402,34 +419,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyIconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#E8F0ED',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 4,
     borderWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#1A2B23',
+    color: theme?.textPrimary || '#0F172A',
     marginBottom: 12,
     letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '500',
@@ -443,7 +454,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
     fontSize: 12,
-    color: '#7FA293',
+    color: theme?.textSecondary || '#94A3B8',
     lineHeight: 18,
     fontWeight: '500',
   },
