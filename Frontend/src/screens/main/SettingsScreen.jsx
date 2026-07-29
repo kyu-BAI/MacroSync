@@ -97,13 +97,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const base64Data = 'data:image/jpeg;base64,' + result.assets[0].base64;
-        setTempImage(base64Data);
+        const localUri = result.assets[0].uri;
+        setTempImage(localUri);
       }
     } catch (error) {
       console.log("Error picking image:", error);

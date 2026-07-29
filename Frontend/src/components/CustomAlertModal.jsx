@@ -150,8 +150,12 @@ export default function CustomAlertModal({
                       key={index}
                       activeOpacity={0.8}
                       onPress={() => {
-                        if (btn.onPress) btn.onPress();
                         onClose();
+                        if (btn.onPress) {
+                          setTimeout(() => {
+                            btn.onPress();
+                          }, 100);
+                        }
                       }}
                       style={[
                         styles.buttonBase,

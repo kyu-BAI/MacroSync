@@ -218,7 +218,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
@@ -319,7 +319,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
