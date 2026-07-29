@@ -60,21 +60,26 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        data = null;
+      }
 
-      if (response.ok) {
+      if (response.ok && data && data.user_id) {
         onVerified(data.user_id, data.is_onboarded);
       } else {
-        showAlert("Error", data.detail || "Invalid or expired OTP. Please try again.");
+        setIsLoading(false);
+        showAlert("Error", data?.detail || "Invalid or expired OTP code. Please try again.");
       }
     } catch (error) {
+      setIsLoading(false);
       console.log("VERIFY OTP ERROR:", error);
       showAlert(
         "Network Error",
         "Cannot connect to backend server. Make sure it is running and your IP is correct."
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 

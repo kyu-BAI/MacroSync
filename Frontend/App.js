@@ -545,6 +545,7 @@ function MainApp() {
         password={tempPassword || ''}
         isLogin={googleIsLoginOtp}
         onVerified={(newUserId, isOnboarded) => {
+          if (!newUserId) return;
           setUserId(newUserId);
           if (isOnboarded === true) {
             saveUserId(newUserId);
@@ -564,6 +565,7 @@ function MainApp() {
         email={resetEmail}
         isLogin={true}
         onVerified={(newUserId, isOnboarded) => {
+          if (!newUserId) return;
           setUserId(newUserId);
           if (isOnboarded === true) {
             saveUserId(newUserId);

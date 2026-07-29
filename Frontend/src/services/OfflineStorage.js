@@ -40,7 +40,8 @@ export async function getCachedDashboardData(userId) {
 // ─── Save logged-in user ID for auto-restore ─────────────────────────────────
 export async function saveUserId(userId) {
   try {
-    await AsyncStorage.setItem(KEYS.USER_ID, userId);
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') return;
+    await AsyncStorage.setItem(KEYS.USER_ID, userId.trim());
   } catch (e) {
     console.warn('OfflineStorage: Failed to save userId', e);
   }

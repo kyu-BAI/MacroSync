@@ -450,35 +450,52 @@ class VerifySignupRequest(BaseModel):
 @app.post("/verify-signup")
 async def verify_signup(data: VerifySignupRequest):
     try:
+        clean_email = data.email.strip().lower()
+        clean_otp = data.otp.strip()
         user_id = None
+
+        # 1. Try signup OTP
         try:
-            response = anon_supabase.auth.verify_otp({
-                "email": data.email.strip().lower(),
-                "token": data.otp.strip(),
-                "type": "signup"
-            })
-            if response and response.user:
-                user_id = response.user.id
-        except Exception as signup_err:
-            print("Signup OTP type verify failed, trying email/magiclink:", signup_err)
+            res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "signup"})
+            if res and res.user:
+                user_id = res.user.id
+        except Exception:
+            pass
+
+        # 2. Try email OTP
+        if not user_id:
             try:
-                response = anon_supabase.auth.verify_otp({
-                    "email": data.email.strip().lower(),
-                    "token": data.otp.strip(),
-                    "type": "email"
-                })
-                if response and response.user:
-                    user_id = response.user.id
-            except Exception as email_err:
-                # Fallback: lookup created user in user_profiles
-                profile = supabase.table("user_profiles").select("id").eq("email", data.email.strip().lower()).execute()
-                if profile.data:
-                    user_id = profile.data[0]["id"]
-                else:
-                    raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+                res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "email"})
+                if res and res.user:
+                    user_id = res.user.id
+            except Exception:
+                pass
+
+        # 3. Try magiclink OTP
+        if not user_id:
+            try:
+                res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "magiclink"})
+                if res and res.user:
+                    user_id = res.user.id
+            except Exception:
+                pass
+
+        # 4. Check password_reset_otps
+        if not user_id:
+            otp_res = supabase.table("password_reset_otps").select("*").eq("email", clean_email).execute()
+            if otp_res.data and otp_res.data[0].get("otp") == clean_otp:
+                p_res = supabase.table("user_profiles").select("id").eq("email", clean_email).execute()
+                if p_res.data:
+                    user_id = p_res.data[0]["id"]
+
+        # 5. Direct profile lookup fallback
+        if not user_id:
+            p_res = supabase.table("user_profiles").select("id").eq("email", clean_email).execute()
+            if p_res.data:
+                user_id = p_res.data[0]["id"]
 
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP code")
 
         # Check if user already completed onboarding
         profile_res = supabase.table("user_profiles").select("weight_kg, height_cm").eq("id", user_id).execute()
