@@ -59,7 +59,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
 
       if (response.ok) {
         showAlert("Success", "Email verified successfully.");
-        onVerified(data.user_id); // Moves cleanly to onboarding
+        onVerified(data.user_id, data.is_onboarded); // Moves cleanly to onboarding if not onboarded
       } else {
         showAlert("Error", data.detail || "Invalid or expired OTP. Please try again.");
       }

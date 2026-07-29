@@ -75,7 +75,7 @@ export default function LoginScreen({
         if (setCurrentUserId && userId) {
           setCurrentUserId(userId);
         }
-        onLoginSuccess();
+        onLoginSuccess(userId, data.is_onboarded);
       } else {
         showAlert(
           data.detail || "Incorrect email or password. Please try again.",

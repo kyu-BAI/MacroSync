@@ -23,8 +23,8 @@ import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const GcashLogo = require('../../images/Gcash.png');
-const CardLogo = require('../../images/CreditDebitCard.png');
+const GcashLogo = require('../../images/gcash.png');
+const CardLogo = require('../../images/credit_debit_card.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {

@@ -1,9 +1,13 @@
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client
 from dotenv import load_dotenv
 import os
 import random
+import secrets
+import uuid
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -18,11 +22,7 @@ from email.mime.multipart import MIMEMultipart
 
 load_dotenv()
 
-# Verify that the service role key is set for admin operations (checked below after dotenv load)
-
 app = FastAPI()
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,8 +35,8 @@ app.add_middleware(
 # ---------------- ENV ----------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-if not SUPABASE_KEY:
-    raise RuntimeError("SUPABASE_KEY not set. Ensure .env contains the service role key before starting the server.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE_URL or SUPABASE_KEY not set. Ensure .env contains Supabase credentials before starting the server.")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -215,9 +215,11 @@ def signin(user: UserLogin):
 
         user_id = auth.user.id
         email = auth.user.email
-        # Ensure profile exists in user_profiles
+        is_onboarded = False
+
+        # Ensure profile exists in user_profiles and check onboarding status
         try:
-            profile_response = supabase.table("user_profiles").select("id").eq("id", user_id).execute()
+            profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
             if not profile_response.data:
                 name = auth.user.user_metadata.get("full_name") if auth.user.user_metadata else None
                 if not name:
@@ -227,12 +229,17 @@ def signin(user: UserLogin):
                     "email": email,
                     "name": name
                 }).execute()
+            else:
+                p = profile_response.data[0]
+                if p.get("weight_kg") is not None and p.get("height_cm") is not None:
+                    is_onboarded = True
         except Exception as profile_err:
             print("ERROR ENSURING PROFILE ON SIGNIN:", repr(profile_err))
 
         return {
             "user": auth.user,
-            "session": auth.session
+            "session": auth.session,
+            "is_onboarded": is_onboarded
         }
 
     except Exception as e:
@@ -264,11 +271,12 @@ async def google_signin(data: GoogleSignInRequest):
 
         # Send OTP via Supabase
         if not user_exists:
+            temp_password = f"GAuth_{secrets.token_urlsafe(12)}"
             # Create user in Supabase Auth using admin API to bypass confirmations
             try:
                 auth_user = supabase_admin.auth.admin.create_user({
                     "email": email,
-                    "password": dummy_password,
+                    "password": temp_password,
                     "options": {
                         "data": {"full_name": name}
                     }
@@ -290,7 +298,7 @@ async def google_signin(data: GoogleSignInRequest):
                 "is_login_otp": False,
                 "email": email,
                 "name": name,
-                "dummy_password": dummy_password
+                "temp_password": temp_password
             }
         elif not is_profile_complete:
             # Case 2: Existing user but incomplete profile -> sign_in_with_otp (Login OTP but routes to onboarding)
@@ -427,17 +435,48 @@ class VerifySignupRequest(BaseModel):
 @app.post("/verify-signup")
 async def verify_signup(data: VerifySignupRequest):
     try:
-        response = anon_supabase.auth.verify_otp({
-            "email": data.email,
-            "token": data.otp,
-            "type": "signup"
-        })
-        
-        if not response.user:
-            raise HTTPException(status_code=400, detail="Invalid OTP")
-            
-        return {"success": True, "user_id": response.user.id}
+        user_id = None
+        try:
+            response = anon_supabase.auth.verify_otp({
+                "email": data.email.strip().lower(),
+                "token": data.otp.strip(),
+                "type": "signup"
+            })
+            if response and response.user:
+                user_id = response.user.id
+        except Exception as signup_err:
+            print("Signup OTP type verify failed, trying email/magiclink:", signup_err)
+            try:
+                response = anon_supabase.auth.verify_otp({
+                    "email": data.email.strip().lower(),
+                    "token": data.otp.strip(),
+                    "type": "email"
+                })
+                if response and response.user:
+                    user_id = response.user.id
+            except Exception as email_err:
+                # Fallback: lookup created user in user_profiles
+                profile = supabase.table("user_profiles").select("id").eq("email", data.email.strip().lower()).execute()
+                if profile.data:
+                    user_id = profile.data[0]["id"]
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+        # Check if user already completed onboarding
+        profile_res = supabase.table("user_profiles").select("weight_kg, height_cm").eq("id", user_id).execute()
+        is_onboarded = False
+        if profile_res.data:
+            p = profile_res.data[0]
+            if p.get("weight_kg") is not None and p.get("height_cm") is not None:
+                is_onboarded = True
+
+        return {"success": True, "user_id": user_id, "is_onboarded": is_onboarded}
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("VERIFY SIGNUP ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
@@ -808,6 +847,35 @@ async def get_dashboard_data(user_id: str):
         # Premium status from user preferences JSON
         is_premium = prefs.get("is_premium", False)
         
+        # Calculate real weekly activity from logged_meals for the past 7 days (Monday to Sunday)
+        today_date = now_manila.date()
+        start_of_week = today_date - timedelta(days=today_date.weekday())
+        start_of_week_utc = datetime(start_of_week.year, start_of_week.month, start_of_week.day, tzinfo=manila_tz).astimezone(timezone.utc)
+
+        weekly_meals_res = supabase.table("logged_meals") \
+            .select("calories, logged_at") \
+            .eq("user_id", user_id) \
+            .gte("logged_at", start_of_week_utc.isoformat()) \
+            .execute()
+
+        weekly_logs = weekly_meals_res.data or []
+        days_map = {0: "M", 1: "T", 2: "W", 3: "Th", 4: "F", 5: "S", 6: "Su"}
+        daily_totals = {i: 0 for i in range(7)}
+
+        for log in weekly_logs:
+            logged_at_str = log.get("logged_at")
+            if logged_at_str:
+                try:
+                    dt = datetime.fromisoformat(logged_at_str.replace("Z", "+00:00")).astimezone(manila_tz)
+                    log_date = dt.date()
+                    day_idx = log_date.weekday()
+                    if 0 <= day_idx < 7:
+                        daily_totals[day_idx] += log.get("calories", 0)
+                except Exception:
+                    pass
+
+        weekly_activity = [{"day": days_map[i], "value": daily_totals[i]} for i in range(7)]
+
         return {
             "profile": {
                 "name": user.get("name", "User"),
@@ -838,15 +906,7 @@ async def get_dashboard_data(user_id: str):
                 "recentExercise": recent_exercise
             },
             "loggedMealIds": logged_meal_ids,
-            "weeklyActivity": [
-                {"day": "M", "value": random.randint(300, 800)},
-                {"day": "T", "value": random.randint(300, 800)},
-                {"day": "W", "value": random.randint(300, 800)},
-                {"day": "Th", "value": random.randint(300, 800)},
-                {"day": "F", "value": random.randint(300, 800)},
-                {"day": "S", "value": random.randint(300, 800)},
-                {"day": "Su", "value": random.randint(300, 800)},
-            ]
+            "weeklyActivity": weekly_activity
         }
     except Exception as e:
         print("DASHBOARD ERROR:", repr(e))
@@ -923,8 +983,8 @@ def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 10:
-                    raise HTTPException(status_code=403, detail="Daily chat limit reached (10 messages/day). Please upgrade to premium for unlimited access.")
+                if day_usage.get("chats", 0) >= 5:
+                    raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
                 usage[today_str] = day_usage
@@ -1120,9 +1180,8 @@ def generate_recipe(data: RecipeRequest):
             
         recipe_data = json.loads(recipe_json.strip())
         
-        # Add a mock ID so the frontend can render it
-        import random
-        recipe_data["id"] = random.randint(1000, 9999)
+        # Generate a unique recipe ID for frontend rendering
+        recipe_data["id"] = f"rec_{uuid.uuid4().hex[:8]}"
         
         return recipe_data
         
@@ -1392,299 +1451,18 @@ async def paymongo_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def get_static_fallback_workouts(goal: str):
-    goal_lower = goal.lower() if goal else ""
-    if "muscle" in goal_lower or "gain" in goal_lower:
-        return [
-            {
-                "id": 1,
-                "title": "Home Calisthenics Push & Core Mass",
-                "intensity": "Intense",
-                "duration": "25 mins",
-                "targetGains": "Muscle Growth",
-                "caloriesBurn": 290,
-                "description": "Decline push-ups, explosive push-ups, chair dips, planks, and leg raises for upper body muscle development.",
-                "tutorials": [
-                    {
-                        "name": "Decline Bodyweight Push-Ups",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "Elevate feet on a chair or couch. Place hands slightly wider than shoulders.",
-                        "form": "Lower your chest with control, keeping your body in a straight line, then push up explosively."
-                    },
-                    {
-                        "name": "Tricep Chair Dips",
-                        "target": "3 Sets x 15 Reps",
-                        "setup": "Sit on edge of a chair, place palms next to hips, slide glutes forward off the seat.",
-                        "form": "Bend elbows to 90 degrees to lower hips. Press firmly through palms to lock out."
-                    },
-                    {
-                        "name": "Strict Isometric Floor Plank",
-                        "target": "3 Sets x 45 Seconds",
-                        "setup": "Place forearms on the floor, elbows aligned under shoulders.",
-                        "form": "Squeeze core, glutes, and thighs. Maintain a perfectly flat table posture."
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "title": "Lower Body & Legs Hypertrophy",
-                "intensity": "Moderate",
-                "duration": "20 mins",
-                "targetGains": "Leg Strength",
-                "caloriesBurn": 210,
-                "description": "Slow tempo air squats, bulgarian split squats, and calf raises to build lower body muscle mass.",
-                "tutorials": [
-                    {
-                        "name": "Air Squats (Slow Tempo)",
-                        "target": "4 Sets x 15 Reps",
-                        "setup": "Feet shoulder-width apart, toes pointing slightly out.",
-                        "form": "Lower down slowly for 3 seconds, pause at parallel, then drive back up in 1 second."
-                    },
-                    {
-                        "name": "Bulgarian Split Squats",
-                        "target": "3 Sets x 10 Reps per leg",
-                        "setup": "Place one foot behind you on a chair, standard stance with the forward foot.",
-                        "form": "Lower your hips until your back knee is just above the floor. Drive through front heel."
-                    },
-                    {
-                        "name": "Single-Leg Calf Raises",
-                        "target": "3 Sets x 20 Reps per leg",
-                        "setup": "Stand on one foot near a wall or chair for balance.",
-                        "form": "Raise up onto your toes as high as possible, pause at top, lower slowly."
-                    }
-                ]
-            },
-            {
-                "id": 3,
-                "title": "Core Sculpt & Stability",
-                "intensity": "Light",
-                "duration": "15 mins",
-                "targetGains": "Abdominal Strength",
-                "caloriesBurn": 90,
-                "description": "Bicycle crunches, lying leg raises, and bird-dogs for absolute core stabilization.",
-                "tutorials": [
-                    {
-                        "name": "Lying Leg Raises",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "Lie flat on your back, hands placed under your glutes for lower back support.",
-                        "form": "Keep legs straight, lift them to 90 degrees, then lower slowly without touching the floor."
-                    },
-                    {
-                        "name": "Bicycle Crunches",
-                        "target": "3 Sets x 20 Reps",
-                        "setup": "Lie on back, hands behind head, knees bent at 90 degrees.",
-                        "form": "Alternately bring elbow to opposite knee while extending the other leg straight."
-                    },
-                    {
-                        "name": "Isometric Bird-Dog",
-                        "target": "3 Sets x 10 Reps per side",
-                        "setup": "All fours position with knees under hips and hands under shoulders.",
-                        "form": "Reach right arm forward and left leg backward simultaneously. Hold for 2 seconds."
-                    }
-                ]
-            }
-        ]
-    elif "loss" in goal_lower or "lost" in goal_lower or "fat" in goal_lower:
-        return [
-            {
-                "id": 1,
-                "title": "Fat-Burning Metabolic HIIT",
-                "intensity": "Intense",
-                "duration": "20 mins",
-                "targetGains": "Fat Loss & Endurance",
-                "caloriesBurn": 320,
-                "description": "High-intensity burpees, mountain climbers, and jumping lunges to trigger the afterburn effect.",
-                "tutorials": [
-                    {
-                        "name": "Full Body Burpees",
-                        "target": "4 Sets x 12 Reps",
-                        "setup": "Stand tall, feet shoulder-width apart.",
-                        "form": "Drop to squat, kick feet back to plank, perform pushup, snap feet back, and jump up explosively."
-                    },
-                    {
-                        "name": "Jumping Lunges",
-                        "target": "3 Sets x 30 Seconds",
-                        "setup": "Step into a lunge stance, core tight.",
-                        "form": "Explode upward and switch leg positions in the air, landing softly into a lunge."
-                    },
-                    {
-                        "name": "High-Speed Mountain Climbers",
-                        "target": "3 Sets x 45 Seconds",
-                        "setup": "High push-up plank, shoulders stacked over wrists.",
-                        "form": "Drive knees to chest as fast as possible while maintaining flat hips."
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "title": "Full-Body Conditioning",
-                "intensity": "Moderate",
-                "duration": "18 mins",
-                "targetGains": "Cardio Stamina",
-                "caloriesBurn": 220,
-                "description": "Jumping jacks, air squats, and push-up rotations for steady calorie expenditure.",
-                "tutorials": [
-                    {
-                        "name": "Jumping Jacks",
-                        "target": "3 Sets x 60 Seconds",
-                        "setup": "Stand with feet together, arms at your sides.",
-                        "form": "Jump feet out while swinging arms overhead. Return to start quickly."
-                    },
-                    {
-                        "name": "Air Squats (Paced)",
-                        "target": "3 Sets x 20 Reps",
-                        "setup": "Feet shoulder-width apart, arms extended forward.",
-                        "form": "Squat down until thighs are parallel to ground, maintaining a steady, fast pace."
-                    },
-                    {
-                        "name": "Push-up to Side Plank Rotation",
-                        "target": "3 Sets x 10 Reps",
-                        "setup": "Start in a standard push-up position.",
-                        "form": "Do a push-up, then rotate your body open into a side plank. Alternate sides."
-                    }
-                ]
-            },
-            {
-                "id": 3,
-                "title": "Core Burn & Cardio Flow",
-                "intensity": "Light",
-                "duration": "15 mins",
-                "targetGains": "Toning & Agility",
-                "caloriesBurn": 120,
-                "description": "Plank taps, flutter kicks, and dynamic cat-cow for low impact cardio and core toning.",
-                "tutorials": [
-                    {
-                        "name": "Plank Shoulder Taps",
-                        "target": "3 Sets x 20 Reps",
-                        "setup": "High push-up position, feet slightly wider than usual for balance.",
-                        "form": "Tap left shoulder with right hand, then right shoulder with left hand. Keep hips stable."
-                    },
-                    {
-                        "name": "Flutter Kicks",
-                        "target": "3 Sets x 40 Seconds",
-                        "setup": "Lying on back, lift head/shoulders slightly, raise heels 6 inches off ground.",
-                        "form": "Kick legs up and down in a small, rapid fluttering motion. Keep lower back flat."
-                    },
-                    {
-                        "name": "Dynamic Cat-Cow Flow",
-                        "target": "2 Sets x 12 Cycles",
-                        "setup": "On all fours, knees under hips, hands under shoulders.",
-                        "form": "Inhale to arch back down and look up; exhale to round spine and look at navel."
-                    }
-                ]
-            }
-        ]
-    else:
-        return [
-            {
-                "id": 1,
-                "title": "Functional Full-Body Integration",
-                "intensity": "Intense",
-                "duration": "22 mins",
-                "targetGains": "Strength & Agility",
-                "caloriesBurn": 260,
-                "description": "Walkout pushups, speed air squats, and plank jacks to build balanced strength.",
-                "tutorials": [
-                    {
-                        "name": "Inchworm Walkout to Push-up",
-                        "target": "3 Sets x 10 Reps",
-                        "setup": "Stand straight, bend at hips, place hands on floor near feet.",
-                        "form": "Walk hands forward to plank, perform a pushup, then walk hands back and stand tall."
-                    },
-                    {
-                        "name": "Plank Jacks",
-                        "target": "3 Sets x 45 Seconds",
-                        "setup": "Low forearm plank position, body in straight line.",
-                        "form": "Jump feet out wide, then jump them back together, maintaining plank height."
-                    },
-                    {
-                        "name": "Jumping Squats",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "Standard squat stance.",
-                        "form": "Squat down, then explode upwards into a vertical jump. Land softly."
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "title": "Steady Mobility & Strength",
-                "intensity": "Moderate",
-                "duration": "20 mins",
-                "targetGains": "Joint Mobility & Tone",
-                "caloriesBurn": 180,
-                "description": "Reverse lunges, pushups, and bird-dog sequence for whole-body mobility.",
-                "tutorials": [
-                    {
-                        "name": "Standard Bodyweight Pushups",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "Plank position, hands shoulder-width apart.",
-                        "form": "Lower chest to ground, elbows tucked at 45 degrees, push up fully."
-                    },
-                    {
-                        "name": "Reverse Lunges (Alternating)",
-                        "target": "3 Sets x 16 Reps",
-                        "setup": "Stand tall, hands on hips.",
-                        "form": "Step back, drop knee to 90 degrees, return to start. Alternate legs."
-                    },
-                    {
-                        "name": "Alternating Bird-Dog Flow",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "On all fours, knees under hips.",
-                        "form": "Extend opposite arm and leg, hold for 1 second. Swap sides."
-                    }
-                ]
-            },
-            {
-                "id": 3,
-                "title": "Living Room Mobility & Posture Alignment",
-                "intensity": "Light",
-                "duration": "15 mins",
-                "targetGains": "Flexibility & Health",
-                "caloriesBurn": 85,
-                "description": "Dynamic stretching sequences, yoga-inspired spinal decompression, and core stability activation patterns.",
-                "tutorials": [
-                    {
-                        "name": "Quadruped Cat-Cow Flow",
-                        "target": "2 Sets x 10 Cycles",
-                        "setup": "All fours, knees under hips.",
-                        "form": "Arch back down looking up (inhale), round spine looking down (exhale)."
-                    },
-                    {
-                        "name": "Deep Yogi Squat Hold",
-                        "target": "2 Sets x 45 Seconds",
-                        "setup": "Stand with feet slightly wider than shoulder-width, toes flared.",
-                        "form": "Sit deep into a full squat. Press elbows against inside of knees to stretch hips."
-                    },
-                    {
-                        "name": "Plank Knee-to-Elbow Taps",
-                        "target": "2 Sets x 12 Reps",
-                        "setup": "High push-up plank position.",
-                        "form": "Bring right knee to touch right elbow. Return and bring left knee to left elbow."
-                    }
-                ]
-            }
-        ]
-
-
 @app.get("/workouts/recommend/{user_id}")
 def recommend_workouts(user_id: str):
-    # Default goal fallback
-    fallback_goal = "Maintain Weight"
     try:
-        # Fetch user profiles from supabase
         profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
-        if not profile_res.data:
-            return get_static_fallback_workouts(fallback_goal)
+        profile = profile_res.data[0] if profile_res.data else {}
 
-        profile = profile_res.data[0]
         goal = profile.get("goal", "Maintain Weight")
-        fallback_goal = goal
         weight_kg = profile.get("weight_kg", 70.0)
         goal_weight = profile.get("goalWeight", 70.0)
         height_cm = profile.get("height_cm", 170.0)
         age = profile.get("age", 25)
 
-        # Manila timezone for seed date string so rotation changes daily
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
         date_str = now_manila.strftime("%A, %B %d, %Y")
@@ -1716,7 +1494,7 @@ def recommend_workouts(user_id: str):
         """
 
         if not genai_client:
-            return get_static_fallback_workouts(goal)
+            raise HTTPException(status_code=503, detail="Gemini AI client not configured")
 
         response = generate_gemini_content(prompt)
         text = response.text.strip()
@@ -1730,128 +1508,24 @@ def recommend_workouts(user_id: str):
         if isinstance(workouts, list) and len(workouts) == 3:
             return workouts
         else:
-            print("Gemini response was not a list of 3 items, falling back.")
-            return get_static_fallback_workouts(goal)
+            raise HTTPException(status_code=500, detail="Failed to format workout recommendations from AI")
             
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("WORKOUT RECOMMENDATION ROUTE ERROR:", repr(e))
-        return get_static_fallback_workouts(fallback_goal)
-
-
-def get_static_fallback_meals(goal: str, targetCalories: int, targetProtein: int, targetCarbs: int, targetFats: int):
-    return [
-        {
-            "id": "dp1",
-            "mealType": "Breakfast",
-            "title": "Local Eggs & Pandesal",
-            "calories": int(round(targetCalories * 0.25)),
-            "protein": f"{int(round(targetProtein * 0.25))}g",
-            "carbs": f"{int(round(targetCarbs * 0.25))}g",
-            "fats": f"{int(round(targetFats * 0.25))}g",
-            "time": "8:00 AM",
-            "ingredients": [
-                "2 fresh local eggs",
-                "2 pieces whole-wheat or regular pandesal bread",
-                "1 tsp oil or butter for frying",
-                "Pinch of salt and black pepper"
-            ],
-            "instructions": [
-                "Heat oil or butter in a non-stick pan over medium heat.",
-                "Crack the eggs in and cook scrambled or sunny-side-up as preferred.",
-                "Toast your pandesal slices lightly in a toaster or pan.",
-                "Plate the hot toasted pandesal, serve with the cooked eggs, and optionally season with salt and pepper."
-            ]
-        },
-        {
-            "id": "dp2",
-            "mealType": "Lunch",
-            "title": "Chicken Adobo & Rice",
-            "calories": int(round(targetCalories * 0.35)),
-            "protein": f"{int(round(targetProtein * 0.35))}g",
-            "carbs": f"{int(round(targetCarbs * 0.35))}g",
-            "fats": f"{int(round(targetFats * 0.35))}g",
-            "time": "12:30 PM",
-            "ingredients": [
-                "150g skinless chicken thigh or breast, chopped",
-                "1 cup cooked white or brown rice",
-                "2 tbsp soy sauce",
-                "1 tbsp vinegar",
-                "2 cloves garlic, crushed",
-                "1 dried bay leaf",
-                "1/2 tsp whole black peppercorns"
-            ],
-            "instructions": [
-                "Combine chicken, soy sauce, garlic, and peppercorns in a bowl. Marinate for 10-15 minutes.",
-                "Heat a pot over medium-high heat and sear the chicken pieces until lightly browned.",
-                "Pour in the marinade, vinegar, and add the bay leaf. Bring to a boil, then cover and lower the heat to simmer for 20 minutes.",
-                "Serve hot chicken adobo with its savory sauce over a cup of steamed rice."
-            ]
-        },
-        {
-            "id": "dp3",
-            "mealType": "Snack",
-            "title": "Banana & Peanut Butter",
-            "calories": int(round(targetCalories * 0.10)),
-            "protein": f"{int(round(targetProtein * 0.10))}g",
-            "carbs": f"{int(round(targetCarbs * 0.10))}g",
-            "fats": f"{int(round(targetFats * 0.10))}g",
-            "time": "4:00 PM",
-            "ingredients": [
-                "1 medium local banana (Lakatan or Latundan)",
-                "1.5 tbsp natural unsweetened peanut butter"
-            ],
-            "instructions": [
-                "Peel the banana and slice it horizontally or into bite-sized coins.",
-                "Spread the natural unsweetened peanut butter evenly across the banana slices.",
-                "Enjoy immediately as a high-potassium, healthy-fat pre-workout snack."
-            ]
-        },
-        {
-            "id": "dp4",
-            "mealType": "Dinner",
-            "title": "Grilled Fish & Veggies",
-            "calories": int(round(targetCalories * 0.30)),
-            "protein": f"{int(round(targetProtein * 0.30))}g",
-            "carbs": f"{int(round(targetCarbs * 0.30))}g",
-            "fats": f"{int(round(targetFats * 0.30))}g",
-            "time": "7:30 PM",
-            "ingredients": [
-                "150g fresh local fish fillet (like Tilapia or Bangus)",
-                "1 cup steamed mixed local vegetables (like Okra, Squash, Eggplant)",
-                "1 tsp olive or coconut oil",
-                "1 squeeze of fresh calamansi juice",
-                "Salt, pepper, and garlic powder to taste"
-            ],
-            "instructions": [
-                "Season the fish fillet with salt, pepper, garlic powder, and a squeeze of calamansi juice.",
-                "Heat oil in a grill pan or skillet over medium-high heat and cook the fish for 3-4 minutes per side until flaky.",
-                "Steam your mixed vegetables in a separate pot until tender but crisp.",
-                "Serve the grilled fish hot alongside the steamed fresh vegetables."
-            ]
-        }
-    ]
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/meals/recommend/{user_id}")
 def recommend_meals(user_id: str):
-    # Default macros fallback
-    fallback_goal = "Maintain Weight"
-    target_calories = 2200
-    target_protein = 126
-    target_carbs = 250
-    target_fats = 70
     try:
-        # Fetch user profiles from supabase
         profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
-        if not profile_res.data:
-            return get_static_fallback_meals(fallback_goal, target_calories, target_protein, target_carbs, target_fats)
+        profile = profile_res.data[0] if profile_res.data else {}
 
-        profile = profile_res.data[0]
-        goal = profile.get("goal", "Maintain Weight")
-        fallback_goal = goal
-        weight_kg = profile.get("weight_kg", 70.0)
+        goal = profile.get("goal") or "Maintain Weight"
+        weight_kg = profile.get("weight_kg") or 70.0
 
-        # Calculate macros
         if "Lose" in goal:
             target_calories = 1800
             target_protein = int(weight_kg * 2.2)
@@ -1868,7 +1542,6 @@ def recommend_meals(user_id: str):
             target_carbs = 250
             target_fats = 70
 
-        # Manila timezone for seed date string so rotation changes daily
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
         date_str = now_manila.strftime("%A, %B %d, %Y")
@@ -1900,7 +1573,7 @@ def recommend_meals(user_id: str):
         """
 
         if not genai_client:
-            return get_static_fallback_meals(goal, target_calories, target_protein, target_carbs, target_fats)
+            raise HTTPException(status_code=503, detail="Gemini AI client not configured")
 
         response = generate_gemini_content(prompt)
         text = response.text.strip()
@@ -1914,12 +1587,13 @@ def recommend_meals(user_id: str):
         if isinstance(meals, list) and len(meals) == 4:
             return meals
         else:
-            print("Gemini response was not a list of 4 items, falling back.")
-            return get_static_fallback_meals(goal, target_calories, target_protein, target_carbs, target_fats)
+            raise HTTPException(status_code=500, detail="Failed to format meal recommendations from AI")
             
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("MEAL RECOMMENDATION ROUTE ERROR:", repr(e))
-        return get_static_fallback_meals(fallback_goal, target_calories, target_protein, target_carbs, target_fats)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/debug-key")

@@ -59,7 +59,7 @@ export default function SplashScreen({ onAppReady }) {
       {/* Central Brand Canvas Viewport */}
       <View style={styles.imagePresenterFrame}>
         <Image 
-          source={require('../../images/MacroSync-Logo.png')} 
+          source={require('../../images/macrosync_logo.png')} 
           style={styles.logoImageLarge}
           resizeMode="contain"
         />

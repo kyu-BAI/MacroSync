@@ -18,7 +18,6 @@ const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';

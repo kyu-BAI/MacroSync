@@ -18,10 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useCustomAlert } from '../../context/CustomAlertContext';
-
-// Import child lookup methods from your installed library
-import { provinces, cities } from 'select-philippines-address';
-
 import { useTheme } from '../../context/ThemeContext';
 
 const ITEM_HEIGHT = 54;
@@ -83,7 +79,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       if (type === 'province') {
         let formatted = [];
         try {
-          // Fast single HTTP fetch for all provinces (takes ~300ms vs 7000ms+ for 18 sequential calls)
           const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/province.json');
           if (Array.isArray(res.data)) {
             formatted = res.data.map(p => ({
@@ -91,18 +86,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
               name: p.province_name || p.name
             }));
           }
-        } catch (_) {
-          // Fallback if direct fetch fails
-          const ALL_REGION_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '19'];
-          const results = await Promise.allSettled(ALL_REGION_CODES.map(code => provinces(code)));
-          let aggregated = [];
-          results.forEach(r => {
-            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
-              aggregated.push(...r.value);
-            }
-          });
-          formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
-        }
+        } catch (_) {}
 
         // De-duplicate by province_code or name
         const uniqueMap = new Map();
@@ -122,11 +106,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           triggerCustomError("Sequence Interrupted", "Please select a Province first.");
           return;
         }
-        const res = await cities(province.province_code);
         let formatted = [];
-        if (Array.isArray(res)) {
-          formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
-        }
+        try {
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/city.json');
+          if (Array.isArray(res.data)) {
+            const filtered = res.data.filter(c => c.province_code === province.province_code);
+            formatted = filtered.map(c => ({ ...c, name: c.city_name || c.name }));
+          }
+        } catch (_) {}
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setSearchQuery('');

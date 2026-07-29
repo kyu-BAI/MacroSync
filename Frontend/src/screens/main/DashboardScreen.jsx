@@ -184,7 +184,7 @@ export default function DashboardScreen({
   ];
 
   // Water Intake State & Logic
-  const consumedGlasses    = globalConsumedGlasses !== undefined ? globalConsumedGlasses : 4;
+  const consumedGlasses    = globalConsumedGlasses !== undefined ? globalConsumedGlasses : 0;
   const weightKg           = parseFloat(userBaseline?.weight || 70);
   const heightCm           = parseFloat(userBaseline?.height || 170);
   const recommendedWaterMl = (weightKg * 35) + (Math.max(0, heightCm - 150) * 10);

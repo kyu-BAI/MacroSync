@@ -14,7 +14,6 @@ import {
   Modal
 } from 'react-native';
 import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
-import { recommendedRecipesPool } from '../../data/recipes';
 import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
@@ -39,114 +38,11 @@ export default function DietRecipesScreen({
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
-  // Static Recipes for Default Scheduled Meals (Offline Fallback)
-  const DEFAULT_RECIPES = {
-    dp1: {
-      id: 'dp1',
-      title: 'Local Eggs & Pandesal',
-      calories: 320,
-      protein: '15g',
-      carbs: '35g',
-      fats: '12g',
-      time: '10 mins',
-      budget: 'Under ₱100',
-      location: 'San Remigio',
-      ingredients: [
-        '2 fresh local eggs',
-        '2 pieces whole-wheat or regular pandesal bread',
-        '1 tsp oil or butter for frying',
-        'Pinch of salt and black pepper'
-      ],
-      instructions: [
-        'Heat oil or butter in a non-stick pan over medium heat.',
-        'Crack the eggs in and cook scrambled or sunny-side-up as preferred.',
-        'Toast your pandesal slices lightly in a toaster or pan.',
-        'Plate the hot toasted pandesal, serve with the cooked eggs, and optionally season with salt and pepper.'
-      ]
-    },
-    dp2: {
-      id: 'dp2',
-      title: 'Chicken Adobo & Rice',
-      calories: 550,
-      protein: '35g',
-      carbs: '65g',
-      fats: '14g',
-      time: '35 mins',
-      budget: '₱100 - ₱300',
-      location: 'San Remigio',
-      ingredients: [
-        '150g skinless chicken thigh or breast, chopped',
-        '1 cup cooked white or brown rice',
-        '2 tbsp soy sauce',
-        '1 tbsp vinegar',
-        '2 cloves garlic, crushed',
-        '1 dried bay leaf',
-        '1/2 tsp whole black peppercorns'
-      ],
-      instructions: [
-        'Combine chicken, soy sauce, garlic, and peppercorns in a bowl. Marinate for 10-15 minutes.',
-        'Heat a pot over medium-high heat and sear the chicken pieces until lightly browned.',
-        'Pour in the marinade, vinegar, and add the bay leaf. Bring to a boil, then cover and lower the heat to simmer for 20 minutes.',
-        'Serve hot chicken adobo with its savory sauce over a cup of steamed rice.'
-      ]
-    },
-    dp3: {
-      id: 'dp3',
-      title: 'Banana & Peanut Butter',
-      calories: 220,
-      protein: '6g',
-      carbs: '28g',
-      fats: '11g',
-      time: '5 mins',
-      budget: 'Under ₱100',
-      location: 'San Remigio',
-      ingredients: [
-        '1 medium local banana (Lakatan or Latundan)',
-        '1.5 tbsp natural unsweetened peanut butter'
-      ],
-      instructions: [
-        'Peel the banana and slice it horizontally or into bite-sized coins.',
-        'Spread the natural peanut butter evenly across the banana slices.',
-        'Eat immediately for a quick pre-workout carb and healthy fat boost.'
-      ]
-    },
-    dp4: {
-      id: 'dp4',
-      title: 'Grilled Fish & Veggies',
-      calories: 410,
-      protein: '32g',
-      carbs: '12g',
-      fats: '9g',
-      time: '20 mins',
-      budget: '₱100 - ₱300',
-      location: 'San Remigio',
-      ingredients: [
-        '150g fresh local fish fillet (bangus, lapu-lapu, or tilapya)',
-        '1 cup chopped local vegetables (kangkong, sitaw, eggplant)',
-        '1 tsp calamansi juice',
-        '1 tsp olive or coconut oil',
-        'Salt and pepper to taste'
-      ],
-      instructions: [
-        'Season fish fillet with calamansi juice, salt, and pepper.',
-        'Brush a pan with oil, heat it, and grill the fish for 4-5 minutes on each side until cooked through.',
-        'Steam or blanch the mixed vegetables in boiling water for 3-5 minutes until tender-crisp.',
-        'Serve the grilled fish hot alongside the steamed local veggies.'
-      ]
-    }
-  };
-
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
 
   const handleViewRecipe = async (meal) => {
-    if (DEFAULT_RECIPES[meal.id]) {
-      setSelectedRecipe(DEFAULT_RECIPES[meal.id]);
-      setShowRecipeModal(true);
-      return;
-    }
-
     setIsFetchingRecipe(true);
     try {
       const response = await fetch(`${API_URL}/generate-recipe`, {
@@ -179,17 +75,22 @@ export default function DietRecipesScreen({
   // Use global persisted state so logged meals survive tab switches
   const loggedMeals = globalLoggedMeals;
   const setLoggedMeals = setGlobalLoggedMeals || (() => {});
-  const [recipes, setRecipes] = useState(
-    sessionRecipes && sessionRecipes.length > 0 
-      ? sessionRecipes 
-      : recommendedRecipesPool.slice(0, 4)
-  );
+  const [recipes, setRecipes] = useState(sessionRecipes || []);
 
   useEffect(() => {
     if (sessionRecipes && sessionRecipes.length > 0) {
       setRecipes(sessionRecipes);
+    } else if (userId) {
+      fetch(`${API_URL}/meals/recommend/${userId}`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setRecipes(data);
+          }
+        })
+        .catch(err => console.warn("Error loading AI meals in DietRecipesScreen:", err));
     }
-  }, [sessionRecipes]);
+  }, [sessionRecipes, userId]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('All');

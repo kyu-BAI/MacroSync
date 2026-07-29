@@ -15,7 +15,6 @@ LogBox.ignoreLogs([
   'ImagePicker.MediaTypeOptions',
   'The <CameraView> component does not support children',
 ]);
-import { recommendedRecipesPool } from './src/data/recipes';
 import NetInfo from '@react-native-community/netinfo';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -442,13 +441,33 @@ function MainApp() {
   }, [userId, currentScreen]);
 
   useEffect(() => {
-    if (userId) {
-      const shuffled = [...recommendedRecipesPool].sort(() => 0.5 - Math.random());
-      setSessionRecipes(shuffled.slice(0, 8));
-    } else {
-      setSessionRecipes([]);
-    }
-  }, [userId]);
+    const fetchRecommendedMeals = async () => {
+      if (!userId || currentScreen !== 'DASHBOARD') {
+        return;
+      }
+      try {
+        const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setSessionRecipes(data);
+            await AsyncStorage.setItem(`ms_meals_${userId}`, JSON.stringify(data));
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching AI recommended meals:", err);
+      }
+      try {
+        const cached = await AsyncStorage.getItem(`ms_meals_${userId}`);
+        if (cached) {
+          setSessionRecipes(JSON.parse(cached));
+        }
+      } catch (e) {}
+    };
+
+    fetchRecommendedMeals();
+  }, [userId, currentScreen]);
 
   // ----------------------------------------------------
   // INITIAL INITIALIZATION STATE VIEWPORT CONTROL
@@ -468,7 +487,15 @@ function MainApp() {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
-        onLoginSuccess={() => setCurrentScreen("DASHBOARD")}
+        onLoginSuccess={(loggedInUserId, isOnboarded) => {
+          if (loggedInUserId) setUserId(loggedInUserId);
+          if (isOnboarded === true) {
+            saveUserId(loggedInUserId);
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
+        }}
         onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
         setCurrentUserId={(id) => setUserId(id)} 
         onGoogleOtpSent={(isNewUser, email, name, dummyPassword, isLoginOtp) => {
@@ -517,9 +544,14 @@ function MainApp() {
         name={userProfile.name}
         password={tempPassword}
         isLogin={googleIsLoginOtp}
-        onVerified={(newUserId) => {
+        onVerified={(newUserId, isOnboarded) => {
           setUserId(newUserId);
-          setCurrentScreen("STEP_ONE");
+          if (isOnboarded === true) {
+            saveUserId(newUserId);
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
         }}
         onNavigateBack={() => setCurrentScreen("SIGNUP")}
       />
@@ -531,9 +563,14 @@ function MainApp() {
       <VerifyEmailScreen
         email={resetEmail}
         isLogin={true}
-        onVerified={(newUserId) => {
+        onVerified={(newUserId, isOnboarded) => {
           setUserId(newUserId);
-          setCurrentScreen("DASHBOARD");
+          if (isOnboarded === true) {
+            saveUserId(newUserId);
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
         }}
         onNavigateBack={() => setCurrentScreen("LOGIN")}
       />
@@ -638,6 +675,7 @@ function MainApp() {
               targetDate: finalData.targetDate || userGoals.targetDate,
             });
           }
+          if (userId) saveUserId(userId);
           setCurrentScreen('DASHBOARD');
         }}
       />
