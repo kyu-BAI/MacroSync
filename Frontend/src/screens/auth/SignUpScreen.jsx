@@ -109,19 +109,19 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           password.trim(),
         );
       } else {
+        setIsLoading(false);
         showAlert(
           "Registration Error",
           data.detail || "Failed to create account. Please try again.",
         );
       }
     } catch (error) {
+      setIsLoading(false);
       console.log("SIGNUP ERROR:", error);
       showAlert(
         "Registration Error",
         "Cannot connect to backend server. Make sure it is running and your IP is correct.",
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -181,19 +181,20 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           generatedGooglePassword,
         );
       } else {
+        setIsLoading(false);
+        setIsGooglePressed(false);
         showAlert(
           "Registration Error",
           data.detail || "Google authentication failed.",
         );
       }
     } catch (error) {
+      setIsLoading(false);
+      setIsGooglePressed(false);
       showAlert(
         "Registration Error",
         "Cannot connect to backend server. Check your network.",
       );
-    } finally {
-      setIsLoading(false);
-      setIsGooglePressed(false);
     }
   };
 

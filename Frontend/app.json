@@ -45,7 +45,8 @@
           "android": {
             "usesCleartextTraffic": true,
             "enableProguardInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false
+            "enableShrinkResourcesInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": false
           }
         }
       ],
@@ -57,9 +58,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6bd1dc63-e86a-459c-9bf3-8501b5231be1"
+        "projectId": "fa694826-0469-4909-83f0-5c0ee84003ec"
       }
     },
-    "owner": "kyubi.karlsefni"
+    "owner": "kyubi.znarf"
   }
 }

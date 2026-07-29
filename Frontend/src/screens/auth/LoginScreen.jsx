@@ -77,15 +77,15 @@ export default function LoginScreen({
         }
         onLoginSuccess(userId, data.is_onboarded);
       } else {
+        setIsLoading(false);
         showAlert(
           data.detail || "Incorrect email or password. Please try again.",
         );
       }
     } catch (error) {
+      setIsLoading(false);
       console.log("LOGIN ERROR:", error);
       showAlert("Cannot connect to backend server. Check your network.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
