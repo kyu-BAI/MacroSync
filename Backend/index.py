@@ -168,6 +168,38 @@ class ProfilePictureUpdate(BaseModel):
 
 
 
+def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP"):
+    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() != "" and GMAIL_SENDER_EMAIL.strip() != "your-gmail@gmail.com":
+        msg = MIMEMultipart()
+        msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL.strip()}>"
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        html = f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>Welcome to MacroSync</h2>
+                <p>Your 6-digit verification OTP code is:</p>
+                <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
+                <p>This code expires in 10 minutes.</p>
+            </div>
+        """
+        msg.attach(MIMEText(html, 'html'))
+        app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
+            server.sendmail(GMAIL_SENDER_EMAIL.strip(), to_email, msg.as_string())
+    elif RESEND_API_KEY and RESEND_API_KEY != "re_your_api_key_here":
+        resend.Emails.send({
+            "from": "MacroSync <onboarding@resend.dev>",
+            "to": to_email,
+            "subject": subject,
+            "html": f"""
+                <h2>Welcome to MacroSync</h2>
+                <h1>{otp_code}</h1>
+                <p>This code expires in 10 minutes.</p>
+            """
+        })
+
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
 async def signup(user: UserAuth):
@@ -178,34 +210,58 @@ async def signup(user: UserAuth):
             raise HTTPException(status_code=400, detail="Email already registered")
 
         user_id = None
+        # 1. Create or retrieve user via Admin Auth (Fast & Never Times Out)
         try:
-            auth = anon_supabase.auth.sign_up({
-                "email": user.email,
-                "password": user.password
+            admin_res = supabase_admin.auth.admin.create_user({
+                "email": email,
+                "password": user.password,
+                "email_confirm": True
             })
-            if auth and auth.user:
-                user_id = auth.user.id
-        except Exception as auth_err:
-            print("Supabase auth sign_up exception:", auth_err)
+            if admin_res and admin_res.user:
+                user_id = admin_res.user.id
+        except Exception as admin_err:
+            err_str = str(admin_err).lower()
+            if "already registered" in err_str or "already exists" in err_str:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            print("Admin create_user error:", admin_err)
 
         if not user_id:
+            # Try list_users fallback if user exists
             try:
-                users = supabase_admin.auth.admin.list_users()
-                matching_user = next((u for u in users if u.email and u.email.lower() == email), None)
-                if matching_user:
-                    user_id = matching_user.id
+                users_list = supabase_admin.auth.admin.list_users()
+                users_iter = users_list.users if hasattr(users_list, 'users') else users_list
+                for u in users_iter:
+                    u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
+                    if u_email and u_email.lower() == email:
+                        user_id = getattr(u, 'id', None) or (u.get('id') if isinstance(u, dict) else None)
+                        break
             except Exception as list_err:
-                print("Failed to list users fallback:", list_err)
+                print("List users fallback error:", list_err)
 
         if not user_id:
-            raise HTTPException(status_code=400, detail="Failed to create account in auth provider")
+            raise HTTPException(status_code=400, detail="Failed to create user account")
 
-        # Insert or update profile (upsert to handle re-sends)
+        # 2. Insert or update user_profiles record
         supabase.table("user_profiles").upsert({
             "id": user_id,
-            "email": user.email,
-            "name": user.name
+            "email": email,
+            "name": user.name.strip() if user.name else "User"
         }).execute()
+
+        # 3. Generate 6-digit OTP and store in password_reset_otps
+        otp_code = str(random.randint(100000, 999999))
+        expiry = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        supabase.table("password_reset_otps").upsert({
+            "email": email,
+            "otp": otp_code,
+            "expires_at": expiry
+        }).execute()
+
+        # 4. Dispatch Email OTP directly via Gmail SMTP / Resend
+        try:
+            send_otp_via_email(email, otp_code, "MacroSync Verification OTP")
+        except Exception as mail_err:
+            print("Mail dispatch error (OTP saved in DB):", mail_err)
 
         return {"user_id": user_id}
 
@@ -214,7 +270,7 @@ async def signup(user: UserAuth):
     except Exception as e:
         err_msg = str(e)
         print("SIGNUP ERROR:", repr(e))
-        if "violates foreign key constraint" in err_msg or "user_profiles_id_fkey" in err_msg or "already registered" in err_msg:
+        if "already registered" in err_msg or "already exists" in err_msg:
             raise HTTPException(status_code=400, detail="Email already registered")
         raise HTTPException(status_code=400, detail=err_msg)
 

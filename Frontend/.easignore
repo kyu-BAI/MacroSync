@@ -1,0 +1,9 @@
+# EAS Build ignore patterns
+node_modules/
+android/
+ios/
+dist/
+.git/
+.expo/
+*.apk
+*.aab
