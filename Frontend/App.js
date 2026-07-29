@@ -540,9 +540,9 @@ function MainApp() {
   if (currentScreen === "VERIFY_SIGNUP") {
     return (
       <VerifyEmailScreen
-        email={resetEmail}
-        name={userProfile.name}
-        password={tempPassword}
+        email={resetEmail || userProfile?.email || ''}
+        name={userProfile?.name || 'User'}
+        password={tempPassword || ''}
         isLogin={googleIsLoginOtp}
         onVerified={(newUserId, isOnboarded) => {
           setUserId(newUserId);

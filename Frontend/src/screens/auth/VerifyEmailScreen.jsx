@@ -37,14 +37,19 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
     setIsLoading(true);
 
     try {
+      const cleanEmail = (email || "").trim();
+      const cleanOtp = (otp || "").trim();
+      const cleanName = (name || "").trim();
+      const cleanPassword = (password || "").trim();
+
       const endpoint = isLogin ? "/verify-login" : "/verify-signup";
       const payload = isLogin 
-        ? { email: email.trim(), otp: otp.trim() }
+        ? { email: cleanEmail, otp: cleanOtp }
         : {
-            email: email.trim(),
-            otp: otp.trim(),
-            name: name ? name.trim() : "",
-            password: password ? password.trim() : ""
+            email: cleanEmail,
+            otp: cleanOtp,
+            name: cleanName,
+            password: cleanPassword
           };
 
       const response = await fetch(`${API_URL}${endpoint}`, {

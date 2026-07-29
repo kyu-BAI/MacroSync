@@ -172,20 +172,33 @@ class ProfilePictureUpdate(BaseModel):
 @app.post("/signup")
 async def signup(user: UserAuth):
     try:
-        # Check if user already exists to prevent raw database foreign key errors
-        # (caused by Supabase User Enumeration Protection returning a mock ID)
         email = user.email.strip().lower()
-        # Fast query via user_profiles table instead of slow list_users() API call
         existing_profile = supabase.table("user_profiles").select("id").eq("email", email).execute()
         if existing_profile.data:
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        auth = anon_supabase.auth.sign_up({
-            "email": user.email,
-            "password": user.password
-        })
+        user_id = None
+        try:
+            auth = anon_supabase.auth.sign_up({
+                "email": user.email,
+                "password": user.password
+            })
+            if auth and auth.user:
+                user_id = auth.user.id
+        except Exception as auth_err:
+            print("Supabase auth sign_up exception:", auth_err)
 
-        user_id = auth.user.id
+        if not user_id:
+            try:
+                users = supabase_admin.auth.admin.list_users()
+                matching_user = next((u for u in users if u.email and u.email.lower() == email), None)
+                if matching_user:
+                    user_id = matching_user.id
+            except Exception as list_err:
+                print("Failed to list users fallback:", list_err)
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Failed to create account in auth provider")
 
         # Insert or update profile (upsert to handle re-sends)
         supabase.table("user_profiles").upsert({
@@ -196,10 +209,12 @@ async def signup(user: UserAuth):
 
         return {"user_id": user_id}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         err_msg = str(e)
         print("SIGNUP ERROR:", repr(e))
-        if "violates foreign key constraint" in err_msg or "user_profiles_id_fkey" in err_msg:
+        if "violates foreign key constraint" in err_msg or "user_profiles_id_fkey" in err_msg or "already registered" in err_msg:
             raise HTTPException(status_code=400, detail="Email already registered")
         raise HTTPException(status_code=400, detail=err_msg)
 
