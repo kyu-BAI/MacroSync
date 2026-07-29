@@ -112,9 +112,16 @@ export default function StepOneScreen({ onNext }) {
       triggerSafetyWarning("Missing Metrics", "Please fill in your age before proceeding.");
       return;
     }
-    if (!heightFt.trim() && !heightIn.trim()) {
-      triggerSafetyWarning("Missing Metrics", "Please specify your height in feet and inches.");
-      return;
+    if (heightUnit === 'cm') {
+      if (!height.trim()) {
+        triggerSafetyWarning("Missing Metrics", "Please specify your height in centimeters.");
+        return;
+      }
+    } else {
+      if (!heightFt.trim() && !heightIn.trim()) {
+        triggerSafetyWarning("Missing Metrics", "Please specify your height in feet and inches.");
+        return;
+      }
     }
     if (!weight.trim()) {
       triggerSafetyWarning("Missing Metrics", "Please fill in your weight metric.");
