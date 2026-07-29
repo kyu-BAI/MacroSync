@@ -31,8 +31,9 @@ import { useTheme } from "../../context/ThemeContext";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme, isDarkMode);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -266,7 +267,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 ]}
               >
                 <Lock
-                  color={showPasswordWarning ? "#64748B" : "#94A3B8"}
+                  color={showPasswordWarning ? "#EF4444" : "#94A3B8"}
                   size={20}
                   style={styles.leadingIcon}
                 />
@@ -291,12 +292,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 >
                   {secureTextEntry ? (
                     <EyeOff
-                      color={showPasswordWarning ? "#64748B" : "#94A3B8"}
+                      color={showPasswordWarning ? "#EF4444" : "#94A3B8"}
                       size={22}
                     />
                   ) : (
                     <Eye
-                      color={showPasswordWarning ? "#64748B" : "#10B981"}
+                      color={showPasswordWarning ? "#EF4444" : "#10B981"}
                       size={22}
                     />
                   )}
@@ -308,7 +309,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 <View style={styles.criteriaContainer}>
                   {showPasswordWarning && (
                     <View style={styles.warningHeaderRow}>
-                      <AlertCircle color="#64748B" size={14} />
+                      <AlertCircle color="#EF4444" size={14} />
                       <Text style={styles.criteriaHeaderWarning}>
                         Password must contain:
                       </Text>
@@ -316,7 +317,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                   )}
                   {passwordCriteria.map((item, index) => {
                     const isSuccess = item.valid;
-                    const isError = showPasswordWarning && !item.valid;
+                    const isUnmet = !item.valid;
                     return (
                       <View key={index} style={styles.criteriaRow}>
                         {isSuccess ? (
@@ -327,7 +328,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                           />
                         ) : (
                           <X
-                            color={isError ? "#64748B" : "#CBD5E1"}
+                            color={isUnmet ? "#EF4444" : "#CBD5E1"}
                             size={16}
                             style={styles.criteriaIcon}
                           />
@@ -336,7 +337,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                           style={[
                             styles.criteriaText,
                             isSuccess && styles.criteriaTextSuccess,
-                            isError && styles.criteriaTextError,
+                            isUnmet && styles.criteriaTextError,
                           ]}
                         >
                           {item.label}
@@ -362,7 +363,10 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               ]}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={[styles.buttonText, { opacity: 0.95 }]}>Creating Account...</Text>
+                </View>
               ) : (
                 <Text
                   style={[
@@ -542,7 +546,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     borderColor: theme?.inputBorder || "#E2E8F0",
   },
   inputWarningBorder: {
-    borderColor: "#E2E8F0",
+    borderColor: "#EF4444",
   },
   criteriaContainer: {
     marginTop: 10,
@@ -554,7 +558,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginBottom: 6,
   },
   criteriaHeaderWarning: {
-    color: "#64748B",
+    color: "#EF4444",
     fontSize: 12,
     fontWeight: "800",
     marginLeft: 5,
@@ -577,7 +581,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     fontWeight: "700",
   },
   criteriaTextError: {
-    color: "#64748B",
+    color: "#EF4444",
     fontWeight: "700",
   },
   fieldRow: {

@@ -20,10 +20,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard } from 'lucide-react-native';
 import API_URL from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const GcashLogo = require('../../images/gcash.png');
+const GcashLogo = require('../../images/Gcash.png');
 const CardLogo = require('../../images/credit_debit_card.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -106,7 +108,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         setTempImage(localUri);
       }
     } catch (error) {
-      console.log("Error picking image:", error);
+      if (__DEV__) console.log("Error picking image:", error);
       showAlert("Error", "Could not pick image from gallery.");
     }
   };
@@ -154,11 +156,11 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             });
           }
         } catch (e) {
-          console.log("Background profile sync error:", e);
+          if (__DEV__) console.log("Background profile sync error:", e);
         }
       })();
     } catch (error) {
-      console.error("UPDATE PROFILE ERROR:", error);
+      if (__DEV__) console.error("UPDATE PROFILE ERROR:", error);
       showAlert("Error", "Failed to update profile. Please try again.");
     }
   };
@@ -205,10 +207,10 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             user_id: userId,
             profile_image: selectedUri
           }),
-        }).catch(err => console.log("Background profile pic sync error:", err));
+        }).catch(err => __DEV__ && console.log("Background profile pic sync error:", err));
       }
     } catch (error) {
-      console.log("Error picking profile image:", error);
+      if (__DEV__) console.log("Error picking profile image:", error);
       showAlert("Error", "Could not pick image from gallery.");
     }
   };
@@ -217,6 +219,48 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [habitReminders, setHabitReminders] = useState(true);
   const [motivationalUpdates, setMotivationalUpdates] = useState(true);
   const [personalizedAlerts, setPersonalizedAlerts] = useState(false);
+
+  // Load saved notification switch preferences on mount
+  useEffect(() => {
+    const loadNotificationPrefs = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.habitReminders !== undefined) setHabitReminders(!!parsed.habitReminders);
+          if (parsed.motivationalUpdates !== undefined) setMotivationalUpdates(!!parsed.motivationalUpdates);
+          if (parsed.personalizedAlerts !== undefined) setPersonalizedAlerts(!!parsed.personalizedAlerts);
+        }
+      } catch (e) {
+        if (__DEV__) console.log("Failed to load notification prefs:", e);
+      }
+    };
+    loadNotificationPrefs();
+  }, []);
+
+  const saveAndUpdateNotificationPrefs = async (updatedPrefs) => {
+    try {
+      await AsyncStorage.setItem('@ms_notification_preferences', JSON.stringify(updatedPrefs));
+      await NotificationService.scheduleDailyReminders(updatedPrefs);
+    } catch (e) {
+      if (__DEV__) console.log("Failed to save notification prefs:", e);
+    }
+  };
+
+  const handleToggleHabitReminders = (val) => {
+    setHabitReminders(val);
+    saveAndUpdateNotificationPrefs({ habitReminders: val, motivationalUpdates, personalizedAlerts });
+  };
+
+  const handleToggleMotivationalUpdates = (val) => {
+    setMotivationalUpdates(val);
+    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates: val, personalizedAlerts });
+  };
+
+  const handleTogglePersonalizedAlerts = (val) => {
+    setPersonalizedAlerts(val);
+    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates, personalizedAlerts: val });
+  };
 
   // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
   const [accountTier, setAccountTier] = useState(userProfile?.isPremium ? 'Premium' : 'Free');
@@ -309,7 +353,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                     "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
                   );
                 } else {
-                  console.log("PayMongo response:", data);
+                  if (__DEV__) console.log("PayMongo response:", data);
                   showAlert("Error", "Could not generate payment link.");
                 }
               } else {
@@ -391,7 +435,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       setEmailCurrentPassword('');
       setShowEmailModal(false);
     } catch (error) {
-      console.error("CHANGE EMAIL ERROR:", error);
+      if (__DEV__) console.error("CHANGE EMAIL ERROR:", error);
       showAlert("Error", error.message || "Failed to update email. Please try again.");
     } finally {
       setIsChangingEmail(false);
@@ -441,7 +485,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       setConfirmPassword('');
       setShowPasswordModal(false);
     } catch (error) {
-      console.error("CHANGE PASSWORD ERROR:", error);
+      if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
       showAlert("Error", error.message || "Failed to change password. Please try again.");
     } finally {
       setIsChangingPassword(false);
@@ -705,7 +749,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor={habitReminders ? '#10B981' : '#64748B'}
               ios_backgroundColor={'#E2E8F0'}
-              onValueChange={setHabitReminders}
+              onValueChange={handleToggleHabitReminders}
               value={habitReminders}
             />
           </View>
@@ -726,7 +770,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               trackColor={{ false: '#E2E8F0', true: '#F97316' }}
               thumbColor={motivationalUpdates ? '#F97316' : '#64748B'}
               ios_backgroundColor={'#E2E8F0'}
-              onValueChange={setMotivationalUpdates}
+              onValueChange={handleToggleMotivationalUpdates}
               value={motivationalUpdates}
             />
           </View>
@@ -747,7 +791,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               trackColor={{ false: '#E2E8F0', true: '#8B5CF6' }}
               thumbColor={personalizedAlerts ? '#8B5CF6' : '#64748B'}
               ios_backgroundColor={'#E2E8F0'}
-              onValueChange={setPersonalizedAlerts}
+              onValueChange={handleTogglePersonalizedAlerts}
               value={personalizedAlerts}
             />
           </View>

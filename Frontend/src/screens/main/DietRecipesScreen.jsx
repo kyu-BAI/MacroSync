@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -15,12 +15,27 @@ import {
 } from 'react-native';
 import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
 import API_URL from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import AILoadingModal from '../../components/AILoadingModal';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
+  if (!setNotifications) return;
+  try {
+    const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+    const prefs = stored ? JSON.parse(stored) : { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+    const category = newNotif.category;
+    if ((category === 'hydration' || category === 'meal') && prefs.habitReminders === false) return;
+    if ((category === 'workout' || category === 'achievement') && prefs.motivationalUpdates === false) return;
+    if (category === 'smart' && prefs.personalizedAlerts === false) return;
+    setNotifications(prev => [newNotif, ...prev]);
+  } catch (e) {
+    setNotifications(prev => [newNotif, ...prev]);
+  }
+};
 
 export default function DietRecipesScreen({ 
   onTabChange, 
@@ -42,7 +57,24 @@ export default function DietRecipesScreen({
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
 
-  const handleViewRecipe = async (meal) => {
+  const recipeCacheRef = React.useRef({});
+
+  const handleViewRecipe = useCallback(async (meal) => {
+    // 1. Check if recipe already attached to meal
+    if (meal.instructions && meal.ingredients) {
+      setSelectedRecipe(meal);
+      setShowRecipeModal(true);
+      return;
+    }
+
+    // 2. Check local client cache for instant 0ms load
+    const cacheKey = `${meal.title.trim().toLowerCase()}_${selectedLocation || 'San Remigio'}`;
+    if (recipeCacheRef.current[cacheKey]) {
+      setSelectedRecipe(recipeCacheRef.current[cacheKey]);
+      setShowRecipeModal(true);
+      return;
+    }
+
     setIsFetchingRecipe(true);
     try {
       const response = await fetch(`${API_URL}/generate-recipe`, {
@@ -62,15 +94,16 @@ export default function DietRecipesScreen({
       }
 
       const data = await response.json();
+      recipeCacheRef.current[cacheKey] = data;
       setSelectedRecipe(data);
       setShowRecipeModal(true);
     } catch (error) {
-      console.error("VIEW RECIPE ERROR:", error);
+      if (__DEV__) console.error("VIEW RECIPE ERROR:", error);
       showAlert('Unable to load recipe', 'Failed to retrieve recipe from AI. Please check your network connection.');
     } finally {
       setIsFetchingRecipe(false);
     }
-  };
+  }, [selectedLocation]);
 
   // Use global persisted state so logged meals survive tab switches
   const loggedMeals = globalLoggedMeals;
@@ -81,14 +114,18 @@ export default function DietRecipesScreen({
     if (sessionRecipes && sessionRecipes.length > 0) {
       setRecipes(sessionRecipes);
     } else if (userId) {
-      fetch(`${API_URL}/meals/recommend/${userId}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(data => {
-          if (Array.isArray(data) && data.length > 0) {
-            setRecipes(data);
-          }
-        })
-        .catch(err => console.warn("Error loading AI meals in DietRecipesScreen:", err));
+      // Defer heavy fetch until after tab animation completes
+      const timer = setTimeout(() => {
+        fetch(`${API_URL}/meals/recommend/${userId}`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data) && data.length > 0) {
+              setRecipes(data);
+            }
+          })
+          .catch(err => __DEV__ && console.warn("Error loading AI meals in DietRecipesScreen:", err));
+      }, 150);
+      return () => clearTimeout(timer);
     }
   }, [sessionRecipes, userId]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -165,12 +202,11 @@ export default function DietRecipesScreen({
 
   // AI Daily Meal Recommendation State
   const [dailyPlan, setDailyPlan] = useState([]);
-  const [loadingMeals, setLoadingMeals] = useState(true);
+  const [loadingMeals, setLoadingMeals] = useState(false);
 
   useEffect(() => {
     const loadCachedOrFetchMeals = async () => {
       try {
-        setLoadingMeals(true);
         const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
 
         // 1. Check local cache
@@ -184,7 +220,8 @@ export default function DietRecipesScreen({
           }
         }
 
-        // 2. Cache miss: Fetch from backend
+        // 2. Cache miss: Fetch from backend (show loading modal only for backend generation)
+        setLoadingMeals(true);
         const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
         if (!res.ok) {
           throw new Error("Failed to fetch custom meal suggestions");
@@ -200,7 +237,7 @@ export default function DietRecipesScreen({
         };
         await AsyncStorage.setItem('ms_meals_cache', JSON.stringify(cachePayload));
       } catch (err) {
-        console.warn("MEAL RECOMMENDATION LOAD ERROR:", err);
+        if (__DEV__) console.warn("MEAL RECOMMENDATION LOAD ERROR:", err);
       } finally {
         setLoadingMeals(false);
       }
@@ -243,7 +280,7 @@ export default function DietRecipesScreen({
       setExpandedRecipeId(data.id);
       showAlert('Success', 'AI generated a healthy recipe matching your preferences!');
     } catch (error) {
-      console.error("GENERATE RECIPE ERROR:", error);
+      if (__DEV__) console.error("GENERATE RECIPE ERROR:", error);
       showAlert('Generation Failed', 'Failed to generate recipe with AI. Please check your network and try again.');
     } finally {
       setIsGenerating(false);
@@ -280,15 +317,15 @@ export default function DietRecipesScreen({
         const updatedLoggedMeals = [...loggedMeals, id];
         setLoggedMeals(updatedLoggedMeals);
         
-        if (setNotifications && macros) {
-          setNotifications(prev => [{
+        if (macros) {
+          await pushNotificationIfAllowed({
             id: `n-${Date.now()}`,
             title: 'Meal Logged! 🍽️',
             category: 'meal',
             time: 'Just Now',
             read: false,
             message: `Successfully logged your meal: ${mealName} (${macros.calories || 0} Kcal). Keep it up!`
-          }, ...prev]);
+          }, setNotifications);
         }
         
         let newNutrition = null;
@@ -332,7 +369,7 @@ export default function DietRecipesScreen({
           });
           
           if (!res.ok) {
-            console.log("Failed to persist meal log upstream:", res.status);
+            if (__DEV__) console.log("Failed to persist meal log upstream:", res.status);
           } else {
             if (newNutrition) {
               await updateCachedDashboardField(userId, {
@@ -347,7 +384,7 @@ export default function DietRecipesScreen({
             }
           }
         } catch (err) {
-          console.warn("Offline or network issue while logging meal:", err);
+          if (__DEV__) console.warn("Offline or network issue while logging meal:", err);
           await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
           if (newNutrition) {
             await updateCachedDashboardField(userId, {
@@ -424,7 +461,7 @@ export default function DietRecipesScreen({
           throw new Error('Failed to delete meal on server');
         }
       } catch (error) {
-        console.warn("DELETE MEAL API ERROR (falling back to queue):", error);
+        if (__DEV__) console.warn("DELETE MEAL API ERROR (falling back to queue):", error);
         await addToSyncQueue({ type: 'DELETE_MEAL', payload: { user_id: userId, id } });
         if (newNutrition) {
           await updateCachedDashboardField(userId, {
@@ -459,18 +496,7 @@ export default function DietRecipesScreen({
   const consumedCalories = dailyNutrition?.consumedCalories || 0;
   const isOverCalories = consumedCalories > targetCalories;
 
-  if (loadingMeals) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme?.background || baseColor }]}>
-        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-        <View style={styles.loaderOuterNeu}>
-          <ActivityIndicator size="large" color={logoGreen} />
-        </View>
-        <Text style={styles.loaderTextTitle}>AI Dietitian Active</Text>
-        <Text style={styles.loaderTextDesc}>Customizing today's meal suggestions based on your target macros...</Text>
-      </View>
-    );
-  }
+
 
   return (
     <View style={styles.fullscreenOverlay}>
@@ -640,7 +666,7 @@ export default function DietRecipesScreen({
                   ) : (
                     <>
                       <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-                      <Text style={styles.aiGenerateBtnText}>Generate recipe with Gemini</Text>
+                      <Text style={styles.aiGenerateBtnText}>Generate Recipe with Vita AI</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -939,17 +965,13 @@ export default function DietRecipesScreen({
         </View>
       </Modal>
 
-      {/* ── LOADING OVERLAY FOR RECIPE FETCHING ── */}
-      <Modal visible={isFetchingRecipe} transparent={true} animationType="fade">
-        <View style={styles.loadingModalOverlay}>
-          <View style={styles.loadingModalContent}>
-            <ActivityIndicator size="large" color={logoGreen} />
-            <Text style={styles.loadingModalText}>Consulting AI Nutritionist...</Text>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- BOTTOM NAVIGATION BAR --- */}
+      {/* ── UIVERSE INSPIRED AI LOADING MODAL ── */}
+      <AILoadingModal
+        visible={isGenerating || isFetchingRecipe || loadingMeals}
+        type={isFetchingRecipe ? "recipe" : "meal"}
+        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Customizing AI Meal Plan"}
+        subtitle="Vita AI is personalizing your nutrition"
+      />
     </View>
   );
 }

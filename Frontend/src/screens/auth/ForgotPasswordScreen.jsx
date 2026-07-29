@@ -19,8 +19,9 @@ import { useTheme } from '../../context/ThemeContext';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [email, setEmail] = useState('');
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,9 +72,13 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
       setIsLoading(false);
     }
   };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <StatusBar 
+        barStyle={isDarkMode ? "light-content" : "dark-content"} 
+        backgroundColor={theme?.background || baseColor} 
+      />
       
       {/* Back Button Row */}
       <View style={styles.topNavigationRow}>
@@ -110,11 +115,11 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.flatInputField, styles.fieldRow]}>
-                <Mail color="#94A3B8" size={20} style={styles.leadingIcon} />
+                <Mail color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -124,7 +129,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
               </View>
             </View>
 
-            {/* Action Trigger Button (Updated to Send OTP) */}
+            {/* Action Trigger Button */}
             <TouchableOpacity
               activeOpacity={1}
               disabled={isLoading}
@@ -156,7 +161,7 @@ export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
 const baseColor = '#F8FAFC';
 const logoGreen = '#10B981';
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme?.background || baseColor,
@@ -167,8 +172,8 @@ const getStyles = (theme) => StyleSheet.create({
   topNavigationRow: {
     width: '100%',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 20 : 16, 
-    marginTop: Platform.OS === 'android' ? 20 : 0, 
+    paddingTop: Platform.OS === 'ios' ? 8 : 12,
+    paddingBottom: 4,
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },
@@ -178,22 +183,21 @@ const getStyles = (theme) => StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
-    marginTop: 30,
-    marginLeft: 5,
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 80, 
+    paddingTop: 10,
+    paddingBottom: 40,
   },
   headerSection: {
-    marginBottom: 45,
+    marginBottom: 32,
     alignItems: 'center',
     width: '100%',
   },
   brandTitle: {
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: '900',
     color: logoGreen, 
     letterSpacing: -0.5,
@@ -202,9 +206,9 @@ const getStyles = (theme) => StyleSheet.create({
   brandSubtitle: {
     fontSize: 14,
     color: theme?.textSecondary || '#64748B',
-    marginTop: 10,
+    marginTop: 8,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: '700',
   },
   formCard: {
@@ -215,7 +219,7 @@ const getStyles = (theme) => StyleSheet.create({
     borderColor: theme?.border || '#E2E8F0',
   },
   inputGroup: {
-    marginBottom: 26,
+    marginBottom: 24,
   },
   inputLabel: {
     color: theme?.textPrimary || '#64748B',
@@ -228,7 +232,7 @@ const getStyles = (theme) => StyleSheet.create({
   },
   flatInputField: {
     backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: theme?.inputBorder || '#E2E8F0',
   },
@@ -238,12 +242,12 @@ const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   leadingIcon: {
-    marginRight: 4,
+    marginRight: 8,
   },
   input: {
     flex: 1,
     color: theme?.textPrimary || '#0F172A',
-    paddingVertical: 15,
+    paddingVertical: 14,
     paddingHorizontal: 8,
     fontSize: 16,
     fontWeight: '700',

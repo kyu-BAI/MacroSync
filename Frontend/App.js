@@ -8,6 +8,8 @@ import {
   Text,
   Linking,
   LogBox,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
 
 LogBox.ignoreLogs([
@@ -365,13 +367,18 @@ function MainApp() {
       try {
         const granted = await NotificationService.requestPermissions();
         if (granted) {
-          console.log("Native notifications permission granted. Scheduling daily reminders...");
-          await NotificationService.scheduleDailyReminders();
+          if (__DEV__) console.log("Native notifications permission granted. Scheduling daily reminders...");
+          let prefs = { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+          try {
+            const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+            if (stored) prefs = JSON.parse(stored);
+          } catch (e) {}
+          await NotificationService.scheduleDailyReminders(prefs);
         } else {
-          console.log("Native notifications permission denied.");
+          if (__DEV__) console.log("Native notifications permission denied.");
         }
       } catch (err) {
-        console.log("Failed to initialize native notifications:", err);
+        if (__DEV__) console.log("Failed to initialize native notifications:", err);
       }
     };
     initNotifications();
@@ -411,6 +418,39 @@ function MainApp() {
     };
     saveNotifications();
   }, [notifications, userId]);
+
+  // ── Load & Save Account-Based Chat History ────────────────────────────────
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (userId) {
+        try {
+          const cached = await AsyncStorage.getItem(`ms_chat_history_${userId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setChatMessages(parsed);
+            }
+          }
+        } catch (err) {
+          console.log("Error loading chat history:", err);
+        }
+      }
+    };
+    loadChatHistory();
+  }, [userId]);
+
+  useEffect(() => {
+    const saveChatHistory = async () => {
+      if (userId && Array.isArray(chatMessages) && chatMessages.length > 0) {
+        try {
+          await AsyncStorage.setItem(`ms_chat_history_${userId}`, JSON.stringify(chatMessages));
+        } catch (err) {
+          console.log("Error saving chat history:", err);
+        }
+      }
+    };
+    saveChatHistory();
+  }, [chatMessages, userId]);
 
   // ── Premium Status Upgrade Notification Listener ───────────────────────────
   const prevIsPremiumRef = useRef(null);
@@ -712,17 +752,18 @@ function MainApp() {
     setActiveTab('DASHBOARD');
   };
 
-  // ── Offline banner shown at top of screen ───────────────────────────────
+  // ── Sleek Floating Offline Banner ────────────────────────────────────────
   const OfflineBanner = () => {
     if (isOnline) return null;
     return (
-      <View style={styles.offlineBanner}>
-        <Text style={styles.offlineBannerText}>
-          {isLoadedFromCache
-            ? '📴 Offline — Showing cached data. Changes will sync when back online.'
-            : '📴 No internet connection. Logs saved and will sync automatically.'}
-        </Text>
-      </View>
+      <SafeAreaView style={styles.offlineBannerContainer}>
+        <View style={styles.offlineBannerPill}>
+          <Text style={styles.offlineBannerIcon}>📴</Text>
+          <Text style={styles.offlineBannerText}>
+            Offline Mode — Showing cached data. Logs will sync when back online.
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   };
 
@@ -915,11 +956,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: baseColor
   },
-  offlineBanner: {
+  offlineBannerContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 44 : 32,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineBannerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#92400E',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 16,
-    zIndex: 999,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    maxWidth: '90%',
+  },
+  offlineBannerIcon: {
+    marginRight: 6,
+    fontSize: 12,
   },
   offlineBannerText: {
     color: '#FEF3C7',

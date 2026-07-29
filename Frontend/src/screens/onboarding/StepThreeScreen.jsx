@@ -24,8 +24,9 @@ const ITEM_HEIGHT = 54;
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [customAllergy, setCustomAllergy] = useState('');

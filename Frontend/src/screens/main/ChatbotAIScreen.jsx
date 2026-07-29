@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   StatusBar,
@@ -14,12 +15,37 @@ import {
   Keyboard,
   Alert
 } from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Send, User, Sparkles, Zap, Lightbulb, AlertTriangle, X, Info } from 'lucide-react-native';
+import { 
+  Camera, 
+  UtensilsCrossed, 
+  BotMessageSquare, 
+  Home, 
+  SportShoe, 
+  Settings, 
+  Send, 
+  User, 
+  Sparkles, 
+  Zap, 
+  Lightbulb, 
+  AlertTriangle, 
+  X, 
+  Info,
+  Flame,
+  ChefHat,
+  ShieldCheck
+} from 'lucide-react-native';
 
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+
+const CATEGORIZED_SUGGESTIONS = [
+  { icon: UtensilsCrossed, text: "What should I eat for dinner?" },
+  { icon: Flame, text: "Am I hitting my protein target?" },
+  { icon: ChefHat, text: "Cheap high-protein recipes" },
+  { icon: SportShoe, text: "15-min zero-equipment workout" },
+];
 
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
   const { showAlert } = useCustomAlert();
@@ -63,28 +89,30 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             });
           }
         })
-        .catch((err) => console.log("Chat status fetch error:", err));
+        .catch((err) => __DEV__ && console.log("Chat status fetch error:", err));
     }
   }, [userId]);
 
-  // --- DYNAMIC AI GREETING ---
+  // --- DYNAMIC VITA AI GREETING ---
   useEffect(() => {
     if (messages.length === 0) {
       setMessages([
         {
           id: 1,
           sender: 'ai',
-          text: `Hi ${userProfile?.name || 'there'}! I'm your MacroSync AI assistant. Ask me anything about local recipes, adjustments to your meal plan, or your workout routine!`,
+          text: `Hi ${userProfile?.name || 'there'}! I'm Vita AI, your personal health & zero-equipment fitness guide. How can I help you reach your target goal weight today?`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     }
-  }, []);
+  }, [messages.length, userProfile?.name]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
 
-  const handleSendMessage = async () => {
+  const flatListRef = useRef(null);
+
+  const handleSendMessage = useCallback(async () => {
     if (inputText.trim() === '' || isLoading) return;
 
     const userMessage = {
@@ -152,49 +180,43 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
           {
             id: Date.now(),
             sender: 'ai',
-            text: `Error: ${data.detail || "Failed to get response from AI."}`,
+            text: `Error: ${data.detail || "Failed to get response from Vita AI."}`,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
       }
     } catch (error) {
-      console.log("CHAT ERROR:", error);
+      if (__DEV__) console.log("CHAT ERROR:", error);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           sender: 'ai',
-          text: "Sorry, I am having trouble connecting to the server. Please check your connection and try again.",
+          text: "Sorry, Vita AI is having trouble connecting right now. Please check your connection and try again.",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [inputText, isLoading, userId, chatInfo]);
 
-  // Helper to parse markdown-like bold (**text**) and bullet points, stripping raw ## headers and * symbols
+  // Helper to parse markdown-like bold (**text**) and bullet points
   const renderMessageText = (text, isAI = false) => {
     if (!text) return null;
 
     const lines = text.split('\n');
     return lines.map((line, lineIdx) => {
       let isBullet = false;
-      // Strip ALL markdown header symbols (##, ###, etc.) anywhere in the line
       let cleanLine = line.replace(/#{1,6}\s*/g, '').trim();
 
-      // Check if the line starts with a bullet point '*' or '-'
       if (cleanLine.trim().startsWith('*') || cleanLine.trim().startsWith('- ')) {
         isBullet = true;
-        // Strip the leading '*' / '-' and any spaces following it
         cleanLine = cleanLine.replace(/^\s*[\*\-]\s*/, '');
       }
 
-      // Strip any remaining lone asterisks (* not part of **bold**)
-      // First split by ** to preserve bold markers, then clean lone * from plain parts
       const parts = cleanLine.split('**');
       const textElements = parts.map((part, partIdx) => {
-        // Odd indices represent text inside '**' (bold) — keep as is
         if (partIdx % 2 === 1) {
           return (
             <Text key={partIdx} style={{ fontWeight: '800' }}>
@@ -202,7 +224,6 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             </Text>
           );
         }
-        // Even indices are plain text — strip stray lone asterisks
         const cleanPart = part.replace(/\*/g, '');
         return <Text key={partIdx}>{cleanPart}</Text>;
       });
@@ -219,8 +240,8 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
   const handleShowTipsModal = () => {
     showAlert(
-      "AI Chatbot Guidance & Limits 💡",
-      "• Ask tailored questions about your macros, local Filipino recipes, or workout routine.\n\n⚠️ Note: On the Free Plan, every message sent deducts 1 count from your 10 daily free messages.",
+      "Vita AI Guidance & Limits 💡",
+      "• Ask tailored questions about your target macros, local Filipino recipes, or zero-equipment home workouts.\n\n⚠️ Note: On the Free Plan, every message sent deducts 1 count from your 10 daily free messages.",
       [{ text: "Got it!", style: "cancel" }]
     );
   };
@@ -259,8 +280,8 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.greeting}>AI Guidance Hub</Text>
-          <Text style={styles.subGreeting}>Real-time health assistance synced to your user profile</Text>
+          <Text style={styles.greeting}>Vita AI Assistant</Text>
+          <Text style={styles.subGreeting}>Real-time nutrition & zero-equipment fitness guidance</Text>
         </View>
       </View>
 
@@ -273,17 +294,22 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
-        {/* CHAT MESSAGES SCROLL AREA */}
-        <ScrollView
+        {/* CHAT MESSAGES — VIRTUALIZED FLATLIST FOR PERFORMANCE */}
+        <FlatList
+          ref={flatListRef}
           style={styles.chatContainer}
-          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.chatScrollContent}
-        >
-          {messages.map((msg) => {
+          showsVerticalScrollIndicator={false}
+          data={messages}
+          keyExtractor={(item) => String(item.id)}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          renderItem={({ item: msg }) => {
             const isAI = msg.sender === 'ai';
             return (
               <View
-                key={msg.id}
                 style={[
                   styles.messageRowFlex,
                   isAI ? styles.messageRowLeft : styles.messageRowRight
@@ -311,65 +337,73 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
                 {!isAI && (
                   <View style={styles.userIconAvatarNeuBox}>
-                    <User color="#FFFFFF" size={16} strokeWidth={2.5} />
+                    <User color="#FFFFFF" size={15} strokeWidth={2.5} />
                   </View>
                 )}
               </View>
             );
-          })}
-
-          {/* MOCK TYPING INDICATOR BUBBLE */}
-          {isLoading && (
-            <View style={[styles.messageRowFlex, styles.messageRowLeft]}>
-              <View style={styles.aiIconAvatarNeuBox}>
-                <BotMessageSquare color={logoGreen} size={16} strokeWidth={2.5} />
+          }}
+          ListFooterComponent={
+            isLoading ? (
+              <View style={[styles.messageRowFlex, styles.messageRowLeft]}>
+                <View style={styles.aiIconAvatarNeuBox}>
+                  <BotMessageSquare color={logoGreen} size={16} strokeWidth={2.5} />
+                </View>
+                <View style={[styles.chatBubble, styles.aiMessageFormCard, styles.typingIndicatorBubble]}>
+                  <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 8 }} />
+                  <Text style={styles.typingIndicatorText}>Vita AI is thinking...</Text>
+                </View>
               </View>
-              <View style={[styles.chatBubble, styles.aiMessageFormCard, { paddingVertical: 14, width: 60, alignItems: 'center' }]}>
-                <ActivityIndicator size="small" color={logoGreen} />
-              </View>
-            </View>
-          )}
-        </ScrollView>
+            ) : null
+          }
+        />
 
-        {/* QUICK REPLY SUGGESTION CHIPS */}
+        {/* CATEGORIZED QUICK REPLY SUGGESTION CHIPS */}
         {!isLoading && (
           <View style={styles.suggestionsWrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
-              {["What should I eat?", "Am I hitting my protein target?", "Cheap high-protein recipes", "Can I eat fast food today?"].map((chip, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.suggestionChip}
-                  onPress={() => setInputText(chip)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.suggestionChipText}>{chip}</Text>
-                </TouchableOpacity>
-              ))}
+              {CATEGORIZED_SUGGESTIONS.map((item, idx) => {
+                const ChipIcon = item.icon;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.suggestionChip}
+                    onPress={() => setInputText(item.text)}
+                    activeOpacity={0.7}
+                  >
+                    <ChipIcon size={13} color={logoGreen} style={{ marginRight: 6 }} strokeWidth={2.2} />
+                    <Text style={styles.suggestionChipText}>{item.text}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         )}
 
-        {/* CHAT INPUT BAR HUB (Slides fluidly when keyboard fires up) */}
+        {/* CHAT INPUT BAR HUB */}
         <View style={styles.chatInputFormCard}>
           <View style={styles.chatInputInnerLayoutRow}>
             <TextInput
               style={styles.chatTextInputField}
-              placeholder="Ask about diet, meals, or workout..."
-              placeholderTextColor="#94A3B8"
+              placeholder="Ask Vita AI about diet, macros, or workouts..."
+              placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
               value={inputText}
               onChangeText={setInputText}
               multiline={true}
             />
             <TouchableOpacity
-              style={styles.sendActionButton}
+              style={[
+                styles.sendActionButton,
+                { opacity: inputText.trim() ? 1 : 0.6 }
+              ]}
               activeOpacity={0.8}
               onPress={handleSendMessage}
-              disabled={isLoading}
+              disabled={isLoading || !inputText.trim()}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Send color="#FFFFFF" size={16} fill="#FFFFFF" />
+                <Send color="#FFFFFF" size={15} fill="#FFFFFF" />
               )}
             </TouchableOpacity>
           </View>
@@ -451,7 +485,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     color: '#8B5CF6',
   },
   greeting: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
     color: theme?.textPrimary || '#0F172A',
     letterSpacing: -0.5,
@@ -464,7 +498,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
   },
   keyboardContainer: {
     flex: 1,
-    marginBottom: 84, // Explicitly avoids overlapping the static nav bar bounds
+    marginBottom: 84,
   },
   chatContainer: {
     flex: 1,
@@ -490,12 +524,12 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
     borderWidth: 1.5,
-    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   userIconAvatarNeuBox: {
     width: 32,
@@ -507,22 +541,40 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginLeft: 8,
   },
   chatBubble: {
-    borderRadius: 16,
+    borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    maxWidth: '75%',
+    maxWidth: '78%',
   },
   aiMessageFormCard: {
-    backgroundColor: theme?.surface || baseColor,
+    backgroundColor: theme?.surface || '#FFFFFF',
     borderTopLeftRadius: 4,
     borderWidth: 1,
     borderColor: theme?.border || '#E2E8F0',
+    borderLeftWidth: 3.5,
+    borderLeftColor: logoGreen,
+    shadowColor: logoGreen,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2
   },
   userMessageFormCard: {
-    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : '#E6F4EA',
     borderTopRightRadius: 4,
     borderWidth: 1,
-    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.2)',
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)',
+  },
+  typingIndicatorBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16
+  },
+  typingIndicatorText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: logoGreen
   },
   messageBubbleText: {
     fontSize: 14,
@@ -531,7 +583,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
   aiBubbleText: {
     color: theme?.textPrimary || '#0F172A',
     fontWeight: '600',
-    textAlign: 'justify',
+    textAlign: 'left',
   },
   userBubbleText: {
     color: theme?.textPrimary || '#0F172A',
@@ -543,61 +595,6 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     fontWeight: '700',
     marginTop: 5,
     alignSelf: 'flex-end',
-  },
-  visualTipsCard: {
-    marginHorizontal: 20,
-    marginVertical: 6,
-    backgroundColor: theme?.surface || '#FFFFFF',
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  tipsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  tipsIconBg: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: theme?.cardBg || '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  tipsCardTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    flex: 1,
-  },
-  closeTipsBtn: {
-    padding: 4,
-  },
-  tipsBulletPoint: {
-    fontSize: 11,
-    color: theme?.textSecondary || '#64748B',
-    lineHeight: 15,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  warningAlertBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  warningAlertText: {
-    flex: 1,
-    fontSize: 11,
-    color: '#059669',
-    lineHeight: 14,
-    fontWeight: '600',
   },
   suggestionsWrapper: {
     paddingVertical: 6,
@@ -611,21 +608,23 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     overflow: 'visible',
   },
   suggestionChip: {
-    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.10)' : 'rgba(16, 185, 129, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
     borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
     borderWidth: 1.2,
-    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.18)',
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)',
   },
   suggestionChipText: {
-    color: logoGreen,
-    fontSize: 13,
-    fontWeight: '700',
+    color: isDarkMode ? '#34D399' : '#059669',
+    fontSize: 12,
+    fontWeight: '800',
   },
   chatInputFormCard: {
     backgroundColor: theme?.surface || baseColor,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginHorizontal: 20,
@@ -649,9 +648,9 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 8 : 4,
   },
   sendActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: logoGreen,
     alignItems: 'center',
     justifyContent: 'center',

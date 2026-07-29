@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { 
   StyleSheet, 
@@ -22,8 +22,24 @@ import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 import API_URL from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+
+const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
+  if (!setNotifications) return;
+  try {
+    const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+    const prefs = stored ? JSON.parse(stored) : { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+    const category = newNotif.category;
+    if ((category === 'hydration' || category === 'meal') && prefs.habitReminders === false) return;
+    if ((category === 'workout' || category === 'achievement') && prefs.motivationalUpdates === false) return;
+    if (category === 'smart' && prefs.personalizedAlerts === false) return;
+    setNotifications(prev => [newNotif, ...prev]);
+  } catch (e) {
+    setNotifications(prev => [newNotif, ...prev]);
+  }
+};
 
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -200,15 +216,15 @@ export default function DashboardScreen({
     const logWaterAction = async () => {
       // Optimistic UI update
       if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
-      if (newAmount === targetGlasses && setNotifications) {
-        setNotifications(prev => [{
+      if (newAmount === targetGlasses) {
+        await pushNotificationIfAllowed({
           id: `n-${Date.now()}`,
           title: 'Hydration Goal Reached! 💧',
           category: 'hydration',
           time: 'Just Now',
           read: false,
           message: 'Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.'
-        }, ...prev]);
+        }, setNotifications);
       }
 
       if (!isOnline) {
@@ -228,7 +244,7 @@ export default function DashboardScreen({
           throw new Error(errData.detail || 'Failed to log water on server');
         }
       } catch (error) {
-        console.error("LOG WATER ERROR (falling back to queue):", error);
+        if (__DEV__) console.error("LOG WATER ERROR (falling back to queue):", error);
         await addToSyncQueue({ type: 'LOG_WATER', payload: { user_id: userId, glasses: newAmount } });
         await updateCachedDashboardField(userId, { water: { glasses: newAmount } });
       }
@@ -253,7 +269,7 @@ export default function DashboardScreen({
   const targetSteps = dailyExercise?.targetSteps || 10000;
   const stepsPct = Math.min(currentSteps / targetSteps, 1);
 
-  const handleAddSteps = (additionalAmount) => {
+  const handleAddSteps = async (additionalAmount) => {
     const parsedAdd = parseInt(additionalAmount) || 0;
     if (parsedAdd <= 0) {
       showAlert("Invalid Steps Amount", "Please enter a valid step number greater than zero.");
@@ -274,16 +290,14 @@ export default function DashboardScreen({
       }));
     }
 
-    if (setNotifications) {
-      setNotifications(prev => [{
-        id: `n-${Date.now()}`,
-        title: 'Steps Tracked! 👟',
-        category: 'workout',
-        time: 'Just Now',
-        read: false,
-        message: `Logged +${parsedAdd.toLocaleString()} steps! You burned ~${addedCalories} kcal.`
-      }, ...prev]);
-    }
+    await pushNotificationIfAllowed({
+      id: `n-${Date.now()}`,
+      title: 'Steps Tracked! 👟',
+      category: 'workout',
+      time: 'Just Now',
+      read: false,
+      message: `Logged +${parsedAdd.toLocaleString()} steps! You burned ~${addedCalories} kcal.`
+    }, setNotifications);
 
     showAlert(
       "Steps Updated! 👟",
@@ -389,7 +403,7 @@ export default function DashboardScreen({
           onRefreshDashboard();
         }
       } catch (e) {
-        console.log('NEW GOAL PERSIST ERROR:', e);
+        if (__DEV__) console.log('NEW GOAL PERSIST ERROR:', e);
       }
     }
   }, [currentWeight, isOnline, userId, userBaseline, setNotifications, onRefreshDashboard]);
@@ -513,16 +527,14 @@ export default function DashboardScreen({
       });
     }
     setShowWeightModal(false);
-    if (setNotifications) {
-      setNotifications(prev => [{
-        id: 'w' + Date.now(),
-        title: 'Weight Logged ⚖️',
-        category: 'achievement',
-        time: 'Just Now',
-        read: false,
-        message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
-      }, ...prev]);
-    }
+    await pushNotificationIfAllowed({
+      id: 'w' + Date.now(),
+      title: 'Weight Logged ⚖️',
+      category: 'achievement',
+      time: 'Just Now',
+      read: false,
+      message: `Successfully logged your weight as ${parsed.toFixed(1)} kg. Keep up the great work!`
+    }, setNotifications);
 
     if (!isOnline) {
       await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
@@ -544,7 +556,7 @@ export default function DashboardScreen({
         showAlert("Error Logging Weight", errData.detail || "Failed to log weight to server.");
       }
     } catch (error) {
-      console.log("LOG WEIGHT ERROR:", error);
+      if (__DEV__) console.log("LOG WEIGHT ERROR:", error);
       await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
       await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
     }

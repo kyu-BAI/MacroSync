@@ -169,36 +169,56 @@ class ProfilePictureUpdate(BaseModel):
 
 
 def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP"):
-    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() != "" and GMAIL_SENDER_EMAIL.strip() != "your-gmail@gmail.com":
-        msg = MIMEMultipart()
-        msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL.strip()}>"
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        
-        html = f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2>Welcome to MacroSync</h2>
-                <p>Your 6-digit verification OTP code is:</p>
-                <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
-                <p>This code expires in 10 minutes.</p>
-            </div>
-        """
-        msg.attach(MIMEText(html, 'html'))
-        app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
-            server.sendmail(GMAIL_SENDER_EMAIL.strip(), to_email, msg.as_string())
-    elif RESEND_API_KEY and RESEND_API_KEY != "re_your_api_key_here":
-        resend.Emails.send({
-            "from": "MacroSync <onboarding@resend.dev>",
-            "to": to_email,
-            "subject": subject,
-            "html": f"""
-                <h2>Welcome to MacroSync</h2>
-                <h1>{otp_code}</h1>
-                <p>This code expires in 10 minutes.</p>
+    email_sent = False
+    
+    # 1. Try Gmail SMTP via Port 587 TLS (Fast & Reliable across all networks/cloud hosts)
+    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() not in ["", "your-gmail@gmail.com"]:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL.strip()}>"
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            html = f"""
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>MacroSync Verification</h2>
+                    <p>Your 6-digit OTP code is:</p>
+                    <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
+                    <p>This code expires in 10 minutes.</p>
+                </div>
             """
-        })
+            msg.attach(MIMEText(html, 'html'))
+            app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
+            
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                server.starttls()
+                server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
+                server.sendmail(GMAIL_SENDER_EMAIL.strip(), to_email, msg.as_string())
+            print(f"OTP Email successfully sent to {to_email} via Gmail SMTP (587 TLS)")
+            email_sent = True
+        except Exception as smtp_err:
+            print("Gmail SMTP dispatch error:", smtp_err)
+
+    # 2. Fallback to Resend HTTP API if Gmail SMTP failed or wasn't configured
+    if not email_sent and RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
+        try:
+            resend.Emails.send({
+                "from": "MacroSync <onboarding@resend.dev>",
+                "to": to_email,
+                "subject": subject,
+                "html": f"""
+                    <h2>MacroSync Verification</h2>
+                    <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
+                    <p>This code expires in 10 minutes.</p>
+                """
+            })
+            print(f"OTP Email successfully sent to {to_email} via Resend API")
+            email_sent = True
+        except Exception as resend_err:
+            print("Resend API dispatch error:", resend_err)
+
+    if not email_sent:
+        print(f"WARNING: Email could not be sent to {to_email}. Ensure GMAIL credentials or RESEND_API_KEY are configured in environment variables.")
 
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
@@ -1006,8 +1026,8 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
     if not genai_client:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
         
-    # Try multiple models to fallback under high demand
-    models_to_try = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
+    # Top-tier Gemini models optimized for health AI, vision food scanning & fast chat
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
     last_error = None
     
     for model_name in models_to_try:
@@ -1071,7 +1091,7 @@ def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 5:
+                if day_usage.get("chats", 0) >= 10:
                     raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
@@ -1233,10 +1253,18 @@ def chat_with_ai(data: ChatMessageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+RECIPE_CACHE = {}
+
 # ---------------- AI RECIPE GENERATOR ----------------
 @app.post("/generate-recipe")
 def generate_recipe(data: RecipeRequest):
     try:
+        cache_key = f"{data.ingredients.strip().lower()}_{data.budget}_{data.location}"
+        if cache_key in RECIPE_CACHE:
+            cached_item = dict(RECIPE_CACHE[cache_key])
+            cached_item["id"] = f"rec_{uuid.uuid4().hex[:8]}"
+            return cached_item
+
         prompt = f"""
         You are an expert Filipino nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
         Their budget constraint is: {data.budget}.
@@ -1267,6 +1295,7 @@ def generate_recipe(data: RecipeRequest):
             recipe_json = recipe_json[3:-3]
             
         recipe_data = json.loads(recipe_json.strip())
+        RECIPE_CACHE[cache_key] = recipe_data
         
         # Generate a unique recipe ID for frontend rendering
         recipe_data["id"] = f"rec_{uuid.uuid4().hex[:8]}"

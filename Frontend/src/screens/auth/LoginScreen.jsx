@@ -32,8 +32,9 @@ export default function LoginScreen({
   onGoogleOtpSent,
 }) {
   const { showAlert: triggerCustomAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
@@ -201,7 +202,10 @@ export default function LoginScreen({
               ]}
             >
               {isLoading && !isGooglePressed ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={[styles.buttonText, { opacity: 0.95 }]}>Signing in...</Text>
+                </View>
               ) : (
                 <Text
                   style={[

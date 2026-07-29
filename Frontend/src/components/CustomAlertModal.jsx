@@ -162,7 +162,7 @@ export default function CustomAlertModal({
                         stackVertically
                           ? styles.buttonFullWidth
                           : (alertButtons.length > 1 ? { flex: 1, marginHorizontal: 4 } : { minWidth: 120 }),
-                        ...btnStyle,
+                        btnStyle,
                         stackVertically && index > 0 && { marginTop: 10 }
                       ]}
                     >
@@ -170,7 +170,7 @@ export default function CustomAlertModal({
                         numberOfLines={1}
                         adjustsFontSizeToFit={true}
                         minimumFontScale={0.8}
-                        style={[styles.buttonText, ...btnTextStyle]}
+                        style={[styles.buttonText, btnTextStyle]}
                       >
                         {btn.text}
                       </Text>

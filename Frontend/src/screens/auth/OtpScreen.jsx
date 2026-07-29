@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,11 +19,56 @@ import { useTheme } from '../../context/ThemeContext';
 
 export default function OtpScreen({ email, onVerified, onNavigateBack }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [otp, setOtp] = useState("");
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Resend OTP State
+  const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    let interval = null;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => {
+        setResendCooldown((prev) => prev - 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  const handleResendOTP = async () => {
+    if (isResending || resendCooldown > 0) return;
+    setIsResending(true);
+
+    try {
+      const cleanEmail = (email || "").trim();
+
+      const response = await fetch(`${API_URL}/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+
+      if (response.ok) {
+        showAlert("OTP Resent", "A new OTP code has been sent to your email.");
+        setResendCooldown(30);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        showAlert("Resend Error", data.detail || "Failed to resend OTP code. Please try again.");
+      }
+    } catch (err) {
+      console.log("RESEND OTP ERROR:", err);
+      showAlert("Network Error", "Cannot connect to backend server. Make sure it is running.");
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   // --- OTP VERIFICATION LIFE CYCLES ---
   const handleVerifyOTP = async () => {
@@ -69,7 +113,10 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <StatusBar 
+        barStyle={isDarkMode ? "light-content" : "dark-content"} 
+        backgroundColor={theme?.background || baseColor} 
+      />
       
       {/* Back Button Row */}
       <View style={styles.topNavigationRow}>
@@ -94,8 +141,10 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
           {/* Header Section */}
           <View style={styles.headerSection}>
             <Text style={styles.brandTitle}>Verify OTP</Text>
-            <Text style={styles.brandSubtitle}>We sent a code to:</Text>
-            <Text style={styles.emailText}>{email}</Text>
+            <Text style={styles.brandSubtitle}>We sent a verification code to:</Text>
+            <View style={styles.emailBadgeContainer}>
+              <Text style={styles.emailText}>{email}</Text>
+            </View>
           </View>
 
           {/* Form Card Group */}
@@ -104,11 +153,11 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
 
             {/* Structured Input Row with Vector Badge Icon */}
             <View style={[styles.flatInputField, styles.fieldRow]}>
-              <KeyRound color="#94A3B8" size={20} style={styles.leadingIcon} />
+              <KeyRound color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter 6-digit OTP"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                 value={otp}
                 onChangeText={setOtp}
                 keyboardType="numeric"
@@ -138,6 +187,30 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
               )}
             </TouchableOpacity>
 
+            {/* Resend OTP Row */}
+            <View style={styles.resendContainer}>
+              <Text style={styles.resendText}>Didn't receive code? </Text>
+              <TouchableOpacity
+                disabled={isResending || resendCooldown > 0}
+                onPress={handleResendOTP}
+                activeOpacity={0.7}
+                style={styles.resendButton}
+              >
+                {isResending ? (
+                  <ActivityIndicator size="small" color={logoGreen} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.resendLink,
+                      resendCooldown > 0 && styles.resendLinkDisabled
+                    ]}
+                  >
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -149,7 +222,7 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
 const baseColor = '#F8FAFC';
 const logoGreen = '#10B981';
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme?.background || baseColor,
@@ -160,8 +233,8 @@ const getStyles = (theme) => StyleSheet.create({
   topNavigationRow: {
     width: '100%',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 20 : 16, 
-    marginTop: Platform.OS === 'android' ? 20 : 0, 
+    paddingTop: Platform.OS === 'ios' ? 8 : 12,
+    paddingBottom: 4,
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },
@@ -171,22 +244,21 @@ const getStyles = (theme) => StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
-    marginTop: 30,
-    marginLeft: 5,
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 80,
+    paddingTop: 10,
+    paddingBottom: 40,
   },
   headerSection: {
-    marginBottom: 45,
+    marginBottom: 32,
     alignItems: "center",
     width: '100%',
   },
   brandTitle: {
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: '900',
     color: logoGreen, 
     letterSpacing: -0.5,
@@ -195,21 +267,27 @@ const getStyles = (theme) => StyleSheet.create({
   brandSubtitle: {
     fontSize: 14,
     color: theme?.textSecondary || '#64748B',
-    marginTop: 10,
+    marginTop: 8,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: '700',
   },
+  emailBadgeContainer: {
+    marginTop: 10,
+    alignSelf: 'center',
+  },
   emailText: {
-    marginTop: 8,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "800",
     color: theme?.textPrimary || "#0F172A",
     backgroundColor: theme?.cardBg || '#F1F5F9',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
     overflow: 'hidden',
+    textAlign: 'center',
   },
   formCard: {
     backgroundColor: theme?.surface || baseColor,
@@ -229,10 +307,10 @@ const getStyles = (theme) => StyleSheet.create({
   },
   flatInputField: {
     backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: theme?.inputBorder || '#E2E8F0',
-    marginBottom: 26,
+    marginBottom: 24,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -240,17 +318,17 @@ const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   leadingIcon: {
-    marginRight: 4,
+    marginRight: 8,
   },
   input: {
     flex: 1,
     color: theme?.textPrimary || '#0F172A',
-    paddingVertical: 15,
+    paddingVertical: 14,
     paddingHorizontal: 8,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     textAlign: "center",
-    letterSpacing: 4,
+    letterSpacing: 6,
   },
   buttonBase: {
     paddingVertical: 16,
@@ -275,5 +353,29 @@ const getStyles = (theme) => StyleSheet.create({
   },
   buttonTextPressed: {
     color: '#E2E8F0',
+  },
+  resendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  resendText: {
+    fontSize: 13,
+    color: theme?.textSecondary || '#64748B',
+    fontWeight: '600',
+  },
+  resendButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  resendLink: {
+    fontSize: 13,
+    color: logoGreen,
+    fontWeight: '800',
+  },
+  resendLinkDisabled: {
+    color: theme?.textSecondary || '#94A3B8',
+    opacity: 0.7,
   },
 });

@@ -38,8 +38,9 @@ const COLORS = {
 
 export default function StepOneScreen({ onNext }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   // --- Core Inputs ---
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -175,7 +176,9 @@ export default function StepOneScreen({ onNext }) {
 
             {/* FIELD BLOCK: AGE */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Age</Text>
+              <View style={styles.rowLabelWrapper}>
+                <Text style={styles.inputLabel}>Age</Text>
+              </View>
               <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}

@@ -35,8 +35,9 @@ import { useTheme } from '../../context/ThemeContext';
 
 export default function StepTwoScreen({ onNext, currentWeight, height, weightUnit }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   // --- Form Controls States ---
   const [selectedActivity, setSelectedActivity] = useState('moderate');
   const [selectedGoal, setSelectedGoal] = useState('muscle');
@@ -61,6 +62,138 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
       setGoalWeight(displayWeight.toString());
     }
   }, [selectedGoal, goalWeightUnit, currentWeight]);
+
+  // Helper: Reliable date parser for MM/DD/YYYY
+  const parseMMDDYYYY = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const parts = dateStr.trim().split('/');
+    if (parts.length !== 3) return null;
+    const month = parseInt(parts[0], 10);
+    const day = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+    if (isNaN(month) || isNaN(day) || isNaN(year)) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 2020) return null;
+    const d = new Date(year, month - 1, day);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  // --- Dynamic Suggestions & Live Validation Engine ---
+  const getHealthyRangeText = () => {
+    if (!height || isNaN(parseFloat(height))) return null;
+    const heightInMeters = parseFloat(height) / 100;
+    if (heightInMeters <= 0) return null;
+
+    const minKg = 18.5 * (heightInMeters * heightInMeters);
+    const maxKg = 24.9 * (heightInMeters * heightInMeters);
+
+    if (goalWeightUnit === 'lbs') {
+      const minLbs = Math.round(minKg * 2.20462);
+      const maxLbs = Math.round(maxKg * 2.20462);
+      return `Recommended healthy range: ${minLbs} – ${maxLbs} lbs (BMI 18.5–24.9)`;
+    } else {
+      return `Recommended healthy range: ${minKg.toFixed(1)} – ${maxKg.toFixed(1)} kg (BMI 18.5–24.9)`;
+    }
+  };
+
+  const getSuggestedDateInfo = () => {
+    const curW = (currentWeight && !isNaN(parseFloat(currentWeight)) && parseFloat(currentWeight) > 0) ? parseFloat(currentWeight) : 70;
+    if (!goalWeight || selectedGoal === 'maintain') return null;
+    const enteredNum = parseFloat(goalWeight);
+    if (isNaN(enteredNum) || enteredNum <= 0) return null;
+    const targetKg = goalWeightUnit === 'lbs' ? enteredNum * 0.45359237 : enteredNum;
+    const weightDiffKg = Math.abs(targetKg - curW);
+    if (weightDiffKg < 0.1) return null;
+
+    const weeksNeeded = Math.max(2, Math.ceil(weightDiffKg / 0.5));
+    const suggestedDate = new Date();
+    suggestedDate.setDate(suggestedDate.getDate() + (weeksNeeded * 7));
+
+    const month = String(suggestedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(suggestedDate.getDate()).padStart(2, '0');
+    const year = suggestedDate.getFullYear();
+
+    return {
+      formatted: `${month}/${day}/${year}`,
+      weeks: weeksNeeded,
+      kgDiff: weightDiffKg.toFixed(1)
+    };
+  };
+
+  const getWeightValidationWarning = () => {
+    const curW = (currentWeight && !isNaN(parseFloat(currentWeight)) && parseFloat(currentWeight) > 0) ? parseFloat(currentWeight) : 70;
+    if (!goalWeight || selectedGoal === 'maintain') return null;
+    const enteredNum = parseFloat(goalWeight);
+    if (isNaN(enteredNum) || enteredNum <= 0) return null;
+
+    const targetKg = goalWeightUnit === 'lbs' ? enteredNum * 0.45359237 : enteredNum;
+    const currentDisplay = goalWeightUnit === 'lbs' ? (curW * 2.20462).toFixed(1) : curW.toFixed(1);
+
+    if (selectedGoal === 'fatloss' && targetKg >= curW) {
+      return `Target weight must be lower than your current weight (${currentDisplay} ${goalWeightUnit}).`;
+    }
+    if (selectedGoal === 'muscle' && targetKg <= curW) {
+      return `Target weight must be higher than your current weight (${currentDisplay} ${goalWeightUnit}).`;
+    }
+
+    if (height) {
+      const heightMeters = parseFloat(height) / 100;
+      if (heightMeters > 0) {
+        const bmi = targetKg / (heightMeters * heightMeters);
+        if (bmi < 18.5) {
+          return `Target weight sets BMI to ${bmi.toFixed(1)} (underweight marker < 18.5).`;
+        }
+        if (bmi >= 30.0) {
+          return `Target weight sets BMI to ${bmi.toFixed(1)} (obesity marker ≥ 30.0).`;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getDateValidationWarning = () => {
+    const curW = (currentWeight && !isNaN(parseFloat(currentWeight)) && parseFloat(currentWeight) > 0) ? parseFloat(currentWeight) : 70;
+    if (!goalWeight || selectedGoal === 'maintain') return null;
+    const enteredNum = parseFloat(goalWeight);
+    if (isNaN(enteredNum) || enteredNum <= 0) return null;
+    const targetKg = goalWeightUnit === 'lbs' ? enteredNum * 0.45359237 : enteredNum;
+
+    if (targetDate && targetDate.trim()) {
+      const targetDateObj = parseMMDDYYYY(targetDate.trim());
+      if (targetDateObj) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (targetDateObj <= today) {
+          return "Target date must be at least 1 day in the future.";
+        }
+        const msDiff = targetDateObj.getTime() - today.getTime();
+        const daysDiff = Math.round(msDiff / (1000 * 60 * 60 * 24));
+        const weeksDiff = daysDiff / 7;
+        const weightDiffKg = Math.abs(targetKg - curW);
+
+        if (selectedGoal !== 'maintain' && weightDiffKg >= 0.5) {
+          if (daysDiff < 7) {
+            return `Target date is too soon! Weight ${selectedGoal === 'fatloss' ? 'loss' : 'gain'} requires at least 7 days (1 week).`;
+          }
+          if (weeksDiff > 0) {
+            const weeklyChange = weightDiffKg / weeksDiff;
+            if (selectedGoal === 'fatloss' && weeklyChange > 1.2) {
+              return `Target date is too soon! Losing ${weightDiffKg.toFixed(1)}kg in ${daysDiff} day(s) exceeds safe 1.2kg/wk rate.`;
+            }
+            if (selectedGoal === 'muscle' && weeklyChange > 0.8) {
+              return `Target date is too soon! Gaining ${weightDiffKg.toFixed(1)}kg in ${daysDiff} day(s) exceeds safe 0.8kg/wk rate.`;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const healthyRangeText = getHealthyRangeText();
+  const suggestedDateInfo = getSuggestedDateInfo();
+  const weightWarningText = getWeightValidationWarning();
+  const dateWarningText = getDateValidationWarning();
 
   // --- Static Structural Mappings Configuration Arrays ---
   const activityLevels = [
@@ -96,57 +229,66 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
       return;
     }
 
-    // 1. Validate Date Format MM/DD/YYYY
-    const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
-    if (!dateRegex.test(targetDate.trim())) {
-      triggerSafetyWarning("Invalid Date", "Please enter the date in MM/DD/YYYY format.");
+    // 1. Validate & Parse Date Format MM/DD/YYYY reliably across React Native engines
+    const targetDateObj = parseMMDDYYYY(targetDate.trim());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (!targetDateObj) {
+      triggerSafetyWarning("Invalid Date", "Please enter the date in valid MM/DD/YYYY format.");
       return;
     }
 
-    // 2. Validate Date is in the future
-    const targetDateObj = new Date(targetDate.trim());
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (targetDateObj < today) {
-      triggerSafetyWarning("Invalid Date", "Target date cannot be in the past.");
+    if (targetDateObj <= today) {
+      triggerSafetyWarning("Invalid Date", "Target date must be at least 1 day in the future.");
       return;
     }
 
     const enteredWeightNum = parseFloat(goalWeight);
     if (isNaN(enteredWeightNum) || enteredWeightNum <= 0) {
-      triggerSafetyWarning("Invalid Input", "Please enter a realistic numeric weight calculation metric entry.");
+      triggerSafetyWarning("Invalid Input", "Please enter a valid numeric target weight.");
       return;
     }
 
     // Dynamic conversion pipeline to baseline Metrics standard internally (kg)
     const targetWeightInKg = goalWeightUnit === 'lbs' ? enteredWeightNum * 0.45359237 : enteredWeightNum;
+    const curW = (currentWeight && !isNaN(parseFloat(currentWeight)) && parseFloat(currentWeight) > 0) ? parseFloat(currentWeight) : 70;
 
-    // 3. Validate Goal Logic (Loss vs Gain vs Maintain)
-    if (selectedGoal === 'fatloss' && targetWeightInKg >= currentWeight) {
+    // 3. Validate Goal Direction Logic (Loss vs Gain vs Maintain)
+    if (selectedGoal === 'fatloss' && targetWeightInKg >= curW) {
       triggerSafetyWarning("Goal Mismatch", "For weight loss, your target weight must be lower than your current weight.");
       return;
     }
-    if (selectedGoal === 'muscle' && targetWeightInKg <= currentWeight) {
+    if (selectedGoal === 'muscle' && targetWeightInKg <= curW) {
       triggerSafetyWarning("Goal Mismatch", "For gaining weight, your target weight must be higher than your current weight.");
       return;
     }
-    if (selectedGoal === 'maintain' && Math.abs(targetWeightInKg - currentWeight) > 0.5) {
+    if (selectedGoal === 'maintain' && Math.abs(targetWeightInKg - curW) > 0.5) {
       triggerSafetyWarning("Goal Mismatch", "For maintaining weight, your target weight must equal your current weight.");
       return;
     }
 
-    // 4. Safe Rate Validation
-    const weeksDiff = (targetDateObj - today) / (1000 * 60 * 60 * 24 * 7);
-    const weightDiffKg = Math.abs(targetWeightInKg - currentWeight);
+    // 4. Safe Rate & 7-Day Minimum Duration Validation
+    const msDiff = targetDateObj.getTime() - today.getTime();
+    const daysDiff = Math.round(msDiff / (1000 * 60 * 60 * 24));
+    const weeksDiff = daysDiff / 7;
+    const weightDiffKg = Math.abs(targetWeightInKg - curW);
+    const weeklyChange = weeksDiff > 0 ? weightDiffKg / weeksDiff : 0;
 
-    if (weeksDiff > 0 && weightDiffKg > 0) {
-      const weeklyChange = weightDiffKg / weeksDiff;
-      if (selectedGoal === 'fatloss' && weeklyChange > 1.2) {
-        triggerSafetyWarning("Aggressive Goal", "This goal requires losing more than 1kg per week, which is medically unsafe. Please select a later date for sustainable results.");
+    if (selectedGoal !== 'maintain' && weightDiffKg >= 0.5) {
+      if (daysDiff < 7) {
+        triggerSafetyWarning(
+          "Target Date Too Soon",
+          `Weight ${selectedGoal === 'fatloss' ? 'loss' : 'gain'} goals require at least 1 week (7 days) for safe, healthy progress. Tomorrow is too soon to change ${weightDiffKg.toFixed(1)} kg. Please select a date at least 7 days from today or tap the suggested realistic date.`
+        );
         return;
       }
-      if (selectedGoal === 'muscle' && weeklyChange > 0.8) {
-        triggerSafetyWarning("Aggressive Goal", "This goal requires gaining more than 0.5kg per week, which is medically unsafe. Please select a later date for sustainable results.");
+      if (weeklyChange > 1.2 && selectedGoal === 'fatloss') {
+        triggerSafetyWarning("Aggressive Goal", "This goal requires losing more than 1.2kg per week, which is medically unsafe. Please select a later date for sustainable results.");
+        return;
+      }
+      if (weeklyChange > 0.8 && selectedGoal === 'muscle') {
+        triggerSafetyWarning("Aggressive Goal", "This goal requires gaining more than 0.8kg per week, which is medically unsafe. Please select a later date for sustainable results.");
         return;
       }
     }
@@ -334,13 +476,13 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
               {/* TARGET WEIGHT FIELD LAYER AREA */}
               <View style={styles.inputGroup}>
                 <View style={styles.rowLabelWrapper}>
-                  <Text style={styles.inputLabel}>Target Goal Weight (kg)</Text>
+                  <Text style={styles.inputLabel}>Target Goal Weight ({goalWeightUnit})</Text>
                 </View>
 
                 <View style={[styles.flatInputField, selectedGoal === 'maintain' && styles.flatInputFieldDisabled]}>
                   <TextInput 
                     style={[styles.input, selectedGoal === 'maintain' && styles.inputDisabled]}
-                    placeholder="Enter target weight in kg"
+                    placeholder={`Enter target weight in ${goalWeightUnit}`}
                     placeholderTextColor={CONFIG.textMuted}
                     value={goalWeight}
                     onChangeText={setGoalWeight}
@@ -348,6 +490,20 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                     editable={!isLoading && selectedGoal !== 'maintain'}
                   />
                 </View>
+
+                {healthyRangeText && (
+                  <View style={styles.helperRow}>
+                    <Ionicons name="information-circle-outline" size={14} color={CONFIG.logoGreen} />
+                    <Text style={styles.helperText}>{healthyRangeText}</Text>
+                  </View>
+                )}
+
+                {weightWarningText && (
+                  <View style={styles.warningBox}>
+                    <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
+                    <Text style={styles.warningBoxText}>{weightWarningText}</Text>
+                  </View>
+                )}
               </View>
 
               {/* TARGET CALENDAR CHRONO SECTOR AREA INPUT GROUP */}
@@ -372,6 +528,26 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                     <Ionicons name="calendar-outline" size={20} color={CONFIG.logoGreen} />
                   </TouchableOpacity>
                 </View>
+
+                {suggestedDateInfo && (
+                  <TouchableOpacity
+                    style={styles.suggestedChip}
+                    activeOpacity={0.7}
+                    onPress={() => setTargetDate(suggestedDateInfo.formatted)}
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color={CONFIG.logoGreen} />
+                    <Text style={styles.suggestedChipText}>
+                      Auto-set realistic date: {suggestedDateInfo.formatted} ({suggestedDateInfo.weeks} wks @ 0.5kg/wk)
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {dateWarningText && (
+                  <View style={styles.warningBox}>
+                    <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
+                    <Text style={styles.warningBoxText}>{dateWarningText}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -779,5 +955,48 @@ const getStyles = (theme) => StyleSheet.create({
   },
   buttonTextPressed: { 
     color: '#E2E8F0' 
-  }
+  },
+
+  // --- Dynamic Suggestions & Validation Styles ---
+  helperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  helperText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme?.textSecondary || CONFIG.textGrey,
+    marginLeft: 5,
+  },
+  suggestedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: CONFIG.logoGreen,
+  },
+  suggestedChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: CONFIG.logoGreen,
+    marginLeft: 6,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  warningBoxText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+    marginLeft: 5,
+  },
 });

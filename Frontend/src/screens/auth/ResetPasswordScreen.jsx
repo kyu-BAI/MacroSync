@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,8 +19,9 @@ import { useTheme } from '../../context/ThemeContext';
 
 export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const { showAlert } = useCustomAlert();
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
@@ -84,10 +84,13 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <StatusBar 
+        barStyle={isDarkMode ? "light-content" : "dark-content"} 
+        backgroundColor={theme?.background || baseColor} 
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={styles.flexContainer}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
@@ -109,11 +112,11 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>New Password</Text>
               <View style={[styles.flatInputField, styles.fieldRow]}>
-                <Lock color="#94A3B8" size={20} style={styles.leadingIcon} />
+                <Lock color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter password"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={newPassword}
                   onChangeText={setNewPassword}
                   secureTextEntry={!showNewPassword}
@@ -126,18 +129,16 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                   style={styles.toggleIconButton}
                 >
                   {showNewPassword ? (
-                    /* Text is Visible -> Show plain open Eye to represent clear vision state */
                     <Eye color="#10B981" size={20} />
                   ) : (
-                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
-                    <EyeOff color="#94A3B8" size={20} />
+                    <EyeOff color={theme?.textSecondary || "#94A3B8"} size={20} />
                   )}
                 </TouchableOpacity>
               </View>
               {/* Dynamic live length alert notice */}
               {isPasswordTooShort && (
                 <View style={styles.warningContainer}>
-                  <AlertCircle color="#64748B" size={14} />
+                  <AlertCircle color="#EF4444" size={14} />
                   <Text style={styles.warningText}>Password must be at least 8 characters</Text>
                 </View>
               )}
@@ -147,11 +148,11 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm New Password</Text>
               <View style={[styles.flatInputField, styles.fieldRow]}>
-                <Lock color="#94A3B8" size={20} style={styles.leadingIcon} />
+                <Lock color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Re-enter password"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showConfirmPassword}
@@ -164,18 +165,16 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                   style={styles.toggleIconButton}
                 >
                   {showConfirmPassword ? (
-                    /* Text is Visible -> Show plain open Eye to represent clear vision state */
                     <Eye color="#10B981" size={20} />
                   ) : (
-                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
-                    <EyeOff color="#94A3B8" size={20} />
+                    <EyeOff color={theme?.textSecondary || "#94A3B8"} size={20} />
                   )}
                 </TouchableOpacity>
               </View>
               {/* Dynamic live match parity notice */}
               {doPasswordsMismatch && (
                 <View style={styles.warningContainer}>
-                  <AlertCircle color="#64748B" size={14} />
+                  <AlertCircle color="#EF4444" size={14} />
                   <Text style={styles.warningText}>Passwords do not match</Text>
                 </View>
               )}
@@ -213,36 +212,40 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
 const baseColor = '#F8FAFC';
 const logoGreen = '#10B981';
 
-const getStyles = (theme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme?.background || baseColor },
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: theme?.background || baseColor 
+  },
+  flexContainer: {
+    flex: 1,
+  },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   headerSection: { 
-    marginBottom: 45, 
+    marginBottom: 32, 
     alignItems: "center",
     width: '100%',
-    paddingHorizontal: 12,
   },
   brandTitle: { 
-    fontSize: 42, 
+    fontSize: 38, 
     fontWeight: "900", 
     color: logoGreen,
     letterSpacing: -0.5,
     textAlign: 'center', 
-    width: '100%',
   },
   brandSubtitle: {
     fontSize: 14,
     color: theme?.textSecondary || '#64748B',
-    marginTop: 10,
+    marginTop: 8,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: '700',
-    width: '100%',
   },
   formCard: {
     backgroundColor: theme?.surface || baseColor,
@@ -265,7 +268,7 @@ const getStyles = (theme) => StyleSheet.create({
   },
   flatInputField: {
     backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: theme?.inputBorder || '#E2E8F0',
   },
@@ -275,12 +278,12 @@ const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   leadingIcon: {
-    marginRight: 4,
+    marginRight: 8,
   },
   input: {
     flex: 1,
     color: theme?.textPrimary || '#0F172A',
-    paddingVertical: 15,
+    paddingVertical: 14,
     paddingHorizontal: 8,
     fontSize: 16,
     fontWeight: '700',
@@ -293,14 +296,14 @@ const getStyles = (theme) => StyleSheet.create({
   warningContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    marginLeft: 8,
+    marginTop: 8,
+    marginLeft: 6,
   },
   warningText: {
-    color: '#64748B',
+    color: '#EF4444',
     fontSize: 12,
     fontWeight: '700',
-    marginLeft: 4,
+    marginLeft: 6,
   },
   buttonBase: {
     paddingVertical: 16,
@@ -324,5 +327,7 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.5,
   },
-  buttonTextPressed: { color: '#E2E8F0' },
+  buttonTextPressed: { 
+    color: '#E2E8F0' 
+  },
 });

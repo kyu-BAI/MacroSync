@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useMemo, useEffect } from '
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const THEME_STORAGE_KEY = '@user_theme_mode';
+const THEME_STORAGE_KEY = '@user_theme_mode_v2';
 
 const lightPalette = {
   background: '#F8FAFC',
@@ -48,7 +48,7 @@ const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
   const systemColorScheme = useColorScheme(); // 'dark' | 'light' | null
-  const [themeMode, setThemeModeState] = useState('system'); // 'system' | 'light' | 'dark'
+  const [themeMode, setThemeModeState] = useState('light'); // Default to 'light' mode when first opened
 
   useEffect(() => {
     const loadSavedThemeMode = async () => {
@@ -59,6 +59,9 @@ export const ThemeProvider = ({ children }) => {
         } else if (savedMode === 'true') {
           setThemeModeState('dark');
         } else if (savedMode === 'false') {
+          setThemeModeState('light');
+        } else {
+          // First time opening app: Default to light mode
           setThemeModeState('light');
         }
       } catch (err) {
@@ -85,7 +88,7 @@ export const ThemeProvider = ({ children }) => {
   }, [themeMode, systemColorScheme]);
 
   const toggleTheme = async () => {
-    const nextMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
+    const nextMode = themeMode === 'light' ? 'dark' : 'light';
     await setThemeMode(nextMode);
   };
 

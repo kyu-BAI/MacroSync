@@ -31,8 +31,9 @@ const LOADING_MESSAGES = [
 import { useTheme } from '../../context/ThemeContext';
 
 export default function GeneratingPlanScreen({ profileData, onComplete }) {
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [messageIndex, setMessageIndex] = useState(0);
   
   // Animation Values

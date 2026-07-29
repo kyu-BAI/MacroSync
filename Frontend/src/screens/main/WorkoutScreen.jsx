@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -22,6 +22,23 @@ import API_URL from '../config/api';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import AILoadingModal from '../../components/AILoadingModal';
+
+const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
+  if (!setNotifications) return;
+  try {
+    const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+    const prefs = stored ? JSON.parse(stored) : { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+    const category = newNotif.category;
+    if ((category === 'hydration' || category === 'meal') && prefs.habitReminders === false) return;
+    if ((category === 'workout' || category === 'achievement') && prefs.motivationalUpdates === false) return;
+    if (category === 'smart' && prefs.personalizedAlerts === false) return;
+    setNotifications(prev => [newNotif, ...prev]);
+  } catch (e) {
+    setNotifications(prev => [newNotif, ...prev]);
+  }
+};
+
 export default function WorkoutScreen({ 
   onTabChange, 
   userId, 
@@ -29,7 +46,9 @@ export default function WorkoutScreen({
   isOnline = true, 
   dailyExercise, 
   setDailyExercise,
-  setNotifications
+  setNotifications,
+  userGoals,
+  userBaseline
 }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
@@ -45,12 +64,38 @@ export default function WorkoutScreen({
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
   const [workoutRoutines, setWorkoutRoutines] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
+
+  const handleRegenerateWorkouts = useCallback(async () => {
+    setIsGeneratingWorkout(true);
+    try {
+      const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`, {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWorkoutRoutines(data);
+        const todayStr = new Date().toISOString().split('T')[0];
+        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
+          userId,
+          date: todayStr,
+          workouts: data
+        }));
+        showAlert('AI Workouts Customized', 'Your personalized home routines have been regenerated with AI!');
+      }
+    } catch (err) {
+      if (__DEV__) console.warn("REGENERATE WORKOUT ERROR:", err);
+      showAlert('Customization Error', 'Failed to customize workouts. Please check your network connection.');
+    } finally {
+      setIsGeneratingWorkout(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     const loadCachedOrFetchWorkouts = async () => {
       try {
-        setLoading(true);
         const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
         
         // 1. Check local cache
@@ -64,7 +109,8 @@ export default function WorkoutScreen({
           }
         }
         
-        // 2. Cache miss: Fetch from backend
+        // 2. Cache miss: Fetch from backend (show loading modal only for backend generation)
+        setLoading(true);
         const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
         if (!res.ok) {
           throw new Error("Failed to fetch custom workouts");
@@ -80,14 +126,16 @@ export default function WorkoutScreen({
         };
         await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify(cachePayload));
       } catch (err) {
-        console.warn("WORKOUT LOAD/FETCH ERROR:", err);
+        if (__DEV__) console.warn("WORKOUT LOAD/FETCH ERROR:", err);
       } finally {
         setLoading(false);
       }
     };
 
     if (userId) {
-      loadCachedOrFetchWorkouts();
+      // Defer heavy fetch until after tab animation completes
+      const timer = setTimeout(() => { loadCachedOrFetchWorkouts(); }, 150);
+      return () => clearTimeout(timer);
     } else {
       setLoading(false);
     }
@@ -147,15 +195,15 @@ export default function WorkoutScreen({
         });
       }
 
-      if (setNotifications && activeRoutine) {
-        setNotifications(prev => [{
+      if (activeRoutine) {
+        await pushNotificationIfAllowed({
           id: `n-${Date.now()}`,
           title: 'Workout Completed! 🏋️‍♂️',
           category: 'workout',
           time: 'Just Now',
           read: false,
           message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`
-        }, ...prev]);
+        }, setNotifications);
       }
 
       const workoutPayload = {
@@ -202,7 +250,7 @@ export default function WorkoutScreen({
           [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
         );
       } catch (error) {
-        console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
+        if (__DEV__) console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
         await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
@@ -220,18 +268,7 @@ export default function WorkoutScreen({
     return selectedIntensity === 'All' || workout.intensity === selectedIntensity;
   });
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme?.background || baseColor }]}>
-        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-        <View style={styles.loaderOuterNeu}>
-          <ActivityIndicator size="large" color={logoGreen} />
-        </View>
-        <Text style={styles.loaderTextTitle}>AI Trainer Active</Text>
-        <Text style={styles.loaderTextDesc}>Tailoring today's routines to help you crush your goal weight...</Text>
-      </View>
-    );
-  }
+
 
   return (
     <View style={styles.fullscreenOverlay}>
@@ -335,7 +372,7 @@ export default function WorkoutScreen({
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Daily Home Workouts</Text>
-            <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Gemini AI</Text>
+            <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Vita AI</Text>
             <View style={styles.aiBadgeRow}>
               <Sparkles color={'#10B981'} size={12} style={{ marginRight: 6 }} />
               <Text style={[styles.aiBadgeText, { color: logoGreen }]}>AI RECOMMENDED WORKOUTS</Text>
@@ -433,7 +470,13 @@ export default function WorkoutScreen({
 
       </ScrollView>
 
-      {/* --- FLOATING AI CHATBOT SYSTEM --- */}
+      {/* UIverse Inspired AI Customization Loading Modal */}
+      <AILoadingModal
+        visible={isGeneratingWorkout || loading}
+        type="workout"
+        title="Customizing Workout Routine"
+        subtitle="Vita AI is calculating optimal home exercises"
+      />
     </View>
   );
 }

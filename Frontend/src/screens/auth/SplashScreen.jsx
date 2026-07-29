@@ -9,8 +9,9 @@ const TOTAL_SPINNER_DOTS = 8;
 const BASE_SPEED_MS = 900; // Derived directly from --uib-speed: .9s
 
 export default function SplashScreen({ onAppReady }) {
-  const { theme, isDarkMode } = useTheme();
-  const styles = getStyles(theme);
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   // Generates 8 independent animation reference tracking timelines
   const dotTimelines = useRef(
     Array.from({ length: TOTAL_SPINNER_DOTS }, () => new Animated.Value(0))
