@@ -18,7 +18,9 @@ export function CustomAlertProvider({ children }) {
     const lowerMsg   = (message || '').toLowerCase();
     const combined   = lowerTitle + ' ' + lowerMsg;
 
-    if (lowerTitle.includes('error') || lowerTitle.includes('failed') || lowerMsg.includes('error')) {
+    if (lowerTitle.includes('log out') || lowerTitle.includes('logout') || lowerMsg.includes('exit your active') || lowerMsg.includes('log out')) {
+      alertType = 'logout';
+    } else if (lowerTitle.includes('error') || lowerTitle.includes('failed') || lowerMsg.includes('error')) {
       alertType = 'error';
     } else if (
       lowerTitle.includes('success') || lowerTitle.includes('saved') || lowerTitle.includes('logged') ||

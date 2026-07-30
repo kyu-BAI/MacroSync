@@ -13,13 +13,13 @@ import {
   Alert,
   Modal
 } from 'react-native';
-import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles } from 'lucide-react-native';
+import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, Compass, Navigation, LocateFixed, ShoppingBag } from 'lucide-react-native';
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
-import AILoadingModal from '../../components/AILoadingModal';
+import { WebView } from 'react-native-webview';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
@@ -137,6 +137,33 @@ export default function DietRecipesScreen({
   
   // New UI States
   const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
+
+  const CITY_PROFILES = {
+    'San Remigio': {
+      specialty: 'Fresh Seafood & Utan Bisaya',
+      palengkeItems: 'Tilapia, Bangus, Kangkong, Squash',
+      avgCost: '₱70 - ₱120',
+      topRatio: '60% Seafood, 40% Greens',
+      top: '48%',
+      left: '18%'
+    },
+    'Bogo City': {
+      specialty: 'Kinilaw na Tangigue & Palengke Greens',
+      palengkeItems: 'Tangigue, Malunggay, Sitaw, Corn',
+      avgCost: '₱85 - ₱150',
+      topRatio: '50% Lean Protein, 50% Fiber',
+      top: '64%',
+      left: '52%'
+    },
+    'Daanbantayan': {
+      specialty: 'Grilled Fish & Kamote Harvest',
+      palengkeItems: 'Fresh Fish, Kamote, Eggplant, Okra',
+      avgCost: '₱60 - ₱110',
+      topRatio: '70% Fresh Catch, 30% Carbs',
+      top: '18%',
+      left: '42%'
+    }
+  };
 
   const budgetTiers = ['All', 'Under ₱100', '₱100 - ₱300', 'Over ₱300'];
   const locations = ['San Remigio', 'Bogo City', 'Daanbantayan'];
@@ -689,53 +716,122 @@ export default function DietRecipesScreen({
 
               <View style={styles.glassDivider} />
 
-              <Text style={styles.cardTitle}>📍 Local Food Radar</Text>
-
-              {/* STATIC VISUAL MAP REPLACEMENT */}
-              <View style={styles.staticMapContainer}>
-                {/* Decorative Map Background Elements */}
-                <View style={styles.mapCoastline} />
-                <View style={styles.mapRouteLine} />
-
-                {/* Daanbantayan Pin */}
-                <TouchableOpacity 
-                  style={[styles.mapPinContainer, { top: '15%', left: '42%' }]}
-                  onPress={() => setSelectedLocation('Daanbantayan')}
-                  activeOpacity={0.8}
-                >
-                  <MapPin 
-                    color={selectedLocation === 'Daanbantayan' ? logoGreen : '#94A3B8'} 
-                    size={selectedLocation === 'Daanbantayan' ? 32 : 24} 
-                  />
-                  <Text style={[styles.mapPinLabel, selectedLocation === 'Daanbantayan' && styles.mapPinLabelActive]}>Daanbantayan</Text>
-                </TouchableOpacity>
-
-                {/* San Remigio Pin */}
-                <TouchableOpacity 
-                  style={[styles.mapPinContainer, { top: '45%', left: '15%' }]}
-                  onPress={() => setSelectedLocation('San Remigio')}
-                  activeOpacity={0.8}
-                >
-                  <MapPin 
-                    color={selectedLocation === 'San Remigio' ? logoGreen : '#94A3B8'} 
-                    size={selectedLocation === 'San Remigio' ? 32 : 24} 
-                  />
-                  <Text style={[styles.mapPinLabel, selectedLocation === 'San Remigio' && styles.mapPinLabelActive]}>San Remigio</Text>
-                </TouchableOpacity>
-
-                {/* Bogo City Pin */}
-                <TouchableOpacity 
-                  style={[styles.mapPinContainer, { top: '65%', left: '55%' }]}
-                  onPress={() => setSelectedLocation('Bogo City')}
-                  activeOpacity={0.8}
-                >
-                  <MapPin 
-                    color={selectedLocation === 'Bogo City' ? logoGreen : '#94A3B8'} 
-                    size={selectedLocation === 'Bogo City' ? 32 : 24} 
-                  />
-                  <Text style={[styles.mapPinLabel, selectedLocation === 'Bogo City' && styles.mapPinLabelActive]}>Bogo City</Text>
-                </TouchableOpacity>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={styles.cardTitle}>📍 Interactive City Food Radar</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                  <Compass size={12} color="#10B981" style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981' }}>LIVE RADAR</Text>
+                </View>
               </View>
+
+              {/* REAL INTERACTIVE OPENSTREETMAP */}
+              <View style={styles.staticMapContainer}>
+                <WebView
+                  originWhitelist={['*']}
+                  source={{
+                    html: `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <style>
+                          * { -webkit-tap-highlight-color: transparent; }
+                          body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
+                          #map { height: 100%; width: 100%; }
+                          ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
+                          .city-marker {
+                            background: #10B981;
+                            color: white;
+                            padding: 5px 10px;
+                            border-radius: 14px;
+                            font-family: -apple-system, sans-serif;
+                            font-size: 11px;
+                            font-weight: 800;
+                            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
+                            border: 2px solid white;
+                            white-space: nowrap;
+                            cursor: pointer;
+                          }
+                          .city-marker.active {
+                            background: #059669;
+                            transform: scale(1.18);
+                            box-shadow: 0 0 16px rgba(16, 185, 129, 0.8);
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div id="map"></div>
+                        <script>
+                          var map = L.map('map', { zoomControl: false }).setView([11.12, 123.98], 10);
+                          
+                          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 18,
+                            attribution: '© OpenStreetMap'
+                          }).addTo(map);
+
+                          var locations = [
+                            { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
+                            { name: 'San Remigio', lat: 11.0827, lng: 123.9536 },
+                            { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
+                          ];
+
+                          locations.forEach(function(loc) {
+                            var isSelected = loc.name === "${selectedLocation}";
+                            var customIcon = L.divIcon({
+                              className: 'custom-div-icon',
+                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                              iconSize: [90, 30],
+                              iconAnchor: [45, 15]
+                            });
+
+                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                            marker.on('click', function() {
+                              if (window.ReactNativeWebView) {
+                                window.ReactNativeWebView.postMessage(loc.name);
+                              }
+                            });
+                          });
+                        </script>
+                      </body>
+                      </html>
+                    `
+                  }}
+                  onMessage={(event) => {
+                    const cityName = event.nativeEvent.data;
+                    if (cityName && locations.includes(cityName)) {
+                      setSelectedLocation(cityName);
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                  scrollEnabled={false}
+                />
+              </View>
+
+              {/* SELECTED CITY CULINARY PROFILE BANNER */}
+              {CITY_PROFILES[selectedLocation] && (
+                <View style={styles.cityDetailCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Navigation size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                      <Text style={styles.cityDetailTitle}>{selectedLocation} Food Market</Text>
+                    </View>
+                    <View style={styles.cityCostBadge}>
+                      <Text style={styles.cityCostBadgeText}>{CITY_PROFILES[selectedLocation].avgCost}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.citySpecialtyText}>
+                    ✨ <Text style={{ fontWeight: '800', color: logoGreen }}>Specialty:</Text> {CITY_PROFILES[selectedLocation].specialty}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <ShoppingBag size={12} color={theme?.textSecondary || '#94A3B8'} style={{ marginRight: 4 }} />
+                    <Text style={styles.cityPalengkeText}>
+                      <Text style={{ fontWeight: '700' }}>Palengke Fresh:</Text> {CITY_PROFILES[selectedLocation].palengkeItems}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               <View style={styles.filterButtonGroupRow}>
                 {locations.map((loc) => (
@@ -1509,33 +1605,39 @@ const getStyles = (theme) => StyleSheet.create({
   },
 
   staticMapContainer: {
-    height: 220,
+    height: 210,
     width: '100%',
-    backgroundColor: '#F1F5F9', 
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
+    backgroundColor: theme?.inputBg || '#F1F5F9', 
+    borderRadius: 20,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    marginBottom: 12,
     overflow: 'hidden',
     position: 'relative',
+  },
+  mapGridPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+    borderWidth: 1,
+    borderColor: '#94A3B8',
+    borderStyle: 'dashed',
   },
   mapCoastline: {
     position: 'absolute',
     top: -50,
     left: -20,
-    width: 200,
+    width: 210,
     height: 300,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
     borderRadius: 100,
-    opacity: 0.5,
   },
   mapRouteLine: {
     position: 'absolute',
-    top: '20%',
-    left: '48%',
+    top: '15%',
+    left: '42%',
     width: 2,
-    height: '60%',
-    backgroundColor: '#E2E8F0',
+    height: '70%',
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
     transform: [{ rotate: '15deg' }],
   },
   mapPinContainer: {
@@ -1543,16 +1645,59 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mapPulseRing: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    top: -6,
+  },
   mapPinLabel: {
     fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '600',
+    color: theme?.textSecondary || '#94A3B8',
+    fontWeight: '700',
     marginTop: 2,
   },
   mapPinLabelActive: {
-    color: '#64748B',
-    fontWeight: '800',
+    color: logoGreen,
+    fontWeight: '900',
     fontSize: 11,
+  },
+  cityDetailCard: {
+    backgroundColor: theme?.inputBg || '#F1F5F9',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    marginBottom: 16,
+  },
+  cityDetailTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: theme?.textPrimary || '#0F172A',
+  },
+  cityCostBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  cityCostBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: logoGreen,
+  },
+  citySpecialtyText: {
+    fontSize: 12,
+    color: theme?.textPrimary || '#0F172A',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cityPalengkeText: {
+    fontSize: 11,
+    color: theme?.textSecondary || '#64748B',
+    flex: 1,
   },
   aiGenerateBtn: {
     flexDirection: 'row',

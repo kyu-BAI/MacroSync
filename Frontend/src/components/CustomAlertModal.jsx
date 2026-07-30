@@ -8,7 +8,7 @@ import {
   TouchableWithoutFeedback,
   Dimensions
 } from 'react-native';
-import { CheckCircle2, AlertCircle, HelpCircle, Info, AlertTriangle, X } from 'lucide-react-native';
+import { CheckCircle2, AlertCircle, HelpCircle, Info, AlertTriangle, X, LogOut } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -27,6 +27,12 @@ const TYPE_CONFIG = {
     accentBdr: 'rgba(239, 68, 68, 0.30)',
     icon: (size) => <AlertCircle color="#EF4444" size={size} strokeWidth={2.5} />,
   },
+  logout: {
+    accent:    '#EF4444',
+    accentBg:  'rgba(239, 68, 68, 0.12)',
+    accentBdr: 'rgba(239, 68, 68, 0.30)',
+    icon: (size) => <LogOut color="#EF4444" size={size} strokeWidth={2.5} />,
+  },
   warning: {
     accent:    '#F59E0B',
     accentBg:  'rgba(245, 158, 11, 0.12)',
@@ -34,10 +40,10 @@ const TYPE_CONFIG = {
     icon: (size) => <AlertTriangle color="#F59E0B" size={size} strokeWidth={2.5} />,
   },
   confirm: {
-    accent:    '#6366F1',
-    accentBg:  'rgba(99, 102, 241, 0.12)',
-    accentBdr: 'rgba(99, 102, 241, 0.30)',
-    icon: (size) => <HelpCircle color="#6366F1" size={size} strokeWidth={2.5} />,
+    accent:    '#10B981',
+    accentBg:  'rgba(16, 185, 129, 0.12)',
+    accentBdr: 'rgba(16, 185, 129, 0.30)',
+    icon: (size) => <HelpCircle color="#10B981" size={size} strokeWidth={2.5} />,
   },
   info: {
     accent:    '#3B82F6',
@@ -85,12 +91,9 @@ export default function CustomAlertModal({
               styles.cardContainer,
               {
                 backgroundColor: theme?.surface || theme?.cardBg || '#FFFFFF',
-                borderColor: cfg.accentBdr,
+                borderColor: theme?.border || '#E2E8F0',
               }
             ]}>
-
-              {/* ── Accent top bar ── */}
-              <View style={[styles.accentBar, { backgroundColor: cfg.accent }]} />
 
               {/* ── Close button ── */}
               <TouchableOpacity
@@ -102,13 +105,13 @@ export default function CustomAlertModal({
               </TouchableOpacity>
 
               {/* ── Icon ring ── */}
-              <View style={[styles.iconContainer, { backgroundColor: cfg.accentBg, borderColor: cfg.accentBdr }]}>
+              <View style={[styles.iconContainer, { backgroundColor: cfg.accentBg, borderColor: theme?.border || '#E2E8F0' }]}>
                 {cfg.icon(30)}
               </View>
 
               {/* ── Title ── */}
               {title ? (
-                <Text style={[styles.titleText, { color: cfg.accent }]}>
+                <Text style={[styles.titleText, { color: theme?.textPrimary || '#0F172A' }]}>
                   {title}
                 </Text>
               ) : null}
@@ -140,8 +143,8 @@ export default function CustomAlertModal({
                     btnStyle = [styles.destructiveButton];
                     btnTextStyle = styles.destructiveButtonText;
                   } else {
-                    // Primary — use the alert accent color
-                    btnStyle = [styles.primaryButton, { backgroundColor: cfg.accent }];
+                    // Primary — use standard clean green
+                    btnStyle = [styles.primaryButton, { backgroundColor: '#10B981' }];
                     btnTextStyle = styles.primaryButtonText;
                   }
 
