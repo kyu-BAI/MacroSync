@@ -984,6 +984,59 @@ async def get_dashboard_data(user_id: str):
 
         weekly_activity = [{"day": days_map[i], "value": daily_totals[i]} for i in range(7)]
 
+        # ── Real Streak Calculation ──────────────────────────────────────
+        # Collect all distinct dates (in Manila TZ) where the user logged
+        # any activity: meals, workouts, or water.
+        streak_dates = set()
+
+        # Dates from logged meals (look back up to 90 days for streak)
+        streak_lookback_utc = (now_manila - timedelta(days=90)).astimezone(timezone.utc)
+        streak_meals_res = supabase.table("logged_meals") \
+            .select("logged_at") \
+            .eq("user_id", user_id) \
+            .gte("logged_at", streak_lookback_utc.isoformat()) \
+            .execute()
+        for m in (streak_meals_res.data or []):
+            try:
+                dt = datetime.fromisoformat(m["logged_at"].replace("Z", "+00:00")).astimezone(manila_tz)
+                streak_dates.add(dt.date())
+            except Exception:
+                pass
+
+        # Dates from logged workouts
+        streak_workouts_res = supabase.table("logged_workouts") \
+            .select("logged_at") \
+            .eq("user_id", user_id) \
+            .gte("logged_at", streak_lookback_utc.isoformat()) \
+            .execute()
+        for w in (streak_workouts_res.data or []):
+            try:
+                dt = datetime.fromisoformat(w["logged_at"].replace("Z", "+00:00")).astimezone(manila_tz)
+                streak_dates.add(dt.date())
+            except Exception:
+                pass
+
+        # Dates from water logs (water_logs uses updated_at)
+        if water_res.data:
+            for wr in water_res.data:
+                updated_str = wr.get("updated_at")
+                if updated_str and wr.get("glasses", 0) > 0:
+                    try:
+                        dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00")).astimezone(manila_tz)
+                        streak_dates.add(dt.date())
+                    except Exception:
+                        pass
+
+        # Count consecutive days backwards from today (or yesterday if no logs today)
+        streak_count = 0
+        check_date = today_date
+        if check_date not in streak_dates and (check_date - timedelta(days=1)) in streak_dates:
+            # User hasn't logged today yet but logged yesterday — start from yesterday
+            check_date = check_date - timedelta(days=1)
+        while check_date in streak_dates:
+            streak_count += 1
+            check_date -= timedelta(days=1)
+
         return {
             "profile": {
                 "name": user.get("name", "User"),
@@ -1014,7 +1067,8 @@ async def get_dashboard_data(user_id: str):
                 "recentExercise": recent_exercise
             },
             "loggedMealIds": logged_meal_ids,
-            "weeklyActivity": weekly_activity
+            "weeklyActivity": weekly_activity,
+            "streakDays": streak_count
         }
     except Exception as e:
         print("DASHBOARD ERROR:", repr(e))
@@ -1027,7 +1081,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
         
     # Top-tier Gemini models optimized for health AI, vision food scanning & fast chat
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro']
     last_error = None
     
     for model_name in models_to_try:
@@ -1050,6 +1104,9 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
                 last_error = e
                 err_msg = str(e)
                 print(f"Gemini API attempt {attempt+1} failed on {model_name}: {err_msg}")
+                # Model not found / deprecated — skip to next model immediately
+                if any(x in err_msg.lower() for x in ["404", "not_found", "not found", "is not supported"]):
+                    break
                 # Retry on typical transient failures
                 if any(x in err_msg.lower() for x in ["503", "429", "resource_exhausted", "unavailable", "overloaded", "demand", "limit"]):
                     time.sleep(1 + attempt)
@@ -1570,6 +1627,108 @@ async def paymongo_webhook(request: Request):
 
 @app.get("/workouts/recommend/{user_id}")
 def recommend_workouts(user_id: str):
+    # ── Hardcoded fallback workouts (returned when AI is unavailable) ──
+    def get_fallback_workouts(goal: str):
+        if "Lose" in goal or "fatloss" in goal.lower():
+            return [
+                {
+                    "id": 1, "title": "Fat Burn Starter", "intensity": "Light",
+                    "duration": "15 mins", "targetGains": "Fat Loss & Conditioning",
+                    "caloriesBurn": 120, "description": "A light cardio circuit to kickstart your metabolism.",
+                    "tutorials": [
+                        {"name": "Jumping Jacks", "target": "3 Sets x 30 Seconds", "setup": "Stand upright with feet together and arms at your sides.", "form": "Jump while spreading legs and raising arms overhead. Land softly."},
+                        {"name": "High Knees", "target": "3 Sets x 20 Reps", "setup": "Stand tall with feet hip-width apart.", "form": "Drive knees up alternately toward chest. Keep core engaged."},
+                        {"name": "Bodyweight Squats", "target": "3 Sets x 15 Reps", "setup": "Stand with feet shoulder-width apart, toes slightly out.", "form": "Lower hips back and down. Keep chest up and knees tracking over toes."}
+                    ]
+                },
+                {
+                    "id": 2, "title": "Cardio Burn Circuit", "intensity": "Moderate",
+                    "duration": "20 mins", "targetGains": "Endurance & Fat Loss",
+                    "caloriesBurn": 220, "description": "Moderate intensity circuit targeting full-body fat burn.",
+                    "tutorials": [
+                        {"name": "Burpees", "target": "3 Sets x 10 Reps", "setup": "Stand with feet shoulder-width apart.", "form": "Drop to a push-up, jump back up explosively. Maintain control throughout."},
+                        {"name": "Mountain Climbers", "target": "3 Sets x 20 Reps", "setup": "Start in a high plank position, hands under shoulders.", "form": "Drive knees alternately toward chest quickly. Keep hips level."},
+                        {"name": "Lunges", "target": "3 Sets x 12 Reps Each Leg", "setup": "Stand upright with hands on hips.", "form": "Step forward into a lunge, lowering back knee toward the floor. Push back to start."}
+                    ]
+                },
+                {
+                    "id": 3, "title": "HIIT Torch Session", "intensity": "Intense",
+                    "duration": "25 mins", "targetGains": "Maximum Calorie Burn",
+                    "caloriesBurn": 350, "description": "High-intensity intervals for aggressive fat loss.",
+                    "tutorials": [
+                        {"name": "Jump Squats", "target": "4 Sets x 12 Reps", "setup": "Stand with feet shoulder-width apart.", "form": "Squat down then explode upward. Land softly with bent knees."},
+                        {"name": "Push-Up to Shoulder Tap", "target": "3 Sets x 10 Reps", "setup": "Start in a high plank, hands slightly wider than shoulders.", "form": "Perform a push-up, then tap opposite shoulder at the top. Minimize hip rotation."},
+                        {"name": "Tuck Jumps", "target": "3 Sets x 8 Reps", "setup": "Stand with feet hip-width apart, arms ready.", "form": "Jump high and tuck knees toward chest at the peak. Land softly."}
+                    ]
+                }
+            ]
+        elif "Gain" in goal or "muscle" in goal.lower():
+            return [
+                {
+                    "id": 1, "title": "Foundation Builder", "intensity": "Light",
+                    "duration": "15 mins", "targetGains": "Muscle Activation",
+                    "caloriesBurn": 100, "description": "Light muscle activation to prime your body for growth.",
+                    "tutorials": [
+                        {"name": "Wall Push-Ups", "target": "3 Sets x 15 Reps", "setup": "Stand arm's length from a wall, hands at chest height.", "form": "Lean in by bending elbows, push back. Keep body straight."},
+                        {"name": "Glute Bridges", "target": "3 Sets x 15 Reps", "setup": "Lie on your back, knees bent, feet flat on floor.", "form": "Squeeze glutes and lift hips until body forms a straight line. Hold 1 second at top."},
+                        {"name": "Dead Hangs (or Chair Rows)", "target": "3 Sets x 20 Seconds", "setup": "Hang from a bar or use a sturdy table for rows.", "form": "Engage shoulders and lats. Keep core tight throughout."}
+                    ]
+                },
+                {
+                    "id": 2, "title": "Hypertrophy Circuit", "intensity": "Moderate",
+                    "duration": "20 mins", "targetGains": "Muscle Growth",
+                    "caloriesBurn": 200, "description": "Moderate volume bodyweight training for hypertrophy.",
+                    "tutorials": [
+                        {"name": "Push-Ups", "target": "4 Sets x 12 Reps", "setup": "High plank position, hands shoulder-width apart.", "form": "Lower chest to the floor slowly (3 sec down), push up explosively."},
+                        {"name": "Bulgarian Split Squats", "target": "3 Sets x 10 Reps Each Leg", "setup": "Place rear foot on a chair or step behind you.", "form": "Lower until front thigh is parallel to floor. Keep torso upright."},
+                        {"name": "Pike Push-Ups", "target": "3 Sets x 10 Reps", "setup": "Start in downward dog position, hips high.", "form": "Bend elbows to lower head toward the floor. Push back up. Targets shoulders."}
+                    ]
+                },
+                {
+                    "id": 3, "title": "Strength Blaster", "intensity": "Intense",
+                    "duration": "25 mins", "targetGains": "Strength & Power",
+                    "caloriesBurn": 300, "description": "Intense bodyweight strength session for maximum muscle stimulus.",
+                    "tutorials": [
+                        {"name": "Diamond Push-Ups", "target": "4 Sets x 10 Reps", "setup": "Hands together forming a diamond shape under your chest.", "form": "Lower slowly with elbows close to body. Push up with power."},
+                        {"name": "Pistol Squat Progressions", "target": "3 Sets x 6 Reps Each Leg", "setup": "Stand on one leg, other leg extended forward. Use a chair for support if needed.", "form": "Lower slowly on one leg, keeping heel grounded. Push back up."},
+                        {"name": "Explosive Pull-Ups (or Inverted Rows)", "target": "3 Sets x 8 Reps", "setup": "Hang from a bar or lie under a sturdy table.", "form": "Pull with force, aiming for maximum height. Control the descent."}
+                    ]
+                }
+            ]
+        else:
+            return [
+                {
+                    "id": 1, "title": "Active Recovery Flow", "intensity": "Light",
+                    "duration": "15 mins", "targetGains": "Mobility & Balance",
+                    "caloriesBurn": 90, "description": "Light movement flow to maintain fitness and flexibility.",
+                    "tutorials": [
+                        {"name": "Cat-Cow Stretch", "target": "3 Sets x 10 Reps", "setup": "Start on all fours, wrists under shoulders, knees under hips.", "form": "Alternate arching and rounding your back. Breathe deeply with each movement."},
+                        {"name": "Standing Calf Raises", "target": "3 Sets x 15 Reps", "setup": "Stand on the edge of a step or flat on the floor.", "form": "Rise onto toes, hold briefly, lower with control."},
+                        {"name": "Bird Dogs", "target": "3 Sets x 10 Reps Each Side", "setup": "Start on all fours in a tabletop position.", "form": "Extend opposite arm and leg simultaneously. Hold 2 seconds, return with control."}
+                    ]
+                },
+                {
+                    "id": 2, "title": "Balanced Fitness Circuit", "intensity": "Moderate",
+                    "duration": "20 mins", "targetGains": "General Fitness",
+                    "caloriesBurn": 180, "description": "Well-rounded circuit to maintain your current conditioning.",
+                    "tutorials": [
+                        {"name": "Push-Ups", "target": "3 Sets x 12 Reps", "setup": "High plank position, hands shoulder-width apart.", "form": "Lower chest to the floor with control. Push up fully extending arms."},
+                        {"name": "Bodyweight Squats", "target": "3 Sets x 15 Reps", "setup": "Stand with feet shoulder-width apart.", "form": "Sit back and down, keeping weight in heels. Stand up driving through heels."},
+                        {"name": "Plank Hold", "target": "3 Sets x 30 Seconds", "setup": "Forearms on the ground, body in a straight line.", "form": "Engage core and glutes. Don't let hips sag or pike up."}
+                    ]
+                },
+                {
+                    "id": 3, "title": "Full Body Maintenance", "intensity": "Intense",
+                    "duration": "25 mins", "targetGains": "Strength Maintenance",
+                    "caloriesBurn": 280, "description": "Higher intensity session to maintain strength and muscle tone.",
+                    "tutorials": [
+                        {"name": "Burpees", "target": "3 Sets x 10 Reps", "setup": "Stand with feet shoulder-width apart.", "form": "Drop into push-up, perform the push-up, jump feet forward and leap up."},
+                        {"name": "Single-Leg Deadlift", "target": "3 Sets x 10 Reps Each Leg", "setup": "Stand on one leg with slight knee bend.", "form": "Hinge at hips, lowering torso while extending free leg behind. Return to standing."},
+                        {"name": "Decline Push-Ups", "target": "3 Sets x 12 Reps", "setup": "Place feet on a chair, hands on the floor in push-up position.", "form": "Lower chest toward floor, push back up. Targets upper chest and shoulders."}
+                    ]
+                }
+            ]
+
     try:
         profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
         profile = profile_res.data[0] if profile_res.data else {}
@@ -1579,6 +1738,11 @@ def recommend_workouts(user_id: str):
         goal_weight = profile.get("goalWeight", 70.0)
         height_cm = profile.get("height_cm", 170.0)
         age = profile.get("age", 25)
+
+        # If Gemini AI is not configured, return fallback immediately
+        if not genai_client:
+            print("WORKOUT RECOMMEND: Gemini not configured, returning fallback workouts")
+            return get_fallback_workouts(goal)
 
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
@@ -1610,9 +1774,6 @@ def recommend_workouts(user_id: str):
           )
         """
 
-        if not genai_client:
-            raise HTTPException(status_code=503, detail="Gemini AI client not configured")
-
         response = generate_gemini_content(prompt)
         text = response.text.strip()
         if text.startswith("```json"):
@@ -1625,13 +1786,18 @@ def recommend_workouts(user_id: str):
         if isinstance(workouts, list) and len(workouts) == 3:
             return workouts
         else:
-            raise HTTPException(status_code=500, detail="Failed to format workout recommendations from AI")
+            print("WORKOUT RECOMMEND: AI returned invalid format, using fallback")
+            return get_fallback_workouts(goal)
             
-    except HTTPException as he:
-        raise he
     except Exception as e:
-        print("WORKOUT RECOMMENDATION ROUTE ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        print("WORKOUT RECOMMENDATION ERROR (returning fallback):", repr(e))
+        # Return fallback workouts instead of crashing with 500
+        try:
+            goal = profile.get("goal", "Maintain Weight") if 'profile' in dir() else "Maintain Weight"
+        except Exception:
+            goal = "Maintain Weight"
+        return get_fallback_workouts(goal)
+
 
 
 @app.get("/meals/recommend/{user_id}")

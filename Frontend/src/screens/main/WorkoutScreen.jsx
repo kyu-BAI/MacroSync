@@ -96,7 +96,9 @@ export default function WorkoutScreen({
   useEffect(() => {
     const loadCachedOrFetchWorkouts = async () => {
       try {
-        const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
+        // Use local date (not UTC) so the cache matches the user's actual "today"
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         
         // 1. Check local cache
         const cachedRaw = await AsyncStorage.getItem('ms_workouts_cache');
@@ -105,11 +107,30 @@ export default function WorkoutScreen({
           if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.workouts)) {
             setWorkoutRoutines(parsed.workouts);
             setLoading(false);
-            return; // Cache hit!
+            return; // Cache hit! No loading modal needed.
+          }
+          // Cache exists but is stale — show stale data immediately while fetching
+          if (parsed.userId === userId && Array.isArray(parsed.workouts) && parsed.workouts.length > 0) {
+            setWorkoutRoutines(parsed.workouts);
+            setLoading(false);
+            // Fetch fresh data in the background (no loading modal)
+            try {
+              const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
+              if (res.ok) {
+                const data = await res.json();
+                setWorkoutRoutines(data);
+                await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
+                  userId, date: todayStr, workouts: data
+                }));
+              }
+            } catch (bgErr) {
+              if (__DEV__) console.warn("WORKOUT BG REFRESH ERROR:", bgErr);
+            }
+            return;
           }
         }
         
-        // 2. Cache miss: Fetch from backend (show loading modal only for backend generation)
+        // 2. No cache at all: Fetch from backend (show loading modal)
         setLoading(true);
         const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
         if (!res.ok) {
@@ -119,12 +140,9 @@ export default function WorkoutScreen({
         setWorkoutRoutines(data);
         
         // 3. Save to local cache
-        const cachePayload = {
-          userId,
-          date: todayStr,
-          workouts: data
-        };
-        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify(cachePayload));
+        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
+          userId, date: todayStr, workouts: data
+        }));
       } catch (err) {
         if (__DEV__) console.warn("WORKOUT LOAD/FETCH ERROR:", err);
       } finally {

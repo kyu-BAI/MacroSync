@@ -307,12 +307,8 @@ export default function DashboardScreen({
     setStepsInput('');
   };
 
-  // Real dynamic logging streak calculation
-  const currentStreak = userProfile?.streakDays || userProfile?.streak || (
-    weightHistory && Array.isArray(weightHistory)
-      ? Math.max(1, weightHistory.filter(w => typeof w === 'number' && w > 0).length)
-      : 1
-  );
+  // Real streak from backend — no more fake fallback
+  const currentStreak = userProfile?.streakDays || 0;
   const primaryGoal    = localGoalLabel || (userGoals?.goal === 'muscle' ? 'Build Muscle' : userGoals?.goal === 'maintain' ? 'Maintain Weight' : 'Lose Weight');
   const startingWeight = localStartingWeight !== null ? localStartingWeight : parseFloat(userBaseline?.startingWeight || userBaseline?.weight || 70);
   const currentWeight  = globalLoggedWeight !== null ? globalLoggedWeight : startingWeight;
@@ -627,6 +623,7 @@ export default function DashboardScreen({
                 </Text>
               </View>
 
+              {currentStreak > 0 && (
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -642,6 +639,7 @@ export default function DashboardScreen({
                   {currentStreak} Day Streak
                 </Text>
               </View>
+              )}
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>

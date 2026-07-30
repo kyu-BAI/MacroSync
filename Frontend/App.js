@@ -230,7 +230,8 @@ function MainApp() {
       name: data.profile.name || 'User',
       email: data.profile.email || prev.email || '',
       profileImage: data.profile.profileImage || null,
-      isPremium: !!data.nutrition.isPremium
+      isPremium: !!data.nutrition.isPremium,
+      streakDays: data.streakDays || 0
     }));
   };
 
