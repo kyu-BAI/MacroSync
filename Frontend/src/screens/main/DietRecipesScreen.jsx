@@ -13,12 +13,13 @@ import {
   Alert,
   Modal
 } from 'react-native';
-import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, Compass, Navigation, LocateFixed, ShoppingBag } from 'lucide-react-native';
+import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, Compass, Navigation, LocateFixed, ShoppingBag, Maximize2, X } from 'lucide-react-native';
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import AILoadingModal from '../../components/AILoadingModal';
 import { WebView } from 'react-native-webview';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -132,6 +133,7 @@ export default function DietRecipesScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('San Remigio');
+  const [showFullMapModal, setShowFullMapModal] = useState(false);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
   
@@ -718,10 +720,14 @@ export default function DietRecipesScreen({
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={styles.cardTitle}>📍 Interactive City Food Radar</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
-                  <Compass size={12} color="#10B981" style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981' }}>LIVE RADAR</Text>
-                </View>
+                <TouchableOpacity 
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
+                  onPress={() => setShowFullMapModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Maximize2 size={12} color="#10B981" style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>Full Map</Text>
+                </TouchableOpacity>
               </View>
 
               {/* REAL INTERACTIVE OPENSTREETMAP */}
@@ -1058,6 +1064,172 @@ export default function DietRecipesScreen({
               </TouchableOpacity>
             </>
           )}
+        </View>
+      </Modal>
+
+      {/* ── FULL SCREEN INTERACTIVE MAP MODAL ── */}
+      <Modal
+        visible={showFullMapModal}
+        animationType="slide"
+        onRequestClose={() => setShowFullMapModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }}>
+          {/* Header Bar */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingTop: Platform.OS === 'ios' ? 60 : 40,
+            paddingHorizontal: 20,
+            paddingBottom: 16,
+            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            borderBottomWidth: 1,
+            borderBottomColor: isDarkMode ? '#334155' : '#E2E8F0',
+            zIndex: 10
+          }}>
+            <View>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                🗺️ Full Northern Cebu Food Map
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 }}>
+                Tap any city marker to select local food market
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowFullMapModal(false)}
+              style={{
+                padding: 8,
+                backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+                borderRadius: 20
+              }}
+            >
+              <X color={isDarkMode ? '#F8FAFC' : '#0F172A'} size={20} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Fullscreen Map WebView */}
+          <View style={{ flex: 1 }}>
+            <WebView
+              originWhitelist={['*']}
+              source={{
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <style>
+                      * { -webkit-tap-highlight-color: transparent; }
+                      body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
+                      #map { height: 100%; width: 100%; }
+                      ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
+                      .city-marker {
+                        background: #10B981;
+                        color: white;
+                        padding: 7px 14px;
+                        border-radius: 18px;
+                        font-family: -apple-system, sans-serif;
+                        font-size: 13px;
+                        font-weight: 800;
+                        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
+                        border: 2.5px solid white;
+                        white-space: nowrap;
+                        cursor: pointer;
+                      }
+                      .city-marker.active {
+                        background: #059669;
+                        transform: scale(1.2);
+                        box-shadow: 0 0 20px rgba(16, 185, 129, 0.9);
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <div id="map"></div>
+                    <script>
+                      var map = L.map('map', { zoomControl: true }).setView([11.12, 123.98], 10);
+                      
+                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 18,
+                        attribution: '© OpenStreetMap'
+                      }).addTo(map);
+
+                      var locations = [
+                        { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
+                        { name: 'San Remigio', lat: 11.0827, lng: 123.9536 },
+                        { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
+                      ];
+
+                      locations.forEach(function(loc) {
+                        var isSelected = loc.name === "${selectedLocation}";
+                        var customIcon = L.divIcon({
+                          className: 'custom-div-icon',
+                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                          iconSize: [110, 36],
+                          iconAnchor: [55, 18]
+                        });
+
+                        var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                        marker.on('click', function() {
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(loc.name);
+                          }
+                        });
+                      });
+                    </script>
+                  </body>
+                  </html>
+                `
+              }}
+              onMessage={(event) => {
+                const cityName = event.nativeEvent.data;
+                if (cityName && locations.includes(cityName)) {
+                  setSelectedLocation(cityName);
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          </View>
+
+          {/* Bottom Floating City Bar */}
+          <View style={{
+            position: 'absolute',
+            bottom: Platform.OS === 'ios' ? 36 : 20,
+            left: 20,
+            right: 20,
+            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            borderRadius: 20,
+            padding: 16,
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            borderWidth: 1.5,
+            borderColor: '#10B981'
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                  📍 Selected: {selectedLocation}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 2 }}>
+                  {CITY_PROFILES[selectedLocation]?.specialty}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFullMapModal(false)}
+                style={{
+                  backgroundColor: '#10B981',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 14
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
