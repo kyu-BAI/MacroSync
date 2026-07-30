@@ -4,8 +4,8 @@
 
 **AI-powered fitness & nutrition tracking mobile app**
 
-[![React Native](https://img.shields.io/badge/React%20Native-0.81.5-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-~54.0.0-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React%20Native-0.86.0-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-~57.0.8-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.12-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-2.15.3-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
@@ -18,25 +18,26 @@
 
 ## 📖 Overview
 
-**MacroSync** is a full-stack mobile health and fitness application that combines macro nutrient tracking, AI-driven food analysis, personalized workout logging, and an intelligent chatbot — all in one seamless experience. Built with React Native (Expo) on the frontend and a FastAPI backend deployed on Vercel, MacroSync leverages the power of Google Gemini AI to help users reach their fitness goals.
+**MacroSync** is a full-stack mobile health and fitness application that combines macro nutrient tracking, AI-driven food analysis, location-based market food radar, personalized workout logging, and an intelligent chatbot — all in one seamless experience. Built with React Native (Expo) on the frontend and a FastAPI backend deployed on Vercel, MacroSync leverages the power of Google Gemini AI to help users reach their health goals.
 
 ---
 
 ## ✨ Features
 
-### 🤖 AI-Powered
+### 🤖 AI & Location-Aware Capabilities
 | Feature | Description |
 |---|---|
 | **AI Food Scanner** | Point your camera at any food and get instant macro breakdown (calories, protein, carbs, fats) powered by Gemini Vision |
-| **AI Recipe Generator** | Generate healthy, budget-aware recipes from available ingredients tailored to your location |
-| **MacroSync AI Chatbot** | Context-aware fitness assistant that knows your profile, goals, and weight history |
+| **Interactive City Food Radar** | OpenStreetMap Leaflet location radar tailored to Northern Cebu (**San Remigio**, **Bogo City**, **Daanbantayan**) displaying fresh *palengke* catch hours & profiles |
+| **Location & Allergy Recipe Generator** | Generate budget-aware Filipino recipes based on local market catch, budget tiers (*Under ₱100*, *₱100-₱300*, *Over ₱300*), and food allergies (*Peanuts*, *Dairy*, *Gluten*, *Seafood*, and custom inputs) |
+| **MacroSync AI Chatbot** | Context-aware fitness assistant powered by Gemini AI that knows your profile, goals, and weight history |
 
 ### 📊 Tracking & Analytics
 | Feature | Description |
 |---|---|
-| **Dashboard** | Real-time overview of daily nutrition, calories, water intake, and workout activity |
+| **Dashboard** | Real-time overview of daily nutrition, calories, water intake, step count, and workout activity |
 | **Meal Logging** | Log meals with full macro breakdown; auto-calculates daily targets based on your goal |
-| **Workout Logging** | Track exercises with calories burned and active minutes |
+| **Interactive Workout Player** | Step-by-step home tutorial player with progress tracking, live **45s Rest Timer**, and **Active Recovery Day** guidance |
 | **Water Tracking** | Daily hydration monitoring with glass-count logging |
 | **Weight Tracking** | Supports both kg and lbs; tracks progress from starting weight to goal weight |
 
@@ -45,9 +46,9 @@
 |---|---|
 | **Onboarding Flow** | Personalized setup capturing age, height, weight, and fitness goal |
 | **Goal-Based Macros** | Dynamic macro targets (Lose Weight / Gain Muscle / Maintain) auto-calculated per user |
-| **Profile Management** | Update name, email, and profile picture |
+| **Profile Management** | Update name, email, and profile avatar (`96px` camera badge overlay) |
 | **Notifications** | In-app notification center |
-| **Settings** | Full control over units, preferences, and account details |
+| **Settings Hub** | Full control over units, preferences, dark/light themes, and account details |
 
 ### 🔐 Authentication
 - Email/Password signup & login
@@ -69,18 +70,17 @@ MacroSync/
 │   └── src/
 │       ├── screens/
 │       │   ├── auth/           # Login, Signup, ForgotPassword, ResetPassword
-│       │   ├── main/           # Dashboard, Diet/Recipes, Workout, FoodScanner,
-│       │   │                   # ChatbotAI, Notifications, Settings
+│       │   ├── main/           # Dashboard, DietRecipesScreen, WorkoutScreen, FoodScanner,
+│       │   │                   # ChatbotAI, NotificationsScreen, SettingsScreen
 │       │   ├── onboarding/     # Multi-step onboarding flow
 │       │   └── config/         # App configuration screens
 │       ├── components/         # Reusable UI components
-│       ├── context/            # React Context (Auth, User state)
-│       ├── services/           # API service layer (Axios)
-│       ├── data/               # Static data (exercises, meal presets)
+│       ├── context/            # React Context (Theme, CustomAlert, Auth, User state)
+│       ├── services/           # API service layer (Axios, OfflineStorage)
 │       └── images/             # In-app image assets
 │
 ├── Backend/                    # FastAPI Python backend
-│   ├── main.py                 # All API routes & business logic
+│   ├── main.py / index.py      # All API routes & business logic
 │   ├── requirements.txt        # Python dependencies
 │   ├── vercel.json             # Vercel deployment config
 │   └── templates/              # Email templates
@@ -95,15 +95,16 @@ MacroSync/
 ### Frontend
 | Technology | Version | Purpose |
 |---|---|---|
-| React Native | 0.81.5 | Cross-platform mobile framework |
-| Expo | ~54.0.0 | Development & build toolchain |
-| Expo Router | ~6.0.24 | File-based navigation |
+| React Native | 0.86.0 | Cross-platform mobile framework |
+| Expo | ~57.0.8 | Development & build toolchain |
+| React | 19.2.3 | UI library |
+| Expo WebView | 13.16.1 | Leaflet OpenStreetMap integration |
 | Axios | ^1.16.1 | HTTP client for API calls |
-| Expo Camera | ~17.0.10 | Food scanning via device camera |
-| Expo Image Picker | ~17.0.11 | Profile picture selection |
+| Expo Camera | ~57.0.3 | Food scanning via device camera |
+| Expo Image Picker | ~57.0.6 | Profile picture selection |
 | React Native Chart Kit | ^6.12.3 | Dashboard activity charts |
 | Lucide React Native | ^1.17.0 | Icon library |
-| AsyncStorage | 2.2.0 | Local session persistence |
+| AsyncStorage | 2.2.0 | Local session & offline sync cache |
 
 ### Backend
 | Technology | Version | Purpose |
@@ -115,103 +116,6 @@ MacroSync/
 | Resend | 2.30.1 | Transactional email (OTP delivery) |
 | Uvicorn | 0.34.3 | ASGI server |
 | Python-dotenv | 1.1.0 | Environment variable management |
-
-### Infrastructure
-| Service | Purpose |
-|---|---|
-| **Supabase** | PostgreSQL database, user authentication, file storage |
-| **Vercel** | Backend serverless deployment |
-| **EAS (Expo Application Services)** | Mobile app builds & OTA updates |
-| **Resend** | Email delivery service |
-
----
-
-## 🗄️ Database Schema (Supabase)
-
-| Table | Key Columns | Description |
-|---|---|---|
-| `user_profiles` | `id`, `name`, `email`, `age`, `weight_kg`, `height_cm`, `goal`, `goalWeight`, `targetDate`, `profile_image`, `location` | Extended user profile & fitness data |
-| `logged_meals` | `id`, `user_id`, `name`, `calories`, `protein`, `carbs`, `fats`, `logged_at` | Daily meal log entries |
-| `logged_workouts` | `id`, `user_id`, `name`, `calories_burned`, `active_minutes`, `logged_at` | Daily workout log entries |
-| `water_logs` | `user_id`, `glasses`, `updated_at` | Daily water intake tracker |
-| `password_reset_otps` | `email`, `otp`, `expires_at` | OTP codes for password resets |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js** >= 18.x
-- **Python** >= 3.10
-- **Expo CLI** (`npm install -g expo-cli`)
-- A **Supabase** project
-- A **Google Gemini** API key
-- A **Resend** API key
-
----
-
-### Backend Setup
-
-1. **Navigate to the Backend directory:**
-   ```bash
-   cd Backend
-   ```
-
-2. **Create a virtual environment and install dependencies:**
-   ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # macOS/Linux
-   source venv/bin/activate
-
-   pip install -r requirements.txt
-   ```
-
-3. **Create the `.env` file:**
-   ```env
-   SUPABASE_URL=your_supabase_project_url
-   SUPABASE_KEY=your_supabase_service_role_key
-   RESEND_API_KEY=your_resend_api_key
-   GEMINI_API_KEY=your_google_gemini_api_key
-   ```
-
-4. **Run the development server:**
-   ```bash
-   uvicorn main:app --reload --port 8000
-   ```
-   The API will be available at `http://localhost:8000`.
-
----
-
-### Frontend Setup
-
-1. **Navigate to the Frontend directory:**
-   ```bash
-   cd Frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Create the `.env` file:**
-   ```env
-   EXPO_PUBLIC_API_URL=http://localhost:8000
-   ```
-   > 💡 Replace with your deployed Vercel backend URL for production.
-
-4. **Start the Expo development server:**
-   ```bash
-   npm start
-   ```
-
-5. **Run on your device:**
-   - **Android:** Press `a` in the terminal, or scan the QR code with the Expo Go app
-   - **iOS:** Press `i` in the terminal (requires macOS with Xcode)
-   - **Web:** Press `w` in the terminal
 
 ---
 
@@ -235,71 +139,91 @@ MacroSync/
 | `POST` | `/workouts` | Log a workout session |
 | `POST` | `/water` | Update water intake |
 | `POST` | `/chat` | Send message to MacroSync AI chatbot |
-| `POST` | `/generate-recipe` | AI-generated recipe from ingredients |
+| `POST` | `/generate-recipe` | AI-generated recipe from ingredients & location |
 | `POST` | `/analyze-food` | Analyze food image for macros (Vision AI) |
 
 ---
 
-## ☁️ Deployment
+## 🚀 Getting Started
 
-### Backend (Vercel)
+### Prerequisites
 
-The backend is pre-configured for Vercel serverless deployment:
-
-```bash
-cd Backend
-vercel --prod
-```
-
-> The `vercel.json` routes all requests to `main.py` via `@vercel/python`.
-
-### Frontend (EAS Build)
-
-```bash
-cd Frontend
-
-# Build for Android
-eas build --platform android
-
-# Build for iOS
-eas build --platform ios
-
-# Submit to stores
-eas submit
-```
+- **Node.js** >= 18.x
+- **Python** >= 3.10
+- **Expo Go App** (installed on physical iOS or Android device for live testing)
+- **Supabase Account** & Project
+- **Google Gemini AI API Key**
+- **Resend API Key** (for OTP transactional emails)
 
 ---
 
-## 🔑 Environment Variables Reference
+### 🐍 Backend Setup (FastAPI)
 
-### Backend (`Backend/.env`)
-| Variable | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | ✅ | Your Supabase project URL |
-| `SUPABASE_KEY` | ✅ | Supabase **service_role** key (admin access) |
-| `RESEND_API_KEY` | ✅ | Resend API key for email delivery |
-| `GEMINI_API_KEY` | ✅ | Google Gemini API key for AI features |
+1. **Navigate to the Backend directory:**
+   ```bash
+   cd Backend
+   ```
 
-### Frontend (`Frontend/.env`)
-| Variable | Required | Description |
-|---|---|---|
-| `EXPO_PUBLIC_API_URL` | ✅ | Base URL of the deployed FastAPI backend |
+2. **Create a virtual environment & install dependencies:**
+   ```bash
+   python -m venv venv
+
+   # On Windows (PowerShell / Command Prompt):
+   venv\Scripts\activate
+
+   # On macOS / Linux:
+   source venv/bin/activate
+
+   # Install required Python packages:
+   pip install -r requirements.txt
+   ```
+
+3. **Create the environment configuration file (`Backend/.env`):**
+   ```env
+   SUPABASE_URL=https://your-supabase-project-id.supabase.co
+   SUPABASE_KEY=your_supabase_service_role_key
+   RESEND_API_KEY=re_your_resend_api_key
+   GEMINI_API_KEY=AIzaSy_your_google_gemini_api_key
+   ```
+
+4. **Launch the FastAPI Server:**
+   ```bash
+   # Start server with live reload enabled across local network:
+   uvicorn index:app --reload --host 0.0.0.0 --port 8000
+   ```
+   > 💡 The backend API will run live at `http://localhost:8000` (or `http://<your-local-ip>:8000`).
 
 ---
 
-## 🤝 Contributing
+### 📱 Frontend Setup (React Native / Expo)
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'feat: add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+1. **Navigate to the Frontend directory:**
+   ```bash
+   cd Frontend
+   ```
 
----
+2. **Install project dependencies:**
+   ```bash
+   npm install
+   ```
 
-## 📄 License
+3. **Configure Local Network API Endpoint:**
+   - Open `Frontend/src/config/api.js` and set your local machine's LAN IP address:
+   ```javascript
+   const API_URL = 'http://192.168.x.x:8000'; // Replace with your local machine's IP address
+   ```
 
-This project is licensed under the **MIT License** — see the [LICENSE](Frontend/LICENSE) file for details.
+4. **Start the Expo LAN Development Server:**
+   ```bash
+   # Run Expo server in LAN mode with cache clear:
+   npx expo start --lan -c
+   ```
+
+5. **Test on Device / Emulator:**
+   - **Physical Mobile Device:** Open **Expo Go** and scan the QR code displayed in your terminal.
+   - **Android Emulator:** Press `a` in the terminal.
+   - **iOS Simulator:** Press `i` in the terminal.
+   - **Reload App:** Press `r` in the terminal anytime to do a quick bundle refresh.
 
 ---
 

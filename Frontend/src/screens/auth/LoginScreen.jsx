@@ -46,8 +46,8 @@ export default function LoginScreen({
 
   // Google Sign-In interaction states are managed via deep linking now
 
-  const showAlert = (message, title = "Login Error") => {
-    triggerCustomAlert(title, message);
+  const showAlert = (message, title = "Login Error", buttons = []) => {
+    triggerCustomAlert(title, message, buttons);
   };
 
   // STANDARD EMAIL/PASSWORD AUTHENTICATION FLOW

@@ -554,8 +554,23 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   style={styles.avatarImageLarge} 
                 />
               ) : (
-                <User color="#FFFFFF" size={48} strokeWidth={2.5} />
+                <User color="#FFFFFF" size={38} strokeWidth={2.5} />
               )}
+              <View style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                backgroundColor: logoGreen,
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: theme?.surface || '#FFFFFF'
+              }}>
+                <Camera color="#FFFFFF" size={12} strokeWidth={2.5} />
+              </View>
             </TouchableOpacity>
             <View style={styles.profileMetadataTextGroup}>
               <Text style={styles.profileUserNameText}>{userProfile?.name || 'User Account'}</Text>
@@ -1270,20 +1285,21 @@ const getStyles = (theme) => StyleSheet.create({
     marginBottom: 4,
   },
   avatarNeuOuterBox: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: logoGreen,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: theme?.border || '#E2E8F0',
+    position: 'relative',
   },
   avatarImageLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
   },
   profileMetadataTextGroup: {
     alignItems: 'center',

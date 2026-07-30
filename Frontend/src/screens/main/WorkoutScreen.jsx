@@ -10,7 +10,8 @@ import {
   Dimensions,
   Alert,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle, Sparkles } from 'lucide-react-native';
 
@@ -39,6 +40,31 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   }
 };
 
+const getExerciseSource = (exerciseName) => {
+  if (!exerciseName) return null;
+  const name = exerciseName.toLowerCase();
+  
+  // Custom local GIF / image assets can be added to Frontend/assets/workouts/ and required here:
+  // if (name.includes('wall')) return require('../../assets/workouts/wall_pushups.gif');
+
+  if (name.includes('push') || name.includes('wall')) {
+    return 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=600&q=80';
+  }
+  if (name.includes('squat')) {
+    return 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?auto=format&fit=crop&w=600&q=80';
+  }
+  if (name.includes('plank') || name.includes('core') || name.includes('hold')) {
+    return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
+  }
+  if (name.includes('jack') || name.includes('jump') || name.includes('cardio') || name.includes('burpee')) {
+    return 'https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?auto=format&fit=crop&w=600&q=80';
+  }
+  if (name.includes('lunge')) {
+    return 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=600&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
+};
+
 export default function WorkoutScreen({ 
   onTabChange, 
   userId, 
@@ -59,6 +85,28 @@ export default function WorkoutScreen({
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+  // --- REST TIMER STATE ---
+  const [restTimer, setRestTimer] = useState(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (isTimerRunning && restTimer > 0) {
+      interval = setInterval(() => {
+        setRestTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (restTimer === 0) {
+      setIsTimerRunning(false);
+      showAlert("Rest Period Complete! ⏱️", "Ready for your next set or exercise step?");
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, restTimer]);
+
+  const handleStartRestTimer = (seconds = 45) => {
+    setRestTimer(seconds);
+    setIsTimerRunning(true);
+  };
 
   const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
 
@@ -314,37 +362,92 @@ export default function WorkoutScreen({
                 <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
                 <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
               </View>
-              <HelpCircle color={theme?.textSecondary || "#94A3B8"} size={22} />
+              <TouchableOpacity 
+                style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}
+                onPress={() => handleStartRestTimer(45)}
+                activeOpacity={0.7}
+              >
+                <Clock color={logoGreen} size={18} />
+              </TouchableOpacity>
+            </View>
+
+            {/* PROGRESS BAR TRACK */}
+            <View style={{ height: 4, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', width: '100%', marginBottom: 12 }}>
+              <View style={{ 
+                height: '100%', 
+                backgroundColor: logoGreen, 
+                width: `${((currentStepIndex + 1) / activeRoutine.tutorials.length) * 100}%`,
+                borderRadius: 2 
+              }} />
             </View>
 
             {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
             <View style={styles.playerMainCard}>
               
-              {/* ANIMATION COMPONENT PLACEHOLDER FRAME */}
-              <View style={styles.animationPlaceholderFrame}>
-                <SportShoe color={logoGreen} size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
-                <View style={styles.liveActivityBadge}>
+              {/* TUTORIAL STATUS PILL */}
+              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                <View style={[styles.liveActivityBadge, { position: 'relative', top: 0, left: 0 }]}>
                   <View style={styles.pulseDot} />
-                  <Text style={styles.liveBadgeText}>HOME TUTORIAL ACTIVE</Text>
+                  <Text style={styles.liveBadgeText}>
+                    {isTimerRunning ? `REST TIMER: 00:${restTimer < 10 ? '0' : ''}${restTimer}` : 'TUTORIAL GUIDE ACTIVE'}
+                  </Text>
                 </View>
               </View>
 
-              {/* EXERCISE NAMES & METRIC SCORES */}
-              <Text style={styles.playerExerciseTitle}>{activeRoutine.tutorials[currentStepIndex].name}</Text>
-              <View style={styles.targetMetricChipBox}>
-                <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
+              {/* EXERCISE TITLE & METRIC SCORES */}
+              <Text style={[styles.playerExerciseTitle, { textAlign: 'center', fontSize: 22, fontWeight: '900', marginBottom: 10 }]}>
+                {activeRoutine.tutorials[currentStepIndex].name}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                <View style={styles.targetMetricChipBox}>
+                  <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.targetMetricChipBox, { backgroundColor: isTimerRunning ? '#F59E0B' : '#0EA5E9' }]}
+                  onPress={() => isTimerRunning ? setIsTimerRunning(false) : handleStartRestTimer(45)}
+                  activeOpacity={0.8}
+                >
+                  <Clock color="#FFFFFF" size={14} style={{ marginRight: 6 }} />
+                  <Text style={styles.targetMetricChipText}>
+                    {isTimerRunning ? `Rest: ${restTimer}s` : '⏱️ 45s Rest Timer'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.playerGlassDivider} />
 
               {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
               <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
-                <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen }]}>How to Set Up:</Text>
-                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                  borderRadius: 16,
+                  padding: 16,
+                  borderLeftWidth: 4,
+                  borderLeftColor: logoGreen,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                }}>
+                  <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>How to Set Up:</Text>
+                  <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
+                </View>
                 
-                <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14, color: logoGreen }]}>Proper Execution Form:</Text>
-                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                  borderRadius: 16,
+                  padding: 16,
+                  borderLeftWidth: 4,
+                  borderLeftColor: '#0EA5E9',
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                }}>
+                  <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>Proper Execution Form:</Text>
+                  <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+                </View>
               </ScrollView>
 
               <View style={styles.playerGlassDivider} />
@@ -390,17 +493,33 @@ export default function WorkoutScreen({
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Daily Home Workouts</Text>
-            <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Vita AI</Text>
-            <View style={styles.aiBadgeRow}>
-              <Sparkles color={'#10B981'} size={12} style={{ marginRight: 6 }} />
-              <Text style={[styles.aiBadgeText, { color: logoGreen }]}>AI RECOMMENDED WORKOUTS</Text>
-            </View>
+            <Text style={styles.subGreeting}>Zero-equipment home workout routines</Text>
           </View>
         </View>
+
+        {/* OVER-EXERCISING / ACTIVE RECOVERY SMART ALERT BANNER */}
+        {((dailyExercise?.caloriesBurned || 0) >= 500 || (dailyExercise?.activeMinutes || 0) >= 60) && (
+          <View style={[styles.formCard, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.14)' : 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', borderWidth: 1, marginBottom: 16 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              <View style={{ backgroundColor: '#F59E0B', padding: 8, borderRadius: 12, marginRight: 12, marginTop: 2 }}>
+                <Flame color="#FFFFFF" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
+                  Active Recovery Recommended 🧘
+                </Text>
+                <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B', lineHeight: 17 }}>
+                  Great effort today! You burned {dailyExercise?.caloriesBurned || 0} kcal across {dailyExercise?.activeMinutes || 0} active minutes. Consider taking a light rest or stretching day tomorrow to prevent overtraining.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* WORKOUT INTENSITY FILTER CHOICES */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Exercise Intensity Preferences</Text>
+
           <View style={styles.filterButtonGroupRow}>
             {intensityTiers.map((tier) => (
               <TouchableOpacity
