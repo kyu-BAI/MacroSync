@@ -212,67 +212,61 @@ export default function DietRecipesScreen({
 
   const targetCalories = calculatedTargetCalories;
 
-  const getMealAccentColor = (mealType) => {
-    switch (mealType) {
-      case 'Breakfast': return '#F59E0B'; // Amber Gold
-      case 'Lunch':     return '#10B981'; // Emerald Green
-      case 'Snack':     return '#0EA5E9'; // Sky Blue
-      case 'Dinner':    return '#8B5CF6'; // Royal Purple
-      default:          return '#10B981';
-    }
+  const getMealAccentColor = (typeOrTime) => {
+    const val = String(typeOrTime || '');
+    if (val.includes('Breakfast')) return '#F59E0B'; // Amber Gold 🌅
+    if (val.includes('Lunch'))     return '#10B981'; // Emerald Green ☀️
+    if (val.includes('Snack'))     return '#0EA5E9'; // Sky Blue ⚡
+    if (val.includes('Dinner'))    return '#8B5CF6'; // Royal Purple 🌙
+    return '#3B82F6'; // Vibrant Blue Default
   };
 
   // Mapping helper to resolve Lucide icon components from meal type names
-  const getMealIconComponent = (mealType) => {
-    switch (mealType) {
-      case 'Breakfast': return Coffee;
-      case 'Lunch': return Sun;
-      case 'Snack': return Flame;
-      case 'Dinner': return Moon;
-      default: return UtensilsCrossed;
-    }
+  const getMealIconComponent = (typeOrTime) => {
+    const val = String(typeOrTime || '');
+    if (val.includes('Breakfast')) return Coffee;
+    if (val.includes('Lunch'))     return Sun;
+    if (val.includes('Snack'))     return Flame;
+    if (val.includes('Dinner'))    return Moon;
+    return UtensilsCrossed;
   };
 
   // AI Daily Meal Recommendation State
-  const [dailyPlan, setDailyPlan] = useState([]);
+  const [dailyPlan, setDailyPlan] = useState([
+    { id: 'm1', title: 'Sinugbang Bangus & Kamote', mealType: 'Breakfast', time: 'Breakfast (7:30 AM)', calories: 420, protein: '35g', carbs: '45g', fats: '12g', budget: '₱85' },
+    { id: 'm2', title: 'Utan Bisaya & Grilled Tilapia', mealType: 'Lunch', time: 'Lunch (12:30 PM)', calories: 510, protein: '42g', carbs: '55g', fats: '14g', budget: '₱95' },
+    { id: 'm3', title: 'Chicken Tinola & Moringa', mealType: 'Dinner', time: 'Dinner (7:00 PM)', calories: 480, protein: '38g', carbs: '40g', fats: '15g', budget: '₱110' }
+  ]);
   const [loadingMeals, setLoadingMeals] = useState(false);
 
   useEffect(() => {
     const loadCachedOrFetchMeals = async () => {
       try {
-        const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
+        const todayStr = new Date().toISOString().split('T')[0];
 
-        // 1. Check local cache
+        // 1. Check local cache first
         const cachedRaw = await AsyncStorage.getItem('ms_meals_cache');
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.meals)) {
+          if (String(parsed.userId) === String(userId) && Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             setDailyPlan(parsed.meals);
-            setLoadingMeals(false);
-            return; // Cache hit!
+            if (parsed.date === todayStr) return; // Fresh cache hit!
           }
         }
 
-        // 2. Cache miss: Fetch from backend (show loading modal only for backend generation)
-        setLoadingMeals(true);
+        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
         const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
-        if (!res.ok) {
-          throw new Error("Failed to fetch custom meal suggestions");
+        if (res.ok) {
+          const data = await res.json();
+          setDailyPlan(data);
+          await AsyncStorage.setItem('ms_meals_cache', JSON.stringify({
+            userId,
+            date: todayStr,
+            meals: data
+          }));
         }
-        const data = await res.json();
-        setDailyPlan(data);
-
-        // 3. Save to local cache
-        const cachePayload = {
-          userId,
-          date: todayStr,
-          meals: data
-        };
-        await AsyncStorage.setItem('ms_meals_cache', JSON.stringify(cachePayload));
       } catch (err) {
-        if (__DEV__) console.warn("MEAL RECOMMENDATION LOAD ERROR:", err);
-      } finally {
-        setLoadingMeals(false);
+        if (__DEV__) console.log("MEAL RECOMMENDATION SILENT BG FETCH ERROR:", err);
       }
     };
 
@@ -632,8 +626,9 @@ export default function DietRecipesScreen({
             <Text style={styles.sectionLabelTitle}>Your Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
               {dailyPlan.map((meal, index) => {
-                const IconComponent = getMealIconComponent(meal.mealType);
-                const accentColor = getMealAccentColor(meal.mealType);
+                const mealCat = meal.mealType || meal.time || '';
+                const IconComponent = getMealIconComponent(mealCat);
+                const accentColor = getMealAccentColor(mealCat);
                 const isLogged = loggedMeals.includes(meal.id);
                 return (
                   <View key={meal.id} style={styles.timelineItem}>

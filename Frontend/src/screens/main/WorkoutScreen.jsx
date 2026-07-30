@@ -111,7 +111,11 @@ export default function WorkoutScreen({
   const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
-  const [workoutRoutines, setWorkoutRoutines] = useState([]);
+  const [workoutRoutines, setWorkoutRoutines] = useState([
+    { id: 'w1', title: 'Full Body Home Blitz', duration: '25 min', caloriesBurned: 220, intensity: 'Moderate', level: 'Beginner', exercisesCount: 5 },
+    { id: 'w2', title: 'Core Strength & Stability', duration: '15 min', caloriesBurned: 140, intensity: 'Light', level: 'Beginner', exercisesCount: 4 },
+    { id: 'w3', title: 'High Intensity Cardio Burn', duration: '30 min', caloriesBurned: 310, intensity: 'Intense', level: 'Intermediate', exercisesCount: 6 }
+  ]);
   const [loading, setLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
 
@@ -144,7 +148,6 @@ export default function WorkoutScreen({
   useEffect(() => {
     const loadCachedOrFetchWorkouts = async () => {
       try {
-        // Use local date (not UTC) so the cache matches the user's actual "today"
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         
@@ -152,49 +155,23 @@ export default function WorkoutScreen({
         const cachedRaw = await AsyncStorage.getItem('ms_workouts_cache');
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.workouts)) {
+          if (String(parsed.userId) === String(userId) && Array.isArray(parsed.workouts) && parsed.workouts.length > 0) {
             setWorkoutRoutines(parsed.workouts);
-            setLoading(false);
-            return; // Cache hit! No loading modal needed.
-          }
-          // Cache exists but is stale — show stale data immediately while fetching
-          if (parsed.userId === userId && Array.isArray(parsed.workouts) && parsed.workouts.length > 0) {
-            setWorkoutRoutines(parsed.workouts);
-            setLoading(false);
-            // Fetch fresh data in the background (no loading modal)
-            try {
-              const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
-              if (res.ok) {
-                const data = await res.json();
-                setWorkoutRoutines(data);
-                await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
-                  userId, date: todayStr, workouts: data
-                }));
-              }
-            } catch (bgErr) {
-              if (__DEV__) console.warn("WORKOUT BG REFRESH ERROR:", bgErr);
-            }
-            return;
+            if (parsed.date === todayStr) return; // Fresh cache hit!
           }
         }
         
-        // 2. No cache at all: Fetch from backend (show loading modal)
-        setLoading(true);
+        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
         const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
-        if (!res.ok) {
-          throw new Error("Failed to fetch custom workouts");
+        if (res.ok) {
+          const data = await res.json();
+          setWorkoutRoutines(data);
+          await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
+            userId, date: todayStr, workouts: data
+          }));
         }
-        const data = await res.json();
-        setWorkoutRoutines(data);
-        
-        // 3. Save to local cache
-        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
-          userId, date: todayStr, workouts: data
-        }));
       } catch (err) {
-        if (__DEV__) console.warn("WORKOUT LOAD/FETCH ERROR:", err);
-      } finally {
-        setLoading(false);
+        if (__DEV__) console.log("WORKOUT SILENT BG FETCH ERROR:", err);
       }
     };
 
