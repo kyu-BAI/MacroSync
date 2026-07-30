@@ -1307,7 +1307,15 @@ def chat_with_ai(data: ChatMessageRequest):
         raise he
     except Exception as e:
         print("CHAT ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = str(e).lower()
+        # User-friendly message for rate limits
+        if any(x in err_msg for x in ["429", "resource_exhausted", "quota exceeded", "rate limit"]):
+            return {
+                "response": "Vita AI is taking a quick breather! 🧘 Our servers are handling a lot of requests right now. Please try again in a few minutes — I'll be ready to help!",
+                "is_premium": False,
+                "remaining_chats": 0
+            }
+        raise HTTPException(status_code=500, detail="Vita AI is temporarily unavailable. Please try again shortly.")
 
 
 RECIPE_CACHE = {}
