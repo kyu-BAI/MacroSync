@@ -747,30 +747,35 @@ export default function DietRecipesScreen({
                           body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
                           #map { height: 100%; width: 100%; }
                           ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
+                          .custom-div-icon {
+                            background: transparent !important;
+                            border: none !important;
+                          }
                           .city-marker {
                             background: #10B981;
                             color: white;
-                            padding: 5px 10px;
-                            border-radius: 14px;
-                            font-family: -apple-system, sans-serif;
-                            font-size: 11px;
+                            padding: 6px 12px;
+                            border-radius: 16px;
+                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 12px;
                             font-weight: 800;
-                            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
-                            border: 2px solid white;
+                            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
+                            border: 2.2px solid white;
                             white-space: nowrap;
                             cursor: pointer;
+                            display: inline-block;
                           }
                           .city-marker.active {
                             background: #059669;
-                            transform: scale(1.18);
-                            box-shadow: 0 0 16px rgba(16, 185, 129, 0.8);
+                            transform: scale(1.15);
+                            box-shadow: 0 0 18px rgba(16, 185, 129, 0.9);
                           }
                         </style>
                       </head>
                       <body>
                         <div id="map"></div>
                         <script>
-                          var map = L.map('map', { zoomControl: false }).setView([11.12, 123.98], 10);
+                          var map = L.map('map', { zoomControl: true });
                           
                           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                             maxZoom: 18,
@@ -783,22 +788,26 @@ export default function DietRecipesScreen({
                             { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
                           ];
 
+                          var markerGroup = L.featureGroup();
+
                           locations.forEach(function(loc) {
                             var isSelected = loc.name === "${selectedLocation}";
                             var customIcon = L.divIcon({
                               className: 'custom-div-icon',
                               html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
-                              iconSize: [90, 30],
-                              iconAnchor: [45, 15]
+                              iconSize: null
                             });
 
-                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(markerGroup);
                             marker.on('click', function() {
                               if (window.ReactNativeWebView) {
                                 window.ReactNativeWebView.postMessage(loc.name);
                               }
                             });
                           });
+
+                          markerGroup.addTo(map);
+                          map.fitBounds(markerGroup.getBounds(), { padding: [60, 60] });
                         </script>
                       </body>
                       </html>
@@ -1777,7 +1786,7 @@ const getStyles = (theme) => StyleSheet.create({
   },
 
   staticMapContainer: {
-    height: 210,
+    height: 235,
     width: '100%',
     backgroundColor: theme?.inputBg || '#F1F5F9', 
     borderRadius: 20,
