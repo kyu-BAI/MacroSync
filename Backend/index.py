@@ -1076,42 +1076,55 @@ async def get_dashboard_data(user_id: str):
 
 
 # ---------------- AI HELPER FOR RETRIES & FALLBACKS ----------------
+class GeminiRESTResponse:
+    def __init__(self, text: str):
+        self.text = text
+
 def generate_gemini_content(prompt: str, image_bytes: bytes = None):
-    if not genai_client:
+    key = os.getenv("GEMINI_API_KEY")
+    if not key or key.strip() == "":
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
-        
-    # Top-tier Gemini models optimized for health AI, vision food scanning & fast chat
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro']
-    last_error = None
+
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-pro']
     
-    for model_name in models_to_try:
-        for attempt in range(3):
+    # 1. Try Direct REST API (Fastest, zero SDK dependencies)
+    for model in models_to_try:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key.strip()}"
+            parts = []
+            if image_bytes:
+                b64_img = base64.b64encode(image_bytes).decode("utf-8")
+                parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64_img}})
+            parts.append({"text": prompt})
+
+            payload = {"contents": [{"parts": parts}]}
+            res = requests.post(url, json=payload, timeout=25)
+            if res.status_code == 200:
+                data = res.json()
+                if "candidates" in data and len(data["candidates"]) > 0:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        parts_res = candidate["content"]["parts"]
+                        if len(parts_res) > 0 and "text" in parts_res[0]:
+                            return GeminiRESTResponse(parts_res[0]["text"])
+            else:
+                print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
+        except Exception as rest_err:
+            print(f"REST Gemini {model} error:", rest_err)
+
+    # 2. Try SDK Fallback
+    if genai_client:
+        for model in models_to_try:
             try:
-                if image_bytes:
-                    contents = [
-                        types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
-                        prompt
-                    ]
+                if image_bytes and types:
+                    contents = [types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'), prompt]
                 else:
                     contents = prompt
-                
-                response = genai_client.models.generate_content(
-                    model=model_name,
-                    contents=contents
-                )
-                return response
-            except Exception as e:
-                last_error = e
-                err_msg = str(e)
-                print(f"Gemini API attempt {attempt+1} failed on {model_name}: {err_msg}")
-                # Retry on typical transient failures
-                if any(x in err_msg.lower() for x in ["503", "429", "resource_exhausted", "unavailable", "overloaded", "demand", "limit"]):
-                    time.sleep(1 + attempt)
-                    continue
-                else:
-                    break # Structural failure, don't retry, go to fallback model
-                    
-    raise last_error or HTTPException(status_code=503, detail="Gemini API failed on all models with no captured exception")
+                return genai_client.models.generate_content(model=model, contents=contents)
+            except Exception as sdk_err:
+                print(f"SDK Gemini {model} error:", sdk_err)
+
+    raise HTTPException(status_code=503, detail="Gemini API key exhausted or unavailable across models")
 
 
 # ---------------- AI CHATBOT ----------------
