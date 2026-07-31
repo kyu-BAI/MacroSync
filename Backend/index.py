@@ -1305,11 +1305,58 @@ def chat_with_ai(data: ChatMessageRequest):
             )
 
         full_prompt = context_prompt + f"User message: {data.message}"
-        response = generate_gemini_content(full_prompt)
+        reply_text = ""
+        try:
+            response = generate_gemini_content(full_prompt)
+            reply_text = response.text
+        except Exception as ai_err:
+            print("AI CHAT FALLBACK ENGINE TRIGGERED:", ai_err)
+            u_name = user.get('name', 'User') if user_result.data else 'User'
+            u_goal = goal if user_result.data else 'Maintain Weight'
+            u_tcals = target_calories if user_result.data else 2200
+            u_ccals = consumed_calories if user_result.data else 0
+            u_tp = target_protein if user_result.data else 150
+            u_cp = consumed_protein if user_result.data else 0
+
+            msg_lower = (data.message or "").lower()
+            rem_cals = max(0, u_tcals - u_ccals)
+            rem_p = max(0, u_tp - u_cp)
+
+            if any(w in msg_lower for w in ["dinner", "eat", "food", "meal", "recipe", "lunch", "breakfast"]):
+                reply_text = (
+                    f"Here are great Filipino fitness recommendations for your **{u_goal}** goal:\n\n"
+                    f"• **Skinless Chicken Breast Tinola** with malunggay and squash (approx. 450 kcal, 38g protein)\n"
+                    f"• **Grilled Bangus Belly** with kangkong stir-fry and 1 cup brown rice (approx. 520 kcal, 34g protein)\n"
+                    f"• **Sinugbang Tilapia & Steamed Kamote** with fresh calamansi (approx. 410 kcal, 32g protein)\n\n"
+                    f"You currently have **{rem_cals} kcal** and **{rem_p}g protein** remaining for today!"
+                )
+            elif any(w in msg_lower for w in ["protein", "macro", "carb", "fat", "calorie", "target"]):
+                reply_text = (
+                    f"Here is your current daily macro breakdown:\n\n"
+                    f"• **Calories**: Consumed {u_ccals} / {u_tcals} kcal (**{rem_cals} kcal remaining**)\n"
+                    f"• **Protein**: Consumed {u_cp} / {u_tp}g (**{rem_p}g remaining**)\n\n"
+                    f"To reach your **{u_goal}** target, prioritize lean proteins like eggs, chicken breast, fish, and malunggay!"
+                )
+            elif any(w in msg_lower for w in ["workout", "exercise", "train", "gym", "routine"]):
+                reply_text = (
+                    f"Here is a recommended zero-equipment home routine for your **{u_goal}** goal:\n\n"
+                    f"• **Push-Ups / Incline Push-Ups**: 3 sets x 12-15 reps\n"
+                    f"• **Bodyweight Squats**: 4 sets x 15 reps\n"
+                    f"• **Plank Hold**: 3 sets x 45 seconds\n"
+                    f"• **Jumping Jacks**: 3 sets x 60 seconds\n\n"
+                    f"Stay consistent and don't forget to drink water post-workout!"
+                )
+            else:
+                reply_text = (
+                    f"Hello {u_name}! I am Vita AI, your personal fitness and nutrition assistant.\n\n"
+                    f"Your current goal is **{u_goal}** with a daily target of **{u_tcals} kcal** ({u_tp}g protein).\n"
+                    f"So far today, you have consumed **{u_ccals} kcal**.\n\n"
+                    f"Ask me anything about dinner ideas, macro targets, workouts, or your daily health progress!"
+                )
         
         remaining_count = "Unlimited" if is_premium else max(0, 10 - day_usage.get("chats", 0))
         return {
-            "response": response.text,
+            "response": reply_text,
             "is_premium": is_premium,
             "remaining_chats": remaining_count
         }
