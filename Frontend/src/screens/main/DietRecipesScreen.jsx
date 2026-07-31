@@ -348,54 +348,57 @@ export default function DietRecipesScreen({
       return;
     }
 
-    const isRecipe = id.startsWith('recipe-');
-    const mealName = macros.name || (isRecipe ? recipes.find(r => `recipe-${r.id}` === id)?.title : null) || 'Meal';
+    const safeId = String(id || `meal-${Date.now()}`);
+    const safeMacros = macros || {};
+    const isRecipe = safeId.startsWith('recipe-');
+    const mealName = safeMacros.name || (isRecipe ? (Array.isArray(recipes) ? recipes.find(r => `recipe-${r.id}` === safeId)?.title : null) : null) || 'Meal';
+    const addedCal = parseInt(safeMacros.calories) || 0;
+    const addedProt = parseInt(safeMacros.protein) || 0;
+    const addedCarb = parseInt(safeMacros.carbs) || 0;
+    const addedFat = parseInt(safeMacros.fats) || 0;
+
     const mealPayload = {
-      id,
+      id: safeId,
       user_id: userId,
       name: mealName,
-      calories: macros.calories || 0,
-      protein: macros.protein || 0,
-      carbs: macros.carbs || 0,
-      fats: macros.fats || 0
+      calories: addedCal,
+      protein: addedProt,
+      carbs: addedCarb,
+      fats: addedFat
     };
 
-    if (!loggedMeals.includes(id)) {
+    if (!loggedMeals.includes(safeId)) {
       const currentConsumed = dailyNutrition?.consumedCalories || 0;
       const targetCalories = dailyNutrition?.targetCalories || 2500;
-      const mealCalories = macros.calories || 0;
-      const newTotal = currentConsumed + mealCalories;
+      const newTotal = currentConsumed + addedCal;
       const excess = newTotal - targetCalories;
 
       const executeMealLog = async () => {
         // Optimistic UI updates
-        const updatedLoggedMeals = [...loggedMeals, id];
+        const updatedLoggedMeals = [...loggedMeals, safeId];
         setLoggedMeals(updatedLoggedMeals);
         
-        if (macros) {
-          await pushNotificationIfAllowed({
-            id: `n-${Date.now()}`,
-            title: 'Meal Logged! 🍽️',
-            category: 'meal',
-            time: 'Just Now',
-            read: false,
-            message: `Successfully logged your meal: ${mealName} (${macros.calories || 0} Kcal). Keep it up!`
-          }, setNotifications);
-        }
+        await pushNotificationIfAllowed({
+          id: `n-${Date.now()}`,
+          title: 'Meal Logged! 🍽️',
+          category: 'meal',
+          time: 'Just Now',
+          read: false,
+          message: `Successfully logged your meal: ${mealName} (${addedCal} Kcal). Keep it up!`
+        }, setNotifications);
         
-        let newNutrition = null;
-        if (setDailyNutrition && macros) {
-          setDailyNutrition(prev => {
-            const next = {
-              ...prev,
-              consumedCalories: prev.consumedCalories + macros.calories,
-              protein: { ...prev.protein, current: prev.protein.current + macros.protein },
-              carbs: { ...prev.carbs, current: prev.carbs.current + macros.carbs },
-              fats: { ...prev.fats, current: prev.fats.current + macros.fats }
-            };
-            newNutrition = next;
-            return next;
-          });
+        const newNutrition = dailyNutrition ? {
+          consumedCalories: (dailyNutrition.consumedCalories || 0) + addedCal,
+          protein: { ...(dailyNutrition.protein || {}), current: ((dailyNutrition.protein?.current || 0) + addedProt) },
+          carbs: { ...(dailyNutrition.carbs || {}), current: ((dailyNutrition.carbs?.current || 0) + addedCarb) },
+          fats: { ...(dailyNutrition.fats || {}), current: ((dailyNutrition.fats?.current || 0) + addedFat) }
+        } : null;
+
+        if (setDailyNutrition && newNutrition) {
+          setDailyNutrition(prev => ({
+            ...prev,
+            ...newNutrition
+          }));
         }
 
         // If offline
