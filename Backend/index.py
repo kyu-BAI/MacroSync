@@ -42,8 +42,8 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
-GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL") or "necoliejamescanales@gmail.com"
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or "xfvmozpawqerxsps"
 
 
 # ---------------- INIT CLIENTS ----------------
