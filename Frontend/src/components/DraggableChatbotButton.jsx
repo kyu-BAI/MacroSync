@@ -16,7 +16,7 @@ const logoGreen = '#10B981';
 
 // Spacing bounds to clear header and absolute bottom navigation bar
 const TOP_BOUND = Platform.OS === 'ios' ? 80 : 60;
-const BOTTOM_BOUND = screenHeight - 105;
+const BOTTOM_BOUND = screenHeight - (Platform.OS === 'ios' ? 168 : 158);
 const LEFT_BOUND = 16;
 const RIGHT_BOUND = screenWidth - 56 - 16;
 

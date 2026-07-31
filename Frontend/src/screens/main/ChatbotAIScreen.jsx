@@ -41,10 +41,11 @@ import { useTheme } from '../../context/ThemeContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 const CATEGORIZED_SUGGESTIONS = [
-  { icon: UtensilsCrossed, text: "What should I eat for dinner?" },
-  { icon: Flame, text: "Am I hitting my protein target?" },
-  { icon: ChefHat, text: "Cheap high-protein recipes" },
-  { icon: SportShoe, text: "15-min zero-equipment workout" },
+  "High-protein meal suggestions",
+  "How to hit my daily protein target",
+  "Cheap budget recipes under ₱100",
+  "15-min zero-equipment home workout",
+  "Quick healthy snacks to stop cravings",
 ];
 
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
@@ -362,20 +363,16 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
         {!isLoading && (
           <View style={styles.suggestionsWrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
-              {CATEGORIZED_SUGGESTIONS.map((item, idx) => {
-                const ChipIcon = item.icon;
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.suggestionChip}
-                    onPress={() => setInputText(item.text)}
-                    activeOpacity={0.7}
-                  >
-                    <ChipIcon size={13} color={logoGreen} style={{ marginRight: 6 }} strokeWidth={2.2} />
-                    <Text style={styles.suggestionChipText}>{item.text}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {CATEGORIZED_SUGGESTIONS.map((textItem, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.suggestionChip}
+                  onPress={() => setInputText(textItem)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.suggestionChipText}>{textItem}</Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         )}
