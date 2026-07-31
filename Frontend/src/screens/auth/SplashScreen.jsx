@@ -60,7 +60,7 @@ export default function SplashScreen({ onAppReady }) {
       {/* Central Brand Canvas Viewport */}
       <View style={styles.imagePresenterFrame}>
         <Image 
-          source={require('../../assets/icon.png')} 
+          source={require('../../../assets/icon.png')} 
           style={styles.logoImageLarge}
           resizeMode="contain"
         />
