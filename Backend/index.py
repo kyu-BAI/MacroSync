@@ -226,7 +226,7 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 async def signup(user: UserAuth):
     try:
         email = user.email.strip().lower()
-        existing_profile = supabase.table("user_profiles").select("id").eq("email", email).execute()
+        existing_profile = supabase_admin.table("user_profiles").select("id").eq("email", email).execute()
         if existing_profile.data:
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -262,17 +262,17 @@ async def signup(user: UserAuth):
         if not user_id:
             raise HTTPException(status_code=400, detail="Failed to create user account")
 
-        # 2. Insert or update user_profiles record
-        supabase.table("user_profiles").upsert({
+        # 2. Insert or update user_profiles record using admin client (bypasses RLS)
+        supabase_admin.table("user_profiles").upsert({
             "id": user_id,
             "email": email,
             "name": user.name.strip() if user.name else "User"
         }).execute()
 
-        # 3. Generate 6-digit OTP and store in password_reset_otps
+        # 3. Generate 6-digit OTP and store in password_reset_otps using admin client (bypasses RLS)
         otp_code = str(random.randint(100000, 999999))
         expiry = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
-        supabase.table("password_reset_otps").upsert({
+        supabase_admin.table("password_reset_otps").upsert({
             "email": email,
             "otp": otp_code,
             "expires_at": expiry
@@ -440,8 +440,8 @@ async def forgot_password(data: ForgotPasswordRequest):
         otp = str(random.randint(100000, 999999))
         expiry = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
 
-        # save OTP
-        supabase.table("password_reset_otps").upsert({
+        # save OTP (bypasses RLS)
+        supabase_admin.table("password_reset_otps").upsert({
             "email": data.email,
             "otp": otp,
             "expires_at": expiry
@@ -496,7 +496,7 @@ async def forgot_password(data: ForgotPasswordRequest):
 @app.post("/verify-reset-otp")
 async def verify_reset_otp(data: VerifyOTPRequest):
 
-    result = supabase.table("password_reset_otps") \
+    result = supabase_admin.table("password_reset_otps") \
         .select("*") \
         .eq("email", data.email) \
         .execute()
@@ -557,17 +557,17 @@ async def verify_signup(data: VerifySignupRequest):
             except Exception:
                 pass
 
-        # 4. Check password_reset_otps
+        # 4. Check password_reset_otps (bypasses RLS)
         if not user_id:
-            otp_res = supabase.table("password_reset_otps").select("*").eq("email", clean_email).execute()
+            otp_res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
             if otp_res.data and otp_res.data[0].get("otp") == clean_otp:
-                p_res = supabase.table("user_profiles").select("id").eq("email", clean_email).execute()
+                p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
                 if p_res.data:
                     user_id = p_res.data[0]["id"]
 
         # 5. Direct profile lookup fallback
         if not user_id:
-            p_res = supabase.table("user_profiles").select("id").eq("email", clean_email).execute()
+            p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
             if p_res.data:
                 user_id = p_res.data[0]["id"]
 
