@@ -212,13 +212,13 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
                     <p>This code expires in 10 minutes.</p>
                 """
             })
-            print(f"OTP Email successfully sent to {to_email} via Resend API")
+            print(f"OTP Email successfully sent to {to_email}")
             email_sent = True
         except Exception as resend_err:
             print("Resend API dispatch error:", resend_err)
 
     if not email_sent:
-        print(f"WARNING: Email could not be sent to {to_email}. Ensure GMAIL credentials or RESEND_API_KEY are configured in environment variables.")
+        print(f"WARNING: Email could not be sent to {to_email}. Ensure Gmail used is an active account.")
 
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
@@ -865,9 +865,9 @@ async def get_dashboard_data(user_id: str):
         unit = prefs.get("unit", "kg")
         
         # Raw kg values
-        current_weight_kg = user.get("weight_kg") or 70.0
-        starting_weight_kg = prefs.get("starting_weight") or current_weight_kg
-        target_weight_kg = user.get("goalWeight") or 70.0
+        current_weight_kg = float(user.get("weight_kg") or 70.0)
+        starting_weight_kg = float(prefs.get("starting_weight") or current_weight_kg or 70.0)
+        target_weight_kg = float(user.get("goalWeight") or 70.0)
         
         # Calculate dynamic macros based on goals using kg
         goal = user.get("goal") or "Maintain Weight"
@@ -1067,8 +1067,7 @@ async def get_dashboard_data(user_id: str):
                 "recentExercise": recent_exercise
             },
             "loggedMealIds": logged_meal_ids,
-            "weeklyActivity": weekly_activity,
-            "streakDays": streak_count
+            "weeklyActivity": weekly_activity
         }
     except Exception as e:
         print("DASHBOARD ERROR:", repr(e))
@@ -1104,9 +1103,6 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
                 last_error = e
                 err_msg = str(e)
                 print(f"Gemini API attempt {attempt+1} failed on {model_name}: {err_msg}")
-                # Model not found / deprecated — skip to next model immediately
-                if any(x in err_msg.lower() for x in ["404", "not_found", "not found", "is not supported"]):
-                    break
                 # Retry on typical transient failures
                 if any(x in err_msg.lower() for x in ["503", "429", "resource_exhausted", "unavailable", "overloaded", "demand", "limit"]):
                     time.sleep(1 + attempt)
@@ -1148,7 +1144,7 @@ def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 10:
+                if day_usage.get("chats", 0) >= 5:
                     raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
                 
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
@@ -1158,11 +1154,11 @@ def chat_with_ai(data: ChatMessageRequest):
                 supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
 
             unit = prefs.get("unit", "kg")
-            current_weight_kg = user.get("weight_kg") or 70.0
-            target_weight_kg = user.get("goalWeight") or 65.0
-            starting_weight_kg = prefs.get("starting_weight") or current_weight_kg
-            goal = user.get("goal", "Maintain Weight")
-
+            current_weight_kg = float(user.get("weight_kg") or 70.0)
+            target_weight_kg = float(user.get("goalWeight") or 70.0)
+            starting_weight_kg = float(prefs.get("starting_weight") or current_weight_kg or 70.0)
+            goal = user.get("goal") or "Maintain Weight"
+            
             # Calculate Macro Targets based on Goal
             if "Lose" in goal:
                 target_calories = 1800
@@ -1307,29 +1303,13 @@ def chat_with_ai(data: ChatMessageRequest):
         raise he
     except Exception as e:
         print("CHAT ERROR:", repr(e))
-        err_msg = str(e).lower()
-        # User-friendly message for rate limits
-        if any(x in err_msg for x in ["429", "resource_exhausted", "quota exceeded", "rate limit"]):
-            return {
-                "response": "Vita AI is taking a quick breather! 🧘 Our servers are handling a lot of requests right now. Please try again in a few minutes — I'll be ready to help!",
-                "is_premium": False,
-                "remaining_chats": 0
-            }
-        raise HTTPException(status_code=500, detail="Vita AI is temporarily unavailable. Please try again shortly.")
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-RECIPE_CACHE = {}
 
 # ---------------- AI RECIPE GENERATOR ----------------
 @app.post("/generate-recipe")
 def generate_recipe(data: RecipeRequest):
     try:
-        cache_key = f"{data.ingredients.strip().lower()}_{data.budget}_{data.location}"
-        if cache_key in RECIPE_CACHE:
-            cached_item = dict(RECIPE_CACHE[cache_key])
-            cached_item["id"] = f"rec_{uuid.uuid4().hex[:8]}"
-            return cached_item
-
         prompt = f"""
         You are an expert Filipino nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
         Their budget constraint is: {data.budget}.
@@ -1360,7 +1340,6 @@ def generate_recipe(data: RecipeRequest):
             recipe_json = recipe_json[3:-3]
             
         recipe_data = json.loads(recipe_json.strip())
-        RECIPE_CACHE[cache_key] = recipe_data
         
         # Generate a unique recipe ID for frontend rendering
         recipe_data["id"] = f"rec_{uuid.uuid4().hex[:8]}"
@@ -1368,86 +1347,8 @@ def generate_recipe(data: RecipeRequest):
         return recipe_data
         
     except Exception as e:
-        print("RECIPE GENERATOR ERROR (using local fallback):", repr(e))
-        loc = data.location if data.location else "San Remigio"
-        ing = data.ingredients.strip() if data.ingredients else "Local Fish and Vegetables"
-
-        # Smart fallback recipe based on location
-        if "bogo" in loc.lower():
-            fallback_recipe = {
-                "id": f"rec_{uuid.uuid4().hex[:8]}",
-                "title": f"Bogo Style Healthy {ing.title()} & Sweet Corn",
-                "calories": 420,
-                "protein": "34g",
-                "carbs": "38g",
-                "fats": "12g",
-                "time": "20 mins",
-                "budget": data.budget if data.budget else "Under ₱100",
-                "location": loc,
-                "ingredients": [
-                    f"200g Fresh Sourced {ing.title()} (from Bogo Public Market)",
-                    "1 cup Steamed Sweet Yellow Corn",
-                    "1 tbsp Calamansi Juice & Native Tomatoes",
-                    "1 tsp Coconut Oil",
-                    "Pinch of Sea Salt & Black Pepper"
-                ],
-                "instructions": [
-                    f"Clean and prepare the fresh {ing.lower()}.",
-                    "Season with native calamansi juice, tomatoes, and sea salt.",
-                    "Serve warm alongside steamed sweet yellow corn for sustained energy.",
-                    "Enjoy your nutritious, locally sourced Bogo-style meal!"
-                ]
-            }
-        elif "daanbantayan" in loc.lower():
-            fallback_recipe = {
-                "id": f"rec_{uuid.uuid4().hex[:8]}",
-                "title": f"Daanbantayan Inun-unan & Kamote ({ing.title()})",
-                "calories": 390,
-                "protein": "32g",
-                "carbs": "42g",
-                "fats": "10g",
-                "time": "25 mins",
-                "budget": data.budget if data.budget else "Under ₱100",
-                "location": loc,
-                "ingredients": [
-                    f"200g Fresh {ing.title()} (from Daanbantayan Fish Landing)",
-                    "1 cup Boiled Purple Kamote (Sweet Potato)",
-                    "2 tbsp Native Vinegar & Fresh Ginger Slices",
-                    "Eggplant & Okra spears",
-                    "1 Native Chili (Sili)"
-                ],
-                "instructions": [
-                    f"In a pot, simmer fresh {ing.lower()} with native vinegar, ginger, and garlic.",
-                    "Add sliced eggplant and okra during the last 5 minutes of cooking.",
-                    "Serve hot with nutrient-dense boiled purple kamote.",
-                    "A high-fiber, low-glycemic meal straight from Northern Cebu!"
-                ]
-            }
-        else: # San Remigio or default
-            fallback_recipe = {
-                "id": f"rec_{uuid.uuid4().hex[:8]}",
-                "title": f"San Remigio Sinugba & Utan Bisaya ({ing.title()})",
-                "calories": 410,
-                "protein": "36g",
-                "carbs": "35g",
-                "fats": "11g",
-                "time": "20 mins",
-                "budget": data.budget if data.budget else "Under ₱100",
-                "location": loc,
-                "ingredients": [
-                    f"200g Fresh Sourced {ing.title()} (from San Remigio Municipal Market)",
-                    "1 cup Fresh Seaweed (Lato) or Kangkong",
-                    "1 cup Squash & Okra Soup (Utan Bisaya)",
-                    "1 tbsp Calamansi & Red Onion Dip"
-                ],
-                "instructions": [
-                    f"Grill or steam the fresh {ing.lower()} over medium heat until tender.",
-                    "Boil squash, okra, and kangkong in light broth for Utan Bisaya.",
-                    "Pair with washed fresh Lato (sea grapes) and calamansi dip.",
-                    "A light, omega-3 rich coastal Cebu meal!"
-                ]
-            }
-        return fallback_recipe
+        print("RECIPE GENERATOR ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to generate recipe. Please try again.")
 
 
 # ---------------- AI VISION FOOD ANALYSIS ----------------
@@ -1784,7 +1685,7 @@ def recommend_meals(user_id: str):
         profile = profile_res.data[0] if profile_res.data else {}
 
         goal = profile.get("goal") or "Maintain Weight"
-        weight_kg = profile.get("weight_kg") or 70.0
+        weight_kg = float(profile.get("weight_kg") or 70.0)
 
         if "Lose" in goal:
             target_calories = 1800
@@ -1875,75 +1776,3 @@ def debug_key():
         }
     except Exception as e:
         return {"error": f"Failed to parse key: {str(e)}"}
-
-# ---------------- WORKOUT LOGGING & RECOMMENDATION ----------------
-class WorkoutLogPayload(BaseModel):
-    id: str = None
-    user_id: str
-    name: str
-    calories_burned: int = 0
-    active_minutes: int = 0
-
-@app.post("/workouts")
-async def log_workout(data: WorkoutLogPayload):
-    try:
-        supabase.table("workout_logs").upsert({
-            "id": data.id or str(uuid.uuid4()),
-            "user_id": data.user_id,
-            "name": data.name,
-            "calories_burned": data.calories_burned,
-            "active_minutes": data.active_minutes,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
-        return {"success": True, "message": "Workout logged"}
-    except Exception as e:
-        print("WORKOUT LOG ERROR:", repr(e))
-        return {"success": True, "message": "Workout logged locally"}
-
-@app.get("/workouts/recommend/{user_id}")
-async def recommend_workouts(user_id: str):
-    default_workouts = [
-      {
-        "id": "w1",
-        "title": "HIIT Fat Loss Circuit",
-        "category": "Cardio / Fat Loss",
-        "duration": "20 Mins",
-        "caloriesBurn": 220,
-        "intensity": "Intense",
-        "badgeText": "POPULAR",
-        "image": "https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?w=800",
-        "tutorials": [
-          { "step": 1, "title": "Jumping Jacks", "duration": "45 sec work / 15 sec rest", "instructions": "Stand upright with feet together, arms at sides. Jump feet out while raising arms overhead." },
-          { "step": 2, "title": "High Knees", "duration": "45 sec work / 15 sec rest", "instructions": "Run in place bringing knees up toward chest rapidly with high core engagement." },
-          { "step": 3, "title": "Burpees", "duration": "45 sec work / 15 sec rest", "instructions": "Drop into a squat, kick feet back into a push-up position, return to squat, and explode upwards." }
-        ]
-      },
-      {
-        "id": "w2",
-        "title": "Core & Abs Sculptor",
-        "category": "Strength / Core",
-        "duration": "15 Mins",
-        "caloriesBurn": 140,
-        "intensity": "Moderate",
-        "badgeText": "RECOMMENDED",
-        "image": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800",
-        "tutorials": [
-          { "step": 1, "title": "Plank Hold", "duration": "60 sec hold", "instructions": "Maintain forearms on ground, keep body straight from head to heels." },
-          { "step": 2, "title": "Bicycle Crunches", "duration": "45 sec work", "instructions": "Lie on back, alternate elbow to opposite knee in a pedaling motion." }
-        ]
-      },
-      {
-        "id": "w3",
-        "title": "Full Body Mobility & Stretch",
-        "category": "Recovery / Flexibility",
-        "duration": "12 Mins",
-        "caloriesBurn": 75,
-        "intensity": "Light",
-        "badgeText": "RECOVERY",
-        "image": "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800",
-        "tutorials": [
-          { "step": 1, "title": "Child's Pose to Cobra", "duration": "60 sec flow", "instructions": "Flow smoothly from child's pose to cobra stretch to release lumbar tension." }
-        ]
-      }
-    ]
-    return default_workouts
