@@ -171,41 +171,52 @@ class ProfilePictureUpdate(BaseModel):
 
 def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP"):
     email_sent = False
+    clean_to = to_email.strip().lower()
     
-    # 1. Try Gmail SMTP via Port 587 TLS (Fast & Reliable across all networks/cloud hosts)
+    # 1. Try Gmail SMTP via Port 465 SSL (Direct Encrypted Connection - Works reliably on Vercel)
     if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() not in ["", "your-gmail@gmail.com"]:
         try:
             msg = MIMEMultipart()
             msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL.strip()}>"
-            msg['To'] = to_email
+            msg['To'] = clean_to
             msg['Subject'] = subject
             
             html = f"""
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>MacroSync Verification</h2>
-                    <p>Your 6-digit OTP code is:</p>
-                    <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
-                    <p>This code expires in 10 minutes.</p>
+                <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0F172A; color: #FFFFFF; border-radius: 16px;">
+                    <h2 style="color: #10B981; margin-bottom: 8px;">MacroSync Verification</h2>
+                    <p style="color: #CBD5E1; font-size: 14px;">Use the following 6-digit security code to verify your account:</p>
+                    <div style="background-color: #1E293B; border: 2px solid #10B981; border-radius: 12px; padding: 16px; display: inline-block; margin: 16px 0;">
+                        <h1 style="color: #10B981; font-size: 38px; letter-spacing: 6px; margin: 0;">{otp_code}</h1>
+                    </div>
+                    <p style="color: #94A3B8; font-size: 12px;">This verification code expires in 10 minutes. If you did not request this, please ignore this email.</p>
                 </div>
             """
             msg.attach(MIMEText(html, 'html'))
             app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
             
-            with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-                server.starttls()
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
                 server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
-                server.sendmail(GMAIL_SENDER_EMAIL.strip(), to_email, msg.as_string())
-            print(f"OTP Email successfully sent to {to_email} via Gmail SMTP (587 TLS)")
+                server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
+            print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP (465 SSL)")
             email_sent = True
-        except Exception as smtp_err:
-            print("Gmail SMTP dispatch error:", smtp_err)
+        except Exception as ssl_err:
+            print("Gmail SSL 465 error, trying 587 TLS fallback:", ssl_err)
+            try:
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                    server.starttls()
+                    server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
+                    server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
+                print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP (587 TLS)")
+                email_sent = True
+            except Exception as tls_err:
+                print("Gmail TLS 587 error:", tls_err)
 
     # 2. Fallback to Resend HTTP API if Gmail SMTP failed or wasn't configured
     if not email_sent and RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
         try:
             resend.Emails.send({
                 "from": "MacroSync <onboarding@resend.dev>",
-                "to": to_email,
+                "to": clean_to,
                 "subject": subject,
                 "html": f"""
                     <h2>MacroSync Verification</h2>
@@ -213,13 +224,13 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
                     <p>This code expires in 10 minutes.</p>
                 """
             })
-            print(f"OTP Email successfully sent to {to_email}")
+            print(f"OTP Email successfully sent to {clean_to} via Resend")
             email_sent = True
         except Exception as resend_err:
             print("Resend API dispatch error:", resend_err)
 
     if not email_sent:
-        print(f"WARNING: Email could not be sent to {to_email}. Ensure Gmail used is an active account.")
+        print(f"WARNING: Email could not be sent to {clean_to}. Ensure Gmail app password is active.")
 
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
@@ -557,22 +568,36 @@ async def verify_signup(data: VerifySignupRequest):
             except Exception:
                 pass
 
-        # 4. Check password_reset_otps (bypasses RLS)
+        # 4. Check password_reset_otps table (Strict OTP Code & Expiration Check)
         if not user_id:
             otp_res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
-            if otp_res.data and otp_res.data[0].get("otp") == clean_otp:
-                p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
-                if p_res.data:
-                    user_id = p_res.data[0]["id"]
+            if otp_res.data:
+                record = otp_res.data[0]
+                db_otp = str(record.get("otp") or "").strip()
+                if db_otp == clean_otp:
+                    expires_at_str = record.get("expires_at")
+                    is_valid = True
+                    if expires_at_str:
+                        try:
+                            expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+                            current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+                            if current_time > expires_at:
+                                is_valid = False
+                        except Exception:
+                            pass
+                    
+                    if is_valid:
+                        p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
+                        if p_res.data:
+                            user_id = p_res.data[0]["id"]
+                            # Clean up used OTP so it cannot be reused
+                            try:
+                                supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
+                            except Exception:
+                                pass
 
-        # 5. Direct profile lookup fallback
         if not user_id:
-            p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
-            if p_res.data:
-                user_id = p_res.data[0]["id"]
-
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid or expired OTP code")
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP code. Please enter the 6-digit code sent to your email.")
 
         # Check if user already completed onboarding
         profile_res = supabase.table("user_profiles").select("weight_kg, height_cm").eq("id", user_id).execute()
