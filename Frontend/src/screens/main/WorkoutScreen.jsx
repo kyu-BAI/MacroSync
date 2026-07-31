@@ -222,20 +222,19 @@ export default function WorkoutScreen({
       // Optimistic UI updates
       const workoutDuration = parseInt(activeRoutine.duration) || 15;
       const workoutSteps = workoutDuration * 100;
-      let newExercise = null;
+      const newExercise = {
+        caloriesBurned: ((dailyExercise?.caloriesBurned || 0) + (activeRoutine?.caloriesBurn || 0)),
+        activeMinutes: ((dailyExercise?.activeMinutes || 0) + workoutDuration),
+        steps: ((dailyExercise?.steps || 0) + workoutSteps),
+        targetSteps: dailyExercise?.targetSteps || 10000,
+        recentExercise: activeRoutine?.title || 'Workout'
+      };
+
       if (setDailyExercise) {
-        setDailyExercise(prev => {
-          const next = {
-            ...prev,
-            caloriesBurned: (prev?.caloriesBurned || 0) + activeRoutine.caloriesBurn,
-            activeMinutes: (prev?.activeMinutes || 0) + workoutDuration,
-            steps: (prev?.steps || 0) + workoutSteps,
-            targetSteps: prev?.targetSteps || 10000,
-            recentExercise: activeRoutine.title
-          };
-          newExercise = next;
-          return next;
-        });
+        setDailyExercise(prev => ({
+          ...prev,
+          ...newExercise
+        }));
       }
 
       if (activeRoutine) {

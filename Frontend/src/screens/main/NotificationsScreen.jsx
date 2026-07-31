@@ -80,7 +80,6 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
           style: 'destructive',
           onPress: () => {
             activeSetNotifications([]);
-            Animated.spring(emptyAnim, { toValue: 1, useNativeDriver: true }).start();
           },
         },
       ]
@@ -130,10 +129,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
 
         {/* ── EMPTY STATE ── */}
         {!hasAny ? (
-          <Animated.View style={[styles.emptyState, {
-            opacity: emptyAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] }),
-            transform: [{ scale: emptyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }]
-          }]}>
+          <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
               <Bell color="#10B981" size={42} strokeWidth={2} />
             </View>
@@ -141,7 +137,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
             <Text style={styles.emptySubtitle}>
               No notifications here. We'll let you know when something important happens.
             </Text>
-          </Animated.View>
+          </View>
         ) : (
           <>
             <View style={styles.subHeaderActionsRow}>

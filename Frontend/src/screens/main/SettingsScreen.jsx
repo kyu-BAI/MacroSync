@@ -25,7 +25,7 @@ import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const GcashLogo = require('../../images/Gcash.png');
+const GcashLogo = require('../../images/gcash.png');
 const CardLogo = require('../../images/credit_debit_card.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -130,7 +130,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         }));
       }
       setShowEditModal(false);
-      showAlert("Success", "Profile updated!");
+      setTimeout(() => {
+        showAlert("Success", "Profile updated!");
+      }, 250);
 
       // Background network sync
       (async () => {
@@ -430,10 +432,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         }));
       }
 
-      showAlert("Success", "Email address updated successfully! Please use this new email to log in next time.");
       setTempAuthEmail('');
       setEmailCurrentPassword('');
       setShowEmailModal(false);
+      setTimeout(() => {
+        showAlert("Success", "Email address updated successfully! Please use this new email to log in next time.");
+      }, 250);
     } catch (error) {
       if (__DEV__) console.error("CHANGE EMAIL ERROR:", error);
       showAlert("Error", error.message || "Failed to update email. Please try again.");
@@ -479,11 +483,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         throw new Error(data.detail || 'Failed to update password');
       }
 
-      showAlert("Success", "Password updated successfully!");
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordModal(false);
+      setTimeout(() => {
+        showAlert("Success", "Password updated successfully!");
+      }, 250);
     } catch (error) {
       if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
       showAlert("Error", error.message || "Failed to change password. Please try again.");

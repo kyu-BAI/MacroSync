@@ -20,7 +20,6 @@ import { addToSyncQueue, updateCachedDashboardField } from '../../services/Offli
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 import AILoadingModal from '../../components/AILoadingModal';
-import { WebView } from 'react-native-webview';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
