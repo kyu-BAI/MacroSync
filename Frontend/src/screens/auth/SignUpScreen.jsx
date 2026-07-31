@@ -405,9 +405,11 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
                 <ActivityIndicator size="small" color="#64748B" />
               ) : (
                 <View style={styles.googleContentRow}>
-                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#4285F4', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                    <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 12 }}>G</Text>
-                  </View>
+                  <Image
+                    source={require("../../images/google.png")}
+                    style={{ width: 20, height: 20, marginRight: 10 }}
+                    resizeMode="contain"
+                  />
                   <Text
                     style={[
                       styles.googleButtonText,
