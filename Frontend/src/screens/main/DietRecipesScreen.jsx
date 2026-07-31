@@ -11,7 +11,8 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
-  Modal
+  Modal,
+  Linking
 } from 'react-native';
 import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, Compass, Navigation, LocateFixed, ShoppingBag, Maximize2, X } from 'lucide-react-native';
 import API_URL from '../config/api';
@@ -231,16 +232,13 @@ export default function DietRecipesScreen({
   };
 
   // AI Daily Meal Recommendation State
-  const [dailyPlan, setDailyPlan] = useState([
-    { id: 'm1', title: 'Sinugbang Bangus & Kamote', mealType: 'Breakfast', time: 'Breakfast (7:30 AM)', calories: 420, protein: '35g', carbs: '45g', fats: '12g', budget: '₱85' },
-    { id: 'm2', title: 'Utan Bisaya & Grilled Tilapia', mealType: 'Lunch', time: 'Lunch (12:30 PM)', calories: 510, protein: '42g', carbs: '55g', fats: '14g', budget: '₱95' },
-    { id: 'm3', title: 'Chicken Tinola & Moringa', mealType: 'Dinner', time: 'Dinner (7:00 PM)', calories: 480, protein: '38g', carbs: '40g', fats: '15g', budget: '₱110' }
-  ]);
-  const [loadingMeals, setLoadingMeals] = useState(false);
+  const [dailyPlan, setDailyPlan] = useState([]);
+  const [loadingMeals, setLoadingMeals] = useState(true);
 
   useEffect(() => {
     const loadCachedOrFetchMeals = async () => {
       try {
+        setLoadingMeals(true);
         const todayStr = new Date().toISOString().split('T')[0];
 
         // 1. Check local cache first
@@ -249,23 +247,28 @@ export default function DietRecipesScreen({
           const parsed = JSON.parse(cachedRaw);
           if (String(parsed.userId) === String(userId) && Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             setDailyPlan(parsed.meals);
+            setLoadingMeals(false);
             if (parsed.date === todayStr) return; // Fresh cache hit!
           }
         }
 
-        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
+        // 2. Fetch fresh data in background silently
         const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
         if (res.ok) {
           const data = await res.json();
-          setDailyPlan(data);
-          await AsyncStorage.setItem('ms_meals_cache', JSON.stringify({
-            userId,
-            date: todayStr,
-            meals: data
-          }));
+          if (Array.isArray(data)) {
+            setDailyPlan(data);
+            await AsyncStorage.setItem('ms_meals_cache', JSON.stringify({
+              userId,
+              date: todayStr,
+              meals: data
+            }));
+          }
         }
       } catch (err) {
-        if (__DEV__) console.log("MEAL RECOMMENDATION SILENT BG FETCH ERROR:", err);
+        if (__DEV__) console.log("MEAL RECOMMENDATION BG FETCH ERROR:", err);
+      } finally {
+        setLoadingMeals(false);
       }
     };
 
@@ -293,7 +296,7 @@ export default function DietRecipesScreen({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ingredients: searchQuery,
+          ingredients: searchQuery.trim(),
           budget: selectedBudget,
           location: selectedLocation,
           allergy: selectedAllergy === 'Other' ? customAllergy : selectedAllergy
@@ -301,45 +304,17 @@ export default function DietRecipesScreen({
       });
       if (response.ok) {
         const data = await response.json();
-        setRecipes(prev => [data, ...prev]);
+        setRecipes(prev => [data, ...(Array.isArray(prev) ? prev : [])]);
         setExpandedRecipeId(data.id);
         showAlert('Success', 'AI generated a healthy recipe matching your preferences!');
-        setIsGenerating(false);
-        return;
+      } else {
+        showAlert('AI Recipe Error', 'Failed to generate recipe. Please check your network connection.');
       }
     } catch (error) {
-      // Network or API failure gracefully caught below
+      showAlert('AI Recipe Error', 'Failed to generate recipe. Please try again.');
+    } finally {
+      setIsGenerating(false);
     }
-
-    // Graceful fallback recipe if network/API is busy
-    const fallbackRecipe = {
-      id: `rec_${Date.now()}`,
-      title: `${selectedLocation || 'Local'} Healthy ${searchQuery.trim()} Bowl`,
-      calories: 420,
-      protein: '34g',
-      carbs: '38g',
-      fats: '12g',
-      time: '20 mins',
-      budget: selectedBudget || 'Under ₱100',
-      location: selectedLocation || 'San Remigio',
-      ingredients: [
-        `200g Fresh Sourced ${searchQuery.trim()} (from ${selectedLocation || 'San Remigio'} Market)`,
-        '1 cup Steamed Vegetables / Corn',
-        '1 tbsp Calamansi Juice & Native Tomatoes',
-        '1 tsp Coconut Oil',
-        'Pinch of Sea Salt & Pepper'
-      ],
-      instructions: [
-        `Clean and prepare the fresh ${searchQuery.trim().toLowerCase()}.`,
-        'Season with native calamansi juice, tomatoes, and sea salt.',
-        'Cook or steam until tender and serve with local fresh vegetables.',
-        'A nutritious, locally sourced healthy meal!'
-      ]
-    };
-    setRecipes(prev => [fallbackRecipe, ...prev]);
-    setExpandedRecipeId(fallbackRecipe.id);
-    showAlert('Success', 'Generated a healthy recipe matching your preferences!');
-    setIsGenerating(false);
   };
   
   const handleLogMeal = async (id, macros) => {
@@ -625,78 +600,136 @@ export default function DietRecipesScreen({
               </View>
             </View>
 
-            <Text style={styles.sectionLabelTitle}>Your Scheduled Meals</Text>
+            <Text style={styles.sectionLabelTitle}>Your AI Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
-              {dailyPlan.map((meal, index) => {
-                const mealCat = meal.mealType || meal.time || '';
-                const IconComponent = getMealIconComponent(mealCat);
-                const accentColor = getMealAccentColor(mealCat);
-                const isLogged = loggedMeals.includes(meal.id);
-                return (
-                  <View key={meal.id} style={styles.timelineItem}>
-                    <View 
-                      style={[
-                        styles.timelineCard, 
-                        isLogged && styles.timelineCardLogged,
-                        { borderLeftColor: accentColor, borderLeftWidth: 5 }
-                      ]}
-                    >
-                      <View style={styles.timelineHeader}>
-                        <View style={[
-                          styles.mealTypeBadge, 
-                          isLogged ? { backgroundColor: '#64748B' } : { backgroundColor: `${accentColor}1F` }
-                        ]}>
-                          <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
-                          <Text style={[
-                            styles.mealTypeBadgeText, 
-                            isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+              {loadingMeals ? (
+                <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="large" color="#10B981" />
+                  <Text style={{ marginTop: 12, fontSize: 13, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
+                    Generating personalized AI meals for your goals...
+                  </Text>
+                </View>
+              ) : dailyPlan.length === 0 ? (
+                <View style={{
+                  padding: 24,
+                  borderRadius: 18,
+                  backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                  alignItems: 'center',
+                  borderWidth: 1.5,
+                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                }}>
+                  <UtensilsCrossed color="#10B981" size={36} style={{ marginBottom: 10 }} />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A', textAlign: 'center', marginBottom: 4 }}>
+                    No AI Meals Generated Yet
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', textAlign: 'center', marginBottom: 16 }}>
+                    Tap below to generate custom meal recommendations calculated for your exact daily macros.
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#10B981',
+                      paddingHorizontal: 20,
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center'
+                    }}
+                    onPress={async () => {
+                      try {
+                        setLoadingMeals(true);
+                        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (Array.isArray(data)) {
+                            setDailyPlan(data);
+                          }
+                        }
+                      } catch (e) {
+                        showAlert("Error", "Could not fetch AI recommendations. Please check connection.");
+                      } finally {
+                        setLoadingMeals(false);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                      Generate AI Meals
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                (Array.isArray(dailyPlan) ? dailyPlan : []).map((meal, index) => {
+                  const mealCat = meal?.mealType || meal?.time || '';
+                  const IconComponent = getMealIconComponent(mealCat);
+                  const accentColor = getMealAccentColor(mealCat);
+                  const isLogged = loggedMeals.includes(meal?.id);
+                  return (
+                    <View key={meal?.id || `m-${index}`} style={styles.timelineItem}>
+                      <View 
+                        style={[
+                          styles.timelineCard, 
+                          isLogged && styles.timelineCardLogged,
+                          { borderLeftColor: accentColor, borderLeftWidth: 5 }
+                        ]}
+                      >
+                        <View style={styles.timelineHeader}>
+                          <View style={[
+                            styles.mealTypeBadge, 
+                            isLogged ? { backgroundColor: '#64748B' } : { backgroundColor: `${accentColor}1F` }
                           ]}>
-                            {meal.mealType}
-                          </Text>
+                            <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
+                            <Text style={[
+                              styles.mealTypeBadgeText, 
+                              isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+                            ]}>
+                              {meal?.mealType || 'Meal'}
+                            </Text>
+                          </View>
+                          <Text style={styles.timelineTime}>{meal?.time || 'Today'}</Text>
                         </View>
-                        <Text style={styles.timelineTime}>{meal.time}</Text>
-                      </View>
-                      <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>{meal.title}</Text>
-                      <View style={styles.timelineFooter}>
-                        <View style={{ flex: 1, paddingRight: 8 }}>
-                          <Text style={styles.timelineMacroText}>{meal.calories} kcal • {meal.protein} protein</Text>
+                        <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>{meal?.title || 'Healthy Meal'}</Text>
+                        <View style={styles.timelineFooter}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.timelineMacroText}>{meal?.calories || 0} kcal • {meal?.protein || '0g'} protein</Text>
+                            <TouchableOpacity 
+                              style={styles.viewRecipeTextBtn} 
+                              onPress={() => handleViewRecipe(meal)}
+                              activeOpacity={0.6}
+                            >
+                              <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
+                              <Text style={styles.viewRecipeTextBtnLabel}>View Recipe</Text>
+                            </TouchableOpacity>
+                          </View>
                           <TouchableOpacity 
-                            style={styles.viewRecipeTextBtn} 
-                            onPress={() => handleViewRecipe(meal)}
-                            activeOpacity={0.6}
+                            style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
+                            onPress={() => handleLogMeal(meal?.id, { 
+                              name: meal?.title || 'Meal',
+                              calories: meal?.calories || 0, 
+                              protein: parseInt(meal?.protein) || 0,
+                              carbs: parseInt(meal?.carbs) || 0,
+                              fats: parseInt(meal?.fats) || 0
+                            })}
+                            activeOpacity={0.7}
                           >
-                            <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
-                            <Text style={styles.viewRecipeTextBtnLabel}>View Recipe</Text>
+                            {isLogged ? (
+                              <>
+                                <CheckCircle2 color="#FFFFFF" size={12} />
+                                <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
+                              </>
+                            ) : (
+                              <>
+                                <PlusCircle color="#FFFFFF" size={12} />
+                                <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
+                              </>
+                            )}
                           </TouchableOpacity>
                         </View>
-                        <TouchableOpacity 
-                          style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
-                          onPress={() => handleLogMeal(meal.id, { 
-                            name: meal.title,
-                            calories: meal.calories, 
-                            protein: parseInt(meal.protein) || 0,
-                            carbs: parseInt(meal.carbs) || 0,
-                            fats: parseInt(meal.fats) || 0
-                          })}
-                          activeOpacity={0.7}
-                        >
-                          {isLogged ? (
-                            <>
-                              <CheckCircle2 color="#FFFFFF" size={12} />
-                              <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
-                            </>
-                          ) : (
-                            <>
-                              <PlusCircle color="#FFFFFF" size={12} />
-                              <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })
+              )}
             </View>
           </View>
         ) : (
@@ -787,108 +820,37 @@ export default function DietRecipesScreen({
                 </TouchableOpacity>
               </View>
 
-              {/* REAL INTERACTIVE OPENSTREETMAP */}
-              <View style={styles.staticMapContainer}>
-                <WebView
-                  originWhitelist={['*']}
-                  source={{
-                    html: `
-                      <!DOCTYPE html>
-                      <html>
-                      <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                        <style>
-                          * { -webkit-tap-highlight-color: transparent; }
-                          body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
-                          #map { height: 100%; width: 100%; }
-                          .leaflet-control-attribution { display: none !important; }
-                          ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
-                          .custom-div-icon {
-                            background: transparent !important;
-                            border: none !important;
-                          }
-                          .city-marker {
-                            background: #10B981;
-                            color: #FFFFFF;
-                            padding: 6px 13px;
-                            border-radius: 16px;
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                            font-size: 12px;
-                            font-weight: 800;
-                            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
-                            border: 2.2px solid #FFFFFF;
-                            white-space: nowrap;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            transition: all 0.2s ease;
-                          }
-                          .city-marker.active {
-                            background: #059669;
-                            border-color: #A7F3D0;
-                            box-shadow: 0 0 18px rgba(16, 185, 129, 0.9);
-                          }
-                        </style>
-                      </head>
-                      <body>
-                        <div id="map"></div>
-                        <script>
-                          var map = L.map('map', { 
-                            zoomControl: false, 
-                            attributionControl: false,
-                            dragging: false, 
-                            touchZoom: false, 
-                            scrollWheelZoom: false, 
-                            doubleClickZoom: false 
-                          }).setView([11.14, 123.97], 9.6);
-                          
-                          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 18
-                          }).addTo(map);
-
-                          var locations = [
-                            { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
-                            { name: 'San Remigio',  lat: 11.0772, lng: 123.9356 },
-                            { name: 'Bogo City',     lat: 11.0517, lng: 124.0055 }
-                          ];
-
-                          locations.forEach(function(loc) {
-                            var isSelected = loc.name === "${selectedLocation}";
-                            var customIcon = L.divIcon({
-                              className: 'custom-div-icon',
-                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
-                              iconSize: [110, 32],
-                              iconAnchor: [55, 16]
-                            });
-
-                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
-                            marker.on('click', function() {
-                              if (window.ReactNativeWebView) {
-                                window.ReactNativeWebView.postMessage(loc.name);
-                              }
-                            });
-                          });
-
-                          setTimeout(function() {
-                            map.invalidateSize();
-                          }, 250);
-                        </script>
-                      </body>
-                      </html>
-                    `
-                  }}
-                  onMessage={(event) => {
-                    const cityName = event.nativeEvent.data;
-                    if (cityName && locations.includes(cityName)) {
-                      setSelectedLocation(cityName);
-                    }
-                  }}
-                  style={{ flex: 1 }}
-                  scrollEnabled={false}
-                />
+              {/* NATIVE CITY SELECTION RADAR */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {locations.map((loc) => {
+                  const isSelected = selectedLocation === loc;
+                  return (
+                    <TouchableOpacity
+                      key={loc}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        borderRadius: 14,
+                        alignItems: 'center',
+                        justify: 'center',
+                        backgroundColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#F1F5F9'),
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? '#10B981' : (isDarkMode ? '#475569' : '#E2E8F0')
+                      }}
+                      onPress={() => setSelectedLocation(loc)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '800',
+                        color: isSelected ? '#FFFFFF' : (isDarkMode ? '#CBD5E1' : '#475569')
+                      }}>
+                        📍 {loc}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
@@ -1172,89 +1134,53 @@ export default function DietRecipesScreen({
             </TouchableOpacity>
           </View>
 
-          {/* Fullscreen Map WebView */}
-          <View style={{ flex: 1 }}>
-            <WebView
-              originWhitelist={['*']}
-              source={{
-                html: `
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                    <style>
-                      * { -webkit-tap-highlight-color: transparent; }
-                      body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
-                      #map { height: 100%; width: 100%; }
-                      ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
-                      .city-marker {
-                        background: #10B981;
-                        color: white;
-                        padding: 7px 14px;
-                        border-radius: 18px;
-                        font-family: -apple-system, sans-serif;
-                        font-size: 13px;
-                        font-weight: 800;
-                        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
-                        border: 2.5px solid white;
-                        white-space: nowrap;
-                        cursor: pointer;
-                      }
-                      .city-marker.active {
-                        background: #059669;
-                        transform: scale(1.2);
-                        box-shadow: 0 0 20px rgba(16, 185, 129, 0.9);
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div id="map"></div>
-                    <script>
-                      var map = L.map('map', { zoomControl: true }).setView([11.12, 123.98], 10);
-                      
-                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 18,
-                        attribution: '© OpenStreetMap'
-                      }).addTo(map);
+          {/* NATIVE FULL MAP CITY LOCATOR */}
+          <ScrollView style={{ flex: 1, padding: 16 }}>
+            {locations.map((loc) => {
+              const isSelected = selectedLocation === loc;
+              const profile = CITY_PROFILES[loc];
+              return (
+                <TouchableOpacity
+                  key={loc}
+                  style={{
+                    backgroundColor: isSelected ? (isDarkMode ? '#1E293B' : '#ECFDF5') : (isDarkMode ? '#1E293B' : '#FFFFFF'),
+                    borderRadius: 18,
+                    padding: 16,
+                    marginBottom: 12,
+                    borderWidth: 2,
+                    borderColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#E2E8F0')
+                  }}
+                  onPress={() => setSelectedLocation(loc)}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isSelected ? '#10B981' : (isDarkMode ? '#F8FAFC' : '#0F172A') }}>
+                      📍 {loc}
+                    </Text>
+                    {isSelected && (
+                      <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>Active Radar</Text>
+                      </View>
+                    )}
+                  </View>
 
-                      var locations = [
-                        { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
-                        { name: 'San Remigio', lat: 11.0827, lng: 123.9536 },
-                        { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
-                      ];
-
-                      locations.forEach(function(loc) {
-                        var isSelected = loc.name === "${selectedLocation}";
-                        var customIcon = L.divIcon({
-                          className: 'custom-div-icon',
-                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
-                          iconSize: [110, 36],
-                          iconAnchor: [55, 18]
-                        });
-
-                        var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
-                        marker.on('click', function() {
-                          if (window.ReactNativeWebView) {
-                            window.ReactNativeWebView.postMessage(loc.name);
-                          }
-                        });
-                      });
-                    </script>
-                  </body>
-                  </html>
-                `
-              }}
-              onMessage={(event) => {
-                const cityName = event.nativeEvent.data;
-                if (cityName && locations.includes(cityName)) {
-                  setSelectedLocation(cityName);
-                }
-              }}
-              style={{ flex: 1 }}
-            />
-          </View>
+                  {profile && (
+                    <>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#334155', marginBottom: 4 }}>
+                        {profile.marketTitle}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginBottom: 4 }}>
+                        ✨ Specialty: {profile.specialty}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
+                        🛒 Fresh Items: {profile.palengkeItems}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           {/* Bottom Floating City Bar */}
           <View style={{
