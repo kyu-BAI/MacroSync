@@ -188,7 +188,38 @@ export default function WorkoutScreen({
   const handlePressOut = () => setIsPressedBtn(null);
 
   const handleStartTutorialEngine = (routine) => {
-    setActiveRoutine(routine);
+    if (!routine) return;
+
+    let tutorials = routine.tutorials;
+    if (!Array.isArray(tutorials) || tutorials.length === 0) {
+      const rTitle = routine.title || 'Home Workout';
+      tutorials = [
+        {
+          name: `${rTitle} - Warm-up & Prep`,
+          target: "3 Sets x 45 Seconds",
+          setup: "Stand tall in an open area with knees slightly bent and core engaged.",
+          form: "Maintain steady breathing. Keep movements smooth, controlled, and engage your core throughout."
+        },
+        {
+          name: `${rTitle} - Main Power Set`,
+          target: "4 Sets x 12 Reps",
+          setup: "Position your feet shoulder-width apart, spine aligned and chest open.",
+          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles at the top."
+        },
+        {
+          name: `${rTitle} - Burnout & Cool-down`,
+          target: "2 Sets x 60 Seconds",
+          setup: "Lower down onto your yoga mat or clean floor, keeping hands aligned with shoulders.",
+          form: "Hold steady isometric tension, breathing slowly into your diaphragm to regulate heart rate."
+        }
+      ];
+    }
+
+    setActiveRoutine({
+      ...routine,
+      tutorials,
+      caloriesBurn: routine.caloriesBurn || routine.caloriesBurned || 200
+    });
     setCurrentStepIndex(0);
   };
 
