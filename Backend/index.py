@@ -1085,7 +1085,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
     if not key or key.strip() == "":
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-pro']
+    models_to_try = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash']
     
     # 1. Try Direct REST API (Fastest, zero SDK dependencies)
     for model in models_to_try:
