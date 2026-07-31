@@ -245,11 +245,9 @@ export default function LoginScreen({
               ) : (
                 <View style={styles.googleContentRow}>
                   {/* Fixed relative path jump parameter */}
-                  <Image
-                    source={require("../../images/google.png")}
-                    style={styles.googleIconImage}
-                    resizeMode="contain"
-                  />
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#4285F4', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 12 }}>G</Text>
+                  </View>
                   <Text
                     style={[
                       styles.googleButtonText,

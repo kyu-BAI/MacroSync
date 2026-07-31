@@ -25,8 +25,6 @@ import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const GcashLogo = require('../../images/gcash.png');
-const CardLogo = require('../../images/credit_debit_card.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
@@ -1144,11 +1142,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('gcash')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={GcashLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(0, 85, 254, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <Smartphone color="#0055FE" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>GCash</Text>
             </TouchableOpacity>
 
@@ -1176,11 +1172,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('card')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={CardLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <CreditCard color="#10B981" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>Credit or Debit Card</Text>
             </TouchableOpacity>
 
