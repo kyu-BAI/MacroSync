@@ -853,6 +853,108 @@ export default function DietRecipesScreen({
                 })}
               </View>
 
+              {/* REAL INTERACTIVE OPENSTREETMAP WEBVIEW */}
+              <View style={styles.staticMapContainer}>
+                <WebView
+                  originWhitelist={['*']}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  mixedContentMode="always"
+                  source={{
+                    html: `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <style>
+                          * { -webkit-tap-highlight-color: transparent; }
+                          body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
+                          #map { height: 100%; width: 100%; }
+                          .leaflet-control-attribution { display: none !important; }
+                          ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
+                          .custom-div-icon {
+                            background: transparent !important;
+                            border: none !important;
+                          }
+                          .city-marker {
+                            background: #10B981;
+                            color: #FFFFFF;
+                            padding: 6px 13px;
+                            border-radius: 16px;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            font-size: 12px;
+                            font-weight: 800;
+                            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
+                            border: 2.2px solid #FFFFFF;
+                            white-space: nowrap;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            transition: all 0.2s ease;
+                          }
+                          .city-marker.active {
+                            background: #059669;
+                            border-color: #A7F3D0;
+                            box-shadow: 0 0 18px rgba(16, 185, 129, 0.9);
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div id="map"></div>
+                        <script>
+                          var map = L.map('map', { 
+                            zoomControl: false, 
+                            attributionControl: false,
+                            dragging: false, 
+                            touchZoom: false, 
+                            scrollWheelZoom: false, 
+                            doubleClickZoom: false 
+                          }).setView([11.14, 123.97], 9.6);
+                          
+                          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 18
+                          }).addTo(map);
+
+                          var locations = [
+                            { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
+                            { name: 'San Remigio',  lat: 11.0772, lng: 123.9356 },
+                            { name: 'Bogo City',     lat: 11.0517, lng: 124.0055 }
+                          ];
+
+                          locations.forEach(function(loc) {
+                            var isSelected = loc.name === "${selectedLocation}";
+                            var customIcon = L.divIcon({
+                              className: 'custom-div-icon',
+                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                              iconSize: [110, 32],
+                              iconAnchor: [55, 16]
+                            });
+
+                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                            marker.on('click', function() {
+                              if (window.ReactNativeWebView) {
+                                window.ReactNativeWebView.postMessage(loc.name);
+                              }
+                            });
+                          });
+                        </script>
+                      </body>
+                      </html>
+                    `
+                  }}
+                  onMessage={(event) => {
+                    const cityName = event.nativeEvent.data;
+                    if (cityName && locations.includes(cityName)) {
+                      setSelectedLocation(cityName);
+                    }
+                  }}
+                  style={{ flex: 1, backgroundColor: 'transparent' }}
+                />
+              </View>
+
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
               {CITY_PROFILES[selectedLocation] && (
                 <View style={styles.cityDetailCard}>
@@ -1134,53 +1236,95 @@ export default function DietRecipesScreen({
             </TouchableOpacity>
           </View>
 
-          {/* NATIVE FULL MAP CITY LOCATOR */}
-          <ScrollView style={{ flex: 1, padding: 16 }}>
-            {locations.map((loc) => {
-              const isSelected = selectedLocation === loc;
-              const profile = CITY_PROFILES[loc];
-              return (
-                <TouchableOpacity
-                  key={loc}
-                  style={{
-                    backgroundColor: isSelected ? (isDarkMode ? '#1E293B' : '#ECFDF5') : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-                    borderRadius: 18,
-                    padding: 16,
-                    marginBottom: 12,
-                    borderWidth: 2,
-                    borderColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#E2E8F0')
-                  }}
-                  onPress={() => setSelectedLocation(loc)}
-                  activeOpacity={0.8}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: isSelected ? '#10B981' : (isDarkMode ? '#F8FAFC' : '#0F172A') }}>
-                      📍 {loc}
-                    </Text>
-                    {isSelected && (
-                      <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>Active Radar</Text>
-                      </View>
-                    )}
-                  </View>
+          {/* FULLSCREEN INTERACTIVE OPENSTREETMAP WEBVIEW */}
+          <View style={{ flex: 1 }}>
+            <WebView
+              originWhitelist={['*']}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
+              source={{
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <style>
+                      * { -webkit-tap-highlight-color: transparent; }
+                      body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
+                      #map { height: 100%; width: 100%; }
+                      .leaflet-control-attribution { display: none !important; }
+                      ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
+                      .city-marker {
+                        background: #10B981;
+                        color: white;
+                        padding: 7px 14px;
+                        border-radius: 18px;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 13px;
+                        font-weight: 800;
+                        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
+                        border: 2.5px solid white;
+                        white-space: nowrap;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                      }
+                      .city-marker.active {
+                        background: #059669;
+                        border-color: #A7F3D0;
+                        box-shadow: 0 0 20px rgba(16, 185, 129, 0.9);
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <div id="map"></div>
+                    <script>
+                      var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([11.12, 123.98], 10);
+                      
+                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 18
+                      }).addTo(map);
 
-                  {profile && (
-                    <>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#334155', marginBottom: 4 }}>
-                        {profile.marketTitle}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginBottom: 4 }}>
-                        ✨ Specialty: {profile.specialty}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
-                        🛒 Fresh Items: {profile.palengkeItems}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                      var locations = [
+                        { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
+                        { name: 'San Remigio', lat: 11.0827, lng: 123.9536 },
+                        { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
+                      ];
+
+                      locations.forEach(function(loc) {
+                        var isSelected = loc.name === "${selectedLocation}";
+                        var customIcon = L.divIcon({
+                          className: 'custom-div-icon',
+                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                          iconSize: [110, 36],
+                          iconAnchor: [55, 18]
+                        });
+
+                        var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                        marker.on('click', function() {
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(loc.name);
+                          }
+                        });
+                      });
+                    </script>
+                  </body>
+                  </html>
+                `
+              }}
+              onMessage={(event) => {
+                const cityName = event.nativeEvent.data;
+                if (cityName && locations.includes(cityName)) {
+                  setSelectedLocation(cityName);
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          </View>
 
           {/* Bottom Floating City Bar */}
           <View style={{
@@ -1861,6 +2005,15 @@ const getStyles = (theme) => StyleSheet.create({
     fontSize: 11,
     color: theme?.textSecondary || '#64748B',
     flex: 1,
+  },
+  staticMapContainer: {
+    height: 180,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    backgroundColor: theme?.cardBackground || '#FFFFFF',
   },
   aiGenerateBtn: {
     flexDirection: 'row',
