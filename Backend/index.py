@@ -173,28 +173,43 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
     email_sent = False
     clean_to = to_email.strip().lower()
     
-    # 1. Try Gmail SMTP via Port 465 SSL (Direct Encrypted Connection - Works reliably on Vercel)
-    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() not in ["", "your-gmail@gmail.com"]:
+    html_content = f"""
+        <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0F172A; color: #FFFFFF; border-radius: 16px;">
+            <h2 style="color: #10B981; margin-bottom: 8px;">MacroSync Verification</h2>
+            <p style="color: #CBD5E1; font-size: 14px;">Use the following 6-digit security code to verify your account:</p>
+            <div style="background-color: #1E293B; border: 2px solid #10B981; border-radius: 12px; padding: 16px; display: inline-block; margin: 16px 0;">
+                <h1 style="color: #10B981; font-size: 38px; letter-spacing: 6px; margin: 0;">{otp_code}</h1>
+            </div>
+            <p style="color: #94A3B8; font-size: 12px;">This verification code expires in 10 minutes. If you did not request this, please ignore this email.</p>
+        </div>
+    """
+
+    # 1. Try Resend HTTP API FIRST (Fastest & 100% reliable on Vercel Serverless - ~200ms)
+    if RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
+        try:
+            resend.api_key = RESEND_API_KEY.strip()
+            res = resend.Emails.send({
+                "from": "MacroSync <onboarding@resend.dev>",
+                "to": clean_to,
+                "subject": subject,
+                "html": html_content
+            })
+            print(f"OTP Email successfully sent to {clean_to} via Resend: {res}")
+            email_sent = True
+        except Exception as resend_err:
+            print("Resend API dispatch error, trying Gmail SMTP fallback:", resend_err)
+
+    # 2. Fallback to Gmail SMTP with fast 3s timeout if Resend wasn't configured or failed
+    if not email_sent and GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() not in ["", "your-gmail@gmail.com"]:
         try:
             msg = MIMEMultipart()
             msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL.strip()}>"
             msg['To'] = clean_to
             msg['Subject'] = subject
-            
-            html = f"""
-                <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0F172A; color: #FFFFFF; border-radius: 16px;">
-                    <h2 style="color: #10B981; margin-bottom: 8px;">MacroSync Verification</h2>
-                    <p style="color: #CBD5E1; font-size: 14px;">Use the following 6-digit security code to verify your account:</p>
-                    <div style="background-color: #1E293B; border: 2px solid #10B981; border-radius: 12px; padding: 16px; display: inline-block; margin: 16px 0;">
-                        <h1 style="color: #10B981; font-size: 38px; letter-spacing: 6px; margin: 0;">{otp_code}</h1>
-                    </div>
-                    <p style="color: #94A3B8; font-size: 12px;">This verification code expires in 10 minutes. If you did not request this, please ignore this email.</p>
-                </div>
-            """
-            msg.attach(MIMEText(html, 'html'))
+            msg.attach(MIMEText(html_content, 'html'))
             app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
             
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=3) as server:
                 server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
                 server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
             print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP (465 SSL)")
@@ -202,7 +217,7 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
         except Exception as ssl_err:
             print("Gmail SSL 465 error, trying 587 TLS fallback:", ssl_err)
             try:
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=3) as server:
                     server.starttls()
                     server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
                     server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
@@ -211,26 +226,8 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
             except Exception as tls_err:
                 print("Gmail TLS 587 error:", tls_err)
 
-    # 2. Fallback to Resend HTTP API if Gmail SMTP failed or wasn't configured
-    if not email_sent and RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
-        try:
-            resend.Emails.send({
-                "from": "MacroSync <onboarding@resend.dev>",
-                "to": clean_to,
-                "subject": subject,
-                "html": f"""
-                    <h2>MacroSync Verification</h2>
-                    <h1 style="color: #10B981; font-size: 36px; letter-spacing: 4px;">{otp_code}</h1>
-                    <p>This code expires in 10 minutes.</p>
-                """
-            })
-            print(f"OTP Email successfully sent to {clean_to} via Resend")
-            email_sent = True
-        except Exception as resend_err:
-            print("Resend API dispatch error:", resend_err)
-
     if not email_sent:
-        print(f"WARNING: Email could not be sent to {clean_to}. Ensure Gmail app password is active.")
+        print(f"WARNING: Email could not be sent to {clean_to}.")
 
     return email_sent
 
