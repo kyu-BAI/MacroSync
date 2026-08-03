@@ -39,6 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def read_root():
+    return {"message": "MacroSync API is live and operational", "status": "ok"}
+
 # ---------------- ENV (WITH BASE64 FALLBACKS FOR VERCEL DEPLOYMENT) ----------------
 def _b64dec(s: str) -> str:
     try:
