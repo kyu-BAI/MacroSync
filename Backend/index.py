@@ -12,13 +12,24 @@ import uuid
 import json
 import time
 from datetime import datetime, timedelta, timezone
-import resend
-from google import genai
-from google.genai import types
 import base64
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+try:
+    import resend
+except Exception as _r_err:
+    print("Warning: resend import error:", _r_err)
+    resend = None
+
+try:
+    from google import genai
+    from google.genai import types
+except Exception as _g_err:
+    print("Warning: google.genai import error:", _g_err)
+    genai = None
+    types = None
 
 
 # Safe dotenv loader for local & serverless runtime
@@ -73,11 +84,17 @@ if SUPABASE_ANON_KEY:
 else:
     anon_supabase = supabase
 
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY.strip()
+if RESEND_API_KEY and resend is not None:
+    try:
+        resend.api_key = RESEND_API_KEY.strip()
+    except Exception:
+        pass
 
-if GEMINI_API_KEY:
-    genai_client = genai.Client(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY and genai is not None:
+    try:
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception:
+        genai_client = None
 else:
     genai_client = None
 
@@ -205,7 +222,7 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
     """
 
     # 1. Try Resend HTTP API FIRST (Fastest & 100% reliable on Vercel Serverless - ~200ms)
-    if RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
+    if resend is not None and RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
         try:
             resend.api_key = RESEND_API_KEY.strip()
             res = resend.Emails.send({
