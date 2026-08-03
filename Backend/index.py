@@ -169,7 +169,7 @@ class ProfilePictureUpdate(BaseModel):
 
 
 
-def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP"):
+def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP") -> bool:
     email_sent = False
     clean_to = to_email.strip().lower()
     
@@ -231,6 +231,8 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 
     if not email_sent:
         print(f"WARNING: Email could not be sent to {clean_to}. Ensure Gmail app password is active.")
+
+    return email_sent
 
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
@@ -350,91 +352,76 @@ def signin(user: UserLogin):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ---------------- GOOGLE SIGNIN (OTP TRIGGER) ----------------
+# ---------------- GOOGLE SIGNIN (OAUTH & ROUTING) ----------------
 @app.post("/auth/google-signin")
 async def google_signin(data: GoogleSignInRequest):
     try:
         email = data.email.strip().lower()
-        name = data.name.strip()
+        name = data.name.strip() or "Google User"
         
-        if not email or not name:
-            raise HTTPException(status_code=400, detail="Email and name are required")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
 
-        # Check if user already exists in Supabase Auth via profiles
-        profile_response = supabase.table("user_profiles").select("*").eq("email", email).execute()
+        # 1. Check if user profile already exists in user_profiles and is onboarded
+        profile_response = supabase_admin.table("user_profiles").select("*").eq("email", email).execute()
         
+        user_id = None
         user_exists = False
-        is_profile_complete = False
+        is_onboarded = False
+        profile = {}
         
-        if profile_response.data:
+        if profile_response.data and len(profile_response.data) > 0:
             user_exists = True
             profile = profile_response.data[0]
+            user_id = profile.get("id")
             if profile.get("weight_kg") is not None and profile.get("height_cm") is not None:
-                is_profile_complete = True
+                is_onboarded = True
 
-        # Send OTP via Supabase
-        if not user_exists:
-            temp_password = f"GAuth_{secrets.token_urlsafe(12)}"
-            # Create user in Supabase Auth using admin API to bypass confirmations
-            try:
-                auth_user = supabase_admin.auth.admin.create_user({
-                    "email": email,
-                    "password": temp_password,
-                    "options": {
-                        "data": {"full_name": name}
-                    }
-                })
-            except Exception as create_err:
-                err_msg = str(create_err)
-                if "already exists" in err_msg or "already registered" in err_msg:
-                    # Fallback check only if they exist in auth.users but didn't have a profile
-                    users = supabase_admin.auth.admin.list_users()
-                    auth_user = next((u for u in users if u.email and u.email.lower() == email), None)
-                    if not auth_user:
-                        raise create_err
-                else:
-                    raise create_err
-            
-            return {
-                "success": True,
-                "is_new_user": True,
-                "is_login_otp": False,
-                "email": email,
-                "name": name,
-                "temp_password": temp_password
-            }
-        elif not is_profile_complete:
-            # Case 2: Existing user but incomplete profile -> sign_in_with_otp (Login OTP but routes to onboarding)
-            anon_supabase.auth.sign_in_with_otp({
-                "email": email,
-                "options": {
-                    "shouldCreateUser": False
-                }
-            })
-            
-            return {
-                "success": True,
-                "is_new_user": True,
-                "is_login_otp": True,
-                "email": email,
-                "name": name
-            }
-        else:
-            # Case 3: Existing user with complete profile -> sign_in_with_otp (Login OTP, goes to dashboard)
-            anon_supabase.auth.sign_in_with_otp({
-                "email": email,
-                "options": {
-                    "shouldCreateUser": False
-                }
-            })
-            
+        # ---------------- CASE 1: EXISTING USER & ONBOARDED ----------------
+        if user_exists and is_onboarded:
             return {
                 "success": True,
                 "is_new_user": False,
-                "is_login_otp": True,
-                "email": email,
-                "name": name
+                "is_onboarded": True,
+                "user_id": user_id,
+                "user": {
+                    "id": user_id,
+                    "email": email,
+                    "name": profile.get("name") or name
+                }
             }
+
+        # ---------------- CASE 2: FIRST-TIME OR UNVERIFIED GOOGLE ACCOUNT ----------------
+        # DO NOT insert into user_profiles or create active account in database yet!
+        # Account is ONLY created upon successful 6-digit OTP verification in /verify-signup.
+        temp_password = f"GAuth_{secrets.token_hex(8)}!"
+        otp_code = str(random.randint(100000, 999999))
+        expiry = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        
+        supabase_admin.table("password_reset_otps").upsert({
+            "email": email,
+            "otp": otp_code,
+            "expires_at": expiry
+        }).execute()
+
+        print(f"Dispatching Google Verification OTP code {otp_code} to {email}")
+        sent_ok = send_otp_via_email(email, otp_code, "MacroSync Verification OTP - Google Account")
+
+        if not sent_ok:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to send verification OTP email to {email}. Please verify your email address and server SMTP settings."
+            )
+
+        return {
+            "success": True,
+            "is_new_user": True,
+            "is_onboarded": False,
+            "email": email,
+            "name": name,
+            "temp_password": temp_password,
+            "user_id": user_id
+        }
 
     except HTTPException as he:
         raise he
@@ -443,98 +430,98 @@ async def google_signin(data: GoogleSignInRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 # ---------------- FORGOT PASSWORD (FIXED) ----------------
 @app.post("/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
 
     try:
-        otp = str(random.randint(100000, 999999))
-        expiry = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        clean_email = data.email.strip().lower()
+        if not clean_email:
+            raise HTTPException(status_code=400, detail="Email is required")
 
-        # save OTP (bypasses RLS)
+        # 1. Lookup user in Supabase Auth by email
+        auth_user_id = None
+        try:
+            users_res = supabase_admin.auth.admin.list_users()
+            users = users_res.users if hasattr(users_res, 'users') else users_res
+            for u in users:
+                u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
+                if u_email and u_email.lower() == clean_email:
+                    auth_user_id = getattr(u, 'id', None) or (u.get('id') if isinstance(u, dict) else None)
+                    break
+        except Exception as auth_err:
+            print("Auth user lookup error:", auth_err)
+
+        # Fallback: Check user_profiles table
+        if not auth_user_id:
+            profile_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
+            if profile_res.data:
+                auth_user_id = profile_res.data[0]["id"]
+
+        if not auth_user_id:
+            raise HTTPException(status_code=404, detail="No registered account found with this email address.")
+
+        # 2. Generate 6-digit numeric OTP and store in password_reset_otps table
+        otp = str(random.randint(100000, 999999))
+        expires_at = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+
         supabase_admin.table("password_reset_otps").upsert({
-            "email": data.email,
+            "email": clean_email,
             "otp": otp,
-            "expires_at": expiry
+            "expires_at": expires_at
         }).execute()
 
         # Send OTP email
-        if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() != "" and GMAIL_SENDER_EMAIL.strip() != "your-gmail@gmail.com":
-            # Send via Gmail SMTP
-            msg = MIMEMultipart()
-            msg['From'] = f"MacroSync <{GMAIL_SENDER_EMAIL}>"
-            msg['To'] = data.email
-            msg['Subject'] = "MacroSync Password Reset OTP"
-            
-            html = f"""
-                <h2>Your OTP Code</h2>
-                <h1>{otp}</h1>
-                <p>This code expires in 10 minutes.</p>
-            """
-            msg.attach(MIMEText(html, 'html'))
-            
-            # Remove any whitespace from app password
-            app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
-            
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
-                server.sendmail(GMAIL_SENDER_EMAIL.strip(), data.email, msg.as_string())
-        else:
-            # Fallback to Resend
-            resend.Emails.send({
-                "from": "MacroSync <onboarding@resend.dev>",
-                "to": data.email,
-                "subject": "MacroSync Password Reset OTP",
-                "html": f"""
-                    <h2>Your OTP Code</h2>
-                    <h1>{otp}</h1>
-                    <p>This code expires in 10 minutes.</p>
-                """
-            })
+        sent = send_otp_via_email(clean_email, otp, "MacroSync Password Reset OTP")
+        if not sent:
+            raise HTTPException(status_code=400, detail=f"Failed to send OTP email to {clean_email}.")
 
-        return {
-            "success": True,
-            "message": "OTP sent"
-        }
+        return {"message": "OTP sent to your email successfully"}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("FORGOT PASSWORD ERROR:", repr(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send OTP: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------- VERIFY OTP ----------------
+# ---------------- VERIFY RESET OTP ----------------
 @app.post("/verify-reset-otp")
 async def verify_reset_otp(data: VerifyOTPRequest):
+    try:
+        clean_email = data.email.strip().lower()
+        clean_otp = data.otp.strip()
 
-    result = supabase_admin.table("password_reset_otps") \
-        .select("*") \
-        .eq("email", data.email) \
-        .execute()
+        res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
+        if not res.data:
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    if not result.data:
-        raise HTTPException(400, "OTP not found")
+        record = res.data[0]
+        db_otp = str(record.get("otp") or "").strip()
+        if db_otp != clean_otp:
+            raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    record = result.data[0]
+        expires_at_str = record.get("expires_at")
+        if expires_at_str:
+            try:
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+                current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+                if current_time > expires_at:
+                    raise HTTPException(status_code=400, detail="OTP code has expired")
+            except Exception:
+                pass
 
-    if record["otp"] != data.otp:
-        raise HTTPException(400, "Invalid OTP")
+        return {"message": "OTP verified successfully"}
 
-    expires_at = datetime.fromisoformat(record["expires_at"])
-    current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("VERIFY OTP ERROR:", repr(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if current_time > expires_at:
-        raise HTTPException(400, "OTP expired")
 
-    return {"success": True}
-
-# ---------------- VERIFY SIGNUP (EMAIL OTP) ----------------
-class VerifySignupRequest(BaseModel):
-    email: str
-    otp: str
-    name: str = None
-    password: str = None
-
+# ---------------- VERIFY SIGNUP (OTP VERIFICATION & ACCOUNT CREATION) ----------------
 @app.post("/verify-signup")
 async def verify_signup(data: VerifySignupRequest):
     try:
@@ -542,59 +529,69 @@ async def verify_signup(data: VerifySignupRequest):
         clean_otp = data.otp.strip()
         user_id = None
 
-        # 1. Try signup OTP
-        try:
-            res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "signup"})
-            if res and res.user:
-                user_id = res.user.id
-        except Exception:
-            pass
-
-        # 2. Try email OTP
-        if not user_id:
-            try:
-                res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "email"})
-                if res and res.user:
-                    user_id = res.user.id
-            except Exception:
-                pass
-
-        # 3. Try magiclink OTP
-        if not user_id:
-            try:
-                res = anon_supabase.auth.verify_otp({"email": clean_email, "token": clean_otp, "type": "magiclink"})
-                if res and res.user:
-                    user_id = res.user.id
-            except Exception:
-                pass
-
-        # 4. Check password_reset_otps table (Strict OTP Code & Expiration Check)
-        if not user_id:
-            otp_res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
-            if otp_res.data:
-                record = otp_res.data[0]
-                db_otp = str(record.get("otp") or "").strip()
-                if db_otp == clean_otp:
-                    expires_at_str = record.get("expires_at")
-                    is_valid = True
-                    if expires_at_str:
+        # 1. Check password_reset_otps table (Strict OTP Code & Expiration Check)
+        otp_res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
+        if otp_res.data:
+            record = otp_res.data[0]
+            db_otp = str(record.get("otp") or "").strip()
+            if db_otp == clean_otp:
+                expires_at_str = record.get("expires_at")
+                is_valid = True
+                if expires_at_str:
+                    try:
+                        expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+                        current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+                        if current_time > expires_at:
+                            is_valid = False
+                    except Exception:
+                        pass
+                
+                if is_valid:
+                    # Check if profile already exists
+                    p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
+                    if p_res.data:
+                        user_id = p_res.data[0]["id"]
+                    else:
+                        # CREATE ACCOUNT IN SUPABASE AUTH & USER_PROFILES ONLY UPON VALID OTP VERIFICATION
+                        name_val = (data.name or "").strip() or clean_email.split("@")[0]
+                        pass_val = (data.password or "").strip() or f"GAuth_{secrets.token_hex(8)}!"
                         try:
-                            expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-                            current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
-                            if current_time > expires_at:
-                                is_valid = False
-                        except Exception:
-                            pass
-                    
-                    if is_valid:
-                        p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
-                        if p_res.data:
-                            user_id = p_res.data[0]["id"]
-                            # Clean up used OTP so it cannot be reused
+                            new_user = supabase_admin.auth.admin.create_user({
+                                "email": clean_email,
+                                "password": pass_val,
+                                "email_confirm": True,
+                                "user_metadata": {"full_name": name_val}
+                            })
+                            user_id = new_user.user.id
+                        except Exception as create_err:
+                            err_str = str(create_err).lower()
                             try:
-                                supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
+                                users_list = supabase_admin.auth.admin.list_users()
+                                users_iter = users_list.users if hasattr(users_list, 'users') else users_list
+                                for u in users_iter:
+                                    u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
+                                    if u_email and u_email.lower() == clean_email:
+                                        user_id = getattr(u, 'id', None) or (u.get('id') if isinstance(u, dict) else None)
+                                        break
                             except Exception:
                                 pass
+
+                        if not user_id:
+                            user_id = str(uuid.uuid4())
+
+                        supabase_admin.table("user_profiles").upsert({
+                            "id": user_id,
+                            "email": clean_email,
+                            "name": name_val,
+                            "auth_provider": "google" if "GAuth_" in pass_val else "email",
+                            "created_at": datetime.utcnow().isoformat()
+                        }).execute()
+
+                    # Clean up used OTP so it cannot be reused
+                    try:
+                        supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
+                    except Exception:
+                        pass
 
         if not user_id:
             raise HTTPException(status_code=400, detail="Invalid or expired OTP code. Please enter the 6-digit code sent to your email.")
@@ -2227,64 +2224,3 @@ async def google_webpage():
     </html>
     """
     return HTMLResponse(content=html_content)
-
-@app.post("/auth/google-signin")
-async def google_signin(payload: GoogleSignInPayload):
-    try:
-        email = payload.email.strip().lower()
-        name = payload.name.strip() or "Google User"
-        print(f"Google Sign-In backend processing for: {email} ({name})")
-
-        # 1. Check if user already exists in user_profiles
-        res = supabase.table("user_profiles").select("*").eq("email", email).execute()
-        user_id = None
-
-        if res.data and len(res.data) > 0:
-            user = res.data[0]
-            user_id = user.get("id")
-            # Update name if empty
-            if not user.get("name"):
-                supabase.table("user_profiles").update({"name": name}).eq("id", user_id).execute()
-        else:
-            # 2. Check Supabase Admin for existing user by email
-            try:
-                users_page = supabase_admin.auth.admin.list_users()
-                existing_admin_user = next((u for u in users_page if u.email and u.email.lower() == email), None)
-                if existing_admin_user:
-                    user_id = existing_admin_user.id
-            except Exception as admin_err:
-                print("Admin user list lookup warning:", admin_err)
-
-            # 3. Create user if not exists
-            if not user_id:
-                dummy_pass = f"Gauth_{secrets.token_hex(8)}!"
-                new_user = supabase_admin.auth.admin.create_user({
-                    'email': email,
-                    'password': dummy_pass,
-                    'email_confirm': True,
-                    'user_metadata': {'name': name}
-                })
-                user_id = new_user.user.id
-
-            # 4. Insert or update user_profiles
-            supabase.table("user_profiles").upsert({
-                "id": user_id,
-                "email": email,
-                "name": name,
-                "auth_provider": "google",
-                "created_at": datetime.utcnow().isoformat()
-            }).execute()
-
-        return {
-            "success": True,
-            "message": "Google Sign-In authorized successfully",
-            "user_id": user_id,
-            "user": {
-                "id": user_id,
-                "email": email,
-                "name": name
-            }
-        }
-    except Exception as e:
-        print("GOOGLE SIGN-IN ROUTE ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))

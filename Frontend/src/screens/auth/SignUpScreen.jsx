@@ -30,7 +30,7 @@ import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
-  const { showAlert } = useCustomAlert();
+  const { showAlert: triggerCustomAlert } = useCustomAlert();
   const { theme } = useTheme();
   const isDarkMode = false;
   const styles = getStyles(theme, false);
@@ -39,24 +39,30 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [password, setPassword] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [isPressed, setIsPressed] = useState(false);
-  const [passwordTouched, setPasswordTouched] = useState(false); // Tracks if the user interacted with the password field
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Google Sign In States
   const [isGooglePressed, setIsGooglePressed] = useState(false);
   const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState("");
 
-  // Evaluates validation rules for password criteria
-  const hasMinLength = password.length >= 8;
-  const hasSpecialChar = /[^a-zA-Z0-9]/.test(password);
+  const showAlert = (title, message, buttons = []) => {
+    triggerCustomAlert(title, message, buttons);
+  };
+
+  // Password validation rules
   const hasLowercase = /[a-z]/.test(password);
   const hasUppercase = /[A-Z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const hasMinLength = password.length >= 8;
 
   const isPasswordValid =
-    hasMinLength && hasSpecialChar && hasLowercase && hasUppercase && hasNumber;
-  const showPasswordWarning = passwordTouched && !isPasswordValid;
+    hasLowercase &&
+    hasUppercase &&
+    hasNumber &&
+    hasSpecialChar &&
+    hasMinLength;
 
   const passwordCriteria = [
     {
@@ -126,72 +132,75 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     if (isLoading) return;
     setIsGoogleModalVisible(true);
-    setCustomGoogleEmail("");
   };
 
-  const submitGoogleSignIn = async (selectedEmail) => {
-    if (!selectedEmail) {
-      showAlert("Input Error", "Please enter a Google email.");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(selectedEmail)) {
-      showAlert("Input Error", "Please enter a valid email address.");
-      return;
-    }
-
-    const derivedName = selectedEmail
-      .split("@")[0]
-      .split(/[._-]/)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-
-    setIsGoogleModalVisible(false);
+  const handleGoogleAccountSelect = async (selectedEmail, selectedName) => {
     setIsLoading(true);
     setIsGooglePressed(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      const generatedGooglePassword =
-        "GUser!" + Math.random().toString(36).slice(2, 12);
-
-      const response = await fetch(`${API_URL}/signup`, {
+      const response = await fetch(`${API_URL}/auth/google-signin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: selectedEmail,
-          name: derivedName,
-          password: generatedGooglePassword,
+          name: selectedName,
         }),
       });
 
       const data = await response.json();
+      console.log("Google Sign Up response:", data);
 
-      if (response.ok) {
-        onSignUpSuccess(
-          data.user_id || null,
-          derivedName,
-          selectedEmail,
-          generatedGooglePassword,
-        );
+      setIsLoading(false);
+      setIsGooglePressed(false);
+      setIsGoogleModalVisible(false);
+
+      if (response.ok && data.success) {
+        const uid = data.user_id || data.user?.id;
+        if (data.is_new_user) {
+          // First time Google account -> follow verification and onboarding process
+          onSignUpSuccess(
+            uid,
+            selectedName,
+            selectedEmail,
+            data.temp_password,
+            false
+          );
+        } else if (data.is_onboarded === true) {
+          // Registered & onboarded -> redirect directly to main dashboard
+          onSignUpSuccess(
+            uid,
+            selectedName,
+            selectedEmail,
+            null,
+            true
+          );
+        } else {
+          // Registered but incomplete onboarding -> redirect to onboarding STEP_ONE
+          onSignUpSuccess(
+            uid,
+            selectedName,
+            selectedEmail,
+            null,
+            false
+          );
+        }
       } else {
-        setIsLoading(false);
-        setIsGooglePressed(false);
         showAlert(
           "Registration Error",
-          data.detail || "Google authentication failed.",
+          data.detail || "Google authentication failed. Please try again.",
         );
       }
     } catch (error) {
       setIsLoading(false);
       setIsGooglePressed(false);
+      setIsGoogleModalVisible(false);
+      console.log("GOOGLE SIGNUP ERROR:", error);
       showAlert(
         "Registration Error",
         "Cannot connect to backend server. Check your network.",
@@ -434,53 +443,12 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       </KeyboardAvoidingView>
 
       {/* GOOGLE ACCOUNTS SELECTOR MODAL */}
-      <Modal
+      <GoogleAccountModal
         visible={isGoogleModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setIsGoogleModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContentCard}>
-            <Text style={styles.modalTitle}>Google Sign Up</Text>
-            <Text style={styles.modalSubtitle}>
-              to create an account on MacroSync
-            </Text>
-
-            <View style={styles.customInputArea}>
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalInputLabel}>Google Email Address</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  placeholder="Enter Google email"
-                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
-                  value={customGoogleEmail}
-                  onChangeText={setCustomGoogleEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <View style={styles.modalActionButtonsRow}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => setIsGoogleModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonCancelText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSubmit]}
-                  onPress={() => submitGoogleSignIn(customGoogleEmail)}
-                >
-                  <Text style={styles.modalButtonSubmitText}>Sign Up</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setIsGoogleModalVisible(false)}
+        onSelectAccount={handleGoogleAccountSelect}
+        isLoading={isLoading && isGooglePressed}
+      />
     </SafeAreaView>
   );
 }

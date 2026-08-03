@@ -280,7 +280,17 @@ function MainApp() {
           setUserId(uid);
           setUserProfile({ name: name, email: email });
         }
-        setCurrentScreen("DASHBOARD");
+        if (data.is_new_user) {
+          setResetEmail(email);
+          setTempPassword(data.temp_password || '');
+          setGoogleIsLoginOtp(false);
+          setCurrentScreen("VERIFY_SIGNUP");
+        } else if (data.is_onboarded === true) {
+          if (uid) saveUserId(uid);
+          setCurrentScreen("DASHBOARD");
+        } else {
+          setCurrentScreen("STEP_ONE");
+        }
       } else {
         Alert.alert("Authentication Failed", data.detail || "Google sign-in failed.");
       }
@@ -559,15 +569,22 @@ function MainApp() {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(newUserId, newName, newEmail, newPassword) => {
+        onSignUpSuccess={(newUserId, newName, newEmail, newPassword, isOnboarded) => {
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
-          if (newPassword === null) {
-            // Google Sign Up skips verification
-            setUserId(newUserId); 
+          if (isOnboarded === true) {
+            if (newUserId) {
+              setUserId(newUserId);
+              saveUserId(newUserId);
+              setUserProfile({ name: newName || 'User', email: newEmail || '' });
+            }
+            setCurrentScreen("DASHBOARD");
+          } else if (newPassword === null) {
+            // Skips verification if direct bypass
+            if (newUserId) setUserId(newUserId); 
             setUserProfile({ name: newName || 'User', email: newEmail || '' });
             setCurrentScreen("STEP_ONE");
           } else {
-            // Normal Sign Up goes to Verify
+            // First time signup / Google OTP signup -> goes to Verify
             setUserProfile({ name: newName || 'User', email: newEmail || '' });
             setResetEmail(newEmail || '');
             setTempPassword(newPassword || '');

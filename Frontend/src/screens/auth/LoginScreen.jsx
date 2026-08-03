@@ -22,6 +22,8 @@ import * as WebBrowser from "expo-web-browser";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 
+import GoogleAccountModal from "../../components/GoogleAccountModal";
+
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({
@@ -44,7 +46,8 @@ export default function LoginScreen({
   const [isGooglePressed, setIsGooglePressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Google Sign-In interaction states are managed via deep linking now
+  // Google Account Selector Modal State
+  const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
 
   const showAlert = (message, title = "Login Error", buttons = []) => {
     triggerCustomAlert(title, message, buttons);
@@ -90,19 +93,66 @@ export default function LoginScreen({
     }
   };
 
-  // GOOGLE OAUTH SECURITY AUTHENTICATION HANDLER
-  const handleGoogleSignIn = async () => {
+  // GOOGLE OAUTH POPUP TRIGGER
+  const handleGoogleSignIn = () => {
     if (isLoading) return;
+    setIsGoogleModalVisible(true);
+  };
+
+  // GOOGLE ACCOUNT SELECTION HANDLER
+  const handleGoogleAccountSelect = async (selectedEmail, selectedName) => {
+    setIsLoading(true);
+    setIsGooglePressed(true);
+
     try {
-      const url = `${API_URL}/auth/google-webpage`;
-      console.log("Opening Google Sign-In webpage modal:", url);
-      await WebBrowser.openBrowserAsync(url);
+      const response = await fetch(`${API_URL}/auth/google-signin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: selectedEmail,
+          name: selectedName,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("Google Sign-In response:", data);
+
+      setIsLoading(false);
+      setIsGooglePressed(false);
+      setIsGoogleModalVisible(false);
+
+      if (response.ok && data.success) {
+        const uid = data.user_id || data.user?.id;
+        if (setCurrentUserId && uid) {
+          setCurrentUserId(uid);
+        }
+
+        if (data.is_new_user) {
+          // First time Google user -> follow verification & onboarding process
+          if (onGoogleOtpSent) {
+            onGoogleOtpSent(true, selectedEmail, selectedName, data.temp_password, false);
+          }
+        } else if (data.is_onboarded === true) {
+          // Existing registered & onboarded user -> redirect directly to dashboard
+          onLoginSuccess(uid, true);
+        } else {
+          // Existing user but not onboarded -> redirect to onboarding STEP_ONE
+          onLoginSuccess(uid, false);
+        }
+      } else {
+        showAlert(
+          data.detail || "Google authentication failed. Please try again.",
+          "Authentication Failed",
+        );
+      }
     } catch (error) {
-      console.log("ERROR OPENING GOOGLE SIGN-IN MODAL:", error);
-      showAlert(
-        "Could not open the Google sign-in browser. Please try again.",
-        "Google Sign-In Error",
-      );
+      setIsLoading(false);
+      setIsGooglePressed(false);
+      setIsGoogleModalVisible(false);
+      console.log("GOOGLE LOGIN ERROR:", error);
+      showAlert("Cannot connect to backend server. Check your network.", "Connection Error");
     }
   };
 
@@ -276,6 +326,14 @@ export default function LoginScreen({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* GOOGLE ACCOUNT SELECTOR MODAL */}
+      <GoogleAccountModal
+        visible={isGoogleModalVisible}
+        onClose={() => setIsGoogleModalVisible(false)}
+        onSelectAccount={handleGoogleAccountSelect}
+        isLoading={isLoading && isGooglePressed}
+      />
     </SafeAreaView>
   );
 }
