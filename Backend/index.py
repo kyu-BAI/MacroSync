@@ -237,7 +237,7 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
         except Exception as resend_err:
             print("Resend API dispatch error, trying Gmail SMTP fallback:", resend_err)
 
-    # 2. Fallback to Gmail SMTP with fast 3s timeout if Resend wasn't configured or failed
+    # 2. Fast fallback to Gmail SMTP (with 1.2s max socket timeout to prevent Vercel serverless timeouts)
     if not email_sent and GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD and GMAIL_SENDER_EMAIL.strip() not in ["", "your-gmail@gmail.com"]:
         try:
             msg = MIMEMultipart()
@@ -247,26 +247,16 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
             msg.attach(MIMEText(html_content, 'html'))
             app_password_clean = GMAIL_APP_PASSWORD.replace(" ", "").strip()
             
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=3) as server:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=1.2) as server:
                 server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
                 server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
-            print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP (465 SSL)")
+            print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP")
             email_sent = True
-        except Exception as ssl_err:
-            print("Gmail SSL 465 error, trying 587 TLS fallback:", ssl_err)
-            try:
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=3) as server:
-                    server.starttls()
-                    server.login(GMAIL_SENDER_EMAIL.strip(), app_password_clean)
-                    server.sendmail(GMAIL_SENDER_EMAIL.strip(), clean_to, msg.as_string())
-                print(f"OTP Email successfully sent to {clean_to} via Gmail SMTP (587 TLS)")
-                email_sent = True
-            except Exception as tls_err:
-                print("Gmail TLS 587 error:", tls_err)
+        except Exception as smtp_err:
+            print("Gmail SMTP dispatch error/timeout on serverless:", smtp_err)
 
     if not email_sent:
-        print(f"WARNING: Email could not be sent to {clean_to}. OTP code [{otp_code}] saved in DB for verification.")
-        # Fallback to True so auth/signup flow is never blocked by SMTP/Resend failures
+        print(f"WARNING: Email dispatch bypassed on serverless. OTP code [{otp_code}] saved in DB for verification.")
         email_sent = True
 
     return email_sent
