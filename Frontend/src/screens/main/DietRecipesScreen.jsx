@@ -254,7 +254,10 @@ export default function DietRecipesScreen({
         }
 
         // 2. Fetch fresh data in background silently
-        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -1371,9 +1374,9 @@ export default function DietRecipesScreen({
 
       {/* ── UIVERSE INSPIRED AI LOADING MODAL ── */}
       <AILoadingModal
-        visible={isGenerating || isFetchingRecipe || loadingMeals}
+        visible={isGenerating || isFetchingRecipe}
         type={isFetchingRecipe ? "recipe" : "meal"}
-        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Customizing AI Meal Plan"}
+        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating Custom AI Recipe"}
         subtitle="Vita AI is personalizing your nutrition"
       />
     </View>

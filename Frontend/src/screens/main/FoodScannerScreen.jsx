@@ -238,16 +238,17 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.3,
+        quality: 0.7,
         base64: true,
       });
 
-      // Freeze the camera preview AFTER the photo is taken (not before — would break capture)
-      if (cameraRef.current && cameraRef.current.pausePreview) {
-        try { cameraRef.current.pausePreview(); } catch (e) {}
-      }
+      const imageUri = photo.uri || (photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : null);
+      setCapturedImage(imageUri);
 
-      setCapturedImage(photo.uri);
+      let cleanBase64 = photo.base64 || '';
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
 
       const response = await fetch(`${API_URL}/analyze-food`, {
         method: "POST",
@@ -255,7 +256,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          image_base64: photo.base64,
+          image_base64: cleanBase64,
           user_id: userId
         })
       });
@@ -267,9 +268,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       if (response.status === 403 || (data && data.detail && data.detail.includes("limit reached"))) {
         setCapturedImage(null);
-        if (cameraRef.current && cameraRef.current.resumePreview) {
-          try { cameraRef.current.resumePreview(); } catch (e) {}
-        }
         setScanInfo(prev => ({ ...prev, remaining: 0 }));
         showAlert(
           "Scan Limit Reached",
@@ -296,9 +294,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
           showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
           setCapturedImage(null);
-          if (cameraRef.current && cameraRef.current.resumePreview) {
-            try { cameraRef.current.resumePreview(); } catch (e) {}
-          }
         } else {
           setAnalysisResult(data);
           openBottomSheet();
@@ -306,17 +301,11 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       } else {
         showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
         setCapturedImage(null);
-        if (cameraRef.current && cameraRef.current.resumePreview) {
-          try { cameraRef.current.resumePreview(); } catch (e) {}
-        }
       }
 
     } catch (error) {
       setIsScanning(false);
       stopPulseAnimation();
-      if (cameraRef.current && cameraRef.current.resumePreview) {
-        try { cameraRef.current.resumePreview(); } catch (e) {}
-      }
       if (__DEV__) console.error("Scanning Error:", error);
       showAlert("Analysis Error", "Cannot connect to server. Check your network.");
       setCapturedImage(null);
@@ -339,15 +328,21 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.3,
+        quality: 0.7,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
-        setCapturedImage(selectedAsset.uri);
+        const imageUri = selectedAsset.uri || (selectedAsset.base64 ? `data:image/jpeg;base64,${selectedAsset.base64}` : null);
+        setCapturedImage(imageUri);
         setIsScanning(true);
         startPulseAnimation();
+
+        let cleanBase64 = selectedAsset.base64 || '';
+        if (cleanBase64.includes(',')) {
+          cleanBase64 = cleanBase64.split(',')[1];
+        }
 
         const response = await fetch(`${API_URL}/analyze-food`, {
           method: "POST",
@@ -355,7 +350,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            image_base64: selectedAsset.base64,
+            image_base64: cleanBase64,
             user_id: userId
           })
         });
@@ -412,13 +407,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   };
 
   const resetScan = () => {
-    if (cameraRef.current && cameraRef.current.resumePreview) {
-      try {
-        cameraRef.current.resumePreview();
-      } catch (err) {
-        if (__DEV__) console.log("Error resuming camera preview:", err);
-      }
-    }
     setAnalysisResult(null);
     setCapturedImage(null);
     setIsScanning(false);
@@ -650,23 +638,24 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       {/* Bounded Camera Area */}
       <View style={styles.cameraContainer}>
-        <CameraView 
-          style={styles.camera} 
-          facing="back"
-          enableTorch={flashMode === 'on'}
-          ref={cameraRef}
-        />
-
-        {/* Captured Image Freeze Frame Overlay */}
-        {capturedImage && (
+        {!capturedImage ? (
+          <CameraView 
+            style={styles.camera} 
+            facing="back"
+            enableTorch={flashMode === 'on'}
+            ref={cameraRef}
+          />
+        ) : (
           <Image 
             source={{ uri: capturedImage }} 
-            style={[StyleSheet.absoluteFillObject, { zIndex: 5 }]} 
+            style={StyleSheet.absoluteFillObject} 
+            resizeMode="cover"
+            fadeDuration={0}
           />
         )}
 
         {/* Viewfinder Guide Overlay */}
-        <View style={styles.viewfinderContainer} pointerEvents="none">
+        <View style={[styles.viewfinderContainer, { zIndex: 20 }]} pointerEvents="none">
           <View style={styles.viewfinderBox}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
@@ -908,7 +897,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 20,
   },
   viewfinderBox: {
     width: 280,
