@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from supabase import create_client
 from dotenv import load_dotenv
 import os
+import requests
 import random
 import secrets
 import uuid
@@ -1168,12 +1169,14 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         except Exception as rest_err:
             print(f"REST Gemini {model} error:", rest_err)
 
-    # 2. Try SDK Fallback
+    # 2. Try SDK Fallback (if installed)
+    genai_client = globals().get("genai_client", None)
+    types_module = globals().get("types", None)
     if genai_client:
         for model in models_to_try:
             try:
-                if image_bytes and types:
-                    contents = [types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'), prompt]
+                if image_bytes and types_module:
+                    contents = [types_module.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'), prompt]
                 else:
                     contents = prompt
                 return genai_client.models.generate_content(model=model, contents=contents)
