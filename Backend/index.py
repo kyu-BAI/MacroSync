@@ -78,12 +78,18 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or "xfvmozpawqerxsps"
 
 
 # ---------------- INIT CLIENTS ----------------
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-supabase_admin = create_client(SUPABASE_URL, SUPABASE_KEY)
-if SUPABASE_ANON_KEY:
-    anon_supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-else:
-    anon_supabase = supabase
+try:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    supabase_admin = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if SUPABASE_ANON_KEY:
+        anon_supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    else:
+        anon_supabase = supabase
+except Exception as _sb_err:
+    print("Supabase init error:", _sb_err)
+    supabase = None
+    supabase_admin = None
+    anon_supabase = None
 
 if RESEND_API_KEY and resend is not None:
     try:
