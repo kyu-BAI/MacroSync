@@ -116,7 +116,13 @@ export default function LoginScreen({
         }),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        console.log("JSON Parse Error on Google Signin:", jsonErr);
+        data = { detail: "Backend server error. Please try again in a moment." };
+      }
       console.log("Google Sign-In response:", data);
 
       setIsLoading(false);
