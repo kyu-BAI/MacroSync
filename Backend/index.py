@@ -1142,7 +1142,13 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
     if not key or key.strip() == "":
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
-    models_to_try = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash']
+    models_to_try = [
+        'gemini-3.6-flash', 
+        'gemini-3.5-flash', 
+        'gemini-2.5-flash', 
+        'gemini-1.5-flash', 
+        'gemini-1.5-pro'
+    ]
     
     # 1. Try Direct REST API (Fastest, zero SDK dependencies)
     for model in models_to_try:
@@ -1213,15 +1219,21 @@ def chat_with_ai(data: ChatMessageRequest):
             now_manila = datetime.now(manila_tz)
             today_str = now_manila.strftime("%Y-%m-%d")
 
+            usage = prefs.get("usage", {})
+            day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+
             if not is_premium:
-                usage = prefs.get("usage", {})
-                day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
-                
+                if day_usage.get("chats", 0) >= 10:
+                    raise HTTPException(status_code=403, detail="Daily chatbot limit reached. Please upgrade to premium for unlimited access.")
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
-                usage[today_str] = day_usage
-                prefs["usage"] = usage
-                
-                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
+            else:
+                if day_usage.get("chats", 0) >= 200:
+                    raise HTTPException(status_code=429, detail="Daily Fair Use limit of 200 chatbot messages reached for today.")
+                day_usage["chats"] = day_usage.get("chats", 0) + 1
+
+            usage[today_str] = day_usage
+            prefs["usage"] = usage
+            supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
 
             unit = prefs.get("unit", "kg")
             user_address = prefs.get("address") or "Philippines"
@@ -1230,6 +1242,38 @@ def chat_with_ai(data: ChatMessageRequest):
                 allergies_str = ", ".join(raw_allergies) if raw_allergies else "None"
             else:
                 allergies_str = str(raw_allergies) or "None"
+
+            # Auto-sync new allergy discoveries mentioned in chat to user_profiles table
+            msg_lower_check = (data.message or "").lower()
+            allergy_triggers = ["allergic to", "allergy to", "have an allergy", "have a allergy", "discovered i have", "add allergy", "cannot eat", "can't eat"]
+            if any(tr in msg_lower_check for tr in allergy_triggers):
+                allergies_list = []
+                if isinstance(raw_allergies, list):
+                    allergies_list = list(raw_allergies)
+                elif raw_allergies:
+                    allergies_list = [a.strip() for a in str(raw_allergies).split(",") if a.strip()]
+
+                scan_allergens = [
+                    "peanut", "peanuts", "nut", "nuts", "egg", "eggs", "dairy", "milk",
+                    "seafood", "fish", "shrimp", "crab", "shellfish", "soy", "tofu",
+                    "gluten", "wheat", "chicken", "pork", "beef", "sesame", "kiwi"
+                ]
+
+                new_found = []
+                for alg in scan_allergens:
+                    if alg in msg_lower_check:
+                        clean_alg = alg.capitalize()
+                        if clean_alg not in allergies_list and alg not in allergies_list:
+                            allergies_list.append(clean_alg)
+                            new_found.append(clean_alg)
+
+                if new_found and user_id:
+                    try:
+                        supabase_admin.table("user_profiles").update({"allergies": allergies_list}).eq("id", user_id).execute()
+                        allergies_str = ", ".join(allergies_list)
+                        print(f"AUTOMATIC CHAT ALLERGY PROFILE UPDATE: Added {new_found} for user {user_id}")
+                    except Exception as _up_err:
+                        print("Failed to auto-update chat allergy:", _up_err)
 
             current_weight_kg = float(user.get("weight_kg") or 70.0)
             target_weight_kg = float(user.get("goalWeight") or 70.0)
@@ -1539,20 +1583,24 @@ def analyze_food(data: AnalyzeFoodRequest):
                         pass
                 
                 is_premium = prefs.get("is_premium", False)
+                manila_tz = timezone(timedelta(hours=8))
+                today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                usage = prefs.get("usage", {})
+                day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+
                 if not is_premium:
-                    manila_tz = timezone(timedelta(hours=8))
-                    today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
-                    usage = prefs.get("usage", {})
-                    day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
-                    
                     if day_usage.get("scans", 0) >= 5:
                         raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
-                    
                     day_usage["scans"] = day_usage.get("scans", 0) + 1
-                    usage[today_str] = day_usage
-                    prefs["usage"] = usage
-                    
-                    supabase_admin.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+                else:
+                    # Fair Use Policy Guard (FUP) for Premium to prevent script bot spam
+                    if day_usage.get("scans", 0) >= 100:
+                        raise HTTPException(status_code=429, detail="Daily Fair Use limit of 100 food scans reached for today. Please resume tomorrow!")
+                    day_usage["scans"] = day_usage.get("scans", 0) + 1
+
+                usage[today_str] = day_usage
+                prefs["usage"] = usage
+                supabase_admin.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
 
         # Clean base64 string (strip data URI prefix if present and handle padding/newlines)
         b64_str = (data.image_base64 or "").strip()
@@ -1985,21 +2033,27 @@ def recommend_meals(user_id: str):
 
         user_address = prefs.get("address") or "Philippines"
 
+        # Read custom target macro overrides if set in user profile
+        custom_cals = profile.get("target_calories") or profile.get("targetCalories")
+        custom_prot = profile.get("target_protein") or profile.get("targetProtein")
+        custom_carbs = profile.get("target_carbs") or profile.get("targetCarbs")
+        custom_fats = profile.get("target_fats") or profile.get("targetFats")
+
         if "Lose" in goal:
-            target_calories = 1800
-            target_protein = int(weight_kg * 2.0)
-            target_carbs = 160
-            target_fats = 55
+            target_calories = int(custom_cals) if custom_cals else 1800
+            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.0)
+            target_carbs = int(custom_carbs) if custom_carbs else 160
+            target_fats = int(custom_fats) if custom_fats else 55
         elif "Gain" in goal or "Muscle" in goal:
-            target_calories = 2700
-            target_protein = int(weight_kg * 2.2)
-            target_carbs = 320
-            target_fats = 75
+            target_calories = int(custom_cals) if custom_cals else 2700
+            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.2)
+            target_carbs = int(custom_carbs) if custom_carbs else 320
+            target_fats = int(custom_fats) if custom_fats else 75
         else:
-            target_calories = 2100
-            target_protein = int(weight_kg * 1.8)
-            target_carbs = 230
-            target_fats = 65
+            target_calories = int(custom_cals) if custom_cals else 2100
+            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 1.8)
+            target_carbs = int(custom_carbs) if custom_carbs else 230
+            target_fats = int(custom_fats) if custom_fats else 65
 
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
@@ -2055,15 +2109,28 @@ def recommend_meals(user_id: str):
         s_cals = int(target_calories * 0.10)
         d_cals = int(target_calories * 0.30)
 
-        is_egg_allergic = any(a in allergies.lower() for a in ["egg", "itlog"])
-        is_seafood_allergic = any(a in allergies.lower() for a in ["seafood", "fish", "bangus", "tilapia", "shellfish", "shrimp", "isda"])
-        is_nut_allergic = any(a in allergies.lower() for a in ["peanut", "nut", "mani"])
-        is_soy_allergic = any(a in allergies.lower() for a in ["soy", "tofu", "tokwa"])
+        allergies_lower = allergies.lower()
+        is_egg_allergic = any(a in allergies_lower for a in ["egg", "itlog"])
+        is_seafood_allergic = any(a in allergies_lower for a in ["seafood", "fish", "bangus", "tilapia", "shellfish", "shrimp", "isda", "hipon", "pusit"])
+        is_nut_allergic = any(a in allergies_lower for a in ["peanut", "nut", "mani", "cashew"])
+        is_soy_allergic = any(a in allergies_lower for a in ["soy", "tofu", "tokwa", "tokwa't"])
+        is_chicken_allergic = any(a in allergies_lower for a in ["chicken", "manok", "poultry"])
+        is_dairy_allergic = any(a in allergies_lower for a in ["dairy", "milk", "gatas", "cheese", "whey"])
 
         # Breakfast customization
-        b_title = "Pinoy High-Protein Chicken & Kamote Hash" if is_egg_allergic else "Pinoy High-Protein Eggs & Kamote Hash"
+        if is_egg_allergic:
+            if is_chicken_allergic:
+                b_title = "Pinoy High-Protein Pork Tenderloin & Kamote Hash"
+                b_prot = "150g Skinless Pork Tenderloin Cubes"
+            else:
+                b_title = "Pinoy High-Protein Chicken & Kamote Hash"
+                b_prot = "150g Skinless Chicken Breast Cubes"
+        else:
+            b_title = "Pinoy High-Protein Eggs & Kamote Hash"
+            b_prot = "3 Large Native Eggs (Scrambled or Soft-Boiled)"
+
         b_ing = [
-            "150g Skinless Chicken Breast Cubes" if is_egg_allergic else "3 Large Native Eggs (Scrambled or Soft-Boiled)",
+            b_prot,
             "150g Steamed Yellow Kamote (Sweet Potato)",
             "1 cup Fresh Malunggay (Moringa) Leaves",
             "1 tsp Native Coconut Oil"
@@ -2071,13 +2138,22 @@ def recommend_meals(user_id: str):
 
         # Lunch customization
         if is_seafood_allergic:
-            l_title = "Grilled Skinless Chicken Inasal with Kangkong Garlic Stir-Fry"
-            l_ing = [
-                "200g Lean Chicken Breast Inasal",
-                "1.5 cups Steamed Brown or White Rice",
-                "1 bunch Fresh River Kangkong",
-                "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
-            ]
+            if is_chicken_allergic:
+                l_title = "Grilled Pork Tenderloin Inasal with Kangkong Garlic Stir-Fry"
+                l_ing = [
+                    "200g Lean Pork Tenderloin Inasal",
+                    "1.5 cups Steamed Brown or White Rice",
+                    "1 bunch Fresh River Kangkong",
+                    "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
+                ]
+            else:
+                l_title = "Grilled Skinless Chicken Inasal with Kangkong Garlic Stir-Fry"
+                l_ing = [
+                    "200g Lean Chicken Breast Inasal",
+                    "1.5 cups Steamed Brown or White Rice",
+                    "1 bunch Fresh River Kangkong",
+                    "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
+                ]
         else:
             l_title = "Grilled Bangus Belly with Kangkong Garlic Stir-Fry"
             l_ing = [
@@ -2089,11 +2165,34 @@ def recommend_meals(user_id: str):
 
         # Snack customization
         s_nut = "1 tbsp Chia Seeds or Toasted Sesame Seeds" if is_nut_allergic else "1 tsp Crushed Roasted Peanuts"
-        s_drink = "1 glass Fresh Coconut Water & Protein Shake" if is_soy_allergic else "1 glass Cold Soy Milk or Protein Shake"
+        if is_soy_allergic or is_dairy_allergic:
+            s_drink = "1 glass Fresh Coconut Water & Plant Protein"
+        else:
+            s_drink = "1 glass Cold Soy Milk or Protein Shake"
+
         s_ing = [
             "2 Ripe Boiled Saba Bananas",
             s_drink,
             s_nut
+        ]
+
+        # Dinner customization
+        if is_chicken_allergic:
+            if is_seafood_allergic:
+                d_title = "Lean Pork Tenderloin Soup with Kalabasa & Moringa"
+                d_prot = "220g Lean Pork Tenderloin Cubes"
+            else:
+                d_title = "Fresh Tilapia Fillet Soup with Kalabasa & Moringa"
+                d_prot = "220g Fresh Tilapia Fillet"
+        else:
+            d_title = "Skinless Chicken Breast Tinola with Squash & Moringa"
+            d_prot = "220g Boneless Skinless Chicken Breast"
+
+        d_ing = [
+            d_prot,
+            "1 cup Kalabasa (Squash) Cubes",
+            "1 cup Fresh Malunggay Leaves",
+            "Ginger Slices & Lemongrass"
         ]
 
         return [
@@ -2149,21 +2248,16 @@ def recommend_meals(user_id: str):
             {
                 "id": "dp4",
                 "mealType": "Dinner",
-                "title": "Skinless Chicken Breast Tinola with Squash & Moringa",
+                "title": d_title,
                 "calories": d_cals,
                 "protein": f"{int(target_protein * 0.30)}g",
                 "carbs": f"{int(target_carbs * 0.30)}g",
                 "fats": f"{int(target_fats * 0.30)}g",
                 "time": "7:30 PM",
-                "ingredients": [
-                    "220g Boneless Skinless Chicken Breast",
-                    "1 cup Kalabasa (Squash) Cubes",
-                    "1 cup Fresh Malunggay Leaves",
-                    "Ginger Slices & Lemongrass"
-                ],
+                "ingredients": d_ing,
                 "instructions": [
                     "Simmer ginger, garlic, and lemongrass in 3 cups of water.",
-                    "Add chicken breast cubes and cook for 10 minutes.",
+                    "Add protein and cook for 10 minutes.",
                     "Add kalabasa cubes and cook until tender.",
                     "Turn off heat and stir in fresh malunggay leaves before serving!"
                 ]

@@ -629,8 +629,8 @@ export default function DietRecipesScreen({
                       borderRadius: 18,
                       backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
                       padding: 18,
-                      borderLeftWidth: 5,
-                      borderLeftColor: isDarkMode ? '#334155' : '#E2E8F0',
+                      borderWidth: 1,
+                      borderColor: isDarkMode ? '#334155' : '#E2E8F0',
                       opacity: 0.7
                     }}>
                       <View style={{ width: 80, height: 22, borderRadius: 8, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', marginBottom: 10 }} />
@@ -709,14 +709,15 @@ export default function DietRecipesScreen({
                       <View 
                         style={[
                           styles.timelineCard, 
-                          isLogged && styles.timelineCardLogged,
-                          { borderLeftColor: accentColor, borderLeftWidth: 5 }
+                          isLogged && styles.timelineCardLogged
                         ]}
                       >
                         <View style={styles.timelineHeader}>
                           <View style={[
                             styles.mealTypeBadge, 
-                            isLogged ? { backgroundColor: '#64748B' } : { backgroundColor: `${accentColor}1F` }
+                            isLogged 
+                              ? { backgroundColor: '#64748B' } 
+                              : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
                           ]}>
                             <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
                             <Text style={[
@@ -737,12 +738,15 @@ export default function DietRecipesScreen({
                               onPress={() => handleViewRecipe(meal)}
                               activeOpacity={0.6}
                             >
-                              <ChefHat color={logoGreen} size={14} style={{ marginRight: 4 }} />
-                              <Text style={styles.viewRecipeTextBtnLabel}>View Recipe</Text>
+                              <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
+                              <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
                             </TouchableOpacity>
                           </View>
                           <TouchableOpacity 
-                            style={[styles.logMealMiniBtn, isLogged && styles.logMealMiniBtnLogged]}
+                            style={[
+                              styles.logMealMiniBtn, 
+                              isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
+                            ]}
                             onPress={() => handleLogMeal(meal?.id, { 
                               name: meal?.title || 'Meal',
                               calories: meal?.calories || 0, 
@@ -1836,19 +1840,16 @@ const getStyles = (theme) => StyleSheet.create({
 
   timelineCard: {
     flex: 1,
-    backgroundColor: theme?.surface || baseColor,
+    backgroundColor: theme?.surface || '#FFFFFF',
     borderRadius: 20,
     padding: 14,
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
   },
   timelineCardLogged: {
-    backgroundColor: theme?.cardBg || '#EBEBEB',
+    backgroundColor: theme?.cardBg || '#F8FAFC',
     borderWidth: 1.5,
-    borderTopColor: theme?.border || '#E2E8F0',
-    borderLeftColor: theme?.border || '#E2E8F0',
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: theme?.border || '#CBD5E1',
     opacity: 0.85,
   },
   timelineHeader: {

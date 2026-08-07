@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from '../../services/NotificationService';
@@ -30,7 +30,7 @@ const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
   const { showAlert } = useCustomAlert();
   const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
-  const styles = getStyles(theme);
+  const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
   // --- EDIT PROFILE MODAL STATE ---
@@ -613,13 +613,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               style={[
                 styles.filterChipButton,
                 accountTier === 'Premium'
-                  ? { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1.5 }
+                  ? { backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1.5 }
                   : styles.filterChipInactive
               ]}
               onPress={() => handleSelectTierOption('Premium')}
             >
-              <Sparkles color={accountTier === 'Premium' ? '#FFFFFF' : '#8B5CF6'} size={12} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterChipText, accountTier === 'Premium' && styles.filterChipTextActive]}>
+              <Crown color={accountTier === 'Premium' ? '#FFFFFF' : '#10B981'} size={13} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterChipText, accountTier === 'Premium' && { color: '#FFFFFF', fontWeight: '900' }]}>
                 Premium Tier
               </Text>
             </TouchableOpacity>
@@ -629,6 +629,36 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
               
+              {/* Premium Feature List (Visible for BOTH Monthly & Annual plans) */}
+              <View style={[
+                styles.premiumFeatureDetailsBox,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }
+              ]}>
+                <View style={styles.featureDetailsHeadingFlexRow}>
+                  <Crown color="#F59E0B" size={18} style={{ marginRight: 6 }} />
+                  <Text style={[
+                    styles.premiumDetailsHeadingText,
+                    isDarkMode && { color: '#F8FAFC' }
+                  ]}>MacroSync Premium Benefits</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[
+                    styles.featureBulletBodyText,
+                    isDarkMode && { color: '#94A3B8' }
+                  ]}>Unlimited AI Food Camera & Gallery Photo Analysis</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[
+                    styles.featureBulletBodyText,
+                    isDarkMode && { color: '#94A3B8' }
+                  ]}>Unlimited Vita AI 24/7 Health, Macro & Workout Guidance</Text>
+                </View>
+              </View>
+
               <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
               
               {/* Monthly Plan */}
@@ -638,13 +668,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
                   { marginBottom: 12 }
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱199/mo')}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱99/mo')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
                   <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱199/mo</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱99/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -653,42 +683,19 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   styles.billingPlanSelectorRowItem,
                   selectedBillingCycle === 'Annual' && styles.billingPlanActive
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,029.80/yr')}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱799/yr')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
                     <View style={styles.bestValueBadge}>
-                      <Text style={styles.bestValueBadgeText}>SAVE 15%</Text>
+                      <Text style={styles.bestValueBadgeText}>SAVE 33%</Text>
                     </View>
                   </View>
-                  <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
+                  <Text style={styles.billingPlanSubDescription}>₱799/year (~₱66/mo). Best value for long-term health!</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱2,029.80/yr</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱799/yr</Text>
               </TouchableOpacity>
-
-              {/* Premium Feature List */}
-              <View style={styles.premiumFeatureDetailsBox}>
-                <View style={styles.featureDetailsHeadingFlexRow}>
-                  <Sparkles color={logoGreen} size={16} style={{ marginRight: 6 }} />
-                  <Text style={styles.premiumDetailsHeadingText}>Premium Benefits</Text>
-                </View>
-                
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Unlimited smart food scanner usage (AI vision analysis)</Text>
-                </View>
-                
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Unlimited chatbot queries & nutrition planning</Text>
-                </View>
-
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Priority generation speeds and backup model availability</Text>
-                </View>
-              </View>
             </View>
           )}
         </View>
@@ -1217,7 +1224,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 const baseColor = '#F8FAFC';
 const logoGreen = '#10B981';        
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, isDarkModePassed) => {
+  const isDarkMode = isDarkModePassed ?? (theme?.isDarkMode || theme?.mode === 'dark');
+  return StyleSheet.create({
   fullscreenOverlay: { 
     position: 'absolute', 
     top: 0, 
@@ -1226,7 +1235,7 @@ const getStyles = (theme) => StyleSheet.create({
     right: 0, 
     width: screenWidth, 
     height: screenHeight, 
-    backgroundColor: theme?.background || baseColor,
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.background || baseColor),
   },
   container: { 
     flex: 1,
@@ -1259,22 +1268,22 @@ const getStyles = (theme) => StyleSheet.create({
   greeting: { 
     fontSize: 28, 
     fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
     letterSpacing: -0.5,
   },
   subGreeting: { 
     fontSize: 13, 
     fontWeight: '700', 
-    color: theme?.textSecondary || '#64748B', 
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#64748B'), 
     marginTop: 2,
   },
   profileFormCard: {
-    backgroundColor: theme?.surface || baseColor, 
+    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
     borderRadius: 20, 
     padding: 16, 
     marginBottom: 24, 
     borderWidth: 1.2, 
-    borderColor: theme?.border || '#E2E8F0',
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1293,7 +1302,7 @@ const getStyles = (theme) => StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: theme?.border || '#E2E8F0',
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
     position: 'relative',
   },
   avatarImageLarge: {
@@ -1307,24 +1316,24 @@ const getStyles = (theme) => StyleSheet.create({
   profileUserNameText: {
     fontSize: 18,
     fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
     marginBottom: 2,
     textAlign: 'center',
   },
   profileUserSubText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
     textAlign: 'center',
   },
   glassDivider: { 
     height: 1, 
-    backgroundColor: theme?.border || '#E2E8F0', 
+    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'), 
     marginVertical: 12,
   },
   innerGlassDivider: {
     height: 1,
-    backgroundColor: theme?.border || '#E2E8F0',
+    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
     marginBottom: 12,
     marginTop: 4,
   },
@@ -1342,37 +1351,37 @@ const getStyles = (theme) => StyleSheet.create({
   profileMetricMiniValue: {
     fontSize: 14,
     fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
     marginBottom: 2,
   },
   profileMetricMiniLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   sectionLabelTitle: { 
     fontSize: 14, 
     fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
     marginBottom: 12, 
     marginLeft: 4, 
     letterSpacing: -0.2,
   },
   formCard: {
-    backgroundColor: theme?.surface || baseColor, 
+    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
     borderRadius: 20, 
     padding: 16, 
     marginBottom: 24, 
     borderWidth: 1.2, 
-    borderColor: theme?.border || '#E2E8F0',
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
     shadowOpacity: 0,
     elevation: 0,
   },
   cardTitle: { 
     fontSize: 11, 
-    color: theme?.textPrimary || '#0F172A', 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
     textTransform: 'uppercase', 
     letterSpacing: 1.2, 
     marginBottom: 12, 
@@ -1389,19 +1398,19 @@ const getStyles = (theme) => StyleSheet.create({
     borderRadius: 16, 
     marginRight: 8, 
     marginBottom: 8, 
-    backgroundColor: theme?.surface || baseColor,
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
     borderWidth: 1.2, 
-    borderColor: theme?.border || '#E2E8F0',
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
     shadowOpacity: 0,
     elevation: 0,
     flexDirection: 'row',
     alignItems: 'center',
   },
   filterChipInactive: { 
-    backgroundColor: theme?.surface || baseColor,
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
   },
   filterChipActive: { 
-    backgroundColor: theme?.cardBg || '#FFFFFF', 
+    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', 
     borderWidth: 1.5,
     borderColor: logoGreen,
     shadowOpacity: 0,
@@ -1410,7 +1419,7 @@ const getStyles = (theme) => StyleSheet.create({
   filterChipText: { 
     fontSize: 12, 
     fontWeight: '800',
-    color: theme?.textSecondary || '#94A3B8',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
   },
   filterChipTextActive: {
     color: logoGreen,
@@ -1437,7 +1446,7 @@ const getStyles = (theme) => StyleSheet.create({
   },
   billingPlanActive: {
     borderColor: logoGreen,
-    backgroundColor: theme?.cardBg || '#EBEBEB',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.06)',
     borderWidth: 1.5,
   },
   billingPlanTextGroup: {
@@ -1459,7 +1468,7 @@ const getStyles = (theme) => StyleSheet.create({
   billingPlanPriceBadgeText: {
     fontSize: 14,
     fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
+    color: logoGreen,
   },
   bestValueBadge: {
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
@@ -1478,11 +1487,11 @@ const getStyles = (theme) => StyleSheet.create({
   },
   premiumFeatureDetailsBox: {
     marginTop: 16,
-    backgroundColor: theme?.cardBg || '#F1F5F9',
+    backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
+    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
   },
   featureDetailsHeadingFlexRow: {
     flexDirection: 'row',
@@ -1492,7 +1501,7 @@ const getStyles = (theme) => StyleSheet.create({
   premiumDetailsHeadingText: {
     fontSize: 12,
     fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
+    color: isDarkMode ? '#F8FAFC' : '#0F172A',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1509,7 +1518,7 @@ const getStyles = (theme) => StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: theme?.textSecondary || '#64748B',
+    color: isDarkMode ? '#94A3B8' : '#475569',
     lineHeight: 18,
   },
   settingSwitchRowItem: {
@@ -1707,6 +1716,6 @@ modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'ce
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
-    marginLeft: 2,
   },
 });
+};

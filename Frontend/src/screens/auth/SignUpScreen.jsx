@@ -28,6 +28,7 @@ import {
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
+import GoogleAccountModal from "../../components/GoogleAccountModal";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const { showAlert: triggerCustomAlert } = useCustomAlert();
@@ -63,6 +64,8 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     hasNumber &&
     hasSpecialChar &&
     hasMinLength;
+
+  const showPasswordWarning = passwordTouched && !isPasswordValid;
 
   const passwordCriteria = [
     {

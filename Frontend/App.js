@@ -435,12 +435,18 @@ function MainApp() {
     const loadChatHistory = async () => {
       if (userId) {
         try {
-          const cached = await AsyncStorage.getItem(`ms_chat_history_${userId}`);
+          const todayStr = new Date().toISOString().split('T')[0];
+          const cached = await AsyncStorage.getItem(`ms_chat_history_${userId}_${todayStr}`);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setChatMessages(parsed);
+            } else {
+              setChatMessages([]);
             }
+          } else {
+            // New day — clear yesterday's chat history so user starts fresh today
+            setChatMessages([]);
           }
         } catch (err) {
           console.log("Error loading chat history:", err);
@@ -452,9 +458,10 @@ function MainApp() {
 
   useEffect(() => {
     const saveChatHistory = async () => {
-      if (userId && Array.isArray(chatMessages) && chatMessages.length > 0) {
+      if (userId && Array.isArray(chatMessages)) {
         try {
-          await AsyncStorage.setItem(`ms_chat_history_${userId}`, JSON.stringify(chatMessages));
+          const todayStr = new Date().toISOString().split('T')[0];
+          await AsyncStorage.setItem(`ms_chat_history_${userId}_${todayStr}`, JSON.stringify(chatMessages));
         } catch (err) {
           console.log("Error saving chat history:", err);
         }

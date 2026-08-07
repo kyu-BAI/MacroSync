@@ -113,6 +113,14 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
   const flatListRef = useRef(null);
 
+  // --- AUTO SCROLL TO LATEST CHAT MESSAGE ON MOUNT & UPDATES ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [messages]);
+
   const handleSendMessage = useCallback(async () => {
     if (inputText.trim() === '' || isLoading) return;
 
@@ -306,6 +314,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
           initialNumToRender={15}
           maxToRenderPerBatch={10}
           windowSize={7}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item: msg }) => {
             const isAI = msg.sender === 'ai';
@@ -544,17 +553,10 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     maxWidth: '78%',
   },
   aiMessageFormCard: {
-    backgroundColor: theme?.surface || '#FFFFFF',
+    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
     borderTopLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-    borderLeftWidth: 3.5,
-    borderLeftColor: logoGreen,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2
+    borderWidth: 1.5,
+    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
   },
   userMessageFormCard: {
     backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : '#E6F4EA',

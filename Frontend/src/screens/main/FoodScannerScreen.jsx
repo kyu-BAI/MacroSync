@@ -15,8 +15,9 @@ import {
   Modal
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle, History, PlusCircle } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
@@ -39,64 +40,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   const [capturedImage, setCapturedImage] = useState(null);
   const [selectedMealType, setSelectedMealType] = useState('Lunch');
   const [portionScale, setPortionScale] = useState(1.0);
-  const [scanHistory, setScanHistory] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-
-  // Load persistent scan history from AsyncStorage on mount
-  useEffect(() => {
-    AsyncStorage.getItem('ms_scan_history')
-      .then((data) => {
-        if (data) {
-          try { setScanHistory(JSON.parse(data)); } catch (e) {}
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const saveToHistory = async (mealItem) => {
-    try {
-      const updated = [mealItem, ...scanHistory.filter(h => h.name !== mealItem.name)].slice(0, 10);
-      setScanHistory(updated);
-      await AsyncStorage.setItem('ms_scan_history', JSON.stringify(updated));
-    } catch (err) {
-      if (__DEV__) console.warn("Failed to save scan history:", err);
-    }
-  };
-
-  const handleRelogHistoryItem = (item) => {
-    const currentConsumed = dailyNutrition?.consumedCalories || 0;
-    const targetCalories = dailyNutrition?.targetCalories || 2500;
-    const mealCalories = item.calories || 0;
-    const newTotal = currentConsumed + mealCalories;
-    const excess = newTotal - targetCalories;
-
-    const performRelog = () => {
-      if (onLogMeal) {
-        onLogMeal({
-          name: item.name,
-          calories: item.calories,
-          protein: item.protein,
-          carbs: item.carbs,
-          fats: item.fats,
-          mealType: item.mealType || 'Lunch'
-        });
-        showAlert('⚡ Meal Logged!', `Successfully re-logged "${item.rawName || item.name}" without consuming scan quota.`);
-      }
-    };
-
-    if (excess > 0) {
-      showAlert(
-        "Calorie Target Exceeded ⚠️",
-        `Logging this meal (${mealCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Proceed & Log", style: "destructive", onPress: performRelog }
-        ]
-      );
-    } else {
-      performRelog();
-    }
-  };
   
   // Scan limits tracking state
   const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
@@ -133,7 +76,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   }, [analysisResult]);
 
   const cameraRef = useRef(null);
-  const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
 
@@ -219,35 +161,51 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     scanLineAnim.setValue(0);
   };
 
-  // Bottom Sheet Animation
-  const openBottomSheet = () => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      tension: 50,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
-  };
-
   // Actions
   const handleCapture = async () => {
     if (!cameraRef.current || isScanning) return;
-    
+
     setIsScanning(true);
     startPulseAnimation();
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        base64: true,
+        quality: 0.5,
+        exif: false,
       });
 
-      const imageUri = photo.uri || (photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : null);
-      setCapturedImage(imageUri);
 
-      let cleanBase64 = photo.base64 || '';
-      if (cleanBase64.includes(',')) {
-        cleanBase64 = cleanBase64.split(',')[1];
+
+      if (!photo || !photo.uri) {
+        setIsScanning(false);
+        stopPulseAnimation();
+        setCapturedImage(null);
+        showAlert("Camera Error 📷", "Failed to capture photo. Please try again.");
+        return;
+      }
+
+      const formattedUri =
+        photo.uri.startsWith("file://") ||
+        photo.uri.startsWith("content://") ||
+        photo.uri.startsWith("data:")
+          ? photo.uri
+          : `file://${photo.uri}`;
+
+      setCapturedImage(formattedUri);
+
+      const base64Data = await FileSystem.readAsStringAsync(photo.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      if (!base64Data || base64Data.length < 4000) {
+        setIsScanning(false);
+        stopPulseAnimation();
+        setCapturedImage(null);
+        showAlert(
+          "Camera Not Ready 📷",
+          "The camera captured a blank image. Please wait a moment and try again."
+        );
+        return;
       }
 
       const response = await fetch(`${API_URL}/analyze-food`, {
@@ -256,7 +214,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          image_base64: cleanBase64,
+          image_base64: base64Data,
           user_id: userId
         })
       });
@@ -296,7 +254,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           setCapturedImage(null);
         } else {
           setAnalysisResult(data);
-          openBottomSheet();
         }
       } else {
         showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
@@ -328,7 +285,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.5,
         base64: true,
       });
 
@@ -390,7 +347,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             setCapturedImage(null);
           } else {
             setAnalysisResult(data);
-            openBottomSheet();
           }
         } else {
           showAlert("Analysis Error", data.detail || "Failed to analyze food. Please try again.");
@@ -441,7 +397,6 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           mealType: selectedMealType,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        saveToHistory(mealItem);
         onLogMeal(mealItem);
       }
       onTabChange('DASHBOARD');
@@ -638,29 +593,30 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       {/* Bounded Camera Area */}
       <View style={styles.cameraContainer}>
-        {!capturedImage ? (
+        {!capturedImage && (
           <CameraView 
             style={styles.camera} 
             facing="back"
             enableTorch={flashMode === 'on'}
             ref={cameraRef}
           />
-        ) : (
+        )}
+        {capturedImage && (
           <Image 
             source={{ uri: capturedImage }} 
-            style={StyleSheet.absoluteFillObject} 
+            style={styles.capturedOverlayImage} 
             resizeMode="cover"
             fadeDuration={0}
           />
         )}
 
-        {/* Viewfinder Guide Overlay */}
+        {/* Viewfinder Guide Overlay & Minimalist Scanning Line */}
         <View style={[styles.viewfinderContainer, { zIndex: 20 }]} pointerEvents="none">
           <View style={styles.viewfinderBox}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
+            <View style={[styles.corner, styles.topLeft, capturedImage && { borderColor: '#10B981' }]} />
+            <View style={[styles.corner, styles.topRight, capturedImage && { borderColor: '#10B981' }]} />
+            <View style={[styles.corner, styles.bottomLeft, capturedImage && { borderColor: '#10B981' }]} />
+            <View style={[styles.corner, styles.bottomRight, capturedImage && { borderColor: '#10B981' }]} />
             {isScanning && (
               <Animated.View style={[styles.scanningLine, { transform: [{ translateY: scanLineAnim }] }]} />
             )}
@@ -736,73 +692,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
               {isScanning && <ActivityIndicator color="#FFFFFF" size="small" />}
             </Animated.View>
           </TouchableOpacity>
-
-          {/* Right: Recent Scans History Button */}
-          <TouchableOpacity 
-            style={styles.historyButton} 
-            onPress={() => setShowHistoryModal(true)}
-            disabled={isScanning}
-            activeOpacity={0.7}
-          >
-            <History color="#10B981" size={22} />
-            {scanHistory.length > 0 && (
-              <View style={styles.historyBadgeDot}>
-                <Text style={styles.historyBadgeDotText}>{scanHistory.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
       </View>
-
-      {/* ── RECENT AI SCANS HISTORY MODAL ── */}
-      <Modal
-        visible={showHistoryModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowHistoryModal(false)}
-      >
-        <View style={styles.historyModalOverlay}>
-          <View style={styles.historyModalContent}>
-            <View style={styles.historyModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <History color={logoGreen} size={18} style={{ marginRight: 8 }} />
-                <Text style={styles.historyModalTitle}>Recent Scans</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
-                <X color={isDarkMode ? "#94A3B8" : "#64748B"} size={20} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.historyModalSubText}>Re-log past scanned meals instantly without spending scan quota</Text>
-
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {scanHistory.length === 0 ? (
-                <Text style={styles.emptyHistoryText}>No recent scans logged yet.</Text>
-              ) : (
-                scanHistory.map((item, idx) => (
-                  <TouchableOpacity
-                    key={item.id || idx}
-                    style={styles.historyModalRowCard}
-                    onPress={() => {
-                      setShowHistoryModal(false);
-                      handleRelogHistoryItem(item);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.historyModalItemName}>{item.rawName || item.name}</Text>
-                      <Text style={styles.historyModalItemMacros}>{item.calories} kcal • {item.protein}g P • {item.carbs}g C • {item.fats}g F</Text>
-                    </View>
-                    <View style={styles.relogModalBtn}>
-                      <PlusCircle color="#FFFFFF" size={12} style={{ marginRight: 4 }} />
-                      <Text style={styles.relogModalBtnText}>Re-log</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -889,6 +780,12 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     height: '100%',
     zIndex: 1,
   },
+  capturedOverlayImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    zIndex: 10,
+  },
   viewfinderContainer: {
     position: 'absolute',
     top: 0,
@@ -903,45 +800,31 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     width: 280,
     height: 280,
     position: 'relative',
+    overflow: 'hidden',
   },
   corner: {
     position: 'absolute',
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderColor: '#FFFFFF',
   },
-  topLeft: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
-  topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
-  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
-  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
+  topLeft: { top: 0, left: 0, borderTopWidth: 3.5, borderLeftWidth: 3.5, borderTopLeftRadius: 14 },
+  topRight: { top: 0, right: 0, borderTopWidth: 3.5, borderRightWidth: 3.5, borderTopRightRadius: 14 },
+  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 3.5, borderLeftWidth: 3.5, borderBottomLeftRadius: 14 },
+  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3.5, borderRightWidth: 3.5, borderBottomRightRadius: 14 },
   scanningLine: {
     position: 'absolute',
     top: 0,
-    left: 10,
-    right: 10,
-    height: 3,
+    left: 4,
+    right: 4,
+    height: 2.5,
     backgroundColor: '#10B981',
     borderRadius: 2,
-  },
-  scanningHudBadge: {
-    position: 'absolute',
-    bottom: 24,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  scanningHudText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
   },
   visualTipsCard: {
     marginHorizontal: 24,
@@ -1048,21 +931,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
     position: 'absolute',
-    left: '10%',
-  },
-  historyButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: theme?.surface || '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-    position: 'absolute',
-    right: '10%',
+    left: '20%',
   },
   shutterOuter: {
     width: 76,
@@ -1107,70 +976,6 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
-  },
-  historySection: {
-    marginHorizontal: 24,
-    marginBottom: 12,
-  },
-  historyHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  historyTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  historySubText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
-  },
-  historyScroll: {
-    gap: 8,
-  },
-  historyChipCard: {
-    backgroundColor: theme?.surface || '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    minWidth: 150,
-  },
-  historyChipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  historyChipTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    maxWidth: 90,
-  },
-  relogPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: logoGreen,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  relogPillText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  historyChipMacros: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#64748B',
   },
   floatingCloseBtn: {
     position: 'absolute',
@@ -1350,94 +1155,5 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  historyBadgeDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: logoGreen,
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyBadgeDotText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  historyModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  historyModalContent: {
-    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    maxHeight: 450,
-  },
-  historyModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  historyModalTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: theme?.textPrimary || (isDarkMode ? '#F8FAFC' : '#0F172A'),
-  },
-  historyModalSubText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#64748B',
-    marginBottom: 16,
-  },
-  historyModalRowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-  },
-  historyModalItemName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme?.textPrimary || (isDarkMode ? '#F8FAFC' : '#0F172A'),
-  },
-  historyModalItemMacros: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#64748B',
-    marginTop: 2,
-  },
-  relogModalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: logoGreen,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginLeft: 10,
-  },
-  relogModalBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  emptyHistoryText: {
-    textAlign: 'center',
-    fontSize: 13,
-    color: theme?.textSecondary || '#64748B',
-    paddingVertical: 30,
-    fontWeight: '600',
   },
 });
