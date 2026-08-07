@@ -187,8 +187,8 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           city: city.name
         },
         allergies: [
-          ...selectedAllergies,
-          ...(customAllergy.trim() ? [customAllergy.trim().toLowerCase()] : [])
+          ...selectedAllergies.map(id => presetAllergens.find(p => p.id === id)?.title || id),
+          ...(customAllergy.trim() ? [customAllergy.trim()] : [])
         ]
       });
     } catch (err) {

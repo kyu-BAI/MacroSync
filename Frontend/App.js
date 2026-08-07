@@ -493,28 +493,37 @@ function MainApp() {
 
   useEffect(() => {
     const fetchRecommendedMeals = async () => {
-      if (!userId || currentScreen !== 'DASHBOARD') {
-        return;
-      }
+      if (!userId) return;
+
+      const CACHE_KEY = `ms_meals_cache_${userId}`;
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // 1. Load from cache instantly first
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
+            setSessionRecipes(parsed.meals);
+            // If cache is fresh (today), no need for a network call
+            if (parsed.date === todayStr) return;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Only fetch from network if cache is stale or empty
       try {
         const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             setSessionRecipes(data);
-            await AsyncStorage.setItem(`ms_meals_${userId}`, JSON.stringify(data));
-            return;
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
           }
         }
       } catch (err) {
         console.warn("Error fetching AI recommended meals:", err);
       }
-      try {
-        const cached = await AsyncStorage.getItem(`ms_meals_${userId}`);
-        if (cached) {
-          setSessionRecipes(JSON.parse(cached));
-        }
-      } catch (e) {}
     };
 
     fetchRecommendedMeals();

@@ -9,5 +9,8 @@ dist/
 web-build/
 local_data/
 venv/
+Backend/venv/
 .agent/
+.vercel
+
 .vercel

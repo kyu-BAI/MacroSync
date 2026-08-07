@@ -91,7 +91,10 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           goal_weight: parseFloat(pData.goalWeight) || 70,
           target_date: pData.targetDate || new Date().toISOString().split('T')[0],
           weight_unit: pData.weightUnit || "kg",
-          starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70
+          starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70,
+          allergies: pData.allergies || [],
+          address: pData.address || "",
+          structured_location: pData.structuredLocation || {}
         };
 
         console.log("Saving onboarding data to backend...", payload);

@@ -85,6 +85,7 @@ export default function DietRecipesScreen({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          user_id: userId,
           ingredients: meal.title,
           budget: 'All',
           location: selectedLocation || 'San Remigio'
@@ -237,32 +238,47 @@ export default function DietRecipesScreen({
   const [loadingMeals, setLoadingMeals] = useState(true);
 
   useEffect(() => {
-    const loadCachedOrFetchMeals = async () => {
-      try {
-        setLoadingMeals(true);
-        const todayStr = new Date().toISOString().split('T')[0];
+    let isMounted = true;
 
-        // 1. Check local cache first
-        const cachedRaw = await AsyncStorage.getItem('ms_meals_cache');
+    const loadCachedOrFetchMeals = async () => {
+      if (!userId) {
+        setLoadingMeals(false);
+        return;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const CACHE_KEY = `ms_meals_cache_${userId}`;
+
+      try {
+        // 1. Check cache first — show instantly with NO loading spinner
+        const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (String(parsed.userId) === String(userId) && Array.isArray(parsed.meals) && parsed.meals.length > 0) {
-            setDailyPlan(parsed.meals);
-            setLoadingMeals(false);
-            if (parsed.date === todayStr) return; // Fresh cache hit!
+          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
+            if (isMounted) {
+              setDailyPlan(parsed.meals);
+              setLoadingMeals(false); // Instant load — no spinner shown to user
+            }
+            // If cache is from today, we're done — no network call needed
+            if (parsed.date === todayStr) return;
+            // If stale (yesterday's data), silently refresh in background
           }
         }
 
-        // 2. Fetch fresh data in background silently
+        // 2. Fetch fresh from server (silently if we already showed cached data)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`${API_URL}/meals/recommend/${userId}`, { signal: controller.signal });
         clearTimeout(timeoutId);
+
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) {
-            setDailyPlan(data);
-            await AsyncStorage.setItem('ms_meals_cache', JSON.stringify({
+          if (Array.isArray(data) && data.length > 0) {
+            if (isMounted) {
+              setDailyPlan(data);
+            }
+            // Save fresh data to user-specific cache
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
               userId,
               date: todayStr,
               meals: data
@@ -270,17 +286,15 @@ export default function DietRecipesScreen({
           }
         }
       } catch (err) {
-        if (__DEV__) console.log("MEAL RECOMMENDATION BG FETCH ERROR:", err);
+        if (__DEV__) console.log("MEAL RECOMMENDATION FETCH ERROR:", err);
       } finally {
-        setLoadingMeals(false);
+        if (isMounted) setLoadingMeals(false);
       }
     };
 
-    if (userId) {
-      loadCachedOrFetchMeals();
-    } else {
-      setLoadingMeals(false);
-    }
+    loadCachedOrFetchMeals();
+
+    return () => { isMounted = false; };
   }, [userId]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
@@ -300,6 +314,7 @@ export default function DietRecipesScreen({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          user_id: userId,
           ingredients: searchQuery.trim(),
           budget: selectedBudget,
           location: selectedLocation,
@@ -606,12 +621,29 @@ export default function DietRecipesScreen({
 
             <Text style={styles.sectionLabelTitle}>Your AI Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
-              {loadingMeals ? (
-                <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
-                  <ActivityIndicator size="large" color="#10B981" />
-                  <Text style={{ marginTop: 12, fontSize: 13, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
-                    Generating personalized AI meals for your goals...
-                  </Text>
+              {loadingMeals && dailyPlan.length === 0 ? (
+                // First-load skeleton — only shown when there's truly no data yet
+                <View style={{ gap: 12 }}>
+                  {[0,1,2,3].map(i => (
+                    <View key={i} style={{
+                      borderRadius: 18,
+                      backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
+                      padding: 18,
+                      borderLeftWidth: 5,
+                      borderLeftColor: isDarkMode ? '#334155' : '#E2E8F0',
+                      opacity: 0.7
+                    }}>
+                      <View style={{ width: 80, height: 22, borderRadius: 8, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', marginBottom: 10 }} />
+                      <View style={{ width: '65%', height: 16, borderRadius: 6, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', marginBottom: 8 }} />
+                      <View style={{ width: '45%', height: 13, borderRadius: 6, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }} />
+                    </View>
+                  ))}
+                  <View style={{ alignItems: 'center', paddingTop: 8 }}>
+                    <ActivityIndicator size="small" color="#10B981" />
+                    <Text style={{ marginTop: 8, fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
+                      Generating personalized AI meals for your goals...
+                    </Text>
+                  </View>
                 </View>
               ) : dailyPlan.length === 0 ? (
                 <View style={{
@@ -644,8 +676,12 @@ export default function DietRecipesScreen({
                         const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
                         if (res.ok) {
                           const data = await res.json();
-                          if (Array.isArray(data)) {
+                          if (Array.isArray(data) && data.length > 0) {
                             setDailyPlan(data);
+                            // Persist to cache so user sees it instantly on return
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            const CACHE_KEY = `ms_meals_cache_${userId}`;
+                            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
                           }
                         }
                       } catch (e) {

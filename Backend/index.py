@@ -127,6 +127,13 @@ class VerifyOTPRequest(BaseModel):
     otp: str
 
 
+class VerifySignupRequest(BaseModel):
+    email: str
+    otp: str
+    name: str = None
+    password: str = None
+
+
 class UpdatePasswordRequest(BaseModel):
     email: str = None
     user_id: str = None
@@ -155,6 +162,9 @@ class OnboardingData(BaseModel):
     target_date: str
     weight_unit: str = "kg"
     starting_weight: float = None
+    allergies: list = []
+    address: str = None
+    structured_location: dict = {}
 
 
 class ChatMessageRequest(BaseModel):
@@ -166,6 +176,8 @@ class RecipeRequest(BaseModel):
     ingredients: str
     budget: str = "All"
     location: str = "Any"
+    user_id: str = None
+    allergies: list = []
 
 
 class AnalyzeFoodRequest(BaseModel):
@@ -594,7 +606,6 @@ async def verify_signup(data: VerifySignupRequest):
                             "id": user_id,
                             "email": clean_email,
                             "name": name_val,
-                            "auth_provider": "google" if "GAuth_" in pass_val else "email",
                             "created_at": datetime.utcnow().isoformat()
                         }).execute()
 
@@ -722,10 +733,23 @@ async def update_email(data: UpdateEmailRequest):
 # ---------------- ONBOARDING ----------------
 @app.post("/save-onboarding")
 async def save_onboarding(data: OnboardingData):
-    prefs = json.dumps({
-        "unit": data.weight_unit,
-        "starting_weight": data.starting_weight if data.starting_weight is not None else data.weight_kg
-    })
+    # Fetch existing location JSON to preserve fields like usage/is_premium
+    existing_res = supabase.table("user_profiles").select("location").eq("id", data.user_id).execute()
+    prefs = {}
+    if existing_res.data and existing_res.data[0].get("location"):
+        try:
+            prefs = json.loads(existing_res.data[0]["location"])
+        except Exception:
+            prefs = {}
+
+    prefs["unit"] = data.weight_unit
+    prefs["starting_weight"] = data.starting_weight if data.starting_weight is not None else data.weight_kg
+    if data.allergies is not None:
+        prefs["allergies"] = data.allergies
+    if data.address:
+        prefs["address"] = data.address
+    if data.structured_location:
+        prefs["structuredLocation"] = data.structured_location
 
     supabase.table("user_profiles").update({
         "age": data.age,
@@ -734,7 +758,7 @@ async def save_onboarding(data: OnboardingData):
         "goal": data.goal,
         "goalWeight": data.goal_weight,
         "targetDate": data.target_date,
-        "location": prefs
+        "location": json.dumps(prefs)
     }).eq("id", data.user_id).execute()
 
     return {"success": True}
@@ -1118,7 +1142,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
     if not key or key.strip() == "":
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
-    models_to_try = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash-001']
+    models_to_try = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash']
     
     # 1. Try Direct REST API (Fastest, zero SDK dependencies)
     for model in models_to_try:
@@ -1193,9 +1217,6 @@ def chat_with_ai(data: ChatMessageRequest):
                 usage = prefs.get("usage", {})
                 day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
                 
-                if day_usage.get("chats", 0) >= 5:
-                    raise HTTPException(status_code=403, detail="Daily chat limit reached. Please upgrade to premium for unlimited access.")
-                
                 day_usage["chats"] = day_usage.get("chats", 0) + 1
                 usage[today_str] = day_usage
                 prefs["usage"] = usage
@@ -1203,6 +1224,13 @@ def chat_with_ai(data: ChatMessageRequest):
                 supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
 
             unit = prefs.get("unit", "kg")
+            user_address = prefs.get("address") or "Philippines"
+            raw_allergies = user.get("allergies") or prefs.get("allergies") or []
+            if isinstance(raw_allergies, list):
+                allergies_str = ", ".join(raw_allergies) if raw_allergies else "None"
+            else:
+                allergies_str = str(raw_allergies) or "None"
+
             current_weight_kg = float(user.get("weight_kg") or 70.0)
             target_weight_kg = float(user.get("goalWeight") or 70.0)
             starting_weight_kg = float(prefs.get("starting_weight") or current_weight_kg or 70.0)
@@ -1215,7 +1243,7 @@ def chat_with_ai(data: ChatMessageRequest):
                 target_carbs = 150
                 target_fats = 60
                 rec_workout = "Cardio & Fat-Burning Circuit (30 mins), Bodyweight Calisthenics, Walking 10,000 steps"
-                rec_diet = "High-protein lean meals: Kinilaw na Tangigue, Grilled Fish Sutukil, Boiled Eggs & Vegetables, Chicken Tinola"
+                rec_diet = "High-protein lean meals: Kinilaw na Tangigue, Grilled Fish Sutukil, Fresh Vegetables, Chicken Tinola"
             elif "Gain" in goal:
                 target_calories = 2800
                 target_protein = int(current_weight_kg * 2.0)
@@ -1312,6 +1340,8 @@ def chat_with_ai(data: ChatMessageRequest):
                 f"  - Starting Weight: {starting_weight_str}\n"
                 f"  - Goal Weight: {target_weight_str}\n"
                 f"  - Primary Fitness Goal: {goal}\n"
+                f"  - User Location / Region: {user_address}\n"
+                f"  - STRICT ALLERGIES / DIETARY RESTRICTIONS: {allergies_str}\n"
                 f"  - Target Date: {user.get('targetDate', 'N/A')}\n\n"
 
                 f"2. TODAY'S REAL-TIME NUTRITION & MACROS STATUS ({today_str}):\n"
@@ -1335,6 +1365,8 @@ def chat_with_ai(data: ChatMessageRequest):
 
                 f"=== INSTRUCTIONS FOR MACROSYNC AI ===\n"
                 f"You have full knowledge of the user's live health data listed above. "
+                f"CRITICAL ALLERGY SAFETY REQUIREMENT: The user has specified the following allergies/restrictions: '{allergies_str}'. "
+                f"You MUST NEVER recommend, suggest, or include any foods, meals, recipes, or ingredients that contain these allergens. "
                 f"When the user asks questions about their progress, meals logged today, workouts logged today, remaining macros, water intake, weight, diet recommendations, or workout advice, answer accurately using the exact numbers and items in this context. "
                 f"Be supportive, motivating, friendly, and structure your responses cleanly with bolding (**text**) and bullet points. Do NOT use markdown header symbols like ## or ### under any circumstances.\n\n"
             )
@@ -1406,12 +1438,32 @@ def chat_with_ai(data: ChatMessageRequest):
 @app.post("/generate-recipe")
 def generate_recipe(data: RecipeRequest):
     try:
+        allergies_list = data.allergies or []
+        user_loc = data.location or "Philippines"
+
+        if data.user_id:
+            try:
+                p_res = supabase_admin.table("user_profiles").select("location").eq("id", data.user_id).execute()
+                if p_res.data and p_res.data[0].get("location"):
+                    p_json = json.loads(p_res.data[0]["location"])
+                    if p_json.get("allergies"):
+                        allergies_list = p_json["allergies"]
+                    if p_json.get("address"):
+                        user_loc = p_json["address"]
+            except Exception:
+                pass
+
+        allergies_str = ", ".join(allergies_list) if isinstance(allergies_list, list) and allergies_list else (str(allergies_list) if allergies_list else "None")
+
         prompt = f"""
         You are an expert Filipino nutritionist and chef. The user wants to make a recipe using the following ingredients: {data.ingredients}.
         Their budget constraint is: {data.budget}.
-        Their location is: {data.location} (default to Philippines).
+        Their location is: {user_loc}.
+        STRICT ALLERGIES / DIETARY RESTRICTIONS: {allergies_str}.
         
         Generate a healthy, practical Filipino recipe (or a healthy adaptation of a local Filipino dish) that strictly fits these constraints and uses local ingredients commonly found in the Philippines. 
+        CRITICAL SAFETY REQUIREMENT: Respect the user's allergies ({allergies_str}). Under NO circumstances include forbidden allergen ingredients (e.g. if allergic to eggs, do NOT include eggs, egg whites, mayo, or egg batter).
+        
         Format your response as a valid JSON object with the following exact keys:
         - "title" (string, the name of the recipe)
         - "calories" (integer)
@@ -1909,13 +1961,29 @@ def recommend_meals(user_id: str):
         profile_res = supabase_admin.table("user_profiles").select("*").eq("id", user_id).execute()
         profile = profile_res.data[0] if profile_res.data else {}
 
+        # Parse location preferences JSON
+        prefs = {}
+        if profile.get("location"):
+            try:
+                prefs = json.loads(profile["location"])
+            except Exception:
+                prefs = {}
+
         goal = profile.get("goal") or "Maintain Weight"
         weight_kg = float(profile.get("weight_kg") or 70.0)
         height_cm = float(profile.get("height_cm") or 170.0)
         age = int(profile.get("age") or 25)
         dietary_pref = profile.get("dietary_preference") or "Palengke Budget-Friendly"
-        allergies = profile.get("allergies") or "None"
         activity_level = profile.get("activity_level") or "Moderate"
+
+        # Allergies & location extraction
+        raw_allergies = profile.get("allergies") or prefs.get("allergies") or []
+        if isinstance(raw_allergies, list):
+            allergies = ", ".join(raw_allergies) if raw_allergies else "None"
+        else:
+            allergies = str(raw_allergies) or "None"
+
+        user_address = prefs.get("address") or "Philippines"
 
         if "Lose" in goal:
             target_calories = 1800
@@ -1941,8 +2009,9 @@ def recommend_meals(user_id: str):
         You are an elite personal fitness dietitian in the Philippines. Recommend exactly 4 custom recipes (Breakfast, Lunch, Snack, Dinner) specifically calculated for this user profile:
         - Primary Fitness Goal: {goal}
         - User Baseline: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg, Activity Level: {activity_level}
+        - Regional Context / Location: {user_address}
         - Dietary Preference: {dietary_pref}
-        - Allergies / Restrictions: {allergies}
+        - STRICT ALLERGIES / RESTRICTIONS: {allergies}
         - Total Daily Nutritional Targets: {target_calories} kcal, {target_protein}g Protein, {target_carbs}g Carbs, {target_fats}g Fats.
         - Date Rotation Seed: {date_str}
 
@@ -1950,7 +2019,7 @@ def recommend_meals(user_id: str):
         - Distribute the targets: Breakfast (25% calories), Lunch (35% calories), Snack (10% calories), Dinner (30% calories).
         - Recommend exclusively healthy Filipino dishes or fitness-oriented adaptations of local Filipino cuisine.
         - The recipes must use ingredients that are easily available in local Philippine wet markets (palengke) and grocery stores (e.g. calamansi, bangus, tilapia, chicken breast, kangkong, sitaw, squash, sweet potato/kamote, brown/white rice). Avoid expensive or hard-to-find western ingredients.
-        - Respect any specified allergies ({allergies}). Do not include forbidden allergen ingredients.
+        - CRITICAL SAFETY INSTRUCTION: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients (for example, if allergic to eggs, do NOT include eggs, egg whites, balut, mayo, or egg batter in any dish).
         - Do not use any currency symbols other than the Philippine Peso sign (₱).
 
         Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
@@ -1967,69 +2036,96 @@ def recommend_meals(user_id: str):
         - "instructions" (list of strings, cooking instructions)
         """
 
-        if genai_client:
-            try:
-                response = generate_gemini_content(prompt)
-                text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                text = text.strip()
+        try:
+            response = generate_gemini_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:-3].strip()
+            elif text.startswith("```"):
+                text = text[3:-3].strip()
+            meals = json.loads(text)
+            if isinstance(meals, list) and len(meals) == 4:
+                return meals
+        except Exception as ai_err:
+            print("GEMINI MEAL GENERATION WARNING:", ai_err)
 
-                meals = json.loads(text)
-                if isinstance(meals, list) and len(meals) == 4:
-                    return meals
-            except Exception as ai_err:
-                print("GEMINI MEAL GENERATION WARNING:", ai_err)
-
-        # High Quality Personalized Fallback Array based on Onboarding Goals
+        # High Quality Personalized Fallback Array based on Onboarding Goals & Allergies
         b_cals = int(target_calories * 0.25)
         l_cals = int(target_calories * 0.35)
         s_cals = int(target_calories * 0.10)
         d_cals = int(target_calories * 0.30)
 
+        is_egg_allergic = any(a in allergies.lower() for a in ["egg", "itlog"])
+        is_seafood_allergic = any(a in allergies.lower() for a in ["seafood", "fish", "bangus", "tilapia", "shellfish", "shrimp", "isda"])
+        is_nut_allergic = any(a in allergies.lower() for a in ["peanut", "nut", "mani"])
+        is_soy_allergic = any(a in allergies.lower() for a in ["soy", "tofu", "tokwa"])
+
+        # Breakfast customization
+        b_title = "Pinoy High-Protein Chicken & Kamote Hash" if is_egg_allergic else "Pinoy High-Protein Eggs & Kamote Hash"
+        b_ing = [
+            "150g Skinless Chicken Breast Cubes" if is_egg_allergic else "3 Large Native Eggs (Scrambled or Soft-Boiled)",
+            "150g Steamed Yellow Kamote (Sweet Potato)",
+            "1 cup Fresh Malunggay (Moringa) Leaves",
+            "1 tsp Native Coconut Oil"
+        ]
+
+        # Lunch customization
+        if is_seafood_allergic:
+            l_title = "Grilled Skinless Chicken Inasal with Kangkong Garlic Stir-Fry"
+            l_ing = [
+                "200g Lean Chicken Breast Inasal",
+                "1.5 cups Steamed Brown or White Rice",
+                "1 bunch Fresh River Kangkong",
+                "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
+            ]
+        else:
+            l_title = "Grilled Bangus Belly with Kangkong Garlic Stir-Fry"
+            l_ing = [
+                "200g Fresh Dagupan Bangus Belly (Boneless)",
+                "1.5 cups Steamed Brown or White Rice",
+                "1 bunch Fresh River Kangkong",
+                "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
+            ]
+
+        # Snack customization
+        s_nut = "1 tbsp Chia Seeds or Toasted Sesame Seeds" if is_nut_allergic else "1 tsp Crushed Roasted Peanuts"
+        s_drink = "1 glass Fresh Coconut Water & Protein Shake" if is_soy_allergic else "1 glass Cold Soy Milk or Protein Shake"
+        s_ing = [
+            "2 Ripe Boiled Saba Bananas",
+            s_drink,
+            s_nut
+        ]
+
         return [
             {
                 "id": "dp1",
                 "mealType": "Breakfast",
-                "title": "Pinoy High-Protein Eggs & Kamote Hash",
+                "title": b_title,
                 "calories": b_cals,
                 "protein": f"{int(target_protein * 0.25)}g",
                 "carbs": f"{int(target_carbs * 0.25)}g",
                 "fats": f"{int(target_fats * 0.25)}g",
                 "time": "8:00 AM",
-                "ingredients": [
-                    "3 Large Native Eggs (Scrambled or Soft-Boiled)",
-                    "150g Steamed Yellow Kamote (Sweet Potato)",
-                    "1 cup Fresh Malunggay (Moringa) Leaves",
-                    "1 tsp Native Coconut Oil"
-                ],
+                "ingredients": b_ing,
                 "instructions": [
-                    "Steam the kamote until tender and slice into cubes.",
-                    "Sauté malunggay leaves in coconut oil for 1 minute.",
-                    "Whisk eggs and cook gently over medium heat until fluffy.",
+                    "Prepare ingredients and heat coconut oil in a pan.",
+                    "Sauté malunggay leaves and protein for 2-3 minutes.",
                     "Serve hot with steamed kamote cubes!"
                 ]
             },
             {
                 "id": "dp2",
                 "mealType": "Lunch",
-                "title": "Grilled Bangus Belly with Kangkong Garlic Stir-Fry",
+                "title": l_title,
                 "calories": l_cals,
                 "protein": f"{int(target_protein * 0.35)}g",
                 "carbs": f"{int(target_carbs * 0.35)}g",
                 "fats": f"{int(target_fats * 0.35)}g",
                 "time": "12:30 PM",
-                "ingredients": [
-                    "200g Fresh Dagupan Bangus Belly (Boneless)",
-                    "1.5 cups Steamed Brown or White Rice",
-                    "1 bunch Fresh River Kangkong",
-                    "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
-                ],
+                "ingredients": l_ing,
                 "instructions": [
-                    "Marinate bangus belly with calamansi juice and sea salt for 10 minutes.",
-                    "Grill or pan-sear bangus belly until golden brown.",
+                    "Marinate protein with calamansi juice and sea salt for 10 minutes.",
+                    "Grill or pan-sear protein until golden brown.",
                     "Stir-fry kangkong with minced garlic and a splash of soy sauce.",
                     "Plate with warm steamed rice and fresh calamansi halves!"
                 ]
@@ -2037,21 +2133,17 @@ def recommend_meals(user_id: str):
             {
                 "id": "dp3",
                 "mealType": "Snack",
-                "title": "Chilled Native Boiled Saba Banana & Protein Shake",
+                "title": "Chilled Native Boiled Saba Banana & Recovery Drink",
                 "calories": s_cals,
                 "protein": f"{int(target_protein * 0.10)}g",
                 "carbs": f"{int(target_carbs * 0.10)}g",
                 "fats": f"{int(target_fats * 0.10)}g",
                 "time": "4:00 PM",
-                "ingredients": [
-                    "2 Ripe Boiled Saba Bananas",
-                    "1 glass Cold Unsweetened Soy Milk or Whey Protein",
-                    "1 tsp Crushed Roasted Peanuts"
-                ],
+                "ingredients": s_ing,
                 "instructions": [
                     "Boil saba bananas in fresh water for 12 minutes until soft.",
                     "Peel and slice the bananas.",
-                    "Enjoy with cold soy milk or protein shake for quick post-workout recovery!"
+                    "Enjoy with cold recovery drink for post-workout nutrition!"
                 ]
             },
             {
