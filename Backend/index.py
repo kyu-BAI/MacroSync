@@ -1384,9 +1384,10 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
     models_to_try = [
-        'gemini-2.0-flash', 
-        'gemini-2.0-flash-lite',
-        'gemini-2.5-pro'
+        'gemini-flash-latest', 
+        'gemini-3.6-flash',
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite'
     ]
     
     # 1. Try Direct REST API across load-balanced ordered keys
