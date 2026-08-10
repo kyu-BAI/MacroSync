@@ -2001,7 +2001,7 @@ def debug_gemini():
     if not key:
         return {"error": "GEMINI_API_KEY missing from environment"}
     
-    models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-latest']
+    models = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite']
     results = {}
     for m in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key.strip()}"
