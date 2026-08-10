@@ -1789,16 +1789,16 @@ def analyze_food(data: AnalyzeFoodRequest):
 
         CRITICAL CLASSIFICATION RULES:
         1. EDIBILITY & FOOD/BEVERAGE CHECK:
-           Is the primary item in the image an EDIBLE food item, dish, meal, snack, raw/cooked ingredient (e.g. egg, fruit, meat, vegetable, bread), beverage, or packaged food meant for human consumption?
-           - IF THE ITEM IS NOT EDIBLE (e.g. non-edible objects, furniture, electronics, clothing, shoes, toys, stationery, household items, human faces/hands with no food, empty plates/bowls/utensils with no food, tools, cars, walls, animals, plastic food replicas, or any inedible object):
+           Is the primary item in the image an EDIBLE food item, dish, meal, snack, raw/cooked ingredient (e.g. egg, boiled egg, fried egg, raw egg, egg yolk, fruit, meat, vegetable, bread, rice), beverage, or packaged food meant for human consumption?
+           - IF THE ITEM IS NOT EDIBLE (e.g. non-edible objects, furniture, electronics, keyboards, clothing, shoes, toys, stationery, household items, human faces/hands with no food, empty plates/bowls/utensils with no food, tools, cars, walls, animals, plastic food replicas, or any inedible object):
              Return EXACTLY this JSON object and nothing else:
              {"error": "No edible food detected. Please align an edible food item, meal, or beverage in the frame."}
 
         2. IF IT IS EDIBLE FOOD OR BEVERAGE:
            Precisely identify the exact food item.
-           - If it is a simple/single food item like an Egg (boiled, fried, raw, scrambled, poached), identify it specifically as "Boiled Egg", "Raw Egg", "Fried Egg", etc. Do NOT misidentify it as a complex mixed meal or dish (such as grilled chicken or rice).
-           - Estimate the portion size/weight in grams ("serving_weight_g") realistically.
-           - Provide accurate calorie and macronutrient values based on standard USDA nutritional data (e.g. 1 large egg ~50g contains ~70 calories, ~6g protein, ~0.5g carbs, ~5g fat).
+           - If it is a single food item like an Egg (boiled egg, fried egg, raw egg, scrambled egg, poached egg), identify it specifically (e.g. "Boiled Egg", "Fried Egg", "Raw Egg", "Scrambled Egg"). Do NOT misidentify simple eggs or single ingredients as complex mixed dishes.
+           - Estimate the portion size/weight in grams ("serving_weight_g") realistically (e.g. 1 large egg ~50g).
+           - Provide accurate calorie and macronutrient values based on standard USDA nutritional data (e.g. 1 egg ~50g contains ~70 calories, ~6g protein, ~0.5g carbs, ~5g fat).
            - Return a valid JSON object with:
              - "name": Precise descriptive name of the food or beverage
              - "serving_weight_g": Estimated portion weight in grams (integer)
@@ -1808,23 +1808,27 @@ def analyze_food(data: AnalyzeFoodRequest):
              - "carbs": Carbs in grams (integer)
              - "fats": Fats in grams (integer)
 
-        Return raw JSON only. Do not include markdown formatting or ```json wrappers.
+        Return raw JSON only. Do not include markdown formatting, code block wrappers, or extra explanatory text.
         """
         
         try:
             response = generate_gemini_content(prompt, image_bytes=image_bytes)
-            result_json = response.text.strip()
-            if result_json.startswith("```json"):
-                result_json = result_json[7:]
-                if result_json.endswith("```"):
-                    result_json = result_json[:-3]
-            elif result_json.startswith("```"):
-                result_json = result_json[3:]
-                if result_json.endswith("```"):
-                    result_json = result_json[:-3]
-            result_data = json.loads(result_json.strip())
+            raw_text = response.text.strip() if hasattr(response, 'text') else str(response).strip()
+            
+            # Clean potential markdown wrappers
+            if "```" in raw_text:
+                raw_text = re.sub(r'```(?:json)?', '', raw_text).replace('```', '').strip()
+            
+            # Extract JSON substring if surrounded by extra text
+            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+            if json_match:
+                result_json_str = json_match.group(0)
+            else:
+                result_json_str = raw_text
+
+            result_data = json.loads(result_json_str)
         except Exception as scan_err:
-            print("FOOD SCANNER VISION ERROR:", scan_err)
+            print("FOOD SCANNER VISION ERROR:", repr(scan_err))
             result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
         
         # Attach scan usage metadata for frontend remaining scan badge
