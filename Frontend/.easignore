@@ -1,9 +1,11 @@
 # EAS Build ignore patterns
 node_modules/
-android/
-ios/
-dist/
-.git/
 .expo/
+dist/
+web-build/
+.kotlin/
 *.apk
 *.aab
+**/.cxx/
+**/build/
+**/.gradle/

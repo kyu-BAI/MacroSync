@@ -125,40 +125,39 @@ function MainApp() {
       const midnight = new Date(now);
       midnight.setHours(0, 0, 0, 0);
 
-      // Get the total steps since midnight on mount
-      try {
-        const result = await Pedometer.getStepCountAsync(midnight, now);
-        if (result?.steps !== undefined) {
-          setDailyExercise(prev => ({ ...prev, steps: result.steps }));
+      // Get the total steps since midnight on mount (iOS supports historic date range queries)
+      if (Platform.OS === 'ios') {
+        try {
+          const result = await Pedometer.getStepCountAsync(midnight, now);
+          if (result?.steps !== undefined) {
+            setDailyExercise(prev => ({ ...prev, steps: result.steps, _midnightBase: result.steps }));
+          }
+        } catch (e) {
+          if (__DEV__) console.log('Could not get historic step count:', e);
         }
-      } catch (e) {
-        console.log('Could not get historic step count:', e);
       }
 
-      // Subscribe to live updates
-      subscription = Pedometer.watchStepCount(result => {
-        if (result?.steps !== undefined) {
-          // watchStepCount gives cumulative steps since subscription start — add to midnight baseline
-          setDailyExercise(prev => {
-            const baseSteps = prev._midnightBase || 0;
-            return { ...prev, steps: baseSteps + result.steps };
-          });
-        }
-      });
-
-      // Store midnight baseline separately
+      // Subscribe to live step updates (supported on both Android & iOS)
       try {
-        const baseResult = await Pedometer.getStepCountAsync(midnight, now);
-        if (baseResult?.steps !== undefined) {
-          setDailyExercise(prev => ({ ...prev, _midnightBase: baseResult.steps, steps: baseResult.steps }));
-        }
-      } catch (e) {}
+        subscription = Pedometer.watchStepCount(result => {
+          if (result?.steps !== undefined) {
+            setDailyExercise(prev => {
+              const baseSteps = prev._midnightBase || 0;
+              return { ...prev, steps: baseSteps + result.steps };
+            });
+          }
+        });
+      } catch (err) {
+        if (__DEV__) console.log('Pedometer watch error:', err);
+      }
     };
 
     startPedometer();
 
     return () => {
-      if (subscription) subscription.remove();
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      }
     };
   }, []);
 

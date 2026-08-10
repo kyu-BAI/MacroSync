@@ -249,8 +249,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         }
 
         if (data.error) {
-          const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
-          showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
+          const errStr = data.error.toLowerCase();
+          const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
+          showAlert(isNotFood ? "No Edible Food Detected 🍽️" : "Scan Error 📸", data.error);
           setCapturedImage(null);
         } else {
           setAnalysisResult(data);
@@ -342,8 +343,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           }
 
           if (data.error) {
-            const isNotFood = data.error.toLowerCase().includes("no food") || data.error.toLowerCase().includes("not food");
-            showAlert(isNotFood ? "No Food Detected 🍽️" : "Scan Unclear 📸", data.error);
+            const errStr = data.error.toLowerCase();
+            const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
+            showAlert(isNotFood ? "No Edible Food Detected 🍽️" : "Scan Error 📸", data.error);
             setCapturedImage(null);
           } else {
             setAnalysisResult(data);

@@ -1366,9 +1366,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
     models_to_try = [
-        'gemini-3.6-flash', 
-        'gemini-3.5-flash', 
-        'gemini-2.5-flash', 
+        'gemini-2.0-flash', 
         'gemini-1.5-flash', 
         'gemini-1.5-pro'
     ]
@@ -1630,7 +1628,13 @@ def chat_with_ai(data: ChatMessageRequest):
                 f"6. EVERYDAY PERSONAL WORKOUT RECOMMENDATIONS (Tailored for {goal}):\n"
                 f"  - Recommended Workouts: {rec_workout}\n\n"
 
-                f"=== INSTRUCTIONS FOR MACROSYNC AI ===\n"
+                f"=== CRITICAL DOMAIN SCOPE & HEALTH ENFORCEMENT ===\n"
+                f"1. STRICT HEALTH & NUTRITION SCOPE: You are strictly MacroSync's AI Health, Nutrition, Diet, & Fitness Assistant.\n"
+                f"2. NON-HEALTH / NON-FOOD QUESTIONS REQUIRE DECLINATIONS:\n"
+                f"   If the user asks a question about ANY topic NOT related to food, nutrition, recipes, diet, macros, calories, water intake, workouts, exercises, fitness, weight, or health/wellness (e.g. politics, coding, math, general history, geography, entertainment, movies, celebrities, video games, tech, sports events, finance, or general trivia):\n"
+                f"   You MUST respond with EXACTLY this error message and NOTHING else:\n"
+                f"   'I am MacroSync\'s AI Health & Nutrition Assistant. Please ask questions specifically related to food, nutrition, diet, workouts, or health.'\n\n"
+                f"3. INSTRUCTIONS FOR MACROSYNC AI:\n"
                 f"You have full knowledge of the user's live health data listed above. "
                 f"CRITICAL ALLERGY SAFETY REQUIREMENT: The user has specified the following allergies/restrictions: '{allergies_str}'. "
                 f"You MUST NEVER recommend, suggest, or include any foods, meals, recipes, or ingredients that contain these allergens. "
@@ -1644,49 +1648,8 @@ def chat_with_ai(data: ChatMessageRequest):
             response = generate_gemini_content(full_prompt)
             reply_text = response.text
         except Exception as ai_err:
-            print("AI CHAT FALLBACK ENGINE TRIGGERED:", ai_err)
-            u_name = user.get('name', 'User') if user_result.data else 'User'
-            u_goal = goal if user_result.data else 'Maintain Weight'
-            u_tcals = target_calories if user_result.data else 2200
-            u_ccals = consumed_calories if user_result.data else 0
-            u_tp = target_protein if user_result.data else 150
-            u_cp = consumed_protein if user_result.data else 0
-
-            msg_lower = (data.message or "").lower()
-            rem_cals = max(0, u_tcals - u_ccals)
-            rem_p = max(0, u_tp - u_cp)
-
-            if any(w in msg_lower for w in ["dinner", "eat", "food", "meal", "recipe", "lunch", "breakfast"]):
-                reply_text = (
-                    f"Here are great Filipino fitness recommendations for your **{u_goal}** goal:\n\n"
-                    f"• **Skinless Chicken Breast Tinola** with malunggay and squash (approx. 450 kcal, 38g protein)\n"
-                    f"• **Grilled Bangus Belly** with kangkong stir-fry and 1 cup brown rice (approx. 520 kcal, 34g protein)\n"
-                    f"• **Sinugbang Tilapia & Steamed Kamote** with fresh calamansi (approx. 410 kcal, 32g protein)\n\n"
-                    f"You currently have **{rem_cals} kcal** and **{rem_p}g protein** remaining for today!"
-                )
-            elif any(w in msg_lower for w in ["protein", "macro", "carb", "fat", "calorie", "target"]):
-                reply_text = (
-                    f"Here is your current daily macro breakdown:\n\n"
-                    f"• **Calories**: Consumed {u_ccals} / {u_tcals} kcal (**{rem_cals} kcal remaining**)\n"
-                    f"• **Protein**: Consumed {u_cp} / {u_tp}g (**{rem_p}g remaining**)\n\n"
-                    f"To reach your **{u_goal}** target, prioritize lean proteins like eggs, chicken breast, fish, and malunggay!"
-                )
-            elif any(w in msg_lower for w in ["workout", "exercise", "train", "gym", "routine"]):
-                reply_text = (
-                    f"Here is a recommended zero-equipment home routine for your **{u_goal}** goal:\n\n"
-                    f"• **Push-Ups / Incline Push-Ups**: 3 sets x 12-15 reps\n"
-                    f"• **Bodyweight Squats**: 4 sets x 15 reps\n"
-                    f"• **Plank Hold**: 3 sets x 45 seconds\n"
-                    f"• **Jumping Jacks**: 3 sets x 60 seconds\n\n"
-                    f"Stay consistent and don't forget to drink water post-workout!"
-                )
-            else:
-                reply_text = (
-                    f"Hello {u_name}! I am Vita AI, your personal fitness and nutrition assistant.\n\n"
-                    f"Your current goal is **{u_goal}** with a daily target of **{u_tcals} kcal** ({u_tp}g protein).\n"
-                    f"So far today, you have consumed **{u_ccals} kcal**.\n\n"
-                    f"Ask me anything about dinner ideas, macro targets, workouts, or your daily health progress!"
-                )
+            print("AI CHAT ERROR:", ai_err)
+            reply_text = "I am unable to process your request right now. Please try asking your health or food question again in a moment."
         
         remaining_count = "Unlimited" if is_premium else max(0, 10 - day_usage.get("chats", 0))
         return {
@@ -1838,45 +1801,48 @@ def analyze_food(data: AnalyzeFoodRequest):
             raise HTTPException(status_code=400, detail="Invalid image encoding format")
         
         prompt = """
-        You are an expert AI food and nutrition scanner for the MacroSync mobile app.
-        Analyze this image carefully.
-        
-        1. IF FOOD OR BEVERAGE IS PRESENT (including dishes, meals, snacks, ingredients, fruits, drinks, or packaged foods):
-           Return a valid JSON object with:
-           - "name": Descriptive name of the food or beverage
-           - "serving_weight_g": Estimated portion weight in grams (e.g. 250)
-           - "confidence": Integer between 75 and 99
-           - "calories": Total estimated calories (integer)
-           - "protein": Protein in grams (integer)
-           - "carbs": Carbs in grams (integer)
-           - "fats": Fats in grams (integer)
-        
-        2. IF NO FOOD/BEVERAGE AT ALL (e.g., furniture, cars, electronics, walls, animals, office items):
-           Return EXACTLY this JSON object:
-           {"error": "No food detected in image. Please align your meal, dish, ingredient, or beverage in the frame."}
-        
-        Do not include markdown code block formatting like ```json in your response, just the raw JSON object.
+        You are an expert AI food, beverage, and nutritional scanner for the MacroSync mobile app.
+        Analyze the provided image with extreme precision.
+
+        CRITICAL CLASSIFICATION RULES:
+        1. EDIBILITY & FOOD/BEVERAGE CHECK:
+           Is the primary item in the image an EDIBLE food item, dish, meal, snack, raw/cooked ingredient (e.g. egg, fruit, meat, vegetable, bread), beverage, or packaged food meant for human consumption?
+           - IF THE ITEM IS NOT EDIBLE (e.g. non-edible objects, furniture, electronics, clothing, shoes, toys, stationery, household items, human faces/hands with no food, empty plates/bowls/utensils with no food, tools, cars, walls, animals, plastic food replicas, or any inedible object):
+             Return EXACTLY this JSON object and nothing else:
+             {"error": "No edible food detected. Please align an edible food item, meal, or beverage in the frame."}
+
+        2. IF IT IS EDIBLE FOOD OR BEVERAGE:
+           Precisely identify the exact food item.
+           - If it is a simple/single food item like an Egg (boiled, fried, raw, scrambled, poached), identify it specifically as "Boiled Egg", "Raw Egg", "Fried Egg", etc. Do NOT misidentify it as a complex mixed meal or dish (such as grilled chicken or rice).
+           - Estimate the portion size/weight in grams ("serving_weight_g") realistically.
+           - Provide accurate calorie and macronutrient values based on standard USDA nutritional data (e.g. 1 large egg ~50g contains ~70 calories, ~6g protein, ~0.5g carbs, ~5g fat).
+           - Return a valid JSON object with:
+             - "name": Precise descriptive name of the food or beverage
+             - "serving_weight_g": Estimated portion weight in grams (integer)
+             - "confidence": Integer between 85 and 99
+             - "calories": Total estimated calories (integer)
+             - "protein": Protein in grams (integer)
+             - "carbs": Carbs in grams (integer)
+             - "fats": Fats in grams (integer)
+
+        Return raw JSON only. Do not include markdown formatting or ```json wrappers.
         """
         
         try:
             response = generate_gemini_content(prompt, image_bytes=image_bytes)
             result_json = response.text.strip()
             if result_json.startswith("```json"):
-                result_json = result_json[7:-3]
+                result_json = result_json[7:]
+                if result_json.endswith("```"):
+                    result_json = result_json[:-3]
             elif result_json.startswith("```"):
-                result_json = result_json[3:-3]
+                result_json = result_json[3:]
+                if result_json.endswith("```"):
+                    result_json = result_json[:-3]
             result_data = json.loads(result_json.strip())
         except Exception as scan_err:
-            print("FOOD SCANNER SMART ENGINE TRIGGERED:", scan_err)
-            # Dynamic smart nutritional meal options for student testing without credit card
-            smart_meals = [
-                {"name": "Grilled Chicken Breast & Brown Rice", "serving_weight_g": 320, "confidence": 92, "calories": 480, "protein": 42, "carbs": 50, "fats": 10},
-                {"name": "Skinless Chicken Tinola with Malunggay", "serving_weight_g": 350, "confidence": 94, "calories": 420, "protein": 38, "carbs": 35, "fats": 12},
-                {"name": "Grilled Bangus Belly & Steamed Kangkong", "serving_weight_g": 300, "confidence": 91, "calories": 510, "protein": 36, "carbs": 42, "fats": 18},
-                {"name": "Boiled Eggs & Sweet Potato (Kamote) Bowl", "serving_weight_g": 280, "confidence": 95, "calories": 380, "protein": 24, "carbs": 46, "fats": 11},
-                {"name": "Tuna & Vegetable Grain Bowl", "serving_weight_g": 310, "confidence": 89, "calories": 440, "protein": 35, "carbs": 48, "fats": 12}
-            ]
-            result_data = random.choice(smart_meals)
+            print("FOOD SCANNER VISION ERROR:", scan_err)
+            result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
         
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
