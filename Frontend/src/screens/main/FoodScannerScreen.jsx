@@ -298,8 +298,28 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         startPulseAnimation();
 
         let cleanBase64 = selectedAsset.base64 || '';
+        if (!cleanBase64 && selectedAsset.uri) {
+          try {
+            cleanBase64 = await FileSystem.readAsStringAsync(selectedAsset.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+          } catch (fsErr) {
+            __DEV__ && console.log("FileSystem read error:", fsErr);
+          }
+        }
         if (cleanBase64.includes(',')) {
           cleanBase64 = cleanBase64.split(',')[1];
+        }
+
+        if (!cleanBase64 || cleanBase64.length < 100) {
+          setIsScanning(false);
+          stopPulseAnimation();
+          setCapturedImage(null);
+          showAlert(
+            "Image Error 📸",
+            "Could not read image file. Please choose another image or take a fresh photo."
+          );
+          return;
         }
 
         const response = await fetch(`${API_URL}/analyze-food`, {

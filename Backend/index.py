@@ -1360,7 +1360,7 @@ class GeminiRESTResponse:
     def __init__(self, text: str):
         self.text = text
 
-def generate_gemini_content(prompt: str, image_bytes: bytes = None):
+def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: str = "image/jpeg"):
     key = os.getenv("GEMINI_API_KEY")
     if not key or key.strip() == "":
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
@@ -1378,9 +1378,9 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key.strip()}"
             parts = []
-            if image_bytes:
+            if image_bytes and len(image_bytes) > 0:
                 b64_img = base64.b64encode(image_bytes).decode("utf-8")
-                parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64_img}})
+                parts.append({"inline_data": {"mime_type": mime_type, "data": b64_img}})
             parts.append({"text": prompt})
 
             payload = {"contents": [{"parts": parts}]}
@@ -1405,7 +1405,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         for model in models_to_try:
             try:
                 if image_bytes and types_module:
-                    contents = [types_module.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'), prompt]
+                    contents = [types_module.Part.from_bytes(data=image_bytes, mime_type=mime_type), prompt]
                 else:
                     contents = prompt
                 return genai_client.models.generate_content(model=model, contents=contents)
@@ -1773,16 +1773,38 @@ def analyze_food(data: AnalyzeFoodRequest):
                 supabase_admin.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
 
         # Clean base64 string (strip data URI prefix if present and handle padding/newlines)
-        b64_str = (data.image_base64 or "").strip()
-        if "," in b64_str:
-            b64_str = b64_str.split(",", 1)[1].strip()
-        
+        raw_b64_input = (data.image_base64 or "").strip()
+        mime_type = "image/jpeg"
+        if raw_b64_input.startswith("data:"):
+            if ";" in raw_b64_input and "," in raw_b64_input:
+                header, b64_str = raw_b64_input.split(",", 1)
+                if "png" in header.lower():
+                    mime_type = "image/png"
+                elif "webp" in header.lower():
+                    mime_type = "image/webp"
+                elif "heic" in header.lower():
+                    mime_type = "image/heic"
+            else:
+                b64_str = raw_b64_input
+        elif "," in raw_b64_input:
+            b64_str = raw_b64_input.split(",", 1)[1].strip()
+        else:
+            b64_str = raw_b64_input
+
+        b64_str = b64_str.strip()
+        if not b64_str or len(b64_str) < 50:
+            return {
+                "error": "No valid image data received. Please align food in the frame and scan again.",
+                "is_premium": is_premium,
+                "remaining_scans": "Unlimited" if is_premium else max(0, 5 - day_usage.get("scans", 0))
+            }
+
         try:
             image_bytes = base64.b64decode(b64_str)
         except Exception as b64_err:
             print("BASE64 DECODE ERROR:", b64_err)
             raise HTTPException(status_code=400, detail="Invalid image encoding format")
-        
+
         prompt = """
         You are an expert AI food, beverage, and nutritional scanner for the MacroSync mobile app.
         Analyze the provided image with extreme precision.
@@ -1812,7 +1834,7 @@ def analyze_food(data: AnalyzeFoodRequest):
         """
         
         try:
-            response = generate_gemini_content(prompt, image_bytes=image_bytes)
+            response = generate_gemini_content(prompt, image_bytes=image_bytes, mime_type=mime_type)
             raw_text = response.text.strip() if hasattr(response, 'text') else str(response).strip()
             
             # Clean potential markdown wrappers
