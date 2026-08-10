@@ -1754,9 +1754,10 @@ def generate_recipe(data: RecipeRequest):
         raise HTTPException(status_code=500, detail="Failed to generate recipe. Please try again.")
 
 
-# ---------------- AI VISION FOOD ANALYSIS ----------------
 @app.post("/analyze-food")
 def analyze_food(data: AnalyzeFoodRequest):
+    is_premium = False
+    day_usage = {"scans": 0, "chats": 0}
     try:
         if data.user_id:
             user_result = supabase_admin.table("user_profiles").select("*").eq("id", data.user_id).execute()
