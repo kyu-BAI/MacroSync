@@ -18,12 +18,13 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, KeyRound, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import { saveUserId, clearSavedUserId, setRememberMe, isRememberMeEnabled } from '../../services/OfflineStorage';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -32,6 +33,29 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
   const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
+
+  // --- REMEMBER ME STATE ---
+  const [rememberMe, setRememberMeState] = useState(true);
+
+  useEffect(() => {
+    const loadRememberMePref = async () => {
+      const enabled = await isRememberMeEnabled();
+      setRememberMeState(enabled);
+    };
+    loadRememberMePref();
+  }, []);
+
+  const handleToggleRememberMe = async (val) => {
+    setRememberMeState(val);
+    await setRememberMe(val);
+    if (val) {
+      if (userId) await saveUserId(userId);
+      showAlert("Remember Me Enabled", "You will remain signed in automatically on this device.");
+    } else {
+      await clearSavedUserId();
+      showAlert("Remember Me Disabled", "Auto-login disabled. You will be required to log in next time.");
+    }
+  };
 
   // --- EDIT PROFILE MODAL STATE ---
   const [showEditModal, setShowEditModal] = useState(false);
@@ -861,6 +885,27 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             </View>
             <ChevronRight color={'#94A3B8'} size={16} />
           </TouchableOpacity>
+
+          <View style={styles.glassDivider} />
+
+          <View style={styles.settingActionRowItem}>
+            <View style={styles.settingIconTextGroup}>
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <KeyRound color={'#10B981'} size={16} />
+              </View>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={styles.settingRowItemMainTitle}>Remember Me</Text>
+                <Text style={styles.settingRowItemSubTitle}>Stay signed in automatically on this device</Text>
+              </View>
+            </View>
+            <Switch
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={rememberMe ? '#10B981' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
+              onValueChange={handleToggleRememberMe}
+              value={rememberMe}
+            />
+          </View>
         </View>
 
         {/* LOGOUT BUTTON */}

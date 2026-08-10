@@ -25,6 +25,7 @@ import {
   saveUserId,
   getSavedUserId,
   clearSavedUserId,
+  isRememberMeEnabled,
   addToSyncQueue,
   syncQueueToBackend,
 } from './src/services/OfflineStorage';
@@ -539,10 +540,26 @@ function MainApp() {
   // ----------------------------------------------------
   // INITIAL INITIALIZATION STATE VIEWPORT CONTROL
   // ----------------------------------------------------
+  const handleAppReady = async () => {
+    try {
+      const rememberEnabled = await isRememberMeEnabled();
+      const savedId = await getSavedUserId();
+      if (rememberEnabled && savedId) {
+        setUserId(savedId);
+        fetchDashboardData(savedId);
+        setCurrentScreen('DASHBOARD');
+        return;
+      }
+    } catch (e) {
+      console.log('Error during auto-login check:', e);
+    }
+    setCurrentScreen('LOGIN');
+  };
+
   if (currentScreen === 'SPLASH') {
     return (
       <SplashScreen 
-        onAppReady={() => setCurrentScreen('LOGIN')} 
+        onAppReady={handleAppReady} 
       />
     );
   }

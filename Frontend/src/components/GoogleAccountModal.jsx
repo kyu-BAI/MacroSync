@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -11,8 +11,15 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
-import { X, HelpCircle, Mail } from "lucide-react-native";
+import { X, HelpCircle, Mail, ShieldCheck } from "lucide-react-native";
+import {
+  getRememberedGoogleEmail,
+  saveRememberedGoogleEmail,
+  setRememberMe,
+  isRememberMeEnabled,
+} from "../services/OfflineStorage";
 
 export default function GoogleAccountModal({
   visible = false,
@@ -21,8 +28,23 @@ export default function GoogleAccountModal({
   isLoading = false,
 }) {
   const [googleEmail, setGoogleEmail] = useState("");
+  const [rememberMe, setRememberMeState] = useState(true);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    if (visible) {
+      const loadSavedSettings = async () => {
+        const savedEmail = await getRememberedGoogleEmail();
+        if (savedEmail) {
+          setGoogleEmail(savedEmail);
+        }
+        const rememberEnabled = await isRememberMeEnabled();
+        setRememberMeState(rememberEnabled);
+      };
+      loadSavedSettings();
+    }
+  }, [visible]);
+
+  const handleSubmit = async () => {
     if (isLoading) return;
     const cleanEmail = (googleEmail || "").trim();
     if (!cleanEmail) {
@@ -35,6 +57,12 @@ export default function GoogleAccountModal({
       return;
     }
 
+    // Save or clear Remember Me preference & Google email
+    await setRememberMe(rememberMe);
+    if (rememberMe) {
+      await saveRememberedGoogleEmail(cleanEmail);
+    }
+
     const derivedName = cleanEmail
       .split("@")[0]
       .split(/[._-]/)
@@ -42,7 +70,7 @@ export default function GoogleAccountModal({
       .join(" ");
 
     if (typeof onSelectAccount === "function") {
-      onSelectAccount(cleanEmail, derivedName);
+      onSelectAccount(cleanEmail, derivedName, rememberMe);
     }
   };
 
@@ -142,6 +170,24 @@ export default function GoogleAccountModal({
                       autoCorrect={false}
                     />
                   </View>
+                </View>
+
+                {/* REMEMBER ME TOGGLE ROW */}
+                <View style={styles.rememberRow}>
+                  <View style={styles.rememberTextGroup}>
+                    <View style={styles.rememberTitleRow}>
+                      <ShieldCheck color="#10B981" size={16} style={{ marginRight: 6 }} />
+                      <Text style={styles.rememberTitle}>Remember Me</Text>
+                    </View>
+                    <Text style={styles.rememberSubtitle}>Verify Gmail one time on this device</Text>
+                  </View>
+                  <Switch
+                    trackColor={{ false: "#3F3F46", true: "#10B981" }}
+                    thumbColor={rememberMe ? "#FFFFFF" : "#A1A1AA"}
+                    ios_backgroundColor="#3F3F46"
+                    onValueChange={setRememberMeState}
+                    value={rememberMe}
+                  />
                 </View>
 
                 <TouchableOpacity
@@ -302,6 +348,38 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#FFFFFF",
     fontSize: 14,
+  },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#18181B",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#3F3F46",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+    width: "100%",
+  },
+  rememberTextGroup: {
+    flex: 1,
+    marginRight: 10,
+  },
+  rememberTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rememberTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  rememberSubtitle: {
+    fontSize: 11,
+    color: "#A1A1AA",
+    marginTop: 2,
+    fontWeight: "500",
   },
   submitButton: {
     backgroundColor: "#10B981",

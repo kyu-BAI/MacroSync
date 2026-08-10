@@ -28,6 +28,7 @@ import {
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
+import { saveUserId, setRememberMe, saveRememberedGoogleEmail } from "../../services/OfflineStorage";
 import GoogleAccountModal from "../../components/GoogleAccountModal";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
@@ -112,6 +113,8 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
       }
 
       if (response.ok) {
+        await saveUserId(data.user_id);
+        await setRememberMe(true);
         onSignUpSuccess(
           data.user_id,
           name.trim(),
@@ -140,7 +143,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     setIsGoogleModalVisible(true);
   };
 
-  const handleGoogleAccountSelect = async (selectedEmail, selectedName) => {
+  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
     setIsLoading(true);
     setIsGooglePressed(true);
 
@@ -165,6 +168,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 
       if (response.ok && data.success) {
         const uid = data.user_id || data.user?.id;
+        if (uid) {
+          await saveUserId(uid);
+          await setRememberMe(rememberMe);
+          if (rememberMe && selectedEmail) {
+            await saveRememberedGoogleEmail(selectedEmail);
+          }
+        }
         if (data.is_new_user) {
           // First time Google account -> follow verification and onboarding process
           onSignUpSuccess(

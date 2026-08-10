@@ -6,6 +6,8 @@ const KEYS = {
   USER_PROFILE: 'ms_user_profile',
   SYNC_QUEUE: 'ms_sync_queue',
   USER_ID: 'ms_user_id',
+  REMEMBER_ME: 'ms_remember_me',
+  REMEMBERED_GOOGLE_EMAIL: 'ms_remembered_google_email',
 };
 
 // ─── Save dashboard data to local cache ─────────────────────────────────────
@@ -59,6 +61,48 @@ export async function clearSavedUserId() {
   try {
     await AsyncStorage.removeItem(KEYS.USER_ID);
   } catch (e) { }
+}
+
+// ─── Remember Me & Google Email Helpers ─────────────────────────────────────
+export async function setRememberMe(enabled) {
+  try {
+    await AsyncStorage.setItem(KEYS.REMEMBER_ME, enabled ? 'true' : 'false');
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to set remember me', e);
+  }
+}
+
+export async function isRememberMeEnabled() {
+  try {
+    const val = await AsyncStorage.getItem(KEYS.REMEMBER_ME);
+    // Default to true if not explicitly set to 'false'
+    return val !== 'false';
+  } catch (e) {
+    return true;
+  }
+}
+
+export async function saveRememberedGoogleEmail(email) {
+  try {
+    if (!email) return;
+    await AsyncStorage.setItem(KEYS.REMEMBERED_GOOGLE_EMAIL, email.trim());
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to save Google email', e);
+  }
+}
+
+export async function getRememberedGoogleEmail() {
+  try {
+    return await AsyncStorage.getItem(KEYS.REMEMBERED_GOOGLE_EMAIL);
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function clearRememberedGoogleEmail() {
+  try {
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_GOOGLE_EMAIL);
+  } catch (e) {}
 }
 
 // ─── Sync Queue (offline actions) ────────────────────────────────────────────

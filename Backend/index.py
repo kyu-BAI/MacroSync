@@ -239,7 +239,38 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
         </div>
     """
 
-    # 1. Try Resend HTTP API for verified admin recipient
+    # 1. Primary Email Engine: Gmail SMTP (Delivers OTP to ANY user-provided Gmail address globally)
+    smtp_sent = False
+    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"MacroSync <{GMAIL_SENDER_EMAIL}>"
+            msg["To"] = clean_to
+            msg.attach(MIMEText(html_content, "html"))
+
+            # Try SSL (port 465) first, then fallback to TLS (port 587)
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+                    server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
+                    server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
+                smtp_sent = True
+                print(f"✅ OTP Email successfully sent via Gmail SMTP SSL to recipient: {clean_to}")
+            except Exception as ssl_err:
+                print("Gmail SMTP SSL port 465 error, trying TLS port 587:", ssl_err)
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                    server.starttls()
+                    server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
+                    server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
+                smtp_sent = True
+                print(f"✅ OTP Email successfully sent via Gmail SMTP TLS to recipient: {clean_to}")
+        except Exception as smtp_err:
+            print(f"❌ Gmail SMTP dispatch error for {clean_to}:", smtp_err)
+
+    if smtp_sent:
+        return True
+
+    # 2. Secondary Fallback: Resend HTTP API
     if resend is not None and RESEND_API_KEY and RESEND_API_KEY.strip() not in ["", "re_your_api_key_here"]:
         try:
             resend.api_key = RESEND_API_KEY.strip()
@@ -250,10 +281,10 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
                 "html": html_content
             })
             print(f"OTP Email sent to {clean_to} via Resend")
+            return True
         except Exception as resend_err:
             print("Resend dispatch info:", resend_err)
 
-    # 2. Always ensure fast execution on Vercel without socket block timeouts
     print(f"OTP Verification code [{otp_code}] generated for {clean_to} and stored in DB.")
     return True
 

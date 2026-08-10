@@ -21,6 +21,7 @@ import API_URL from "../config/api";
 import * as WebBrowser from "expo-web-browser";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
+import { saveUserId, setRememberMe, saveRememberedGoogleEmail } from "../../services/OfflineStorage";
 
 import GoogleAccountModal from "../../components/GoogleAccountModal";
 
@@ -79,6 +80,8 @@ export default function LoginScreen({
         if (setCurrentUserId && userId) {
           setCurrentUserId(userId);
         }
+        await saveUserId(userId);
+        await setRememberMe(true);
         onLoginSuccess(userId, data.is_onboarded);
       } else {
         setIsLoading(false);
@@ -100,7 +103,7 @@ export default function LoginScreen({
   };
 
   // GOOGLE ACCOUNT SELECTION HANDLER
-  const handleGoogleAccountSelect = async (selectedEmail, selectedName) => {
+  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
     setIsLoading(true);
     setIsGooglePressed(true);
 
@@ -133,6 +136,15 @@ export default function LoginScreen({
         const uid = data.user_id || data.user?.id;
         if (setCurrentUserId && uid) {
           setCurrentUserId(uid);
+        }
+
+        // Save session & Remember Me state
+        if (uid) {
+          await saveUserId(uid);
+          await setRememberMe(rememberMe);
+          if (rememberMe && selectedEmail) {
+            await saveRememberedGoogleEmail(selectedEmail);
+          }
         }
 
         if (data.is_new_user) {
