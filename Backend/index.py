@@ -1363,8 +1363,16 @@ class GeminiRESTResponse:
         self.text = text
 
 def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: str = "image/jpeg"):
-    key = os.getenv("GEMINI_API_KEY")
-    if not key or key.strip() == "":
+    raw_keys = os.getenv("GEMINI_API_KEY", "")
+    keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+    k2 = os.getenv("GEMINI_API_KEY_2")
+    if k2 and k2.strip():
+        keys.append(k2.strip())
+    k3 = os.getenv("GEMINI_API_KEY_3")
+    if k3 and k3.strip():
+        keys.append(k3.strip())
+
+    if not keys:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
     models_to_try = [
@@ -1374,11 +1382,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
         'gemini-2.5-pro'
     ]
     
-    # 1. Try Direct REST API (Fastest, zero SDK dependencies)
-    for attempt in range(1):
+    # 1. Try Direct REST API across configured keys
+    for key in keys:
         for model in models_to_try:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key.strip()}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
                 parts = []
                 if image_bytes and len(image_bytes) > 0:
                     b64_img = base64.b64encode(image_bytes).decode("utf-8")
@@ -1396,7 +1404,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                             if len(parts_res) > 0 and "text" in parts_res[0]:
                                 return GeminiRESTResponse(parts_res[0]["text"])
                 elif res.status_code == 429:
-                    print(f"REST Gemini {model} HTTP 429 (Rate Limited).")
+                    print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Trying next key/model...")
                 else:
                     print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
             except Exception as rest_err:
