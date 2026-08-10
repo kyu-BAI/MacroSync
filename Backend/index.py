@@ -1738,41 +1738,56 @@ def generate_recipe(data: RecipeRequest):
         raise HTTPException(status_code=500, detail="Failed to generate recipe. Please try again.")
 
 
+def is_valid_uuid(val):
+    if not val or not isinstance(val, str):
+        return False
+    try:
+        uuid.UUID(val)
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 @app.post("/analyze-food")
 def analyze_food(data: AnalyzeFoodRequest):
     is_premium = False
     day_usage = {"scans": 0, "chats": 0}
     try:
-        if data.user_id:
-            user_result = supabase_admin.table("user_profiles").select("*").eq("id", data.user_id).execute()
-            if user_result.data:
-                user = user_result.data[0]
-                prefs = {}
-                if user.get("location"):
-                    try:
-                        prefs = json.loads(user["location"])
-                    except:
-                        pass
-                
-                is_premium = prefs.get("is_premium", False)
-                manila_tz = timezone(timedelta(hours=8))
-                today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
-                usage = prefs.get("usage", {})
-                day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+        if data.user_id and is_valid_uuid(data.user_id):
+            try:
+                user_result = supabase_admin.table("user_profiles").select("*").eq("id", data.user_id).execute()
+                if user_result.data:
+                    user = user_result.data[0]
+                    prefs = {}
+                    if user.get("location"):
+                        try:
+                            prefs = json.loads(user["location"])
+                        except:
+                            pass
+                    
+                    is_premium = prefs.get("is_premium", False)
+                    manila_tz = timezone(timedelta(hours=8))
+                    today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+                    usage = prefs.get("usage", {})
+                    day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
 
-                if not is_premium:
-                    if day_usage.get("scans", 0) >= 5:
-                        raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
-                    day_usage["scans"] = day_usage.get("scans", 0) + 1
-                else:
-                    # Fair Use Policy Guard (FUP) for Premium to prevent script bot spam
-                    if day_usage.get("scans", 0) >= 100:
-                        raise HTTPException(status_code=429, detail="Daily Fair Use limit of 100 food scans reached for today. Please resume tomorrow!")
-                    day_usage["scans"] = day_usage.get("scans", 0) + 1
+                    if not is_premium:
+                        if day_usage.get("scans", 0) >= 5:
+                            raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
+                        day_usage["scans"] = day_usage.get("scans", 0) + 1
+                    else:
+                        # Fair Use Policy Guard (FUP) for Premium to prevent script bot spam
+                        if day_usage.get("scans", 0) >= 100:
+                            raise HTTPException(status_code=429, detail="Daily Fair Use limit of 100 food scans reached for today. Please resume tomorrow!")
+                        day_usage["scans"] = day_usage.get("scans", 0) + 1
 
-                usage[today_str] = day_usage
-                prefs["usage"] = usage
-                supabase_admin.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+                    usage[today_str] = day_usage
+                    prefs["usage"] = usage
+                    supabase_admin.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", data.user_id).execute()
+            except HTTPException as he:
+                raise he
+            except Exception as db_err:
+                print("SUPABASE PROFILE FETCH ERROR IN SCANNER:", repr(db_err))
 
         # Clean base64 string (strip data URI prefix if present and handle padding/newlines)
         raw_b64_input = (data.image_base64 or "").strip()
@@ -1855,9 +1870,15 @@ def analyze_food(data: AnalyzeFoodRequest):
                 result_json_str = raw_text
 
             result_data = json.loads(result_json_str)
+        except HTTPException as he:
+            raise he
         except Exception as scan_err:
             print("FOOD SCANNER VISION ERROR:", repr(scan_err))
-            result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
+            err_msg = str(scan_err)
+            if "quota" in err_msg.lower() or "key" in err_msg.lower():
+                result_data = {"error": "AI Scanner service is temporarily busy. Please try again in a few moments."}
+            else:
+                result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
         
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
