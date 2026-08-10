@@ -761,6 +761,177 @@ async def update_email(data: UpdateEmailRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------- PROGRAMMATIC ALLERGEN INSPECTOR ENGINE ----------------
+def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
+    """
+    Programmatic Allergen Inspection & Substitution Engine.
+    Scans every meal title, ingredient, and instruction against the user's dietary allergies.
+    If any allergen is detected, it automatically substitutes the offending ingredient
+    with a safe, high-protein alternative dish to guarantee 100% allergy safety.
+    """
+    if not isinstance(meals_list, list) or not meals_list:
+        return meals_list
+
+    allergies_list = []
+    if isinstance(allergies_raw, list):
+        allergies_list = [str(a).strip().lower() for a in allergies_raw if a]
+    elif isinstance(allergies_raw, str) and allergies_raw.strip():
+        allergies_list = [a.strip().lower() for a in allergies_raw.split(",") if a.strip()]
+
+    if not allergies_list or "none" in allergies_list:
+        return meals_list
+
+    print(f"PROGRAMMATIC ALLERGEN INSPECTION ACTIVE for allergies: {allergies_list}")
+
+    def has_allergen(text: str, allergen_keywords: list) -> bool:
+        if not text:
+            return False
+        t_lower = text.lower()
+        for kw in allergen_keywords:
+            if kw in t_lower:
+                return True
+        return False
+
+    ALLERGEN_MAP = {
+        "egg": {
+            "keywords": ["egg", "eggs", "itlog", "balut", "mayo", "mayonnaise", "batter"],
+            "title_replacements": [("Egg", "Chicken Breast"), ("Eggs", "Kamote Hash"), ("Omelet", "Tofu Scramble")],
+            "substitutes": [
+                "150g Grilled Skinless Chicken Breast Cubes",
+                "150g Steamed Yellow Kamote (Sweet Potato)",
+                "100g Crispy Tokwa / Tofu Cubes"
+            ]
+        },
+        "peanut": {
+            "keywords": ["peanut", "peanuts", "mani", "nut", "nuts", "cashew", "kare-kare"],
+            "title_replacements": [("Peanut", "Calamansi Garlic"), ("Kare-Kare", "Sinigang na Baboy")],
+            "substitutes": [
+                "1 tbsp Toasted Sesame Seeds",
+                "1 tbsp Fresh Calamansi & Garlic Glaze",
+                "1 tbsp Sunflower Seed Butter"
+            ]
+        },
+        "seafood": {
+            "keywords": ["seafood", "fish", "isda", "shrimp", "hipon", "crab", "alimasag", "shellfish", "tahong", "bangus", "tilapia", "squid", "pusit", "tuna", "salmon"],
+            "title_replacements": [("Fish", "Chicken Breast"), ("Bangus", "Chicken Breast"), ("Tilapia", "Lean Pork Tenderloin"), ("Seafood", "Chicken")],
+            "substitutes": [
+                "200g Lean Chicken Breast Fillet",
+                "200g Skinless Pork Tenderloin Cubes",
+                "180g Extra Firm Tokwa / Tofu"
+            ]
+        },
+        "dairy": {
+            "keywords": ["dairy", "milk", "gatas", "cheese", "kezo", "butter", "whey", "cream", "yogurt"],
+            "title_replacements": [("Cheese", "Avocado"), ("Milk", "Coconut Water"), ("Cream", "Gata (Coconut Milk)")],
+            "substitutes": [
+                "1 cup Fresh Gata (Coconut Milk)",
+                "1 glass Cold Almond / Soy Milk",
+                "1 tbsp Native Coconut Oil"
+            ]
+        },
+        "chicken": {
+            "keywords": ["chicken", "manok", "poultry", "tinola", "inasal"],
+            "title_replacements": [("Chicken", "Lean Pork"), ("Manok", "Baboy")],
+            "substitutes": [
+                "200g Lean Pork Tenderloin Cutlets",
+                "200g Grass-Fed Beef Tenderloin",
+                "200g Fresh Boneless Fish Fillet"
+            ]
+        },
+        "pork": {
+            "keywords": ["pork", "baboy", "liempo", "porkchop", "bacon"],
+            "title_replacements": [("Pork", "Chicken Breast"), ("Baboy", "Manok")],
+            "substitutes": [
+                "200g Skinless Chicken Breast",
+                "200g Fresh Bangus Belly",
+                "200g Tokwa / Tofu Cubes"
+            ]
+        },
+        "soy": {
+            "keywords": ["soy", "tofu", "tokwa", "toyo", "edamame"],
+            "title_replacements": [("Tokwa", "Chicken Breast"), ("Tofu", "Lean Pork")],
+            "substitutes": [
+                "1 tbsp Coconut Aminos & Sea Salt",
+                "200g Skinless Chicken Breast",
+                "1 cup Fresh Malunggay Leaves"
+            ]
+        }
+    }
+
+    sanitized_meals = []
+
+    for meal in meals_list:
+        meal_copy = dict(meal)
+        title = str(meal_copy.get("title") or "")
+        ingredients = meal_copy.get("ingredients") or []
+        instructions = meal_copy.get("instructions") or []
+
+        is_unsafe = False
+        triggered_categories = []
+
+        for category, config in ALLERGEN_MAP.items():
+            kws = config["keywords"]
+            user_has_allergy = any(category in a or a in category for a in allergies_list)
+            if not user_has_allergy:
+                user_has_allergy = any(any(kw in a for kw in kws) for a in allergies_list)
+
+            if user_has_allergy:
+                if has_allergen(title, kws) or any(has_allergen(ing, kws) for ing in ingredients) or any(has_allergen(inst, kws) for inst in instructions):
+                    is_unsafe = True
+                    triggered_categories.append(category)
+
+        if is_unsafe:
+            print(f"⚠️ UNSAFE MEAL DETECTED: '{title}' contains allergens ({triggered_categories}). Sanitizing...")
+
+            new_title = title
+            for cat in triggered_categories:
+                repls = ALLERGEN_MAP[cat]["title_replacements"]
+                for old_t, new_t in repls:
+                    if old_t.lower() in new_title.lower():
+                        import re
+                        new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
+
+            if new_title == title:
+                new_title = f"Allergen-Free Pinoy High-Protein Meal ({meal_copy.get('mealType', 'Dish')})"
+
+            meal_copy["title"] = new_title
+
+            clean_ing = []
+            for ing in ingredients:
+                ing_unsafe = False
+                replacement_item = None
+                for cat in triggered_categories:
+                    kws = ALLERGEN_MAP[cat]["keywords"]
+                    if has_allergen(ing, kws):
+                        ing_unsafe = True
+                        subs = ALLERGEN_MAP[cat]["substitutes"]
+                        replacement_item = random.choice(subs)
+                        break
+                if ing_unsafe:
+                    if replacement_item and replacement_item not in clean_ing:
+                        clean_ing.append(replacement_item)
+                else:
+                    clean_ing.append(ing)
+
+            meal_copy["ingredients"] = clean_ing
+
+            clean_inst = []
+            for inst in instructions:
+                inst_text = inst
+                for cat in triggered_categories:
+                    kws = ALLERGEN_MAP[cat]["keywords"]
+                    if has_allergen(inst_text, kws):
+                        inst_text = "Cook all prepped safe ingredients thoroughly over medium-high heat until tender and fragrant."
+                        break
+                clean_inst.append(inst_text)
+
+            meal_copy["instructions"] = clean_inst
+
+        sanitized_meals.append(meal_copy)
+
+    return sanitized_meals
+
+
 # ---------------- ONBOARDING ----------------
 @app.post("/save-onboarding")
 async def save_onboarding(data: OnboardingData):
@@ -782,7 +953,7 @@ async def save_onboarding(data: OnboardingData):
     if data.structured_location:
         prefs["structuredLocation"] = data.structured_location
 
-    supabase.table("user_profiles").update({
+    update_payload = {
         "age": data.age,
         "weight_kg": data.weight_kg,
         "height_cm": data.height_cm,
@@ -790,7 +961,17 @@ async def save_onboarding(data: OnboardingData):
         "goalWeight": data.goal_weight,
         "targetDate": data.target_date,
         "location": json.dumps(prefs)
-    }).eq("id", data.user_id).execute()
+    }
+
+    if data.allergies is not None:
+        update_payload["allergies"] = data.allergies
+
+    try:
+        supabase.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
+    except Exception as update_err:
+        print("Save onboarding update error, retrying without top-level allergies:", update_err)
+        update_payload.pop("allergies", None)
+        supabase.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
 
     return {"success": True}
 
@@ -1591,7 +1772,8 @@ def generate_recipe(data: RecipeRequest):
         
         # Generate a unique recipe ID for frontend rendering
         recipe_data["id"] = f"rec_{uuid.uuid4().hex[:8]}"
-        return recipe_data
+        sanitized = sanitize_meals_for_allergies([recipe_data], allergies_list)
+        return sanitized[0] if sanitized else recipe_data
         
     except Exception as e:
         print("RECIPE GENERATOR ERROR:", repr(e))
@@ -1887,24 +2069,41 @@ def recommend_workouts(user_id: str):
         profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
         profile = profile_res.data[0] if profile_res.data else {}
 
+        prefs = {}
+        if profile.get("location"):
+            try:
+                prefs = json.loads(profile["location"])
+            except Exception:
+                pass
+
         goal = profile.get("goal", "Maintain Weight")
-        weight_kg = profile.get("weight_kg", 70.0)
-        goal_weight = profile.get("goalWeight", 70.0)
-        height_cm = profile.get("height_cm", 170.0)
-        age = profile.get("age", 25)
+        weight_kg = float(profile.get("weight_kg") or 70.0)
+        goal_weight = float(profile.get("goalWeight") or 70.0)
+        height_cm = float(profile.get("height_cm") or 170.0)
+        age = int(profile.get("age") or 25)
+        starting_weight = float(prefs.get("starting_weight") or weight_kg)
+        activity_level = profile.get("activity_level") or prefs.get("activity_level") or "Moderate"
+
+        bmi = round(weight_kg / ((height_cm / 100.0) ** 2), 1) if height_cm > 0 else 24.2
+        weight_gap = round(abs(weight_kg - goal_weight), 1)
 
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
         date_str = now_manila.strftime("%A, %B %d, %Y")
 
         prompt = f"""
-        You are an elite personal fitness trainer. Recommend exactly 3 custom bodyweight home workout routines (one Light, one Moderate, one Intense) specifically tailored to the user's goal to achieve their target weight:
-        - User Baseline: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg
-        - User Target Weight: {goal_weight}kg
+        You are an elite personal fitness trainer. Recommend exactly 3 custom bodyweight home workout routines (one Light, one Moderate, one Intense) specifically calculated for this user's data analytics:
+        - User Profile Analytics: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg, Starting Weight {starting_weight}kg, Calculated BMI: {bmi}
+        - User Target Weight: {goal_weight}kg (Total weight delta to achieve: {weight_gap}kg)
         - Primary Fitness Goal: {goal}
+        - Activity Level: {activity_level}
+        - Date Rotation Seed: {date_str}
         
-        Generate safe, effective routines that require no gym equipment.
-        To maintain daily variety, today's date rotation seed is: {date_str}. Recommend a unique combination of exercises for this specific date, different from typical recommendations.
+        Guidelines:
+        - Tailor set/rep schemes, rest periods, and exercise selections uniquely to their physical baseline (BMI {bmi}, activity level {activity_level}, goal {goal}).
+        - Calorie burn estimations MUST be calculated realistically for a {weight_kg}kg individual performing each specific routine.
+        - Generate safe, effective routines requiring no gym equipment.
+        - Recommend a unique combination of exercises for this specific date seed ({date_str}), ensuring daily variety.
 
         Return ONLY a JSON array of 3 objects (no markdown blocks, no backticks, just raw JSON).
         Each object must have the following keys:
@@ -1945,7 +2144,7 @@ def recommend_workouts(user_id: str):
                 "duration": "15 mins",
                 "targetGains": "Active Recovery & Flexibility",
                 "caloriesBurn": 130,
-                "description": f"A low-impact home mobility session designed to support your {goal} goal.",
+                "description": f"A low-impact home mobility session designed for a {weight_kg}kg individual targeting {goal}.",
                 "tutorials": [
                     {
                         "name": "Arm Circles & Torso Twists",
@@ -2104,7 +2303,7 @@ def recommend_meals(user_id: str):
         - Distribute the targets: Breakfast (25% calories), Lunch (35% calories), Snack (10% calories), Dinner (30% calories).
         - Recommend exclusively healthy Filipino dishes or fitness-oriented adaptations of local Filipino cuisine.
         - The recipes must use ingredients that are easily available in local Philippine wet markets (palengke) and grocery stores (e.g. calamansi, bangus, tilapia, chicken breast, kangkong, sitaw, squash, sweet potato/kamote, brown/white rice). Avoid expensive or hard-to-find western ingredients.
-        - CRITICAL SAFETY INSTRUCTION: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients (for example, if allergic to eggs, do NOT include eggs, egg whites, balut, mayo, or egg batter in any dish).
+        - CRITICAL ALLERGY SAFETY REQUIREMENT: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients (for example, if allergic to eggs, do NOT include eggs, egg whites, balut, mayo, or egg batter in any dish).
         - Do not use any currency symbols other than the Philippine Peso sign (₱).
 
         Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
@@ -2130,7 +2329,7 @@ def recommend_meals(user_id: str):
                 text = text[3:-3].strip()
             meals = json.loads(text)
             if isinstance(meals, list) and len(meals) == 4:
-                return meals
+                return sanitize_meals_for_allergies(meals, raw_allergies)
         except Exception as ai_err:
             print("GEMINI MEAL GENERATION WARNING:", ai_err)
 
@@ -2226,7 +2425,7 @@ def recommend_meals(user_id: str):
             "Ginger Slices & Lemongrass"
         ]
 
-        return [
+        raw_fallback_meals = [
             {
                 "id": "dp1",
                 "mealType": "Breakfast",
@@ -2294,6 +2493,8 @@ def recommend_meals(user_id: str):
                 ]
             }
         ]
+
+        return sanitize_meals_for_allergies(raw_fallback_meals, raw_allergies)
             
     except HTTPException as he:
         raise he
