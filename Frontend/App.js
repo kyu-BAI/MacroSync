@@ -506,20 +506,18 @@ function MainApp() {
       const CACHE_KEY = `ms_meals_cache_${userId}`;
       const todayStr = new Date().toISOString().split('T')[0];
 
-      // 1. Load from cache instantly first
+      // 1. Load from cache instantly first for 0ms load speed
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             setSessionRecipes(parsed.meals);
-            // If cache is fresh (today), no need for a network call
-            if (parsed.date === todayStr) return;
           }
         }
       } catch (e) {}
 
-      // 2. Only fetch from network if cache is stale or empty
+      // 2. Fetch fresh recommendations from backend to ensure up-to-date allergy safety & analytics
       try {
         const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
         if (res.ok) {

@@ -259,13 +259,10 @@ export default function DietRecipesScreen({
               setDailyPlan(parsed.meals);
               setLoadingMeals(false); // Instant load — no spinner shown to user
             }
-            // If cache is from today, we're done — no network call needed
-            if (parsed.date === todayStr) return;
-            // If stale (yesterday's data), silently refresh in background
           }
         }
 
-        // 2. Fetch fresh from server (silently if we already showed cached data)
+        // 2. Fetch fresh from server to ensure up-to-date allergy safety & analytics
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(`${API_URL}/meals/recommend/${userId}`, { signal: controller.signal });

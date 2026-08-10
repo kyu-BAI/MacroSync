@@ -774,9 +774,12 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
 
     allergies_list = []
     if isinstance(allergies_raw, list):
-        allergies_list = [str(a).strip().lower() for a in allergies_raw if a]
+        for item in allergies_raw:
+            if isinstance(item, str):
+                allergies_list.extend([x.strip().lower() for x in item.replace('[','').replace(']','').replace('"','').replace("'",'').split(',') if x.strip()])
     elif isinstance(allergies_raw, str) and allergies_raw.strip():
-        allergies_list = [a.strip().lower() for a in allergies_raw.split(",") if a.strip()]
+        clean_str = allergies_raw.replace('[','').replace(']','').replace('"','').replace("'",'')
+        allergies_list.extend([x.strip().lower() for x in clean_str.split(',') if x.strip()])
 
     if not allergies_list or "none" in allergies_list:
         return meals_list
@@ -794,8 +797,8 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
 
     ALLERGEN_MAP = {
         "egg": {
-            "keywords": ["egg", "eggs", "itlog", "balut", "mayo", "mayonnaise", "batter"],
-            "title_replacements": [("Egg", "Chicken Breast"), ("Eggs", "Kamote Hash"), ("Omelet", "Tofu Scramble")],
+            "keywords": ["egg", "eggs", "itlog", "balut", "mayo", "mayonnaise", "batter", "scrambled", "omelet"],
+            "title_replacements": [("Eggs &", "Chicken Breast &"), ("Egg &", "Chicken &"), ("Eggs", "Chicken Breast"), ("Egg", "Chicken"), ("Omelet", "Tofu Scramble"), ("Itlog", "Manok")],
             "substitutes": [
                 "150g Grilled Skinless Chicken Breast Cubes",
                 "150g Steamed Yellow Kamote (Sweet Potato)",
@@ -804,7 +807,7 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
         },
         "peanut": {
             "keywords": ["peanut", "peanuts", "mani", "nut", "nuts", "cashew", "kare-kare"],
-            "title_replacements": [("Peanut", "Calamansi Garlic"), ("Kare-Kare", "Sinigang na Baboy")],
+            "title_replacements": [("Peanut", "Calamansi Garlic"), ("Kare-Kare", "Sinigang na Baboy"), ("Nuts", "Sesame Seeds")],
             "substitutes": [
                 "1 tbsp Toasted Sesame Seeds",
                 "1 tbsp Fresh Calamansi & Garlic Glaze",
@@ -863,8 +866,8 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
     for meal in meals_list:
         meal_copy = dict(meal)
         title = str(meal_copy.get("title") or "")
-        ingredients = meal_copy.get("ingredients") or []
-        instructions = meal_copy.get("instructions") or []
+        ingredients = list(meal_copy.get("ingredients") or [])
+        instructions = list(meal_copy.get("instructions") or [])
 
         is_unsafe = False
         triggered_categories = []
@@ -884,15 +887,23 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
             print(f"⚠️ UNSAFE MEAL DETECTED: '{title}' contains allergens ({triggered_categories}). Sanitizing...")
 
             new_title = title
+            import re
             for cat in triggered_categories:
                 repls = ALLERGEN_MAP[cat]["title_replacements"]
                 for old_t, new_t in repls:
                     if old_t.lower() in new_title.lower():
-                        import re
-                        new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
+                        new_title = re.sub(r'\b' + re.escape(old_t) + r'\b', new_t, new_title, flags=re.IGNORECASE)
+                        if old_t.lower() in new_title.lower():
+                            new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
 
-            if new_title == title:
-                new_title = f"Allergen-Free Pinoy High-Protein Meal ({meal_copy.get('mealType', 'Dish')})"
+            if new_title == title or any(has_allergen(new_title, ALLERGEN_MAP[cat]["keywords"]) for cat in triggered_categories):
+                m_type = meal_copy.get('mealType', 'Dish')
+                if any("egg" in cat for cat in triggered_categories):
+                    new_title = f"Pinoy High-Protein Chicken & Kamote {m_type}"
+                elif any("seafood" in cat for cat in triggered_categories):
+                    new_title = f"Grilled Skinless Chicken Breast & Kangkong {m_type}"
+                else:
+                    new_title = f"Allergen-Free Pinoy High-Protein {m_type}"
 
             meal_copy["title"] = new_title
 
