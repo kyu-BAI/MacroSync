@@ -1896,7 +1896,7 @@ def analyze_food(data: AnalyzeFoodRequest):
             if "quota" in err_msg.lower() or "key" in err_msg.lower() or "429" in err_msg:
                 result_data = {"error": "AI Scanner service is temporarily busy. Please try scanning again in a few moments."}
             else:
-                result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
+                result_data = {"error": f"AI Scanner Error: {err_msg}"}
         
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
