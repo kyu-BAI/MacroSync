@@ -14,6 +14,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 import base64
+import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -1896,7 +1897,7 @@ def analyze_food(data: AnalyzeFoodRequest):
             if "quota" in err_msg.lower() or "key" in err_msg.lower() or "429" in err_msg:
                 result_data = {"error": "AI Scanner service is temporarily busy. Please try scanning again in a few moments."}
             else:
-                result_data = {"error": f"AI Scanner Error: {err_msg}"}
+                result_data = {"error": "AI Scanner was unable to process the image. Please take a clearer photo of your food and try again."}
         
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
