@@ -66,13 +66,15 @@ _DEFAULT_URL = _b64dec("aHR0cHM6Ly96Z3BtdXR4cnJoZm5zam5teGh2ci5zdXBhYmFzZS5jbw==
 _DEFAULT_KEY = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGMzT1Rnek5qUTVOQ3dpWlhod0lqb3lNRGsxTkRFeU5EazBmUS5uMFlBSzBITEh5bnJQRk5WZGJSVEROcm96M1FNUnZJLUlhaWJhdElEc1hn")
 _DEFAULT_ANON = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkltRnViMjRpTENKaVhHaDBJam9pTVRjM05UazNNREExTmlJc0ltVjRjQ0k2TVRjM05UazNNREExTmlKOS5XajUteWhzbjlJRkNBZHkxVGU5ZGI3OTlvQlZadVFxelp1SUhyVWhKWEVVOQ==")
 _DEFAULT_RESEND = _b64dec("cmVfRjhrSEN5cGhfMkdob3ljSkJqVVV5RFZuQW9YYnA4RUty")
+_DEFAULT_GEMINI = _b64dec("QVEuQWI4Uk42SUpXMERXc1BsRnZEWld6azJmVmtsenMyeE8xenZQZGJLdXpteTMyUU1ibVE=")
+_DEFAULT_PAYMONGO = _b64dec("c2tfdGVzdF94Vkt1elVlZzc0Rm9TeGFVRXIyeXZuVFg=")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL") or _DEFAULT_URL
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") or _DEFAULT_KEY
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or _DEFAULT_ANON
 RESEND_API_KEY = os.getenv("RESEND_API_KEY") or _DEFAULT_RESEND
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or _DEFAULT_GEMINI
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY") or _DEFAULT_PAYMONGO
 GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL") or "necoliejamescanales@gmail.com"
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or "xfvmozpawqerxsps"
 
@@ -1366,11 +1368,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
     models_to_try = [
-        'gemini-1.5-flash', 
+        'gemini-2.5-flash', 
         'gemini-2.0-flash', 
-        'gemini-2.5-flash',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash-8b'
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash-latest',
+        'gemini-2.5-pro'
     ]
     
     # 1. Try Direct REST API (Fastest, zero SDK dependencies)
@@ -1791,13 +1793,17 @@ def analyze_food(data: AnalyzeFoodRequest):
         else:
             b64_str = raw_b64_input
 
-        b64_str = b64_str.strip()
+        b64_str = b64_str.strip().replace("\n", "").replace("\r", "").replace(" ", "+")
         if not b64_str or len(b64_str) < 50:
             return {
                 "error": "No valid image data received. Please align food in the frame and scan again.",
                 "is_premium": is_premium,
                 "remaining_scans": "Unlimited" if is_premium else max(0, 5 - day_usage.get("scans", 0))
             }
+
+        missing_padding = len(b64_str) % 4
+        if missing_padding:
+            b64_str += '=' * (4 - missing_padding)
 
         try:
             image_bytes = base64.b64decode(b64_str)
