@@ -40,14 +40,6 @@ import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
-const CATEGORIZED_SUGGESTIONS = [
-  "High-protein meal suggestions",
-  "How to hit my daily protein target",
-  "Cheap budget recipes under ₱100",
-  "15-min zero-equipment home workout",
-  "Quick healthy snacks to stop cravings",
-];
-
 export default function ChatbotAIScreen({ onTabChange, userId, userProfile, messages = [], setMessages }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
@@ -97,16 +89,17 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   // --- DYNAMIC VITA AI GREETING ---
   useEffect(() => {
     if (messages.length === 0) {
+      const userName = userProfile?.name || userProfile?.full_name || 'there';
       setMessages([
         {
           id: 1,
           sender: 'ai',
-          text: `Hi ${userProfile?.name || 'there'}! I'm Vita AI, your personal health & zero-equipment fitness guide. How can I help you reach your target goal weight today?`,
+          text: `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     }
-  }, [messages.length, userProfile?.name]);
+  }, [messages.length, userProfile?.name, userProfile?.full_name]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -144,7 +137,8 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
         },
         body: JSON.stringify({
           user_id: userId,
-          message: messageToSend
+          message: messageToSend,
+          user_profile: userProfile || {}
         })
       });
 
@@ -367,24 +361,6 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             ) : null
           }
         />
-
-        {/* CATEGORIZED QUICK REPLY SUGGESTION CHIPS */}
-        {!isLoading && (
-          <View style={styles.suggestionsWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
-              {CATEGORIZED_SUGGESTIONS.map((textItem, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.suggestionChip}
-                  onPress={() => setInputText(textItem)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.suggestionChipText}>{textItem}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
 
         {/* CHAT INPUT BAR HUB */}
         <View style={styles.chatInputFormCard}>

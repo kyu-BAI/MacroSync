@@ -11,6 +11,7 @@ import {
   Platform,
   SafeAreaView,
 } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 LogBox.ignoreLogs([
   'Cannot connect to Expo CLI',
@@ -1043,10 +1044,12 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <CustomAlertProvider>
-        <MainApp />
-      </CustomAlertProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <CustomAlertProvider>
+          <MainApp />
+        </CustomAlertProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

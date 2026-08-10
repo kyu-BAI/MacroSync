@@ -12,10 +12,11 @@ import {
   Image,
   ScrollView,
   Alert,
-  Modal
+  Modal,
+  TextInput
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle, Minus, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,6 +41,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   const [capturedImage, setCapturedImage] = useState(null);
   const [selectedMealType, setSelectedMealType] = useState('Lunch');
   const [portionScale, setPortionScale] = useState(1.0);
+  const [customGramsInput, setCustomGramsInput] = useState('');
   
   // Scan limits tracking state
   const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
@@ -72,6 +74,8 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
       else if (hour >= 16 && hour < 18) setSelectedMealType('Snack');
       else setSelectedMealType('Dinner');
       setPortionScale(1.0);
+      const baseGrams = analysisResult.serving_weight_g || 100;
+      setCustomGramsInput(baseGrams.toString());
     }
   }, [analysisResult]);
 
@@ -401,13 +405,29 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     setCapturedImage(null);
     setIsScanning(false);
     setPortionScale(1.0);
+    setCustomGramsInput('');
   };
 
-  const scaledCalories = Math.round((analysisResult?.calories || 0) * portionScale);
-  const scaledProtein = Math.round((analysisResult?.protein || 0) * portionScale);
-  const scaledCarbs = Math.round((analysisResult?.carbs || 0) * portionScale);
-  const scaledFats = Math.round((analysisResult?.fats || 0) * portionScale);
-  const scaledWeight = analysisResult?.serving_weight_g ? Math.round(analysisResult.serving_weight_g * portionScale) : null;
+  const baseWeightGrams = analysisResult?.serving_weight_g || 100;
+  const currentGrams = parseFloat(customGramsInput) || (baseWeightGrams * portionScale);
+  const effectiveScale = baseWeightGrams > 0 ? (currentGrams / baseWeightGrams) : portionScale;
+
+  const scaledCalories = Math.round((analysisResult?.calories || 0) * effectiveScale);
+  const scaledProtein = Math.round((analysisResult?.protein || 0) * effectiveScale);
+  const scaledCarbs = Math.round((analysisResult?.carbs || 0) * effectiveScale);
+  const scaledFats = Math.round((analysisResult?.fats || 0) * effectiveScale);
+  const scaledWeight = Math.round(currentGrams);
+
+  const handleStepGrams = (delta) => {
+    const nextGrams = Math.max(10, Math.round(currentGrams + delta));
+    setCustomGramsInput(nextGrams.toString());
+  };
+
+  const handleMultiplierPress = (scale) => {
+    setPortionScale(scale);
+    const newGrams = Math.round(baseWeightGrams * scale);
+    setCustomGramsInput(newGrams.toString());
+  };
 
   const handleLogFood = () => {
     if (!analysisResult) return;
@@ -491,30 +511,70 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           
           <Text style={styles.foodName}>{analysisResult.name}</Text>
           {scaledWeight ? (
-            <Text style={styles.portionText}>Estimated Portion: {scaledWeight}g ({portionScale}x serving)</Text>
+            <Text style={styles.portionText}>Estimated Portion: {scaledWeight}g (AI Base ~{baseWeightGrams}g)</Text>
           ) : null}
 
-          {/* ── PORTION SCALE CHIPS ── */}
-          <Text style={styles.subTitleLabel}>Adjust Portion Scale</Text>
+          {/* ── PORTION WEIGHT (GRAMS INPUT & STEPPER) ── */}
+          <Text style={styles.subTitleLabel}>Adjust Portion Weight (Grams)</Text>
+          
+          <View style={styles.gramInputCard}>
+            <TouchableOpacity 
+              style={styles.stepperButton}
+              onPress={() => handleStepGrams(-25)}
+              activeOpacity={0.7}
+            >
+              <Minus color={isDarkMode ? '#CBD5E1' : '#475569'} size={18} />
+            </TouchableOpacity>
+
+            <View style={styles.gramInputWrapper}>
+              <TextInput
+                style={styles.gramTextInput}
+                value={customGramsInput}
+                onChangeText={(val) => {
+                  const clean = val.replace(/[^0-9.]/g, '');
+                  setCustomGramsInput(clean);
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus={true}
+                placeholder={String(baseWeightGrams)}
+                placeholderTextColor="#94A3B8"
+              />
+              <Text style={styles.gramSuffixText}>grams</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.stepperButton}
+              onPress={() => handleStepGrams(25)}
+              activeOpacity={0.7}
+            >
+              <Plus color={isDarkMode ? '#CBD5E1' : '#475569'} size={18} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Multipliers Row */}
           <View style={styles.portionScaleRow}>
-            {[0.5, 1.0, 1.5, 2.0].map((scale) => (
-              <TouchableOpacity
-                key={scale}
-                style={[
-                  styles.scaleChip,
-                  portionScale === scale && styles.scaleChipActive
-                ]}
-                onPress={() => setPortionScale(scale)}
-                activeOpacity={0.8}
-              >
-                <Text style={[
-                  styles.scaleChipText,
-                  portionScale === scale && styles.scaleChipTextActive
-                ]}>
-                  {scale}x
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {[0.5, 1.0, 1.5, 2.0].map((scale) => {
+              const targetGrams = Math.round(baseWeightGrams * scale);
+              const isActive = Math.abs(currentGrams - targetGrams) < 2;
+              return (
+                <TouchableOpacity
+                  key={scale}
+                  style={[
+                    styles.scaleChip,
+                    isActive && styles.scaleChipActive
+                  ]}
+                  onPress={() => handleMultiplierPress(scale)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.scaleChipText,
+                    isActive && styles.scaleChipTextActive
+                  ]}>
+                    {scale}x ({targetGrams}g)
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* ── MEAL TYPE SELECTOR ── */}
@@ -1032,6 +1092,49 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
+  gramInputCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme?.cardBg || (isDarkMode ? '#1E293B' : '#F1F5F9'),
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    borderWidth: 1.2,
+    borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0'),
+  },
+  stepperButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme?.surface || (isDarkMode ? '#334155' : '#FFFFFF'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  gramInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gramTextInput: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: logoGreen,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    minWidth: 60,
+  },
+  gramSuffixText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+    marginLeft: 4,
+  },
   portionScaleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1040,17 +1143,19 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
   },
   scaleChip: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     marginHorizontal: 3,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme?.cardBg || '#F1F5F9',
     borderWidth: 1,
     borderColor: theme?.border || '#E2E8F0',
   },
   scaleChipActive: {
-    backgroundColor: logoGreen,
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)',
     borderColor: logoGreen,
+    borderWidth: 1.5,
   },
   scaleChipText: {
     fontSize: 12,
@@ -1058,7 +1163,8 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     color: theme?.textSecondary || '#64748B',
   },
   scaleChipTextActive: {
-    color: '#FFFFFF',
+    color: logoGreen,
+    fontWeight: '900',
   },
   mealTypeRow: {
     flexDirection: 'row',
@@ -1072,6 +1178,7 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginHorizontal: 3,
     borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme?.border || '#E2E8F0',
   },

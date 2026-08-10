@@ -173,6 +173,7 @@ class OnboardingData(BaseModel):
 class ChatMessageRequest(BaseModel):
     user_id: str
     message: str
+    user_profile: Optional[dict] = None
 
 
 class RecipeRequest(BaseModel):
@@ -1387,10 +1388,10 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
     models_to_try = [
-        'gemini-flash-latest', 
-        'gemini-3.6-flash',
-        'gemini-flash-lite-latest',
-        'gemini-3.1-flash-lite'
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash-8b'
     ]
     
     # 1. Try Direct REST API across load-balanced ordered keys
@@ -1448,213 +1449,400 @@ def chat_with_ai(data: ChatMessageRequest):
         is_premium = False
         day_usage = {"scans": 0, "chats": 0}
         
-        # Base System Instructions enforcing the two strict chatbot routes
+        # Base System Instructions enforcing strict chatbot routes and auto-logging features
         system_instructions = (
             "=== MACROSYNC VITA AI ASSISTANT SYSTEM INSTRUCTIONS ===\n"
-            "You are Vita AI, MacroSync's official AI Health, Nutrition, Diet, and Fitness Assistant.\n\n"
-            "STRICT DOMAIN BOUNDARIES & ROUTE RULES:\n"
-            "ROUTE 1: FOOD & HEALTH RELATED QUESTIONS\n"
-            "- IF the user message is asking about food, nutrition, recipes, diet, macros, calories, water intake, workouts, exercises, fitness, weight, body goals, or health/wellness:\n"
-            "  - Provide an accurate, clear, supportive, and well-structured answer.\n"
-            "  - Use clear formatting with bolding (**text**) and bullet points where helpful. Do NOT use markdown header tags (like ## or ###).\n"
-            "  - Use the user profile context and daily progress below to tailor your advice.\n\n"
-            "ROUTE 2: NON-FOOD & NON-HEALTH RELATED QUESTIONS OR RANDOM TEXT\n"
-            "- IF the user message or text is NOT related to food, nutrition, diet, workouts, fitness, or health (e.g. random gibberish like 'esmeringhoygod', coding, math, general history, entertainment, movies, tech, politics, sports events, celebrities, or general non-health topics):\n"
-            "  - DO NOT answer or fulfill the non-health question.\n"
-            "  - Respond with EXACTLY this explanation message and NOTHING else:\n"
-            "    \"I am Vita AI, MacroSync's Health & Nutrition Assistant. I am only built to answer questions related to food, nutrition, diet, workouts, or health. Please ask a health or nutrition-related question!\"\n\n"
+            "You are Vita AI, MacroSync's official AI Health, Nutrition, Diet, Fitness, and Personal Profile Assistant.\n\n"
+            "RULE 1: USER PROFILE & IDENTITY QUESTIONS (HIGHEST PRIORITY)\n"
+            "- Whenever the user asks 'Who am I?', 'who am i', 'what is my name', 'where do I live', 'what are my stats', or asks about their profile:\n"
+            "  - Greet them warmly using their exact Name / Username!\n"
+            "  - Provide a clear, beautifully formatted bulleted overview of ALL content they have in the app using the USER PROFILE & TODAY'S LIVE PROGRESS section below, including:\n"
+            "    • Profile Details (Username/Name, Location, Age, Goal)\n"
+            "    • Weight & Goal Progress (Current Weight, Target Goal Weight, Weight Analytics)\n"
+            "    • Today's Nutrition & Meals Logged (Calories, Protein, Carbs, Fats taken, and list of logged meals)\n"
+            "    • Today's Water Drunk (Glasses of water / 8 glasses)\n"
+            "    • Active Workout Minutes & Workouts Logged Today\n"
+            "    • Allergies\n"
+            "  - NEVER treat identity, profile, or user content questions as off-topic!\n\n"
+            "RULE 2: NUTRITION, DIET, RECIPES & WORKOUTS\n"
+            "- Answer questions about food, nutrition, fitness, recipes, and workouts.\n"
+            "- When asked what to eat, check TODAY'S REMAINING MACRO BUDGET below and recommend specific meals that fit within their remaining budget.\n"
+            "- Use bolding (**text**) and bullet points where helpful. Do NOT use markdown header tags (like ## or ###).\n\n"
+            "RULE 3: AUTO-LOGGING MEALS, WORKOUTS & WATER\n"
+            "- IF the user mentions eating food, working out, or drinking water (e.g. 'I ate 2 eggs', 'I ran 30 mins', 'I drank 2 glasses of water'):\n"
+            "  - At the VERY END of your response, on a new line, output the auto-logging JSON block:\n"
+            "    For meal logging: LOG_MEAL: {\"name\": \"Meal Name\", \"calories\": 350, \"protein\": 25, \"carbs\": 30, \"fats\": 10}\n"
+            "    For workout logging: LOG_WORKOUT: {\"name\": \"Workout Name\", \"calories_burned\": 220, \"active_minutes\": 30}\n"
+            "    For water logging: LOG_WATER: {\"glasses\": 2}\n\n"
+            "RULE 4: UNRELATED OFF-TOPIC QUESTIONS ONLY\n"
+            "- ONLY if the user asks about completely unrelated non-health topics (like math homework, coding, politics, or movies):\n"
+            "  - Politely state: \"I am Vita AI, MacroSync's Health, Fitness & Profile Assistant. Please ask a health, nutrition, or profile-related question!\"\n\n"
         )
 
         user_context_str = ""
         
+        user = {}
         if user_result and user_result.data:
             user = user_result.data[0]
-            
-            # Parse preferences from location column
-            prefs = {}
-            if user.get("location"):
-                try:
-                    prefs = json.loads(user["location"])
-                except:
-                    pass
-            
-            is_premium = prefs.get("is_premium", False)
-            manila_tz = timezone(timedelta(hours=8))
-            now_manila = datetime.now(manila_tz)
-            today_str = now_manila.strftime("%Y-%m-%d")
 
-            usage = prefs.get("usage", {})
-            day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
+        client_profile = data.user_profile or {}
+        
+        # Parse preferences from location column
+        prefs = {}
+        raw_loc = user.get("location") or ""
+        if raw_loc:
+            try:
+                prefs = json.loads(raw_loc)
+            except:
+                pass
+        
+        is_premium = prefs.get("is_premium", False) or client_profile.get("is_premium", False)
+        manila_tz = timezone(timedelta(hours=8))
+        now_manila = datetime.now(manila_tz)
+        today_str = now_manila.strftime("%Y-%m-%d")
 
-            if not is_premium:
-                if day_usage.get("chats", 0) >= 10:
-                    raise HTTPException(status_code=403, detail="Daily chatbot limit reached. Please upgrade to premium for unlimited access.")
-                day_usage["chats"] = day_usage.get("chats", 0) + 1
-            else:
-                if day_usage.get("chats", 0) >= 200:
-                    raise HTTPException(status_code=429, detail="Daily Fair Use limit of 200 chatbot messages reached for today.")
-                day_usage["chats"] = day_usage.get("chats", 0) + 1
+        usage = prefs.get("usage", {})
+        day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
 
-            usage[today_str] = day_usage
-            prefs["usage"] = usage
-            supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
+        if not is_premium:
+            if day_usage.get("chats", 0) >= 10:
+                raise HTTPException(status_code=403, detail="Daily chatbot limit reached. Please upgrade to premium for unlimited access.")
+            day_usage["chats"] = day_usage.get("chats", 0) + 1
+        else:
+            if day_usage.get("chats", 0) >= 200:
+                raise HTTPException(status_code=429, detail="Daily Fair Use limit of 200 chatbot messages reached for today.")
+            day_usage["chats"] = day_usage.get("chats", 0) + 1
 
-            unit = prefs.get("unit", "kg")
-            user_address = prefs.get("address") or "Philippines"
-            raw_allergies = user.get("allergies") or prefs.get("allergies") or []
+        usage[today_str] = day_usage
+        prefs["usage"] = usage
+        if user_id and user:
+            try:
+                supabase.table("user_profiles").update({"location": json.dumps(prefs)}).eq("id", user_id).execute()
+            except Exception:
+                pass
+
+        unit = prefs.get("unit") or client_profile.get("unit") or "kg"
+        user_location = (
+            prefs.get("address") or 
+            prefs.get("structuredLocation") or 
+            prefs.get("location_name") or 
+            prefs.get("city") or 
+            client_profile.get("address") or 
+            client_profile.get("location") or 
+            (raw_loc if isinstance(raw_loc, str) and not raw_loc.startswith("{") else None) or 
+            "Philippines"
+        )
+        raw_allergies = user.get("allergies") or prefs.get("allergies") or client_profile.get("allergies") or []
+        if isinstance(raw_allergies, list):
+            allergies_str = ", ".join(raw_allergies) if raw_allergies else "None"
+        else:
+            allergies_str = str(raw_allergies) or "None"
+
+        # Auto-sync new allergy discoveries mentioned in chat to user_profiles table
+        msg_lower_check = (data.message or "").lower()
+        allergy_triggers = ["allergic to", "allergy to", "have an allergy", "have a allergy", "discovered i have", "add allergy", "cannot eat", "can't eat"]
+        if any(tr in msg_lower_check for tr in allergy_triggers):
+            allergies_list = []
             if isinstance(raw_allergies, list):
-                allergies_str = ", ".join(raw_allergies) if raw_allergies else "None"
-            else:
-                allergies_str = str(raw_allergies) or "None"
+                allergies_list = list(raw_allergies)
+            elif raw_allergies:
+                allergies_list = [a.strip() for a in str(raw_allergies).split(",") if a.strip()]
 
-            # Auto-sync new allergy discoveries mentioned in chat to user_profiles table
-            msg_lower_check = (data.message or "").lower()
-            allergy_triggers = ["allergic to", "allergy to", "have an allergy", "have a allergy", "discovered i have", "add allergy", "cannot eat", "can't eat"]
-            if any(tr in msg_lower_check for tr in allergy_triggers):
-                allergies_list = []
-                if isinstance(raw_allergies, list):
-                    allergies_list = list(raw_allergies)
-                elif raw_allergies:
-                    allergies_list = [a.strip() for a in str(raw_allergies).split(",") if a.strip()]
+            scan_allergens = [
+                "peanut", "peanuts", "nut", "nuts", "egg", "eggs", "dairy", "milk",
+                "seafood", "fish", "shrimp", "crab", "shellfish", "soy", "tofu",
+                "gluten", "wheat", "chicken", "pork", "beef", "sesame", "kiwi"
+            ]
 
-                scan_allergens = [
-                    "peanut", "peanuts", "nut", "nuts", "egg", "eggs", "dairy", "milk",
-                    "seafood", "fish", "shrimp", "crab", "shellfish", "soy", "tofu",
-                    "gluten", "wheat", "chicken", "pork", "beef", "sesame", "kiwi"
-                ]
+            new_found = []
+            for alg in scan_allergens:
+                if alg in msg_lower_check:
+                    clean_alg = alg.capitalize()
+                    if clean_alg not in allergies_list and alg not in allergies_list:
+                        allergies_list.append(clean_alg)
+                        new_found.append(clean_alg)
 
-                new_found = []
-                for alg in scan_allergens:
-                    if alg in msg_lower_check:
-                        clean_alg = alg.capitalize()
-                        if clean_alg not in allergies_list and alg not in allergies_list:
-                            allergies_list.append(clean_alg)
-                            new_found.append(clean_alg)
+            if new_found and user_id:
+                try:
+                    supabase_admin.table("user_profiles").update({"allergies": allergies_list}).eq("id", user_id).execute()
+                    allergies_str = ", ".join(allergies_list)
+                    print(f"AUTOMATIC CHAT ALLERGY PROFILE UPDATE: Added {new_found} for user {user_id}")
+                except Exception as _up_err:
+                    print("Failed to auto-update chat allergy:", _up_err)
 
-                if new_found and user_id:
-                    try:
-                        supabase_admin.table("user_profiles").update({"allergies": allergies_list}).eq("id", user_id).execute()
-                        allergies_str = ", ".join(allergies_list)
-                        print(f"AUTOMATIC CHAT ALLERGY PROFILE UPDATE: Added {new_found} for user {user_id}")
-                    except Exception as _up_err:
-                        print("Failed to auto-update chat allergy:", _up_err)
+        current_weight_kg = float(user.get("weight_kg") or client_profile.get("weight_kg") or 70.0)
+        target_weight_kg = float(user.get("goalWeight") or client_profile.get("goalWeight") or 70.0)
+        starting_weight_kg = float(prefs.get("starting_weight") or client_profile.get("starting_weight") or current_weight_kg or 70.0)
+        goal = user.get("goal") or client_profile.get("goal") or "Maintain Weight"
+        
+        # Calculate Macro Targets based on Goal
+        if "Lose" in goal:
+            target_calories = 1800
+            target_protein = int(current_weight_kg * 2.2)
+            target_carbs = 150
+            target_fats = 60
+        elif "Gain" in goal:
+            target_calories = 2800
+            target_protein = int(current_weight_kg * 2.0)
+            target_carbs = 350
+            target_fats = 80
+        else:
+            target_calories = 2200
+            target_protein = int(current_weight_kg * 1.8)
+            target_carbs = 250
+            target_fats = 70
 
-            current_weight_kg = float(user.get("weight_kg") or 70.0)
-            target_weight_kg = float(user.get("goalWeight") or 70.0)
-            starting_weight_kg = float(prefs.get("starting_weight") or current_weight_kg or 70.0)
-            goal = user.get("goal") or "Maintain Weight"
-            
-            # Calculate Macro Targets based on Goal
-            if "Lose" in goal:
-                target_calories = 1800
-                target_protein = int(current_weight_kg * 2.2)
-                target_carbs = 150
-                target_fats = 60
-                rec_workout = "Cardio & Fat-Burning Circuit (30 mins), Bodyweight Calisthenics, Walking 10,000 steps"
-                rec_diet = "High-protein lean meals: Kinilaw na Tangigue, Grilled Fish Sutukil, Fresh Vegetables, Chicken Tinola"
-            elif "Gain" in goal:
-                target_calories = 2800
-                target_protein = int(current_weight_kg * 2.0)
-                target_carbs = 350
-                target_fats = 80
-                rec_workout = "Hypertrophy Resistance Training (Push/Pull/Legs), Heavy Compound Lifts, Dumbbell Press"
-                rec_diet = "Calorie & Protein-dense meals: Beef Sinigang with Rice, Grilled Chicken Breast with Brown Rice, Pinto Corn Snack"
-            else:
-                target_calories = 2200
-                target_protein = int(current_weight_kg * 1.8)
-                target_carbs = 250
-                target_fats = 70
-                rec_workout = "Balanced Resistance & Cardio Routine, Full Body Circuit (40 mins), Yoga & Mobility"
-                rec_diet = "Balanced Filipino Nutrition: Steamed Fish, Monggo with Malunggay, Oatmeal with Bananas, Fresh Fruits"
+        # Formatted weight strings
+        if unit == "lbs":
+            current_weight_str = f"{round(current_weight_kg * 2.20462, 1)} lbs ({current_weight_kg} kg)"
+            target_weight_str = f"{round(target_weight_kg * 2.20462, 1)} lbs ({target_weight_kg} kg)"
+            starting_weight_str = f"{round(starting_weight_kg * 2.20462, 1)} lbs ({starting_weight_kg} kg)"
+        else:
+            current_weight_str = f"{current_weight_kg} kg"
+            target_weight_str = f"{target_weight_kg} kg"
+            starting_weight_str = f"{starting_weight_kg} kg"
 
-            # Formatted weight strings
-            if unit == "lbs":
-                current_weight_str = f"{round(current_weight_kg * 2.20462, 1)} lbs ({current_weight_kg} kg)"
-                target_weight_str = f"{round(target_weight_kg * 2.20462, 1)} lbs ({target_weight_kg} kg)"
-                starting_weight_str = f"{round(starting_weight_kg * 2.20462, 1)} lbs ({starting_weight_kg} kg)"
-            else:
-                current_weight_str = f"{current_weight_kg} kg"
-                target_weight_str = f"{target_weight_kg} kg"
-                starting_weight_str = f"{starting_weight_kg} kg"
+        # 1. Fetch Today's Logged Meals
+        today_start_manila = now_manila.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start_manila.astimezone(timezone.utc)
 
-            # 1. Fetch Today's Logged Meals
-            today_start_manila = now_manila.replace(hour=0, minute=0, second=0, microsecond=0)
-            today_start_utc = today_start_manila.astimezone(timezone.utc)
+        logged_meals_data = []
+        if user_id:
+            try:
+                meals_res = supabase.table("logged_meals") \
+                    .select("*") \
+                    .eq("user_id", user_id) \
+                    .gte("logged_at", today_start_utc.isoformat()) \
+                    .execute()
+                logged_meals_data = meals_res.data or []
+            except Exception:
+                pass
 
-            meals_res = supabase.table("logged_meals") \
-                .select("*") \
-                .eq("user_id", user_id) \
-                .gte("logged_at", today_start_utc.isoformat()) \
-                .execute()
-            logged_meals_data = meals_res.data or []
+        consumed_calories = sum(m.get("calories", 0) for m in logged_meals_data)
+        consumed_protein = sum(m.get("protein", 0) for m in logged_meals_data)
+        consumed_carbs = sum(m.get("carbs", 0) for m in logged_meals_data)
+        consumed_fats = sum(m.get("fats", 0) for m in logged_meals_data)
 
-            consumed_calories = sum(m.get("calories", 0) for m in logged_meals_data)
-            consumed_protein = sum(m.get("protein", 0) for m in logged_meals_data)
-            consumed_carbs = sum(m.get("carbs", 0) for m in logged_meals_data)
-            consumed_fats = sum(m.get("fats", 0) for m in logged_meals_data)
+        rem_cals = max(0, target_calories - consumed_calories)
+        rem_prot = max(0, target_protein - consumed_protein)
+        rem_carb = max(0, target_carbs - consumed_carbs)
+        rem_fat = max(0, target_fats - consumed_fats)
 
-            if logged_meals_data:
-                meals_list_str = "\n".join([
-                    f"  - {m.get('name')}: {m.get('calories')} kcal, {m.get('protein')}g P, {m.get('carbs')}g C, {m.get('fats')}g F"
-                    for m in logged_meals_data
-                ])
-            else:
-                meals_list_str = "  - No meals logged yet today."
+        if logged_meals_data:
+            meals_list_str = "\n".join([
+                f"  - {m.get('name')}: {m.get('calories')} kcal, {m.get('protein')}g P, {m.get('carbs')}g C, {m.get('fats')}g F"
+                for m in logged_meals_data
+            ])
+        else:
+            meals_list_str = "  - No meals logged yet today."
 
-            # 2. Fetch Today's Water Logs
-            water_res = supabase.table("water_logs").select("*").eq("user_id", user_id).execute()
-            glasses = 0
-            if water_res.data:
-                record = water_res.data[0]
-                updated_at_str = record.get("updated_at")
-                if updated_at_str:
-                    try:
-                        updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
-                        if updated_at >= today_start_utc:
+        # 2. Fetch Today's Water Logs
+        glasses = 0
+        if user_id:
+            try:
+                water_res = supabase.table("water_logs").select("*").eq("user_id", user_id).execute()
+                if water_res.data:
+                    record = water_res.data[0]
+                    updated_at_str = record.get("updated_at")
+                    if updated_at_str:
+                        try:
+                            updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                            if updated_at >= today_start_utc:
+                                glasses = record.get("glasses", 0)
+                        except:
                             glasses = record.get("glasses", 0)
-                    except:
+                    else:
                         glasses = record.get("glasses", 0)
-                else:
-                    glasses = record.get("glasses", 0)
+            except Exception:
+                pass
 
-            # 3. Fetch Today's Logged Workouts
-            workouts_res = supabase.table("logged_workouts") \
-                .select("*") \
-                .eq("user_id", user_id) \
-                .gte("logged_at", today_start_utc.isoformat()) \
-                .execute()
-            workouts_data = workouts_res.data or []
+        # 3. Fetch Today's Logged Workouts
+        workouts_data = []
+        if user_id:
+            try:
+                workouts_res = supabase.table("logged_workouts") \
+                    .select("*") \
+                    .eq("user_id", user_id) \
+                    .gte("logged_at", today_start_utc.isoformat()) \
+                    .execute()
+                workouts_data = workouts_res.data or []
+            except Exception:
+                pass
 
-            calories_burned = sum(w.get("calories_burned", 0) for w in workouts_data)
-            active_minutes = sum(w.get("active_minutes", 0) for w in workouts_data)
+        calories_burned = sum(w.get("calories_burned", 0) for w in workouts_data)
+        active_minutes = sum(w.get("active_minutes", 0) for w in workouts_data)
 
-            if workouts_data:
-                workouts_list_str = "\n".join([
-                    f"  - {w.get('name')}: {w.get('calories_burned')} kcal burned, {w.get('active_minutes')} active mins"
-                    for w in workouts_data
-                ])
-            else:
-                workouts_list_str = "  - No workouts logged yet today."
+        if workouts_data:
+            workouts_list_str = "\n".join([
+                f"  - {w.get('name')}: {w.get('calories_burned')} kcal burned, {w.get('active_minutes')} active mins"
+                for w in workouts_data
+            ])
+        else:
+            workouts_list_str = "  - No workouts logged yet today."
 
-            user_context_str = (
-                f"USER PROFILE & TODAY'S LIVE PROGRESS:\n"
-                f"- Name: {user.get('name', 'User')}\n"
-                f"- Goal: {goal} | Current: {current_weight_str} | Target: {target_weight_str}\n"
-                f"- Allergies: {allergies_str}\n"
-                f"- Today's Macros: Calories ({consumed_calories}/{target_calories} kcal), Protein ({consumed_protein}/{target_protein}g), Carbs ({consumed_carbs}/{target_carbs}g), Fats ({consumed_fats}/{target_fats}g)\n"
-                f"- Water Today: {glasses} glasses\n"
-                f"- Meals Logged Today:\n{meals_list_str}\n"
-                f"- Workouts Logged Today:\n{workouts_list_str}\n\n"
+        display_user_name = (
+            user.get("name") or 
+            user.get("full_name") or 
+            prefs.get("name") or 
+            client_profile.get("name") or 
+            client_profile.get("full_name") or 
+            (user.get("email", "").split("@")[0].capitalize() if user.get("email") else "User")
+        )
+        user_age = user.get("age") or prefs.get("age") or client_profile.get("age") or "Not specified"
+
+        # Weight trend calculation
+        weight_diff = round(current_weight_kg - starting_weight_kg, 1)
+        if weight_diff < 0:
+            weight_trend = f"Down {abs(weight_diff)} kg from starting weight of {starting_weight_str} (Progressing towards target)"
+        elif weight_diff > 0:
+            weight_trend = f"Up {weight_diff} kg from starting weight of {starting_weight_str}"
+        else:
+            weight_trend = f"Steady at starting weight of {starting_weight_str}"
+
+        user_context_str = (
+            f"USER PROFILE & TODAY'S LIVE PROGRESS (Use these exact details to answer identity, stats, and health questions):\n"
+            f"- Name / Who Am I: {display_user_name}\n"
+            f"- Location / Where I Live / Address: {user_location}\n"
+            f"- Age / How Old Am I: {user_age}\n"
+            f"- Goal / Weight Goal: {goal}\n"
+            f"- Starting Weight: {starting_weight_str}\n"
+            f"- Current Weight: {current_weight_str}\n"
+            f"- Target / Goal Weight: {target_weight_str}\n"
+            f"- Weight Trend Analytics: {weight_trend}\n"
+            f"- Allergies: {allergies_str}\n"
+            f"- Today's Calories Taken / Eaten: {consumed_calories} / {target_calories} kcal ({rem_cals} kcal remaining)\n"
+            f"- Today's Protein Taken / Eaten: {consumed_protein}g / {target_protein}g ({rem_prot}g remaining)\n"
+            f"- Today's Carbs Taken / Eaten: {consumed_carbs}g / {target_carbs}g ({rem_carb}g remaining)\n"
+            f"- Today's Fats Taken / Eaten: {consumed_fats}g / {target_fats}g ({rem_fat}g remaining)\n"
+            f"- Water Drunk Today / Glasses of Water: {glasses} / 8 glasses\n"
+            f"- Active Workout Minutes Today / Minutes I Stay Active: {active_minutes} mins\n"
+            f"- Calories Burned Today: {calories_burned} kcal\n"
+            f"- Meals Logged Today:\n{meals_list_str}\n"
+            f"- Workouts Logged Today:\n{workouts_list_str}\n\n"
+        )
+
+        msg_clean = (data.message or "").strip().lower()
+        identity_keywords = [
+            "who am i", "who am I", "what is my name", "what's my name", 
+            "where do i live", "where do I live", "where am i", "where am I",
+            "what is my address", "what is my age", "how old am i", 
+            "what is my weight", "what is my goal", "my profile", 
+            "who is this", "tell me about me", "what are my stats", "my stats",
+            "who i am", "where i live", "my info", "about me"
+        ]
+
+        is_identity_query = any(kw in msg_clean for kw in identity_keywords)
+
+        if is_identity_query:
+            full_prompt = (
+                f"You are Vita AI, MacroSync's official AI Health, Fitness, and Personal Profile Assistant.\n"
+                f"The user is asking: '{data.message}'.\n"
+                f"You MUST greet them by their Name ({display_user_name}) and present a complete, friendly summary of all their MacroSync profile data and app content using the exact details below:\n\n"
+                f"{user_context_str}\n"
+                f"Format the response nicely with emoji bullet points highlighting their Profile info (Name, Location/Address: {user_location}, Age, Goal), Weight Stats, Today's Macros & Meals Logged, Water Logged, Active Minutes/Workouts, and Allergies. Do NOT decline or say this is off-topic!"
             )
+        else:
+            full_prompt = system_instructions + user_context_str + f"User message: {data.message}"
 
-        full_prompt = system_instructions + user_context_str + f"User message: {data.message}"
         reply_text = ""
         try:
             response = generate_gemini_content(full_prompt)
-            reply_text = response.text
+            reply_text = response.text or ""
+
+            # Check if Gemini output LOG_MEAL, LOG_WORKOUT, or LOG_WATER instructions
+            if "LOG_MEAL:" in reply_text and user_id:
+                try:
+                    parts = reply_text.split("LOG_MEAL:")
+                    main_reply = parts[0].strip()
+                    json_str = parts[1].strip().split("\n")[0].strip()
+                    meal_info = json.loads(json_str)
+                    
+                    meal_id = f"chat-m-{int(time.time() * 1000)}"
+                    meal_name = meal_info.get("name", "Logged Meal")
+                    cals = int(meal_info.get("calories", 0))
+                    prot = int(meal_info.get("protein", 0))
+                    carb = int(meal_info.get("carbs", 0))
+                    fat = int(meal_info.get("fats", 0))
+
+                    supabase.table("logged_meals").upsert({
+                        "id": meal_id,
+                        "user_id": user_id,
+                        "name": meal_name,
+                        "calories": cals,
+                        "protein": prot,
+                        "carbs": carb,
+                        "fats": fat,
+                        "logged_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+
+                    new_consumed = consumed_calories + cals
+                    excess_cals = new_consumed - target_calories
+
+                    badge_text = f"\n\n✅ **Auto-Logged to Meal Diary:** {meal_name} ({cals} kcal | {prot}g P | {carb}g C | {fat}g F)"
+                    if excess_cals > 0:
+                        badge_text += f"\n\n⚠️ **Calorie Target Notice:** Logging this meal puts you **{excess_cals} kcal over** your daily target of {target_calories} kcal. Consider balancing with light exercise or adjusting your next meal!"
+
+                    reply_text = main_reply + badge_text
+                except Exception as log_err:
+                    print("AUTO LOG MEAL CHAT ERROR:", log_err)
+                    if "LOG_MEAL:" in reply_text:
+                        reply_text = reply_text.split("LOG_MEAL:")[0].strip()
+
+            elif "LOG_WORKOUT:" in reply_text and user_id:
+                try:
+                    parts = reply_text.split("LOG_WORKOUT:")
+                    main_reply = parts[0].strip()
+                    json_str = parts[1].strip().split("\n")[0].strip()
+                    workout_info = json.loads(json_str)
+
+                    workout_id = f"chat-w-{int(time.time() * 1000)}"
+                    workout_name = workout_info.get("name", "Logged Workout")
+                    cals_burned = int(workout_info.get("calories_burned", 0))
+                    mins = int(workout_info.get("active_minutes", 0))
+
+                    supabase.table("logged_workouts").upsert({
+                        "id": workout_id,
+                        "user_id": user_id,
+                        "name": workout_name,
+                        "calories_burned": cals_burned,
+                        "active_minutes": mins,
+                        "logged_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+
+                    reply_text = main_reply + f"\n\n🔥 **Auto-Logged Workout:** {workout_name} ({cals_burned} kcal burned | {mins} mins)"
+                except Exception as wlog_err:
+                    print("AUTO LOG WORKOUT CHAT ERROR:", wlog_err)
+                    if "LOG_WORKOUT:" in reply_text:
+                        reply_text = reply_text.split("LOG_WORKOUT:")[0].strip()
+
+            elif "LOG_WATER:" in reply_text and user_id:
+                try:
+                    parts = reply_text.split("LOG_WATER:")
+                    main_reply = parts[0].strip()
+                    json_str = parts[1].strip().split("\n")[0].strip()
+                    water_info = json.loads(json_str)
+                    added_glasses = int(water_info.get("glasses", 1))
+
+                    new_total_glasses = max(0, glasses + added_glasses)
+                    supabase.table("water_logs").upsert({
+                        "user_id": user_id,
+                        "glasses": new_total_glasses,
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+
+                    reply_text = main_reply + f"\n\n💧 **Auto-Logged Water Intake:** +{added_glasses} glasses (Total today: {new_total_glasses}/8 glasses)"
+                except Exception as water_err:
+                    print("AUTO LOG WATER CHAT ERROR:", water_err)
+                    if "LOG_WATER:" in reply_text:
+                        reply_text = reply_text.split("LOG_WATER:")[0].strip()
+
         except Exception as ai_err:
-            print("AI CHAT ERROR:", ai_err)
-            reply_text = "I am Vita AI, MacroSync's Health & Nutrition Assistant. I am only built to answer questions related to food, nutrition, diet, workouts, or health. Please ask a health or nutrition-related question!"
+            print("AI CHAT ERROR:", repr(ai_err))
+            err_str = str(ai_err).lower()
+            if "quota" in err_str or "429" in err_str or "limit" in err_str:
+                reply_text = "⚠️ **Gemini AI Quota / Rate Limit**: The AI service key reached its temporary request limit. Please wait a few seconds and try sending your question again!"
+            else:
+                reply_text = "I'm having a temporary connection issue. Please try re-sending your question in a moment!"
         
         remaining_count = "Unlimited" if is_premium else max(0, 10 - day_usage.get("chats", 0))
         return {

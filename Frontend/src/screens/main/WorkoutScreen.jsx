@@ -429,28 +429,24 @@ export default function WorkoutScreen({
               {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
               <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
                 <View style={{
-                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                  backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
                   borderRadius: 16,
                   padding: 16,
-                  borderLeftWidth: 4,
-                  borderLeftColor: logoGreen,
                   marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                  borderWidth: 1.2,
+                  borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
                 }}>
                   <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>How to Set Up:</Text>
                   <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
                 </View>
                 
                 <View style={{
-                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                  backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
                   borderRadius: 16,
                   padding: 16,
-                  borderLeftWidth: 4,
-                  borderLeftColor: '#0EA5E9',
                   marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                  borderWidth: 1.2,
+                  borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
                 }}>
                   <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>Proper Execution Form:</Text>
                   <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>

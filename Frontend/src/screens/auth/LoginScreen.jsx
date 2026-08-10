@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -16,12 +16,21 @@ import {
   Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react-native";
+import { Eye, EyeOff, Mail, Lock, Check } from "lucide-react-native";
 import API_URL from "../config/api";
 import * as WebBrowser from "expo-web-browser";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
-import { saveUserId, setRememberMe, saveRememberedGoogleEmail } from "../../services/OfflineStorage";
+import { 
+  saveUserId, 
+  clearSavedUserId,
+  setRememberMe, 
+  isRememberMeEnabled,
+  saveRememberedGoogleEmail,
+  saveRememberedCredentials,
+  getRememberedCredentials,
+  clearRememberedCredentials
+} from "../../services/OfflineStorage";
 
 import GoogleAccountModal from "../../components/GoogleAccountModal";
 
@@ -41,6 +50,7 @@ export default function LoginScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+  const [rememberMe, setRememberMeState] = useState(true);
 
   // Interaction & Loading State Tracking
   const [isPressed, setIsPressed] = useState(false);
@@ -49,6 +59,24 @@ export default function LoginScreen({
 
   // Google Account Selector Modal State
   const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
+
+  // Auto-restore Remembered Credentials & Toggle State on Mount
+  useEffect(() => {
+    async function loadSavedRememberedState() {
+      try {
+        const enabled = await isRememberMeEnabled();
+        setRememberMeState(enabled);
+        if (enabled) {
+          const creds = await getRememberedCredentials();
+          if (creds?.email) setEmail(creds.email);
+          if (creds?.password) setPassword(creds.password);
+        }
+      } catch (err) {
+        console.log("Error loading remembered credentials:", err);
+      }
+    }
+    loadSavedRememberedState();
+  }, []);
 
   const showAlert = (message, title = "Login Error", buttons = []) => {
     triggerCustomAlert(title, message, buttons);
@@ -80,8 +108,14 @@ export default function LoginScreen({
         if (setCurrentUserId && userId) {
           setCurrentUserId(userId);
         }
-        await saveUserId(userId);
-        await setRememberMe(true);
+        await setRememberMe(rememberMe);
+        if (rememberMe) {
+          await saveUserId(userId);
+          await saveRememberedCredentials(email, password);
+        } else {
+          await clearSavedUserId();
+          await clearRememberedCredentials();
+        }
         onLoginSuccess(userId, data.is_onboarded);
       } else {
         setIsLoading(false);
@@ -247,15 +281,29 @@ export default function LoginScreen({
               </View>
             </View>
 
-            {/* Forgot Password Link */}
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={onForgotPassword}
-              activeOpacity={0.7}
-              disabled={isLoading}
-            >
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
+            {/* Remember Me & Forgot Password Row */}
+            <View style={styles.rememberForgotRow}>
+              <TouchableOpacity
+                style={styles.rememberMeContainer}
+                onPress={() => setRememberMeState(!rememberMe)}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                  {rememberMe && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
+                </View>
+                <Text style={styles.rememberMeText}>Remember me</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={onForgotPassword}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Sign In Button */}
             <TouchableOpacity
@@ -438,14 +486,43 @@ const getStyles = (theme) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  rememberForgotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+    marginTop: 4,
+  },
+  rememberMeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: theme?.inputBorder || "#94A3B8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    backgroundColor: "transparent",
+  },
+  checkboxChecked: {
+    backgroundColor: logoGreen,
+    borderColor: logoGreen,
+  },
+  rememberMeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: theme?.textSecondary || "#64748B",
+  },
   forgotPassword: {
-    alignSelf: "flex-end",
-    marginBottom: 26,
-    marginTop: 2,
+    alignSelf: "center",
   },
   forgotText: {
     color: logoGreen,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   buttonBase: {

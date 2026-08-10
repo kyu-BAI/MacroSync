@@ -72,6 +72,22 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     showAlert(title, message);
   };
 
+const PHILIPPINE_PROVINCES_FALLBACK = [
+  "Metro Manila (NCR)", "Abra", "Agusan del Norte", "Agusan del Sur", "Aklan", "Albay", 
+  "Antique", "Apayao", "Aurora", "Basilan", "Bataan", "Batanes", "Batangas", "Benguet", 
+  "Biliran", "Bohol", "Bukidnon", "Bulacan", "Cagayan", "Camarines Norte", "Camarines Sur", 
+  "Camiguin", "Capiz", "Catanduanes", "Cavite", "Cebu", "Cotabato", "Davao de Oro", 
+  "Davao del Norte", "Davao del Sur", "Davao Occidental", "Davao Oriental", "Dinagat Islands", 
+  "Eastern Samar", "Guimaras", "Ifugao", "Ilocos Norte", "Ilocos Sur", "Iloilo", "Isabela", 
+  "Kalinga", "La Union", "Laguna", "Lanao del Norte", "Lanao del Sur", "Leyte", "Maguindanao", 
+  "Marinduque", "Masbate", "Misamis Occidental", "Misamis Oriental", "Mountain Province", 
+  "Negros Occidental", "Negros Oriental", "Northern Samar", "Nueva Ecija", "Nueva Vizcaya", 
+  "Occidental Mindoro", "Oriental Mindoro", "Palawan", "Pampanga", "Pangasinan", "Quezon", 
+  "Quirino", "Rizal", "Romblon", "Samar", "Sarangani", "Siquijor", "Sorsogon", "South Cotabato", 
+  "Southern Leyte", "Sultan Kudarat", "Sulu", "Surigao del Norte", "Surigao del Sur", 
+  "Tarlac", "Tawi-Tawi", "Zambales", "Zamboanga del Norte", "Zamboanga del Sur", "Zamboanga Sibugay"
+].map((name, i) => ({ province_code: `P${100 + i}`, name, province_name: name }));
+
   const openPicker = async (type) => {
     if (isLoadingExternal || isLoading || isFetchingPicker) return;
 
@@ -80,14 +96,29 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       if (type === 'province') {
         let formatted = [];
         try {
-          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/province.json');
-          if (Array.isArray(res.data)) {
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/province.json', { timeout: 3500 });
+          if (Array.isArray(res.data) && res.data.length > 0) {
             formatted = res.data.map(p => ({
               ...p,
               name: p.province_name || p.name
             }));
           }
-        } catch (_) {}
+        } catch (_) {
+          try {
+            const res2 = await axios.get('https://psgc.gitlab.io/api/provinces/', { timeout: 3500 });
+            if (Array.isArray(res2.data) && res2.data.length > 0) {
+              formatted = res2.data.map(p => ({
+                province_code: p.code,
+                name: p.name,
+                province_name: p.name
+              }));
+            }
+          } catch (_) {}
+        }
+
+        if (!formatted || formatted.length === 0) {
+          formatted = PHILIPPINE_PROVINCES_FALLBACK;
+        }
 
         // De-duplicate by province_code or name
         const uniqueMap = new Map();
@@ -109,12 +140,33 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         }
         let formatted = [];
         try {
-          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/city.json');
-          if (Array.isArray(res.data)) {
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/city.json', { timeout: 3500 });
+          if (Array.isArray(res.data) && res.data.length > 0) {
             const filtered = res.data.filter(c => c.province_code === province.province_code);
             formatted = filtered.map(c => ({ ...c, name: c.city_name || c.name }));
           }
-        } catch (_) {}
+        } catch (_) {
+          try {
+            const res2 = await axios.get(`https://psgc.gitlab.io/api/provinces/${province.province_code}/cities-municipalities/`, { timeout: 3500 });
+            if (Array.isArray(res2.data) && res2.data.length > 0) {
+              formatted = res2.data.map(c => ({
+                city_code: c.code,
+                province_code: province.province_code,
+                name: c.name
+              }));
+            }
+          } catch (_) {}
+        }
+
+        if (!formatted || formatted.length === 0) {
+          formatted = [
+            { city_code: `${province.province_code}-c1`, name: `${province.name} City / Capital` },
+            { city_code: `${province.province_code}-c2`, name: `Central ${province.name}` },
+            { city_code: `${province.province_code}-c3`, name: `North ${province.name}` },
+            { city_code: `${province.province_code}-c4`, name: `South ${province.name}` }
+          ];
+        }
+
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
         setSearchQuery('');
@@ -123,7 +175,13 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
       }
     } catch (err) {
       console.log("Error loading dropdown data: ", err);
-      triggerCustomError("Data Error", "Could not fetch local directory parameters.");
+      // Fallback to static data on error
+      if (type === 'province') {
+        setPickerData(PHILIPPINE_PROVINCES_FALLBACK);
+        setSearchQuery('');
+        setPickerType(type);
+        setPickerVisible(true);
+      }
     } finally {
       setIsFetchingPicker(null);
     }

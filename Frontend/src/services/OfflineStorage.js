@@ -7,6 +7,8 @@ const KEYS = {
   SYNC_QUEUE: 'ms_sync_queue',
   USER_ID: 'ms_user_id',
   REMEMBER_ME: 'ms_remember_me',
+  REMEMBERED_EMAIL: 'ms_remembered_email',
+  REMEMBERED_PASSWORD: 'ms_remembered_password',
   REMEMBERED_GOOGLE_EMAIL: 'ms_remembered_google_email',
 };
 
@@ -102,6 +104,32 @@ export async function getRememberedGoogleEmail() {
 export async function clearRememberedGoogleEmail() {
   try {
     await AsyncStorage.removeItem(KEYS.REMEMBERED_GOOGLE_EMAIL);
+  } catch (e) {}
+}
+
+export async function saveRememberedCredentials(email, password) {
+  try {
+    if (email) await AsyncStorage.setItem(KEYS.REMEMBERED_EMAIL, email.trim());
+    if (password) await AsyncStorage.setItem(KEYS.REMEMBERED_PASSWORD, password);
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to save remembered credentials', e);
+  }
+}
+
+export async function getRememberedCredentials() {
+  try {
+    const email = await AsyncStorage.getItem(KEYS.REMEMBERED_EMAIL);
+    const password = await AsyncStorage.getItem(KEYS.REMEMBERED_PASSWORD);
+    return { email: email || '', password: password || '' };
+  } catch (e) {
+    return { email: '', password: '' };
+  }
+}
+
+export async function clearRememberedCredentials() {
+  try {
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_EMAIL);
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_PASSWORD);
   } catch (e) {}
 }
 

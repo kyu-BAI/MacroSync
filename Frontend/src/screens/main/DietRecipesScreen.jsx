@@ -141,33 +141,148 @@ export default function DietRecipesScreen({
   // New UI States
   const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
 
+  const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // Hash function for deterministic daily seed per location
+    let hash = 0;
+    const seedString = `${todayStr}_${location}`;
+    for (let i = 0; i < seedString.length; i++) {
+      hash = ((hash << 5) - hash) + seedString.charCodeAt(i);
+      hash |= 0;
+    }
+    const seed = Math.abs(hash);
+
+    const LOCATION_MEALS = {
+      'San Remigio': {
+        breakfast: [
+          'Fresh Lato (Seaweed) Salad & Boiled Eggs',
+          'Grilled Bangus Belly with Garlic Rice',
+          'Poached Eggs on Steamed Kangkong & Calamansi',
+          'Steamed Tilapia Fillet & Fresh Seaweed Dip'
+        ],
+        lunch: [
+          'Sinugbang Tilapia with Kangkong Soup & Steamed Corn',
+          'Sinugbang Lato Bowl & Spicy Calamansi Dip',
+          'Grilled Bangus in Banana Leaf with Squash Soup',
+          'Pan-Seared Tilapia Fillet with Lato Greens'
+        ],
+        snack: [
+          'Fresh Calamansi Juice & Steamed Sweet Corn',
+          'Cold Buko Water & Fresh Mango Slices',
+          'Boiled Sweet Corn with Calamansi Zest',
+          'Fresh Lato Salad Bites with Tomato Dip'
+        ],
+        dinner: [
+          'Gabi Leaves in Coconut Milk (Laing) & Grilled Bangus',
+          'Squash & Kangkong Clear Soup with Tilapia Fillet',
+          'Sinugbang Bangus with Native Vegetable Stew',
+          'Steamed Tilapia with Garlic Kangkong & Gabi Soup'
+        ]
+      },
+      'Bogo City': {
+        breakfast: [
+          'Native Tomato & Cucumber Egg Scramble',
+          'Sweet Corn Porridge (Lugaw) & Poached Egg',
+          'Sautéed Palengke Tomatoes with Egg Whites',
+          'Fresh Cucumber Salad & Scrambled Native Eggs'
+        ],
+        lunch: [
+          'Kinilaw na Tangigue with Fresh Greens & Sweet Corn',
+          'Grilled Tangigue Steak with Native Tomato Relish',
+          'Palengke Vegetable Stir-Fry & Steamed Tangigue',
+          'Kinilaw Bowl with Native Cucumber & Sweet Corn'
+        ],
+        snack: [
+          'Roasted Sweet Corn on the Cob',
+          'Sliced Cucumber with Vinegar & Calamansi',
+          'Fresh Steamed Yellow Corn & Calamansi Water',
+          'Chilled Native Tomatoes & Calamansi Spritz'
+        ],
+        dinner: [
+          'Sautéed Native Vegetables with Grilled Chicken Breast',
+          'Palengke Vegetable Stir-Fry & Steamed Tangigue',
+          'Grilled Tangigue with Tomato & Cucumber Salad',
+          'Sautéed Palengke Greens with Tangigue Fillet'
+        ]
+      },
+      'Daanbantayan': {
+        breakfast: [
+          'Steamed Purple Kamote with Boiled Eggs & Coffee',
+          'Roasted Kamote Bowls with Omelette & Native Ginger Tea',
+          'Boiled Kamote Slices & Native Egg Scramble',
+          'Purple Kamote Hash with Poached Eggs & Calamansi'
+        ],
+        lunch: [
+          'Inun-unan na Bodboron with Eggplant & Brown Rice',
+          'Grilled Tulingan Fish with Eggplant Salad & Rice',
+          'Inun-unan Fish Soup & Steamed Native Greens',
+          'Bodboron Vinegar Stew with Steamed Kamote'
+        ],
+        snack: [
+          'Baked Sweet Potato (Kamote) Slices',
+          'Steamed Purple Yam (Kamote)',
+          'Crispy Kamote Chips (No Oil) & Ginger Tea',
+          'Baked Kamote Slices with Native Honey'
+        ],
+        dinner: [
+          'Tulingan Fish Stew with Native Ginger & Squash Soup',
+          'Inun-unan Fish Soup & Steamed Native Greens',
+          'Grilled Bodboron with Eggplant & Ginger Broth',
+          'Tulingan Fish Stew with Steamed Kamote Tops'
+        ]
+      }
+    };
+
+    const locData = LOCATION_MEALS[location] || LOCATION_MEALS['San Remigio'];
+    
+    // Pick daily item using date seed
+    const bTitle = locData.breakfast[(seed) % locData.breakfast.length];
+    const lTitle = locData.lunch[(seed + 1) % locData.lunch.length];
+    const sTitle = locData.snack[(seed + 2) % locData.snack.length];
+    const dTitle = locData.dinner[(seed + 3) % locData.dinner.length];
+
+    // Dynamically scale calories & macros tailored to user target protein, carbs & fats
+    const bKcal = Math.round(totalUserCalories * 0.25);
+    const bProt = Math.round(targetProtein * 0.25);
+    const bCarb = Math.round(targetCarbs * 0.25);
+    const bFat = Math.round(targetFats * 0.25);
+
+    const lKcal = Math.round(totalUserCalories * 0.35);
+    const lProt = Math.round(targetProtein * 0.35);
+    const lCarb = Math.round(targetCarbs * 0.35);
+    const lFat = Math.round(targetFats * 0.35);
+
+    const sKcal = Math.round(totalUserCalories * 0.15);
+    const sProt = Math.round(targetProtein * 0.15);
+    const sCarb = Math.round(targetCarbs * 0.15);
+    const sFat = Math.round(targetFats * 0.15);
+
+    const dKcal = Math.round(totalUserCalories * 0.25);
+    const dProt = Math.round(targetProtein * 0.25);
+    const dCarb = Math.round(targetCarbs * 0.25);
+    const dFat = Math.round(targetFats * 0.25);
+
+    return [
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, time: 'Breakfast 🌅', title: bTitle, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt}g`, carbs: `${bCarb}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, time: 'Lunch ☀️', title: lTitle, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt}g`, carbs: `${lCarb}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, time: 'Snack ⚡', title: sTitle, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt}g`, carbs: `${sCarb}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, time: 'Dinner 🌙', title: dTitle, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt}g`, carbs: `${dCarb}g` }
+    ];
+  };
+
   const CITY_PROFILES = {
     'San Remigio': {
       marketTitle: 'San Remigio Municipal Public Market',
-      specialty: 'Sinugbang Tilapia/Bangus & Fresh Seaweed (Lato)',
-      palengkeItems: 'Fresh Bangus, Tilapia, Lato, Kangkong, Squash, Gabi Leaves',
-      avgCost: '₱70 - ₱120',
-      peakHours: '5:30 AM – 8:30 AM (Coastal Catch Arrival)',
-      healthBenefit: 'High Omega-3 & Natural Electrolytes (Low Calorie)',
-      topRatio: '60% Seafood, 40% Greens'
+      palengkeItems: 'Fresh Bangus, Tilapia, Lato, Kangkong, Squash, Gabi Leaves'
     },
     'Bogo City': {
       marketTitle: 'Bogo City Public Market (Palengke sa Bogo)',
-      specialty: 'Kinilaw na Tangigue & Fresh Palengke Greens',
-      palengkeItems: 'Tangigue, Cucumber, Native Tomatoes, Calamansi, Sweet Corn',
-      avgCost: '₱85 - ₱150',
-      peakHours: '6:00 AM – 9:00 AM (Wholesale Harvest Arrival)',
-      healthBenefit: 'Lean Protein & Slow-Release Carbs from Yellow Corn',
-      topRatio: '50% Lean Protein, 50% Fiber'
+      palengkeItems: 'Tangigue, Cucumber, Native Tomatoes, Calamansi, Sweet Corn'
     },
     'Daanbantayan': {
       marketTitle: 'Daanbantayan Public Market & Fish Landing',
-      specialty: 'Inun-unan na Bodboron & Kamote Harvest Bowl',
-      palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger',
-      avgCost: '₱60 - ₱110',
-      peakHours: '6:00 AM – 10:00 AM (Northern Wharf Supply)',
-      healthBenefit: 'Rich in Vitamin A, Fiber, & Low-GI Complex Carbs',
-      topRatio: '70% Fresh Catch, 30% Carbs'
+      palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger'
     }
   };
 
@@ -229,16 +344,13 @@ export default function DietRecipesScreen({
 
   // AI Daily Meal Recommendation State
   const [dailyPlan, setDailyPlan] = useState([]);
-  const [loadingMeals, setLoadingMeals] = useState(true);
+  const [loadingMeals, setLoadingMeals] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadCachedOrFetchMeals = async () => {
-      if (!userId) {
-        setLoadingMeals(false);
-        return;
-      }
+      if (!userId) return;
 
       const todayStr = new Date().toISOString().split('T')[0];
       const CACHE_KEY = `ms_meals_cache_${userId}`;
@@ -254,7 +366,14 @@ export default function DietRecipesScreen({
               setDailyPlan(parsed.meals);
               setLoadingMeals(false); // Instant load
             }
+            // If cache is from today and valid, skip network fetch
+            if (parsed.date === todayStr && !hasGenericTitle) return;
           }
+        }
+
+        // If no cached plan exists for today, show loading modal only for initial generation
+        if (isMounted && (!dailyPlan || dailyPlan.length === 0)) {
+          setLoadingMeals(true);
         }
 
         // 2. Fetch fresh from server to ensure up-to-date allergy safety & analytics
@@ -448,7 +567,7 @@ export default function DietRecipesScreen({
       if (excess > 0) {
         showAlert(
           "Calorie Target Exceeded ⚠️",
-          `Logging this meal (${mealCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
+          `Logging this meal (${addedCal} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
           [
             { text: "Cancel", style: "cancel" },
             { text: "Proceed & Log", style: "destructive", onPress: executeMealLog }
@@ -694,9 +813,10 @@ export default function DietRecipesScreen({
                   const mealCat = meal?.mealType || meal?.time || '';
                   const IconComponent = getMealIconComponent(mealCat);
                   const accentColor = getMealAccentColor(mealCat);
-                  const isLogged = loggedMeals.includes(meal?.id);
+                  const mealId = String(meal?.id || `meal-plan-${index}`);
+                  const isLogged = loggedMeals.some(mId => String(mId) === mealId);
                   return (
-                    <View key={meal?.id || `m-${index}`} style={styles.timelineItem}>
+                    <View key={mealId} style={styles.timelineItem}>
                       <View 
                         style={[
                           styles.timelineCard, 
@@ -738,7 +858,7 @@ export default function DietRecipesScreen({
                               styles.logMealMiniBtn, 
                               isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
                             ]}
-                            onPress={() => handleLogMeal(meal?.id, { 
+                            onPress={() => handleLogMeal(mealId, { 
                               name: meal?.title || 'Meal',
                               calories: meal?.calories || 0, 
                               protein: parseInt(meal?.protein) || 0,
@@ -799,8 +919,6 @@ export default function DietRecipesScreen({
                   )}
                 </TouchableOpacity>
               )}
-
-
             </View>
 
             {/* CARD 2: INTERACTIVE CITY FOOD RADAR */}
@@ -954,7 +1072,7 @@ export default function DietRecipesScreen({
 
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
               {CITY_PROFILES[selectedLocation] && (
-                <View style={styles.cityDetailCard}>
+                <View style={{ marginTop: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
                       <Navigation size={14} color={logoGreen} style={{ marginRight: 6 }} />
@@ -962,38 +1080,106 @@ export default function DietRecipesScreen({
                         {CITY_PROFILES[selectedLocation].marketTitle || `${selectedLocation} Food Market`}
                       </Text>
                     </View>
-                    <View style={styles.cityCostBadge}>
-                      <Text style={styles.cityCostBadgeText}>{CITY_PROFILES[selectedLocation].avgCost}</Text>
-                    </View>
                   </View>
 
-                  <Text style={styles.citySpecialtyText}>
-                    ✨ <Text style={{ fontWeight: '800', color: logoGreen }}>Specialty:</Text> {CITY_PROFILES[selectedLocation].specialty}
-                  </Text>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                     <ShoppingBag size={12} color={theme?.textSecondary || '#94A3B8'} style={{ marginRight: 5 }} />
                     <Text style={[styles.cityPalengkeText, { flex: 1 }]}>
                       <Text style={{ fontWeight: '700' }}>Palengke Fresh:</Text> {CITY_PROFILES[selectedLocation].palengkeItems}
                     </Text>
                   </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <Clock size={12} color="#F59E0B" style={{ marginRight: 5 }} />
-                    <Text style={[styles.cityPalengkeText, { color: theme?.textSecondary || '#64748B', flex: 1 }]}>
-                      <Text style={{ fontWeight: '700', color: '#F59E0B' }}>Peak Fresh Catch:</Text> {CITY_PROFILES[selectedLocation].peakHours}
-                    </Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <Sparkles size={12} color="#8B5CF6" style={{ marginRight: 5 }} />
-                    <Text style={[styles.cityPalengkeText, { color: theme?.textSecondary || '#64748B', flex: 1 }]}>
-                      <Text style={{ fontWeight: '700', color: '#8B5CF6' }}>Nutrition Boost:</Text> {CITY_PROFILES[selectedLocation].healthBenefit}
-                    </Text>
-                  </View>
                 </View>
               )}
             </View>
+
+            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD (STANDALONE CLEAN CARD) */}
+            {CITY_PROFILES[selectedLocation] && (
+              <View style={styles.formCard}>
+                {(() => {
+                  const todayPlan = getDynamicPalengkePlan(selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats);
+                  const totalKcal = todayPlan.reduce((acc, m) => acc + m.kcal, 0);
+                  return (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A', flex: 1, marginRight: 8 }} numberOfLines={1}>
+                          🍽️ 1-Day Meal Guide ({selectedLocation})
+                        </Text>
+                        <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
+                            ~{totalKcal} Kcal Total
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ gap: 12 }}>
+                        {todayPlan.map((mealItem, idx) => {
+                          const isItemLogged = loggedMeals.some(mId => String(mId) === mealItem.id);
+                          return (
+                            <View key={idx} style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              backgroundColor: isItemLogged ? (isDarkMode ? '#102A20' : '#E6F4EA') : (isDarkMode ? '#1E293B' : '#F8FAFC'),
+                              paddingHorizontal: 14,
+                              paddingVertical: 14,
+                              borderRadius: 16,
+                              borderWidth: 1,
+                              borderColor: isItemLogged ? '#10B981' : (isDarkMode ? '#334155' : '#E2E8F0')
+                            }}>
+                              <View style={{ flex: 1, paddingRight: 10 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>
+                                  {mealItem.time}
+                                </Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', lineHeight: 18 }}>
+                                  {mealItem.title}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>
+                                    {mealItem.kcal} kcal
+                                  </Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 1 }}>
+                                    {mealItem.proteinNum}g protein • {mealItem.carbsNum}g carbs
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={{
+                                    backgroundColor: isItemLogged ? '#64748B' : '#10B981',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    borderRadius: 10,
+                                    flexDirection: 'row',
+                                    alignItems: 'center'
+                                  }}
+                                  onPress={() => handleLogMeal(mealItem.id, {
+                                    name: mealItem.title,
+                                    calories: mealItem.kcal,
+                                    protein: mealItem.proteinNum,
+                                    carbs: mealItem.carbsNum,
+                                    fats: mealItem.fatsNum
+                                  })}
+                                  activeOpacity={0.8}
+                                >
+                                  {isItemLogged ? (
+                                    <CheckCircle2 color="#FFFFFF" size={14} />
+                                  ) : (
+                                    <>
+                                      <PlusCircle color="#FFFFFF" size={13} style={{ marginRight: 4 }} />
+                                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Log</Text>
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+            )}
 
             <Text style={styles.sectionLabelTitle}>Recommended Local Recipes</Text>
             
@@ -1367,10 +1553,10 @@ export default function DietRecipesScreen({
 
       {/* ── UIVERSE INSPIRED AI LOADING MODAL ── */}
       <AILoadingModal
-        visible={isGenerating || isFetchingRecipe}
+        visible={isFetchingRecipe || loadingMeals}
         type={isFetchingRecipe ? "recipe" : "meal"}
-        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating Custom AI Recipe"}
-        subtitle="Vita AI is personalizing your nutrition"
+        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
+        subtitle={isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
       />
     </View>
   );
