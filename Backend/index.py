@@ -1366,9 +1366,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
     models_to_try = [
-        'gemini-2.0-flash', 
         'gemini-1.5-flash', 
-        'gemini-1.5-pro'
+        'gemini-2.0-flash', 
+        'gemini-2.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-8b'
     ]
     
     # 1. Try Direct REST API (Fastest, zero SDK dependencies)
@@ -1418,13 +1420,31 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None):
 def chat_with_ai(data: ChatMessageRequest):
     try:
         user_id = data.user_id
-        user_result = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        user_result = supabase.table("user_profiles").select("*").eq("id", user_id).execute() if user_id else None
         
-        context_prompt = ""
         is_premium = False
         day_usage = {"scans": 0, "chats": 0}
         
-        if user_result.data:
+        # Base System Instructions enforcing the two strict chatbot routes
+        system_instructions = (
+            "=== MACROSYNC VITA AI ASSISTANT SYSTEM INSTRUCTIONS ===\n"
+            "You are Vita AI, MacroSync's official AI Health, Nutrition, Diet, and Fitness Assistant.\n\n"
+            "STRICT DOMAIN BOUNDARIES & ROUTE RULES:\n"
+            "ROUTE 1: FOOD & HEALTH RELATED QUESTIONS\n"
+            "- IF the user message is asking about food, nutrition, recipes, diet, macros, calories, water intake, workouts, exercises, fitness, weight, body goals, or health/wellness:\n"
+            "  - Provide an accurate, clear, supportive, and well-structured answer.\n"
+            "  - Use clear formatting with bolding (**text**) and bullet points where helpful. Do NOT use markdown header tags (like ## or ###).\n"
+            "  - Use the user profile context and daily progress below to tailor your advice.\n\n"
+            "ROUTE 2: NON-FOOD & NON-HEALTH RELATED QUESTIONS OR RANDOM TEXT\n"
+            "- IF the user message or text is NOT related to food, nutrition, diet, workouts, fitness, or health (e.g. random gibberish like 'esmeringhoygod', coding, math, general history, entertainment, movies, tech, politics, sports events, celebrities, or general non-health topics):\n"
+            "  - DO NOT answer or fulfill the non-health question.\n"
+            "  - Respond with EXACTLY this explanation message and NOTHING else:\n"
+            "    \"I am Vita AI, MacroSync's Health & Nutrition Assistant. I am only built to answer questions related to food, nutrition, diet, workouts, or health. Please ask a health or nutrition-related question!\"\n\n"
+        )
+
+        user_context_str = ""
+        
+        if user_result and user_result.data:
             user = user_result.data[0]
             
             # Parse preferences from location column
@@ -1593,63 +1613,25 @@ def chat_with_ai(data: ChatMessageRequest):
             else:
                 workouts_list_str = "  - No workouts logged yet today."
 
-            context_prompt = (
-                f"=== MACROSYNC AI KNOWLEDGE BASE: COMPLETE USER HEALTH PROFILE & REAL-TIME PROGRESS ===\n\n"
-                f"1. USER PROFILE DETAILS:\n"
-                f"  - Name: {user.get('name', 'User')}\n"
-                f"  - Email: {user.get('email', 'N/A')}\n"
-                f"  - Age: {user.get('age', 'N/A')}\n"
-                f"  - Height: {user.get('height_cm', 'N/A')} cm\n"
-                f"  - Preferred Weight Unit: {unit}\n"
-                f"  - Current Weight: {current_weight_str}\n"
-                f"  - Starting Weight: {starting_weight_str}\n"
-                f"  - Goal Weight: {target_weight_str}\n"
-                f"  - Primary Fitness Goal: {goal}\n"
-                f"  - User Location / Region: {user_address}\n"
-                f"  - STRICT ALLERGIES / DIETARY RESTRICTIONS: {allergies_str}\n"
-                f"  - Target Date: {user.get('targetDate', 'N/A')}\n\n"
-
-                f"2. TODAY'S REAL-TIME NUTRITION & MACROS STATUS ({today_str}):\n"
-                f"  - Calories: Target {target_calories} kcal | Consumed {consumed_calories} kcal | Remaining {max(0, target_calories - consumed_calories)} kcal\n"
-                f"  - Protein: Target {target_protein}g | Consumed {consumed_protein}g | Remaining {max(0, target_protein - consumed_protein)}g\n"
-                f"  - Carbs: Target {target_carbs}g | Consumed {consumed_carbs}g | Remaining {max(0, target_carbs - consumed_carbs)}g\n"
-                f"  - Fats: Target {target_fats}g | Consumed {consumed_fats}g | Remaining {max(0, target_fats - consumed_fats)}g\n"
-                f"  - Water Consumed Today: {glasses} glass(es) of water\n\n"
-
-                f"3. TODAY'S LOGGED MEALS ({len(logged_meals_data)} total):\n"
-                f"{meals_list_str}\n\n"
-
-                f"4. TODAY'S LOGGED WORKOUTS ({len(workouts_data)} total, {calories_burned} kcal burned, {active_minutes} active mins):\n"
-                f"{workouts_list_str}\n\n"
-
-                f"5. EVERYDAY PERSONAL DIET RECOMMENDATIONS (Tailored for {goal}):\n"
-                f"  - Recommended Meals: {rec_diet}\n\n"
-
-                f"6. EVERYDAY PERSONAL WORKOUT RECOMMENDATIONS (Tailored for {goal}):\n"
-                f"  - Recommended Workouts: {rec_workout}\n\n"
-
-                f"=== CRITICAL DOMAIN SCOPE & HEALTH ENFORCEMENT ===\n"
-                f"1. STRICT HEALTH & NUTRITION SCOPE: You are strictly MacroSync's AI Health, Nutrition, Diet, & Fitness Assistant.\n"
-                f"2. NON-HEALTH / NON-FOOD QUESTIONS REQUIRE DECLINATIONS:\n"
-                f"   If the user asks a question about ANY topic NOT related to food, nutrition, recipes, diet, macros, calories, water intake, workouts, exercises, fitness, weight, or health/wellness (e.g. politics, coding, math, general history, geography, entertainment, movies, celebrities, video games, tech, sports events, finance, or general trivia):\n"
-                f"   You MUST respond with EXACTLY this error message and NOTHING else:\n"
-                f"   'I am MacroSync\'s AI Health & Nutrition Assistant. Please ask questions specifically related to food, nutrition, diet, workouts, or health.'\n\n"
-                f"3. INSTRUCTIONS FOR MACROSYNC AI:\n"
-                f"You have full knowledge of the user's live health data listed above. "
-                f"CRITICAL ALLERGY SAFETY REQUIREMENT: The user has specified the following allergies/restrictions: '{allergies_str}'. "
-                f"You MUST NEVER recommend, suggest, or include any foods, meals, recipes, or ingredients that contain these allergens. "
-                f"When the user asks questions about their progress, meals logged today, workouts logged today, remaining macros, water intake, weight, diet recommendations, or workout advice, answer accurately using the exact numbers and items in this context. "
-                f"Be supportive, motivating, friendly, and structure your responses cleanly with bolding (**text**) and bullet points. Do NOT use markdown header symbols like ## or ### under any circumstances.\n\n"
+            user_context_str = (
+                f"USER PROFILE & TODAY'S LIVE PROGRESS:\n"
+                f"- Name: {user.get('name', 'User')}\n"
+                f"- Goal: {goal} | Current: {current_weight_str} | Target: {target_weight_str}\n"
+                f"- Allergies: {allergies_str}\n"
+                f"- Today's Macros: Calories ({consumed_calories}/{target_calories} kcal), Protein ({consumed_protein}/{target_protein}g), Carbs ({consumed_carbs}/{target_carbs}g), Fats ({consumed_fats}/{target_fats}g)\n"
+                f"- Water Today: {glasses} glasses\n"
+                f"- Meals Logged Today:\n{meals_list_str}\n"
+                f"- Workouts Logged Today:\n{workouts_list_str}\n\n"
             )
 
-        full_prompt = context_prompt + f"User message: {data.message}"
+        full_prompt = system_instructions + user_context_str + f"User message: {data.message}"
         reply_text = ""
         try:
             response = generate_gemini_content(full_prompt)
             reply_text = response.text
         except Exception as ai_err:
             print("AI CHAT ERROR:", ai_err)
-            reply_text = "I am unable to process your request right now. Please try asking your health or food question again in a moment."
+            reply_text = "I am Vita AI, MacroSync's Health & Nutrition Assistant. I am only built to answer questions related to food, nutrition, diet, workouts, or health. Please ask a health or nutrition-related question!"
         
         remaining_count = "Unlimited" if is_premium else max(0, 10 - day_usage.get("chats", 0))
         return {
