@@ -1374,8 +1374,8 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
         'gemini-2.5-pro'
     ]
     
-    # 1. Try Direct REST API (Fastest, zero SDK dependencies) with auto-retry for rate limits (429)
-    for attempt in range(3):
+    # 1. Try Direct REST API (Fastest, zero SDK dependencies)
+    for attempt in range(1):
         for model in models_to_try:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key.strip()}"
@@ -1386,7 +1386,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                 parts.append({"text": prompt})
 
                 payload = {"contents": [{"parts": parts}]}
-                res = requests.post(url, json=payload, timeout=25)
+                res = requests.post(url, json=payload, timeout=12)
                 if res.status_code == 200:
                     data = res.json()
                     if "candidates" in data and len(data["candidates"]) > 0:
@@ -1396,8 +1396,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                             if len(parts_res) > 0 and "text" in parts_res[0]:
                                 return GeminiRESTResponse(parts_res[0]["text"])
                 elif res.status_code == 429:
-                    print(f"REST Gemini {model} HTTP 429 (Rate Limited). Retrying in {attempt + 1}s...")
-                    time.sleep(1.0 + attempt * 0.5)
+                    print(f"REST Gemini {model} HTTP 429 (Rate Limited).")
                 else:
                     print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
             except Exception as rest_err:
