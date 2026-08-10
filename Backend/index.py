@@ -1384,7 +1384,6 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
     models_to_try = [
-        'gemini-2.5-flash', 
         'gemini-2.0-flash', 
         'gemini-2.0-flash-lite',
         'gemini-2.5-pro'
