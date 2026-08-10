@@ -264,10 +264,10 @@ export default function DietRecipesScreen({
     const dFat = Math.round(targetFats * 0.25);
 
     return [
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, time: 'Breakfast 🌅', title: bTitle, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt}g`, carbs: `${bCarb}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, time: 'Lunch ☀️', title: lTitle, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt}g`, carbs: `${lCarb}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, time: 'Snack ⚡', title: sTitle, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt}g`, carbs: `${sCarb}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, time: 'Dinner 🌙', title: dTitle, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt}g`, carbs: `${dCarb}g` }
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, mealType: 'Breakfast', time: '7:30 AM', title: bTitle, calories: bKcal, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt} protein`, carbs: `${bCarb}g`, fats: `${bFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, mealType: 'Lunch', time: '12:30 PM', title: lTitle, calories: lKcal, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt} protein`, carbs: `${lCarb}g`, fats: `${lFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, mealType: 'Snack', time: '4:00 PM', title: sTitle, calories: sKcal, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt} protein`, carbs: `${sCarb}g`, fats: `${sFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, mealType: 'Dinner', time: '7:00 PM', title: dTitle, calories: dKcal, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt} protein`, carbs: `${dCarb}g`, fats: `${dFat}g` }
     ];
   };
 
@@ -709,22 +709,28 @@ export default function DietRecipesScreen({
             <View style={styles.dailyProgressCard}>
               <View style={styles.macroRowInline}>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { color: isOverCalories ? '#EF4444' : '#F97316' }]}>
-                    {consumedCalories} / {targetCalories}
+                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: isOverCalories ? '#EF4444' : '#F97316' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {Math.round(parseFloat(consumedCalories) || 0)}/{Math.round(parseFloat(targetCalories) || 0)}
                   </Text>
-                  <Text style={styles.macroMiniLabel}>Kcal</Text>
+                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Kcal</Text>
                 </View>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { color: '#10B981' }]}>{dailyNutrition?.protein?.current || 0}g</Text>
-                  <Text style={styles.macroMiniLabel}>Protein</Text>
+                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#10B981' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {Math.round(parseFloat(dailyNutrition?.protein?.current) || 0)}/{Math.round(parseFloat(targetProtein) || 0)}g
+                  </Text>
+                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Protein</Text>
                 </View>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { color: '#F59E0B' }]}>{dailyNutrition?.carbs?.current || 0}g</Text>
-                  <Text style={styles.macroMiniLabel}>Carbs</Text>
+                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#F59E0B' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {Math.round(parseFloat(dailyNutrition?.carbs?.current) || 0)}/{Math.round(parseFloat(targetCarbs) || 0)}g
+                  </Text>
+                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Carbs</Text>
                 </View>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { color: '#EC4899' }]}>{dailyNutrition?.fats?.current || 0}g</Text>
-                  <Text style={styles.macroMiniLabel}>Fats</Text>
+                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#EC4899' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {Math.round(parseFloat(dailyNutrition?.fats?.current) || 0)}/{Math.round(parseFloat(targetFats) || 0)}g
+                  </Text>
+                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Fats</Text>
                 </View>
               </View>
             </View>
@@ -890,36 +896,6 @@ export default function DietRecipesScreen({
         ) : (
           /* --- TAB B: EXPLORE RECIPES --- */
           <View style={styles.exploreSection}>
-            {/* CARD 1: SEARCH & RECIPE FILTERS */}
-            <View style={styles.searchFormCard}>
-              <View style={styles.searchBarInnerContainer}>
-                <Search color="#64748B" size={20} style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchTextInput}
-                  placeholder="Search or type ingredients (e.g. Bangus, Kangkong)..."
-                  placeholderTextColor="#94A3B8"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
-              {searchQuery.trim().length > 0 && (
-                <TouchableOpacity 
-                  style={styles.aiGenerateBtn} 
-                  onPress={handleGenerateRecipe}
-                  disabled={isGenerating}
-                  activeOpacity={0.8}
-                >
-                  {isGenerating ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-                      <Text style={styles.aiGenerateBtnText}>Generate Recipe with Vita AI</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
 
             {/* CARD 2: INTERACTIVE CITY FOOD RADAR */}
             <View style={styles.formCard}>
@@ -1021,13 +997,13 @@ export default function DietRecipesScreen({
                         <div id="map"></div>
                         <script>
                           var map = L.map('map', { 
-                            zoomControl: false, 
+                            zoomControl: true, 
                             attributionControl: false,
-                            dragging: false, 
-                            touchZoom: false, 
-                            scrollWheelZoom: false, 
-                            doubleClickZoom: false 
-                          }).setView([11.14, 123.97], 9.6);
+                            dragging: true, 
+                            touchZoom: true, 
+                            scrollWheelZoom: true, 
+                            doubleClickZoom: true 
+                          }).setView([11.14, 123.97], 9.8);
                           
                           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                             maxZoom: 18
@@ -1092,84 +1068,98 @@ export default function DietRecipesScreen({
               )}
             </View>
 
-            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD (STANDALONE CLEAN CARD) */}
+            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD (CONSISTENT WITH AI SCHEDULED MEALS) */}
             {CITY_PROFILES[selectedLocation] && (
-              <View style={styles.formCard}>
+              <View style={{ marginBottom: 16 }}>
                 {(() => {
                   const todayPlan = getDynamicPalengkePlan(selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats);
                   const totalKcal = todayPlan.reduce((acc, m) => acc + m.kcal, 0);
                   return (
                     <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A', flex: 1, marginRight: 8 }} numberOfLines={1}>
-                          🍽️ 1-Day Meal Guide ({selectedLocation})
-                        </Text>
-                        <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>🍽️ 1-Day Meal Guide ({selectedLocation})</Text>
+                        <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
                           <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
                             ~{totalKcal} Kcal Total
                           </Text>
                         </View>
                       </View>
 
-                      <View style={{ gap: 12 }}>
+                      <View style={styles.timelineList}>
                         {todayPlan.map((mealItem, idx) => {
-                          const isItemLogged = loggedMeals.some(mId => String(mId) === mealItem.id);
+                          const mealCat = mealItem.mealType || 'Meal';
+                          const IconComponent = getMealIconComponent(mealCat);
+                          const accentColor = getMealAccentColor(mealCat);
+                          const mealId = String(mealItem.id);
+                          const isLogged = loggedMeals.some(mId => String(mId) === mealId);
+
                           return (
-                            <View key={idx} style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              backgroundColor: isItemLogged ? (isDarkMode ? '#102A20' : '#E6F4EA') : (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                              paddingHorizontal: 14,
-                              paddingVertical: 14,
-                              borderRadius: 16,
-                              borderWidth: 1,
-                              borderColor: isItemLogged ? '#10B981' : (isDarkMode ? '#334155' : '#E2E8F0')
-                            }}>
-                              <View style={{ flex: 1, paddingRight: 10 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>
-                                  {mealItem.time}
-                                </Text>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', lineHeight: 18 }}>
+                            <View key={mealId} style={styles.timelineItem}>
+                              <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
+                                <View style={styles.timelineHeader}>
+                                  <View style={[
+                                    styles.mealTypeBadge, 
+                                    isLogged 
+                                      ? { backgroundColor: '#64748B' } 
+                                      : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
+                                  ]}>
+                                    <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
+                                    <Text style={[
+                                      styles.mealTypeBadgeText, 
+                                      isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+                                    ]}>
+                                      {mealCat}
+                                    </Text>
+                                  </View>
+                                  <Text style={styles.timelineTime}>{mealItem.time}</Text>
+                                </View>
+
+                                <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>
                                   {mealItem.title}
                                 </Text>
-                              </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>
-                                    {mealItem.kcal} kcal
-                                  </Text>
-                                  <Text style={{ fontSize: 11, fontWeight: '600', color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 1 }}>
-                                    {mealItem.proteinNum}g protein • {mealItem.carbsNum}g carbs
-                                  </Text>
+
+                                <View style={styles.timelineFooter}>
+                                  <View style={{ flex: 1, paddingRight: 8 }}>
+                                    <Text style={styles.timelineMacroText}>
+                                      {mealItem.kcal} kcal • {mealItem.proteinNum} protein
+                                    </Text>
+                                    <TouchableOpacity 
+                                      style={styles.viewRecipeTextBtn} 
+                                      onPress={() => handleViewRecipe(mealItem)}
+                                      activeOpacity={0.6}
+                                    >
+                                      <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
+                                      <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
+                                    </TouchableOpacity>
+                                  </View>
+
+                                  <TouchableOpacity 
+                                    style={[
+                                      styles.logMealMiniBtn, 
+                                      isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
+                                    ]}
+                                    onPress={() => handleLogMeal(mealId, { 
+                                      name: mealItem.title,
+                                      calories: mealItem.kcal, 
+                                      protein: mealItem.proteinNum,
+                                      carbs: mealItem.carbsNum,
+                                      fats: mealItem.fatsNum
+                                    })}
+                                    activeOpacity={0.7}
+                                  >
+                                    {isLogged ? (
+                                      <>
+                                        <CheckCircle2 color="#FFFFFF" size={12} />
+                                        <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <PlusCircle color="#FFFFFF" size={12} />
+                                        <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
+                                      </>
+                                    )}
+                                  </TouchableOpacity>
                                 </View>
-                                <TouchableOpacity
-                                  style={{
-                                    backgroundColor: isItemLogged ? '#64748B' : '#10B981',
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    borderRadius: 10,
-                                    flexDirection: 'row',
-                                    alignItems: 'center'
-                                  }}
-                                  onPress={() => handleLogMeal(mealItem.id, {
-                                    name: mealItem.title,
-                                    calories: mealItem.kcal,
-                                    protein: mealItem.proteinNum,
-                                    carbs: mealItem.carbsNum,
-                                    fats: mealItem.fatsNum
-                                  })}
-                                  activeOpacity={0.8}
-                                >
-                                  {isItemLogged ? (
-                                    <CheckCircle2 color="#FFFFFF" size={14} />
-                                  ) : (
-                                    <>
-                                      <PlusCircle color="#FFFFFF" size={13} style={{ marginRight: 4 }} />
-                                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Log</Text>
-                                    </>
-                                  )}
-                                </TouchableOpacity>
                               </View>
                             </View>
                           );
@@ -1181,130 +1171,7 @@ export default function DietRecipesScreen({
               </View>
             )}
 
-            <Text style={styles.sectionLabelTitle}>Recommended Local Recipes</Text>
-            
-            {filteredRecipes.length === 0 ? (
-              <View style={styles.emptyFormCard}>
-                <Text style={styles.emptyStateText}>No recipes matched your exact targets.</Text>
-              </View>
-            ) : (
-          filteredRecipes.map((recipe) => {
-            const isExpanded = expandedRecipeId === recipe.id;
-            const isLogged = loggedMeals.includes(`recipe-${recipe.id}`);
-            return (
-              <View key={recipe.id} style={styles.recipeFormCard}>
-                <View style={styles.recipeHeaderRow}>
-                  <View style={styles.recipeTitleContainer}>
-                    <Text style={styles.recipeMainTitle}>{recipe.title}</Text>
-                    <View style={styles.metaBadgeRow}>
-                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)' }]}>
-                        <Clock color="#10B981" size={12} strokeWidth={2.2} />
-                        <Text style={[styles.metaBadgeText, { color: '#10B981' }]}>{recipe.time}</Text>
-                      </View>
-                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.10)' }]}>
-                        <Text style={[styles.metaBadgeText, { color: '#F59E0B' }]}>{recipe.budget}</Text>
-                      </View>
-                      <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? 'rgba(14, 165, 233, 0.16)' : 'rgba(14, 165, 233, 0.10)' }]}>
-                        <MapPin color="#0EA5E9" size={12} strokeWidth={2.2} />
-                        <Text style={[styles.metaBadgeText, { color: '#0EA5E9' }]}>{recipe.location}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.glassDivider} />
-
-                <View style={styles.macroMetricsSummaryGrid}>
-                  <View style={styles.macroTileBox}>
-                    <Text style={[styles.macroTileValue, { color: '#F97316' }]}>{recipe.calories}</Text>
-                    <Text style={styles.macroTileLabel}>Kcal</Text>
-                  </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                    <Text style={[styles.macroTileValue, { color: '#10B981' }]}>{recipe.protein}</Text>
-                    <Text style={styles.macroTileLabel}>Protein</Text>
-                  </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                    <Text style={[styles.macroTileValue, { color: '#F59E0B' }]}>{recipe.carbs}</Text>
-                    <Text style={styles.macroTileLabel}>Carbs</Text>
-                  </View>
-                  <View style={[styles.macroTileBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                    <Text style={[styles.macroTileValue, { color: '#EC4899' }]}>{recipe.fats}</Text>
-                    <Text style={styles.macroTileLabel}>Fats</Text>
-                  </View>
-                </View>
-
-                {isExpanded && (
-                  <View style={styles.expandedRecipeContentAnimation}>
-                    <View style={styles.glassDivider} />
-                    <View style={styles.ingredientsBox}>
-                      <Text style={styles.extendedSectionHeaderLabel}>Ingredients Needed</Text>
-                      {recipe.ingredients.map((ingredient, i) => (
-                        <Text key={i} style={styles.recipeListItemRowText}>• {ingredient}</Text>
-                      ))}
-                    </View>
-
-                    <View style={styles.instructionsBox}>
-                      <View style={styles.instructionHeaderFlexTitle}>
-                        <ChefHat color={logoGreen} size={16} style={{ marginRight: 6 }} />
-                        <Text style={styles.extendedSectionHeaderLabel}>How to Prepare & Cook</Text>
-                      </View>
-                      {recipe.instructions.map((step, i) => (
-                        <View key={i} style={styles.stepParagraphBlockItemRow}>
-                          <Text style={styles.stepIndexMarkerBadgeText}>{i + 1}</Text>
-                          <Text style={styles.stepBodyInstructionParagraphText}>{step}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                <View style={styles.glassDivider} />
-
-                <View style={styles.recipeFooterActions}>
-
-                  <TouchableOpacity 
-                    style={[styles.fullRecipeViewToggleButton, isExpanded && styles.fullRecipeViewToggleActiveButton]}
-                    activeOpacity={0.8}
-                    onPress={() => toggleExpandRecipe(recipe.id)}
-                  >
-                    <Text style={[styles.fullRecipeToggleButtonText, isExpanded && { color: '#FFFFFF' }]}>
-                      {isExpanded ? 'Hide Details' : 'View Recipe'}
-                    </Text>
-                    {isExpanded ? (
-                      <ChevronUp color={isExpanded ? '#FFFFFF' : logoGreen} size={16} />
-                    ) : (
-                      <ChevronDown color={logoGreen} size={16} />
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={[styles.logRecipeBtn, isLogged && styles.logRecipeBtnLogged]}
-                    onPress={() => handleLogMeal(`recipe-${recipe.id}`, {
-                      name: recipe.title,
-                      calories: recipe.calories,
-                      protein: parseInt(recipe.protein) || 0,
-                      carbs: parseInt(recipe.carbs) || 0,
-                      fats: parseInt(recipe.fats) || 0,
-                    })}
-                    activeOpacity={0.8}
-                  >
-                    {isLogged ? (
-                      <>
-                        <CheckCircle2 color="#FFFFFF" size={14} />
-                        <Text style={styles.logRecipeBtnTextLogged}>Logged</Text>
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle color="#FFFFFF" size={14} />
-                        <Text style={styles.logRecipeBtnText}>Log Meal</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
+            {/* Recommended Local Recipes Removed */}
         </View>
       )}
       </ScrollView>
@@ -1933,7 +1800,6 @@ const getStyles = (theme) => StyleSheet.create({
   },
   tabTextInactive: {
     fontSize: 13,
-    fontWeight: '700',
     color: theme?.textSecondary || '#94A3B8',
   },
   // --- DAILY PLAN UI ---
@@ -1946,28 +1812,38 @@ const getStyles = (theme) => StyleSheet.create({
   macroRowInline: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    width: '100%',
   },
   macroMiniBox: {
-    flex: 1,
+    width: '23.5%',
+    maxWidth: '24%',
+    height: 54,
+    minHeight: 54,
+    maxHeight: 54,
     backgroundColor: theme?.surface || baseColor,
-    marginHorizontal: 4,
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
+    overflow: 'hidden',
   },
   macroMiniVal: {
-    fontSize: 14,
+    width: '100%',
+    fontSize: 9.5,
     fontWeight: '900',
     color: theme?.textPrimary || '#0F172A',
+    textAlign: 'center',
   },
   macroMiniLabel: {
-    fontSize: 10,
+    width: '100%',
+    fontSize: 9.5,
     fontWeight: '700',
     color: theme?.textSecondary || '#94A3B8',
     marginTop: 2,
+    textAlign: 'center',
   },
   timelineContainer: {
     marginTop: 6,
@@ -2187,10 +2063,10 @@ const getStyles = (theme) => StyleSheet.create({
     flex: 1,
   },
   staticMapContainer: {
-    height: 180,
-    borderRadius: 16,
+    height: 320,
+    borderRadius: 18,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
     backgroundColor: theme?.cardBackground || '#FFFFFF',

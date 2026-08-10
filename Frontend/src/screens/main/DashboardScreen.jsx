@@ -17,7 +17,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User, Flame, Clock, Trophy, ChevronRight, Sparkles, Target } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User, Flame, Clock, Trophy, ChevronRight, ChevronLeft, Sparkles, Target } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
@@ -168,6 +168,8 @@ export default function DashboardScreen({
 
   // ── New Goal Modal (shown when user hits 100% progress) ──
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
+  const [selectedNewGoalOption, setSelectedNewGoalOption] = useState(null);
+  const [weightChangeKg, setWeightChangeKg] = useState('5');
 
   const NEW_GOAL_OPTIONS = [
     {
@@ -1101,77 +1103,222 @@ export default function DashboardScreen({
       {/* ── NEW GOAL MODAL (shown on goal completion) ── */}
       <Modal visible={showNewGoalModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { padding: 24, borderRadius: 24 }]}>
-            {/* Header Icon Badge */}
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <View style={{
-                width: 64,
-                height: 64,
-                borderRadius: 32,
-                backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1.5,
-                borderColor: 'rgba(16, 185, 129, 0.3)',
-                marginBottom: 12,
-              }}>
-                <Trophy color={logoGreen} size={32} strokeWidth={2.5} />
-              </View>
-              
-              <Text style={{ fontSize: 22, fontWeight: '900', color: theme?.textPrimary || '#0F172A', textAlign: 'center', letterSpacing: -0.5 }}>
-                Goal Achieved! 🎉
-              </Text>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
-                Fantastic progress! You reached your target weight of <Text style={{ color: logoGreen, fontWeight: '800' }}>{goalWeight.toFixed(1)} kg</Text>.{`\n`}Select your next goal to stay on track:
-              </Text>
-            </View>
+          <View style={[styles.modalContent, { padding: 22, borderRadius: 24 }]}>
+            {!selectedNewGoalOption ? (
+              <>
+                {/* Header Icon Badge */}
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 32,
+                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    marginBottom: 12,
+                  }}>
+                    <Trophy color={logoGreen} size={32} strokeWidth={2.5} />
+                  </View>
+                  
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: theme?.textPrimary || '#0F172A', textAlign: 'center', letterSpacing: -0.5 }}>
+                    Goal Achieved! 🎉
+                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
+                    Fantastic progress! You reached your target weight of <Text style={{ color: logoGreen, fontWeight: '800' }}>{goalWeight.toFixed(1)} kg</Text>.{`\n`}Select your next goal to stay on track:
+                  </Text>
+                </View>
 
-            {/* Goal Options List */}
-            {NEW_GOAL_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={styles.newGoalOptionBtn}
-                onPress={() => handleSelectNewGoal(option)}
-                activeOpacity={0.75}
-              >
+                {/* Goal Options List */}
+                {NEW_GOAL_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={styles.newGoalOptionBtn}
+                    onPress={() => {
+                      if (option.id === 'maintain') {
+                        handleSelectNewGoal(option);
+                      } else {
+                        setSelectedNewGoalOption(option);
+                        setWeightChangeKg('5');
+                      }
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: option.badgeBg,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                    }}>
+                      {option.icon}
+                    </View>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.newGoalOptionLabel}>{option.label}</Text>
+                      <Text style={styles.newGoalOptionDesc}>{option.desc}</Text>
+                    </View>
+                    <ChevronRight color={option.accentColor} size={18} strokeWidth={2.5} />
+                  </TouchableOpacity>
+                ))}
+
+                {/* Cancel / Decide Later Ghost Button */}
+                <TouchableOpacity
+                  style={{
+                    width: '100%',
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    backgroundColor: theme?.inputBg || '#F1F5F9',
+                    alignItems: 'center',
+                    marginTop: 6,
+                    borderWidth: 1.2,
+                    borderColor: theme?.border || '#E2E8F0',
+                  }}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowNewGoalModal(false);
+                    setSelectedNewGoalOption(null);
+                  }}
+                >
+                  <Text style={{ color: theme?.textSecondary || '#94A3B8', fontWeight: '800', fontSize: 13, letterSpacing: 0.2 }}>
+                    Decide Later
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              /* --- SUB-VIEW: SELECT WEIGHT AMOUNT TO LOSE / GAIN --- */
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                  <TouchableOpacity 
+                    onPress={() => setSelectedNewGoalOption(null)}
+                    style={{
+                      padding: 8,
+                      borderRadius: 12,
+                      backgroundColor: theme?.inputBg || '#F1F5F9',
+                      marginRight: 12
+                    }}
+                  >
+                    <ChevronLeft color={theme?.textPrimary || '#0F172A'} size={20} />
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: theme?.textPrimary || '#0F172A', flex: 1 }} numberOfLines={1}>
+                    Set Weight {selectedNewGoalOption.id === 'fatloss' ? 'Loss' : 'Gain'} Target
+                  </Text>
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: '600', color: theme?.textSecondary || '#94A3B8', marginBottom: 14, lineHeight: 18 }}>
+                  How many kilograms do you want to <Text style={{ color: selectedNewGoalOption.accentColor, fontWeight: '800' }}>{selectedNewGoalOption.id === 'fatloss' ? 'lose' : 'gain'}</Text> from your current weight ({currentWeight.toFixed(1)} kg)?
+                </Text>
+
+                {/* Preset Chips */}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  Quick Preset Target
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                  {['2', '3', '5', '8', '10'].map((amount) => {
+                    const isSelected = weightChangeKg === amount;
+                    return (
+                      <TouchableOpacity
+                        key={amount}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 12,
+                          backgroundColor: isSelected ? selectedNewGoalOption.accentColor : (theme?.inputBg || '#F1F5F9'),
+                          borderWidth: 1,
+                          borderColor: isSelected ? selectedNewGoalOption.accentColor : (theme?.border || '#E2E8F0')
+                        }}
+                        onPress={() => setWeightChangeKg(amount)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: isSelected ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }}>
+                          {selectedNewGoalOption.id === 'fatloss' ? '-' : '+'}{amount} kg
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Custom Number Input */}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  Or Enter Custom Amount (kg)
+                </Text>
                 <View style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  backgroundColor: option.badgeBg,
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 12,
+                  backgroundColor: theme?.inputBg || '#F1F5F9',
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderWidth: 1.5,
+                  borderColor: theme?.border || '#E2E8F0',
+                  marginBottom: 14
                 }}>
-                  {option.icon}
+                  <TextInput
+                    style={{ flex: 1, fontSize: 16, fontWeight: '800', color: theme?.textPrimary || '#0F172A' }}
+                    value={weightChangeKg}
+                    onChangeText={(val) => setWeightChangeKg(val.replace(/[^0-9.]/g, ''))}
+                    keyboardType="numeric"
+                    placeholder="Enter kg"
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: theme?.textSecondary || '#64748B' }}>kg</Text>
                 </View>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.newGoalOptionLabel}>{option.label}</Text>
-                  <Text style={styles.newGoalOptionDesc}>{option.desc}</Text>
-                </View>
-                <ChevronRight color={option.accentColor} size={18} strokeWidth={2.5} />
-              </TouchableOpacity>
-            ))}
 
-            {/* Cancel / Decide Later Ghost Button */}
-            <TouchableOpacity
-              style={{
-                width: '100%',
-                paddingVertical: 13,
-                borderRadius: 14,
-                backgroundColor: theme?.inputBg || '#F1F5F9',
-                alignItems: 'center',
-                marginTop: 6,
-                borderWidth: 1.2,
-                borderColor: theme?.border || '#E2E8F0',
-              }}
-              activeOpacity={0.7}
-              onPress={() => setShowNewGoalModal(false)}
-            >
-              <Text style={{ color: theme?.textSecondary || '#94A3B8', fontWeight: '800', fontSize: 13, letterSpacing: 0.2 }}>
-                Decide Later
-              </Text>
-            </TouchableOpacity>
+                {/* Target Calculation Live Preview Card */}
+                {(() => {
+                  const numKg = parseFloat(weightChangeKg) || 0;
+                  const calculatedTarget = selectedNewGoalOption.id === 'fatloss' 
+                    ? Math.max(30, currentWeight - numKg) 
+                    : (currentWeight + numKg);
+                  return (
+                    <View style={{
+                      backgroundColor: selectedNewGoalOption.badgeBg,
+                      padding: 12,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: `${selectedNewGoalOption.accentColor}40`,
+                      marginBottom: 14
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: selectedNewGoalOption.accentColor, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                        Live Target Preview
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: theme?.textPrimary || '#0F172A' }}>
+                        {currentWeight.toFixed(1)} kg ➔ Target: <Text style={{ color: selectedNewGoalOption.accentColor }}>{calculatedTarget.toFixed(1)} kg</Text>
+                      </Text>
+                    </View>
+                  );
+                })()}
+
+                {/* Confirm Button */}
+                <TouchableOpacity
+                  style={{
+                    width: '100%',
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    backgroundColor: selectedNewGoalOption.accentColor,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    const numKg = parseFloat(weightChangeKg) || 5;
+                    const offsetKg = selectedNewGoalOption.id === 'fatloss' ? -numKg : +numKg;
+                    handleSelectNewGoal({
+                      ...selectedNewGoalOption,
+                      label: `${selectedNewGoalOption.label} (${selectedNewGoalOption.id === 'fatloss' ? '-' : '+'}${numKg}kg)`,
+                      offsetKg
+                    });
+                    setSelectedNewGoalOption(null);
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>
+                    Confirm Goal ({selectedNewGoalOption.id === 'fatloss' ? '-' : '+'}{parseFloat(weightChangeKg) || 5} kg)
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>

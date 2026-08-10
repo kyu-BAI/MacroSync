@@ -18,13 +18,13 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, KeyRound, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
-import { saveUserId, clearSavedUserId, setRememberMe, isRememberMeEnabled } from '../../services/OfflineStorage';
+import { clearSavedUserId } from '../../services/OfflineStorage';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -34,39 +34,11 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
-  // --- REMEMBER ME STATE ---
-  const [rememberMe, setRememberMeState] = useState(true);
-
-  useEffect(() => {
-    const loadRememberMePref = async () => {
-      const enabled = await isRememberMeEnabled();
-      setRememberMeState(enabled);
-    };
-    loadRememberMePref();
-  }, []);
-
-  const handleToggleRememberMe = async (val) => {
-    setRememberMeState(val);
-    await setRememberMe(val);
-    if (val) {
-      if (userId) await saveUserId(userId);
-      showAlert("Remember Me Enabled", "You will remain signed in automatically on this device.");
-    } else {
-      await clearSavedUserId();
-      showAlert("Remember Me Disabled", "Auto-login disabled. You will be required to log in next time.");
-    }
-  };
 
   // --- EDIT PROFILE MODAL STATE ---
   const [showEditModal, setShowEditModal] = useState(false);
   const [tempName, setTempName] = useState('');
   const [tempImage, setTempImage] = useState(null);
-
-  // --- CHANGE EMAIL STATE ---
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [tempAuthEmail, setTempAuthEmail] = useState('');
-  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
-  const [isChangingEmail, setIsChangingEmail] = useState(false);
 
   // --- CHANGE PASSWORD STATE ---
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -76,7 +48,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- PASSWORD VISIBILITY STATE ---
-  const [showEmailPassword, setShowEmailPassword] = useState(false);
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -93,11 +64,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     setShowEditModal(true);
   };
 
-  const handleOpenEmailModal = () => {
-    setTempAuthEmail('');
-    setEmailCurrentPassword('');
-    setShowEmailModal(true);
-  };
 
   const handleOpenPasswordModal = () => {
     setOldPassword('');
@@ -354,7 +320,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           text: "Proceed to Pay",
           onPress: async () => {
             try {
-              const amount_cents = planName === 'Monthly' ? 19900 : 202980; // Multiply by 100 to get cents
+              const amount_cents = planName === 'Monthly' ? 14900 : 119900; // ₱149.00 or ₱1,199.00 (in cents)
               const response = await fetch(`${API_URL}/create-checkout-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -409,64 +375,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     }, 1000);
   };
 
-  const handleChangeEmail = async () => {
-    if (!tempAuthEmail.trim()) {
-      showAlert("Validation Error", "Please enter a new email address.");
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(tempAuthEmail.trim())) {
-      showAlert("Validation Error", "Please enter a valid email address.");
-      return;
-    }
-    if (tempAuthEmail.trim().toLowerCase() === (userProfile?.email || '').toLowerCase()) {
-      showAlert("Validation Error", "New email is the same as your current email.");
-      return;
-    }
-    if (!emailCurrentPassword.trim()) {
-      showAlert("Validation Error", "Please enter your current password to authorize this email update.");
-      return;
-    }
-
-    setIsChangingEmail(true);
-    try {
-      const response = await fetch(`${API_URL}/update-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          new_email: tempAuthEmail.trim().toLowerCase(),
-          current_password: emailCurrentPassword.trim()
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update email address');
-      }
-
-      if (setUserProfile) {
-        setUserProfile(prev => ({
-          ...prev,
-          email: tempAuthEmail.trim().toLowerCase()
-        }));
-      }
-
-      setTempAuthEmail('');
-      setEmailCurrentPassword('');
-      setShowEmailModal(false);
-      setTimeout(() => {
-        showAlert("Success", "Email address updated successfully! Please use this new email to log in next time.");
-      }, 250);
-    } catch (error) {
-      if (__DEV__) console.error("CHANGE EMAIL ERROR:", error);
-      showAlert("Error", error.message || "Failed to update email. Please try again.");
-    } finally {
-      setIsChangingEmail(false);
-    }
-  };
 
   const handleChangePassword = async () => {
     if (!oldPassword.trim()) {
@@ -509,8 +417,29 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordModal(false);
+
+      // Clear saved offline user session for security
+      try {
+        await clearSavedUserId();
+      } catch (err) {
+        if (__DEV__) console.log("Clear saved session error:", err);
+      }
+
       setTimeout(() => {
-        showAlert("Success", "Password updated successfully!");
+        showAlert(
+          "Password Updated 🔒", 
+          "Your password has been changed successfully. For your security, please sign in with your new password.",
+          [
+            {
+              text: "Sign In Now",
+              onPress: () => {
+                if (onTabChange) {
+                  onTabChange('AUTH');
+                }
+              }
+            }
+          ]
+        );
       }, 250);
     } catch (error) {
       if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
@@ -692,13 +621,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
                   { marginBottom: 12 }
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱99/mo')}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱149/mo')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
                   <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱99/mo</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱149/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -707,7 +636,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   styles.billingPlanSelectorRowItem,
                   selectedBillingCycle === 'Annual' && styles.billingPlanActive
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱799/yr')}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱1,199/yr')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -716,9 +645,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                       <Text style={styles.bestValueBadgeText}>SAVE 33%</Text>
                     </View>
                   </View>
-                  <Text style={styles.billingPlanSubDescription}>₱799/year (~₱66/mo). Best value for long-term health!</Text>
+                  <Text style={styles.billingPlanSubDescription}>₱1,199/year (~₱99/mo). Best value for long-term health!</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱799/yr</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱1,199/yr</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -817,8 +746,8 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#E2E8F0', true: '#F97316' }}
-              thumbColor={motivationalUpdates ? '#F97316' : '#64748B'}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={motivationalUpdates ? '#10B981' : '#64748B'}
               ios_backgroundColor={'#E2E8F0'}
               onValueChange={handleToggleMotivationalUpdates}
               value={motivationalUpdates}
@@ -838,8 +767,8 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#E2E8F0', true: '#8B5CF6' }}
-              thumbColor={personalizedAlerts ? '#8B5CF6' : '#64748B'}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={personalizedAlerts ? '#10B981' : '#64748B'}
               ios_backgroundColor={'#E2E8F0'}
               onValueChange={handleTogglePersonalizedAlerts}
               value={personalizedAlerts}
@@ -848,26 +777,8 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         </View>
 
         {/* SECURITY SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Security & Account</Text>
+        <Text style={styles.sectionLabelTitle}>Account Security</Text>
         <View style={styles.formCard}>
-          <TouchableOpacity 
-            style={styles.settingActionRowItem} 
-            onPress={handleOpenEmailModal}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(14, 165, 233, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <Mail color={'#0EA5E9'} size={16} />
-              </View>
-              <View>
-                <Text style={styles.settingRowItemMainTitle}>Change Email Address</Text>
-                <Text style={styles.settingRowItemSubTitle}>Update your login email address securely</Text>
-              </View>
-            </View>
-            <ChevronRight color={'#94A3B8'} size={16} />
-          </TouchableOpacity>
-
-          <View style={styles.glassDivider} />
 
           <TouchableOpacity 
             style={styles.settingActionRowItem} 
@@ -886,26 +797,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             <ChevronRight color={'#94A3B8'} size={16} />
           </TouchableOpacity>
 
-          <View style={styles.glassDivider} />
 
-          <View style={styles.settingActionRowItem}>
-            <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <KeyRound color={'#10B981'} size={16} />
-              </View>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>Remember Me</Text>
-                <Text style={styles.settingRowItemSubTitle}>Stay signed in automatically on this device</Text>
-              </View>
-            </View>
-            <Switch
-              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
-              thumbColor={rememberMe ? '#10B981' : '#64748B'}
-              ios_backgroundColor={'#E2E8F0'}
-              onValueChange={handleToggleRememberMe}
-              value={rememberMe}
-            />
-          </View>
         </View>
 
         {/* LOGOUT BUTTON */}
@@ -969,89 +861,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         </View>
       </Modal>
 
-      {/* --- CHANGE EMAIL MODAL --- */}
-      <Modal
-        visible={showEmailModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowEmailModal(false);
-          setTempAuthEmail('');
-          setEmailCurrentPassword('');
-          setShowEmailPassword(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={styles.modalContent}
-          >
-            <Text style={styles.modalTitle}>Change Email</Text>
-            <Text style={styles.modalSubtitle}>Enter details below to update your email address</Text>
-
-            <Text style={styles.inputLabel}>Current Email</Text>
-            <View style={[styles.modalInput, { backgroundColor: 'rgba(30, 60, 50, 0.6)', justifyContent: 'center' }]}>
-              <Text style={{ color: '#CBD5E1', fontSize: 14 }}>{userProfile?.email || 'No email set'}</Text>
-            </View>
-
-            <Text style={styles.inputLabel}>Current Password</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.passwordTextInput}
-                value={emailCurrentPassword}
-                onChangeText={setEmailCurrentPassword}
-                placeholder="Enter current password"
-                placeholderTextColor="#CBD5E1"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={!showEmailPassword}
-              />
-              <TouchableOpacity onPress={() => setShowEmailPassword(!showEmailPassword)} activeOpacity={0.7}>
-                {showEmailPassword ? (
-                  <Eye color="#94A3B8" size={20} />
-                ) : (
-                  <EyeOff color="#94A3B8" size={20} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>New Email Address</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempAuthEmail}
-              onChangeText={setTempAuthEmail}
-              placeholder="email@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholderTextColor="#CBD5E1"
-            />
-
-            <View style={styles.modalButtons}>
-               <TouchableOpacity 
-                 style={styles.modalCancel} 
-                 onPress={() => {
-                   setShowEmailModal(false);
-                   setTempAuthEmail('');
-                   setEmailCurrentPassword('');
-                   setShowEmailPassword(false);
-                 }}
-               >
-                 <Text style={styles.modalCancelText}>Cancel</Text>
-               </TouchableOpacity>
-               <TouchableOpacity 
-                 style={styles.modalSave} 
-                 onPress={handleChangeEmail}
-                 disabled={isChangingEmail}
-               >
-                 <Text style={styles.modalSaveText}>
-                   {isChangingEmail ? "Saving..." : "Change"}
-                 </Text>
-               </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       {/* --- CHANGE PASSWORD MODAL --- */}
       <Modal

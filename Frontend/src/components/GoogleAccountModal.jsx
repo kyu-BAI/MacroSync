@@ -20,6 +20,7 @@ import {
   setRememberMe,
   isRememberMeEnabled,
 } from "../services/OfflineStorage";
+import { useTheme } from "../context/ThemeContext";
 
 export default function GoogleAccountModal({
   visible = false,
@@ -27,6 +28,9 @@ export default function GoogleAccountModal({
   onSelectAccount = () => {},
   isLoading = false,
 }) {
+  const { isDarkMode, theme } = useTheme();
+  const styles = getStyles(isDarkMode, theme);
+
   const [googleEmail, setGoogleEmail] = useState("");
   const [rememberMe, setRememberMeState] = useState(true);
 
@@ -53,7 +57,10 @@ export default function GoogleAccountModal({
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      Alert.alert("Input Error", "Please enter a valid email format (e.g. name@gmail.com).");
+      Alert.alert(
+        "Input Error",
+        "Please enter a valid email format (e.g. name@gmail.com).",
+      );
       return;
     }
 
@@ -85,7 +92,7 @@ export default function GoogleAccountModal({
     Alert.alert(
       "Google Sign-In Help",
       "Enter your Google Account email to authorize MacroSync. Your account allows seamless sync of daily meal logs, AI nutrients tracking, and fitness routines.",
-      [{ text: "OK" }]
+      [{ text: "OK" }],
     );
   };
 
@@ -93,7 +100,7 @@ export default function GoogleAccountModal({
     Alert.alert(
       "Privacy Policy & Terms",
       "MacroSync respects your privacy. Your Google profile email is strictly used to secure your personal account.",
-      [{ text: "Close" }]
+      [{ text: "Close" }],
     );
   };
 
@@ -113,7 +120,7 @@ export default function GoogleAccountModal({
             activeOpacity={0.7}
             disabled={isLoading}
           >
-            <X color="#FFFFFF" size={24} strokeWidth={2} />
+            <X color={isDarkMode ? "#FFFFFF" : "#0F172A"} size={22} strokeWidth={2.4} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -122,7 +129,7 @@ export default function GoogleAccountModal({
             activeOpacity={0.7}
             disabled={isLoading}
           >
-            <HelpCircle color="#FFFFFF" size={24} strokeWidth={2} />
+            <HelpCircle color={isDarkMode ? "#FFFFFF" : "#0F172A"} size={22} strokeWidth={2.4} />
           </TouchableOpacity>
         </View>
 
@@ -151,18 +158,20 @@ export default function GoogleAccountModal({
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#10B981" />
-                <Text style={styles.loadingText}>Authenticating with Google...</Text>
+                <Text style={styles.loadingText}>
+                  Authenticating with Google...
+                </Text>
               </View>
             ) : (
               <View style={styles.accountFormContainer}>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Google Email Address</Text>
                   <View style={styles.fieldRow}>
-                    <Mail color="#94A3B8" size={18} style={styles.fieldIcon} />
+                    <Mail color={isDarkMode ? "#94A3B8" : "#64748B"} size={18} style={styles.fieldIcon} />
                     <TextInput
                       style={styles.textInput}
                       placeholder="yourname@gmail.com"
-                      placeholderTextColor="#71717A"
+                      placeholderTextColor={isDarkMode ? "#71717A" : "#9CA3AF"}
                       value={googleEmail}
                       onChangeText={setGoogleEmail}
                       keyboardType="email-address"
@@ -176,15 +185,21 @@ export default function GoogleAccountModal({
                 <View style={styles.rememberRow}>
                   <View style={styles.rememberTextGroup}>
                     <View style={styles.rememberTitleRow}>
-                      <ShieldCheck color="#10B981" size={16} style={{ marginRight: 6 }} />
+                      <ShieldCheck
+                        color="#10B981"
+                        size={16}
+                        style={{ marginRight: 6 }}
+                      />
                       <Text style={styles.rememberTitle}>Remember Me</Text>
                     </View>
-                    <Text style={styles.rememberSubtitle}>Verify Gmail one time on this device</Text>
+                    <Text style={styles.rememberSubtitle}>
+                      Verify Gmail one time on this device
+                    </Text>
                   </View>
                   <Switch
-                    trackColor={{ false: "#3F3F46", true: "#10B981" }}
-                    thumbColor={rememberMe ? "#FFFFFF" : "#A1A1AA"}
-                    ios_backgroundColor="#3F3F46"
+                    trackColor={{ false: isDarkMode ? "#3F3F46" : "#D1D5DB", true: "#10B981" }}
+                    thumbColor={rememberMe ? "#FFFFFF" : (isDarkMode ? "#A1A1AA" : "#9CA3AF")}
+                    ios_backgroundColor={isDarkMode ? "#3F3F46" : "#D1D5DB"}
                     onValueChange={setRememberMeState}
                     value={rememberMe}
                   />
@@ -205,8 +220,8 @@ export default function GoogleAccountModal({
 
                 {/* LEGAL / PRIVACY DISCLAIMER */}
                 <Text style={styles.legalDisclaimerText}>
-                  To continue, Google will share your email address with MacroSync.
-                  Before using this app, review its{" "}
+                  To continue, Google will share your email address with
+                  MacroSync. Before using this app, review its{" "}
                   <Text style={styles.legalLinkText} onPress={handleOpenPolicy}>
                     privacy policy
                   </Text>{" "}
@@ -225,10 +240,10 @@ export default function GoogleAccountModal({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDarkMode, theme) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.78)",
+    backgroundColor: isDarkMode ? "rgba(0, 0, 0, 0.82)" : "rgba(0, 0, 0, 0.55)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -247,63 +262,70 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.18)" : "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: "rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDarkMode ? 0 : 0.12,
+    shadowRadius: 4,
+    elevation: isDarkMode ? 0 : 3,
   },
   modalCardContainer: {
     width: "100%",
     maxWidth: 380,
-    backgroundColor: "#262626",
+    backgroundColor: isDarkMode ? "#262626" : "#FFFFFF",
     borderRadius: 24,
     paddingHorizontal: 22,
     paddingTop: 28,
     paddingBottom: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    shadowOpacity: isDarkMode ? 0.5 : 0.15,
     shadowRadius: 16,
     elevation: 20,
     borderWidth: 1,
-    borderColor: "#3F3F46",
+    borderColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
   },
   scrollContent: {
     alignItems: "center",
   },
   logoBadgeOuter: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: "#18181A",
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: isDarkMode ? "#18181A" : "#F3F4F6",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#3F3F46",
+    borderColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
   },
   logoBadgeInner: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 58,
+    height: 58,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
   },
   appLogoImage: {
-    width: 40,
-    height: 40,
+    width: 54,
+    height: 54,
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: isDarkMode ? "#FFFFFF" : "#111827",
     textAlign: "center",
     letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#A1A1AA",
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
     textAlign: "center",
     marginTop: 4,
     marginBottom: 24,
@@ -315,7 +337,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 14,
     fontSize: 14,
-    color: "#CBD5E1",
+    color: isDarkMode ? "#CBD5E1" : "#4B5563",
     fontWeight: "500",
   },
   accountFormContainer: {
@@ -328,16 +350,16 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#D4D4D8",
+    color: isDarkMode ? "#D4D4D8" : "#374151",
     marginBottom: 6,
   },
   fieldRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#18181B",
+    backgroundColor: isDarkMode ? "#18181B" : "#F9FAFB",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#3F3F46",
+    borderColor: isDarkMode ? "#3F3F46" : "#D1D5DB",
     paddingHorizontal: 12,
     height: 46,
   },
@@ -346,17 +368,17 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    color: "#FFFFFF",
+    color: isDarkMode ? "#FFFFFF" : "#111827",
     fontSize: 14,
   },
   rememberRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#18181B",
+    backgroundColor: isDarkMode ? "#18181B" : "#F9FAFB",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#3F3F46",
+    borderColor: isDarkMode ? "#3F3F46" : "#D1D5DB",
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 14,
@@ -373,11 +395,11 @@ const styles = StyleSheet.create({
   rememberTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: isDarkMode ? "#FFFFFF" : "#111827",
   },
   rememberSubtitle: {
     fontSize: 11,
-    color: "#A1A1AA",
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
     marginTop: 2,
     fontWeight: "500",
   },
@@ -397,14 +419,14 @@ const styles = StyleSheet.create({
   },
   dividerLine: {
     height: 1,
-    backgroundColor: "#3F3F46",
+    backgroundColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
     marginVertical: 18,
     width: "100%",
   },
   legalDisclaimerText: {
     fontSize: 12,
     lineHeight: 17,
-    color: "#A1A1AA",
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
     textAlign: "left",
   },
   legalLinkText: {

@@ -48,7 +48,7 @@ const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
   const systemColorScheme = useColorScheme(); // 'dark' | 'light' | null
-  const [themeMode, setThemeModeState] = useState('light'); // Default to 'light' mode when first opened
+  const [themeMode, setThemeModeState] = useState('system'); // Default: follow phone OS theme
 
   useEffect(() => {
     const loadSavedThemeMode = async () => {
@@ -61,8 +61,8 @@ export const ThemeProvider = ({ children }) => {
         } else if (savedMode === 'false') {
           setThemeModeState('light');
         } else {
-          // First time opening app: Default to light mode
-          setThemeModeState('light');
+          // First time opening app: follow phone OS dark/light mode
+          setThemeModeState('system');
         }
       } catch (err) {
         console.log('Error loading saved theme mode:', err);
