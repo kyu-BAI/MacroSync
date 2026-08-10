@@ -1976,6 +1976,25 @@ def debug_key():
     except Exception as e:
         return {"error": f"Failed to parse key: {str(e)}"}
 
+
+@app.get("/debug-gemini")
+def debug_gemini():
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return {"error": "GEMINI_API_KEY missing from environment"}
+    
+    models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-latest']
+    results = {}
+    for m in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key.strip()}"
+        payload = {"contents": [{"parts": [{"text": "Hello"}]}]}
+        try:
+            res = requests.post(url, json=payload, timeout=10)
+            results[m] = {"status": res.status_code, "body": res.text[:200]}
+        except Exception as e:
+            results[m] = {"error": str(e)}
+    return {"gemini_key_prefix": key[:8] if key else None, "results": results}
+
 # ---------------- PAYMONGO INTEGRATION ----------------
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
 
