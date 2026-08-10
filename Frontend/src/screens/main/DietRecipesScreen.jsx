@@ -133,7 +133,6 @@ export default function DietRecipesScreen({
   }, [sessionRecipes, userId]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBudget, setSelectedBudget] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('San Remigio');
   const [showFullMapModal, setShowFullMapModal] = useState(false);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
@@ -172,12 +171,7 @@ export default function DietRecipesScreen({
     }
   };
 
-  const budgetTiers = ['All', 'Under ₱100', '₱100 - ₱300', 'Over ₱300'];
   const locations = ['San Remigio', 'Bogo City', 'Daanbantayan'];
-  
-  const [selectedAllergy, setSelectedAllergy] = useState('None');
-  const [customAllergy, setCustomAllergy] = useState('');
-  const allergyList = ['None', 'Peanuts', 'Dairy', 'Gluten', 'Seafood', 'Other'];
 
   // --- DYNAMIC CALORIE & MACRO CALCULATOR ENGINE ---
   let calculatedTargetCalories = 2000;
@@ -314,9 +308,9 @@ export default function DietRecipesScreen({
         body: JSON.stringify({
           user_id: userId,
           ingredients: searchQuery.trim(),
-          budget: selectedBudget,
+          budget: 'All',
           location: selectedLocation,
-          allergy: selectedAllergy === 'Other' ? customAllergy : selectedAllergy
+          allergy: 'None'
         }),
       });
       if (response.ok) {
@@ -534,13 +528,12 @@ export default function DietRecipesScreen({
   );
 
   const filteredRecipes = uniqueRecipes.filter(recipe => {
-    const matchesBudget = selectedBudget === 'All' || recipe.budget === selectedBudget;
-    const matchesLocation = recipe.location === selectedLocation;
-    const matchesAllergy = selectedAllergy === 'None' || !(recipe.allergies || []).includes(selectedAllergy);
-    const ingredientsString = recipe.ingredients.join(', ').toLowerCase();
-    const matchesSearch = recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesLocation = !recipe.location || recipe.location === selectedLocation;
+    const ingredientsString = (recipe.ingredients || []).join(', ').toLowerCase();
+    const matchesSearch = !searchQuery.trim() ||
+                          (recipe.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           ingredientsString.includes(searchQuery.toLowerCase());
-    return matchesBudget && matchesLocation && matchesAllergy && matchesSearch;
+    return matchesLocation && matchesSearch;
   });
 
   const consumedCalories = dailyNutrition?.consumedCalories || 0;
@@ -807,45 +800,7 @@ export default function DietRecipesScreen({
                 </TouchableOpacity>
               )}
 
-              {/* BUDGET PREFERENCES */}
-              <Text style={[styles.cardTitle, { marginTop: 14, fontSize: 13 }]}>Budget Preferences</Text>
-              <View style={styles.filterButtonGroupRow}>
-                {budgetTiers.map((tier) => (
-                  <TouchableOpacity
-                    key={tier}
-                    style={[styles.filterChipButton, selectedBudget === tier ? styles.filterChipActive : styles.filterChipInactive]}
-                    onPress={() => setSelectedBudget(tier)}
-                  >
-                    <Text style={[styles.filterChipText, { color: selectedBudget === tier ? '#FFFFFF' : '#64748B' }]}>{tier}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
 
-              {/* ALLERGY RESTRICTIONS */}
-              <Text style={[styles.cardTitle, { marginTop: 12, fontSize: 13 }]}>Allergy Restrictions</Text>
-              <View style={styles.filterButtonGroupRow}>
-                {allergyList.map((allergy) => (
-                  <TouchableOpacity
-                    key={allergy}
-                    style={[styles.filterChipButton, selectedAllergy === allergy ? styles.filterChipActive : styles.filterChipInactive]}
-                    onPress={() => setSelectedAllergy(allergy)}
-                  >
-                    <Text style={[styles.filterChipText, { color: selectedAllergy === allergy ? '#FFFFFF' : '#64748B' }]}>{allergy}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {selectedAllergy === 'Other' && (
-                <View style={[styles.searchBarInnerContainer, { marginTop: 10, height: 42, paddingHorizontal: 12 }]}>
-                  <TextInput
-                    style={[styles.searchTextInput, { fontSize: 12 }]}
-                    placeholder="Type custom allergy (e.g. Soy, Eggs, Shrimp)..."
-                    placeholderTextColor="#94A3B8"
-                    value={customAllergy}
-                    onChangeText={setCustomAllergy}
-                  />
-                </View>
-              )}
             </View>
 
             {/* CARD 2: INTERACTIVE CITY FOOD RADAR */}
