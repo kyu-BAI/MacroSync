@@ -251,7 +251,13 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         if (data.error) {
           const errStr = data.error.toLowerCase();
           const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
-          showAlert(isNotFood ? "No Edible Food Detected 🍽️" : "Scan Error 📸", data.error);
+          const isBusy = errStr.includes("busy") || errStr.includes("quota") || errStr.includes("temporarily");
+          
+          let alertTitle = "Scan Error 📸";
+          if (isNotFood) alertTitle = "No Edible Food Detected 🍽️";
+          else if (isBusy) alertTitle = "AI Service Busy ⌛";
+
+          showAlert(alertTitle, data.error);
           setCapturedImage(null);
         } else {
           setAnalysisResult(data);
@@ -365,7 +371,13 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           if (data.error) {
             const errStr = data.error.toLowerCase();
             const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
-            showAlert(isNotFood ? "No Edible Food Detected 🍽️" : "Scan Error 📸", data.error);
+            const isBusy = errStr.includes("busy") || errStr.includes("quota") || errStr.includes("temporarily");
+            
+            let alertTitle = "Scan Error 📸";
+            if (isNotFood) alertTitle = "No Edible Food Detected 🍽️";
+            else if (isBusy) alertTitle = "AI Service Busy ⌛";
+
+            showAlert(alertTitle, data.error);
             setCapturedImage(null);
           } else {
             setAnalysisResult(data);
