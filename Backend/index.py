@@ -1362,7 +1362,10 @@ class GeminiRESTResponse:
     def __init__(self, text: str):
         self.text = text
 
+gemini_key_counter = 0
+
 def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: str = "image/jpeg"):
+    global gemini_key_counter
     raw_keys = os.getenv("GEMINI_API_KEY", "")
     keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
     k2 = os.getenv("GEMINI_API_KEY_2")
@@ -1375,6 +1378,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     if not keys:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
+    # Round-Robin Load Balancing: Alternate starting key for every request
+    start_idx = gemini_key_counter % len(keys)
+    gemini_key_counter += 1
+    ordered_keys = keys[start_idx:] + keys[:start_idx]
+
     models_to_try = [
         'gemini-2.5-flash', 
         'gemini-2.0-flash', 
@@ -1382,8 +1390,8 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
         'gemini-2.5-pro'
     ]
     
-    # 1. Try Direct REST API across configured keys
-    for key in keys:
+    # 1. Try Direct REST API across load-balanced ordered keys
+    for key in ordered_keys:
         for model in models_to_try:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
@@ -1404,7 +1412,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                             if len(parts_res) > 0 and "text" in parts_res[0]:
                                 return GeminiRESTResponse(parts_res[0]["text"])
                 elif res.status_code == 429:
-                    print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Trying next key/model...")
+                    print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Failover to next key/model...")
                 else:
                     print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
             except Exception as rest_err:
