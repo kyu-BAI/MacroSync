@@ -250,14 +250,15 @@ export default function DietRecipesScreen({
       const CACHE_KEY = `ms_meals_cache_${userId}`;
 
       try {
-        // 1. Check cache first — show instantly with NO loading spinner
+        // 1. Check cache first — show instantly if not stale/generic
         const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
           if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
-            if (isMounted) {
+            const hasGenericTitle = parsed.meals.some(m => String(m.title || '').includes('Allergen-Free Pinoy High-Protein'));
+            if (!hasGenericTitle && isMounted) {
               setDailyPlan(parsed.meals);
-              setLoadingMeals(false); // Instant load — no spinner shown to user
+              setLoadingMeals(false); // Instant load
             }
           }
         }

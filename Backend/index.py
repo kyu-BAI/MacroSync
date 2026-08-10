@@ -900,13 +900,15 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
                             new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
 
             if new_title == title or any(has_allergen(new_title, ALLERGEN_MAP[cat]["keywords"]) for cat in triggered_categories):
-                m_type = meal_copy.get('mealType', 'Dish')
-                if any("egg" in cat for cat in triggered_categories):
-                    new_title = f"Pinoy High-Protein Chicken & Kamote {m_type}"
-                elif any("seafood" in cat for cat in triggered_categories):
-                    new_title = f"Grilled Skinless Chicken Breast & Kangkong {m_type}"
+                m_type = meal_copy.get('mealType', 'Breakfast')
+                if "Breakfast" in m_type:
+                    new_title = "Pinoy Garlic Chicken Breast & Kamote Hash"
+                elif "Lunch" in m_type:
+                    new_title = "Grilled Skinless Chicken Inasal & Kangkong Stir-Fry"
+                elif "Snack" in m_type:
+                    new_title = "Roasted Garlic Kamote & Toasted Sesame Dip"
                 else:
-                    new_title = f"Allergen-Free Pinoy High-Protein {m_type}"
+                    new_title = "Pan-Seared Lean Pork Tenderloin with Steamed Squash"
 
             meal_copy["title"] = new_title
 
@@ -2287,14 +2289,27 @@ def recommend_workouts(user_id: str):
 @app.get("/meals/recommend/{user_id}")
 def recommend_meals(user_id: str):
     try:
-        profile_res = supabase_admin.table("user_profiles").select("*").eq("id", user_id).execute()
-        profile = profile_res.data[0] if profile_res.data else {}
+        profile = {}
+        if user_id and is_valid_uuid(user_id):
+            try:
+                profile_res = supabase_admin.table("user_profiles").select("*").eq("id", user_id).execute()
+                profile = profile_res.data[0] if (profile_res and profile_res.data) else {}
+            except Exception as pe:
+                print("Profile lookup notice:", pe)
+                profile = {}
+        elif user_id and "@" in user_id:
+            try:
+                profile_res = supabase_admin.table("user_profiles").select("*").eq("email", user_id.lower().strip()).execute()
+                profile = profile_res.data[0] if (profile_res and profile_res.data) else {}
+            except Exception as pe:
+                print("Profile lookup by email notice:", pe)
+                profile = {}
 
         # Parse location preferences JSON
         prefs = {}
         if profile.get("location"):
             try:
-                prefs = json.loads(profile["location"])
+                prefs = json.loads(profile["location"]) if isinstance(profile["location"], str) else profile["location"]
             except Exception:
                 prefs = {}
 
@@ -2314,27 +2329,39 @@ def recommend_meals(user_id: str):
 
         user_address = prefs.get("address") or "Philippines"
 
+        # Calculate Mifflin-St Jeor BMR & TDEE based on exact onboarding biometrics
+        bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
+        act_multipliers = {
+            "sedentary": 1.2,
+            "light": 1.375,
+            "moderate": 1.55,
+            "active": 1.725,
+            "very_active": 1.9
+        }
+        act_key = str(activity_level).lower().replace(" ", "_")
+        tdee = bmr * act_multipliers.get(act_key, 1.55)
+
         # Read custom target macro overrides if set in user profile
         custom_cals = profile.get("target_calories") or profile.get("targetCalories")
         custom_prot = profile.get("target_protein") or profile.get("targetProtein")
         custom_carbs = profile.get("target_carbs") or profile.get("targetCarbs")
         custom_fats = profile.get("target_fats") or profile.get("targetFats")
 
-        if "Lose" in goal:
-            target_calories = int(custom_cals) if custom_cals else 1800
+        if "lose" in goal.lower() or "fat" in goal.lower():
+            target_calories = int(custom_cals) if custom_cals else max(1200, int(tdee - 500))
             target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.0)
-            target_carbs = int(custom_carbs) if custom_carbs else 160
-            target_fats = int(custom_fats) if custom_fats else 55
-        elif "Gain" in goal or "Muscle" in goal:
-            target_calories = int(custom_cals) if custom_cals else 2700
+            target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.40) / 4)
+            target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
+        elif "gain" in goal.lower() or "muscle" in goal.lower():
+            target_calories = int(custom_cals) if custom_cals else int(tdee + 400)
             target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.2)
-            target_carbs = int(custom_carbs) if custom_carbs else 320
-            target_fats = int(custom_fats) if custom_fats else 75
+            target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.45) / 4)
+            target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
         else:
-            target_calories = int(custom_cals) if custom_cals else 2100
+            target_calories = int(custom_cals) if custom_cals else int(tdee)
             target_protein = int(custom_prot) if custom_prot else int(weight_kg * 1.8)
-            target_carbs = int(custom_carbs) if custom_carbs else 230
-            target_fats = int(custom_fats) if custom_fats else 65
+            target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.45) / 4)
+            target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
 
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
@@ -2355,6 +2382,7 @@ def recommend_meals(user_id: str):
         - Recommend exclusively healthy Filipino dishes or fitness-oriented adaptations of local Filipino cuisine.
         - The recipes must use ingredients that are easily available in local Philippine wet markets (palengke) and grocery stores (e.g. calamansi, bangus, tilapia, chicken breast, kangkong, sitaw, squash, sweet potato/kamote, brown/white rice). Avoid expensive or hard-to-find western ingredients.
         - CRITICAL ALLERGY SAFETY REQUIREMENT: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients (for example, if allergic to eggs, do NOT include eggs, egg whites, balut, mayo, or egg batter in any dish).
+        - Do not use generic title names like "High-Protein Breakfast". Create specific, appetizing recipe names like "Garlic Calamansi Chicken Breast & Kamote Hash" or "Pan-Seared Tilapia Fillet with Malunggay Soup".
         - Do not use any currency symbols other than the Philippine Peso sign (₱).
 
         Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
@@ -2378,6 +2406,12 @@ def recommend_meals(user_id: str):
                 text = text[7:-3].strip()
             elif text.startswith("```"):
                 text = text[3:-3].strip()
+
+            import re
+            json_match = re.search(r'\[.*\]', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(0)
+
             meals = json.loads(text)
             if isinstance(meals, list) and len(meals) == 4:
                 return sanitize_meals_for_allergies(meals, raw_allergies)
