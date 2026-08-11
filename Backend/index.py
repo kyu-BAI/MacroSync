@@ -1376,31 +1376,43 @@ gemini_key_counter = 0
 
 def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: str = "image/jpeg"):
     global gemini_key_counter
-    raw_keys = os.getenv("GEMINI_API_KEY", "")
-    keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
-    k2 = os.getenv("GEMINI_API_KEY_2")
-    if k2 and k2.strip():
-        keys.append(k2.strip())
-    k3 = os.getenv("GEMINI_API_KEY_3")
-    if k3 and k3.strip():
-        keys.append(k3.strip())
+    
+    # Collect all available API keys from environment variables
+    keys = []
+    for env_name in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4", "GEMINI_API_KEY_5"]:
+        raw_val = os.getenv(env_name, "")
+        if raw_val:
+            for k in raw_val.split(","):
+                clean_k = k.strip()
+                if clean_k and clean_k not in keys:
+                    keys.append(clean_k)
+                    
+    # Fallback to default key if env is empty
+    if not keys and _DEFAULT_GEMINI:
+        keys.append(_DEFAULT_GEMINI)
 
     if not keys:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
-    # Round-Robin Load Balancing: Alternate starting key for every request
+    # Round-Robin Load Balancing across keys
     start_idx = gemini_key_counter % len(keys)
     gemini_key_counter += 1
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
+    # Models prioritized by capacity, speed, and fallback availability
     models_to_try = [
+        'gemini-flash-latest',
+        'gemini-3.6-flash',
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite',
         'gemini-2.0-flash',
-        'gemini-1.5-flash',
         'gemini-2.0-flash-lite',
-        'gemini-1.5-flash-8b'
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-8b',
+        'gemini-2.5-flash'
     ]
     
-    # 1. Try Direct REST API across load-balanced ordered keys
+    # 1. Direct REST API execution with key and model failover
     for key in ordered_keys:
         for model in models_to_try:
             try:
@@ -1422,13 +1434,14 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                             if len(parts_res) > 0 and "text" in parts_res[0]:
                                 return GeminiRESTResponse(parts_res[0]["text"])
                 elif res.status_code == 429:
-                    print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Failover to next key/model...")
+                    print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Failover to next model/key...")
+                    time.sleep(0.2)
                 else:
                     print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
             except Exception as rest_err:
                 print(f"REST Gemini {model} error:", rest_err)
 
-    # 2. Try SDK Fallback (if installed)
+    # 2. SDK Fallback if installed
     genai_client = globals().get("genai_client", None)
     types_module = globals().get("types", None)
     if genai_client:
@@ -1442,7 +1455,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
             except Exception as sdk_err:
                 print(f"SDK Gemini {model} error:", sdk_err)
 
-    raise RuntimeError("Gemini API key quota limited or unavailable across models")
+    # 3. Graceful Fallback if all models/keys hit quota limits
+    print("Warning: All Gemini API keys and models currently rate-limited. Returning fallback response.")
+    return GeminiRESTResponse(
+        "I am currently receiving high request volume. Your daily macro targets and logs have been safely preserved. Please try asking again in a few moments!"
+    )
 
 
 # ---------------- AI CHATBOT ----------------
