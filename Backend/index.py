@@ -18,6 +18,7 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from typing import Optional, List, Dict, Any
 
 try:
     import resend
@@ -255,14 +256,14 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 
             # Try SSL (port 465) first, then fallback to TLS (port 587)
             try:
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=2.5) as server:
                     server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
                     server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
                 smtp_sent = True
                 print(f"✅ OTP Email successfully sent via Gmail SMTP SSL to recipient: {clean_to}")
             except Exception as ssl_err:
                 print("Gmail SMTP SSL port 465 error, trying TLS port 587:", ssl_err)
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=2.5) as server:
                     server.starttls()
                     server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
                     server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
@@ -420,27 +421,33 @@ async def google_signin(data: GoogleSignInRequest):
         if not email:
             raise HTTPException(status_code=400, detail="Email is required")
 
-        # 1. Check if user profile already exists in user_profiles and is onboarded
-        profile_response = supabase_admin.table("user_profiles").select("*").eq("email", email).execute()
-        
+        # 1. Check if user profile already exists in user_profiles with retry
         user_id = None
         user_exists = False
         is_onboarded = False
         profile = {}
-        
-        if profile_response.data and len(profile_response.data) > 0:
-            user_exists = True
-            profile = profile_response.data[0]
-            user_id = profile.get("id")
-            if profile.get("weight_kg") is not None and profile.get("height_cm") is not None:
-                is_onboarded = True
 
-        # ---------------- CASE 1: EXISTING USER & ONBOARDED ----------------
-        if user_exists and is_onboarded:
+        if supabase_admin is not None:
+            for retry in range(3):
+                try:
+                    profile_response = supabase_admin.table("user_profiles").select("*").eq("email", email).execute()
+                    if profile_response.data and len(profile_response.data) > 0:
+                        user_exists = True
+                        profile = profile_response.data[0]
+                        user_id = profile.get("id")
+                        if profile.get("weight_kg") is not None and profile.get("height_cm") is not None:
+                            is_onboarded = True
+                    break
+                except Exception as sb_err:
+                    print(f"Supabase user lookup retry {retry+1} error:", sb_err)
+                    time.sleep(0.3)
+
+        # ---------------- CASE 1: EXISTING USER ----------------
+        if user_exists:
             return {
                 "success": True,
                 "is_new_user": False,
-                "is_onboarded": True,
+                "is_onboarded": is_onboarded,
                 "user_id": user_id,
                 "user": {
                     "id": user_id,
@@ -450,26 +457,25 @@ async def google_signin(data: GoogleSignInRequest):
             }
 
         # ---------------- CASE 2: FIRST-TIME OR UNVERIFIED GOOGLE ACCOUNT ----------------
-        # DO NOT insert into user_profiles or create active account in database yet!
-        # Account is ONLY created upon successful 6-digit OTP verification in /verify-signup.
         temp_password = f"GAuth_{secrets.token_hex(8)}!"
         otp_code = str(random.randint(100000, 999999))
         expiry = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
         
-        supabase_admin.table("password_reset_otps").upsert({
-            "email": email,
-            "otp": otp_code,
-            "expires_at": expiry
-        }).execute()
+        if supabase_admin is not None:
+            try:
+                supabase_admin.table("password_reset_otps").upsert({
+                    "email": email,
+                    "otp": otp_code,
+                    "expires_at": expiry
+                }).execute()
+            except Exception as otp_db_err:
+                print("OTP DB upsert error:", otp_db_err)
 
         print(f"Dispatching Google Verification OTP code {otp_code} to {email}")
-        sent_ok = send_otp_via_email(email, otp_code, "MacroSync Verification OTP - Google Account")
-
-        if not sent_ok:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Failed to send verification OTP email to {email}. Please verify your email address and server SMTP settings."
-            )
+        try:
+            send_otp_via_email(email, otp_code, "MacroSync Verification OTP - Google Account")
+        except Exception as email_err:
+            print("Google verification email error:", email_err)
 
         return {
             "success": True,
@@ -485,7 +491,7 @@ async def google_signin(data: GoogleSignInRequest):
         raise he
     except Exception as e:
         print("GOOGLE SIGNIN ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Google Authentication processing error. Please try again.")
 
 
 
