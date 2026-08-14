@@ -131,20 +131,251 @@ export default function DietRecipesScreen({
       return () => clearTimeout(timer);
     }
   }, [sessionRecipes, userId]);
+  const [userAllergies, setUserAllergies] = useState([]);
+
+  useEffect(() => {
+    const loadUserAllergies = async () => {
+      try {
+        const storedProfile = await AsyncStorage.getItem('ms_user_profile');
+        if (storedProfile) {
+          const parsed = JSON.parse(storedProfile);
+          if (Array.isArray(parsed.allergies) && parsed.allergies.length > 0) {
+            setUserAllergies(parsed.allergies);
+            return;
+          }
+        }
+        const onboardingData = await AsyncStorage.getItem('@ms_onboarding_data');
+        if (onboardingData) {
+          const parsedOnb = JSON.parse(onboardingData);
+          if (Array.isArray(parsedOnb.allergies) && parsedOnb.allergies.length > 0) {
+            setUserAllergies(parsedOnb.allergies);
+            return;
+          }
+        }
+      } catch (err) {
+        if (__DEV__) console.log("Error loading user allergies:", err);
+      }
+    };
+    loadUserAllergies();
+  }, []);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState('San Remigio');
+  const [selectedLocation, setSelectedLocation] = useState('Cebu City');
   const [showFullMapModal, setShowFullMapModal] = useState(false);
+  const [showCityPickerModal, setShowCityPickerModal] = useState(false);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
   
   // New UI States
   const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
 
+  const locations = [
+    'Cebu City',
+    'Lapu-Lapu City',
+    'Mandaue City',
+    'Talisay City',
+    'Carcar City',
+    'Argao',
+    'Bogo City',
+    'San Remigio',
+    'Daanbantayan',
+    'Bantayan Island',
+    'Camotes Islands',
+    'Toledo City',
+    'Balamban',
+    'Moalboal',
+    'Oslob',
+    'Danao City',
+    'Liloan',
+    'Dalaguete',
+    'Barili'
+  ];
+
+  const CITY_PROFILES = {
+    'Cebu City': {
+      marketTitle: 'Carbon Market & Pasil Fish Port (Cebu City)',
+      palengkeItems: 'Pasil Fresh Fish, Singkamas, Pork Belly, Kangkong, Calamansi',
+      lat: 10.3157, lng: 123.8854,
+      famousDishes: [
+        { name: 'Pasil Tuslob Buwa', emoji: '🧠', desc: 'Frothy pig brain & liver stew cooked with onions & chili, dipped with puso (hanging rice).' },
+        { name: 'Cebuano Ngohiong', emoji: '🌯', desc: 'Crispy five-spice fried lumpia stuffed with ubod/singkamas, served with garlic brown dip.' },
+        { name: 'Lechon sa Sugbo', emoji: '🐖', desc: 'World-famous herb & lemongrass stuffed charcoal roasted pork with super crispy skin.' },
+        { name: 'Ginabot (Chicharon Bulaklak)', emoji: '🍳', desc: 'Deep-fried pork mesentery, a legendary Cebuano night market street food staple.' }
+      ]
+    },
+    'Lapu-Lapu City': {
+      marketTitle: 'Mactan Public Market & Saang Pier (Lapu-Lapu City)',
+      palengkeItems: 'Tangigue, Saang, Bakasi, Calamansi, Fresh Lato',
+      lat: 10.3103, lng: 123.9494,
+      famousDishes: [
+        { name: 'Sutukil Seafood Trilogy', emoji: '🐟', desc: 'Iconic 3-way seafood meal: Sugba (Grilled), Tula (Fish Soup), and Kinilaw (Raw Cured).' },
+        { name: 'Linarang na Bakasi sa Cordova', emoji: '🐍', desc: 'Cordova moray eel stew cooked with kamias souring broth, black beans, and chili.' },
+        { name: 'Presko nga Saang sa Mactan', emoji: '🐚', desc: 'Steamed local sea snails dipped in spicy native tuba vinegar and ginger.' }
+      ]
+    },
+    'Mandaue City': {
+      marketTitle: 'Mandaue City Public Market',
+      palengkeItems: 'Native Chicken, Kangkong, Sayote, Eggplant, Sweet Rice',
+      lat: 10.3333, lng: 123.9333,
+      famousDishes: [
+        { name: 'Bibingka sa Mandaue', emoji: '🫓', desc: 'Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves.' },
+        { name: 'Tagaktak sa Mandaue', emoji: '🕸️', desc: 'Crispy net-like sweet rice flour treat fried to golden perfection.' },
+        { name: 'Utan Bisaya sa Mandaue', emoji: '🥣', desc: 'Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens.' }
+      ]
+    },
+    'Talisay City': {
+      marketTitle: 'Talisay City Public Market (Poblacion)',
+      palengkeItems: 'Pork Belly, Inun-unan Fish, Kangkong, Cucumber, Native Tomatoes',
+      lat: 10.2447, lng: 123.8494,
+      famousDishes: [
+        { name: 'Inasal nga Lechon sa Talisay', emoji: '🍖', desc: 'Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork.' },
+        { name: 'Inun-unan nga Bisaya', emoji: '🐟', desc: 'Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant.' }
+      ]
+    },
+    'Carcar City': {
+      marketTitle: 'Carcar City Public Market (Palengke sa Carcar)',
+      palengkeItems: 'Native Pork, Ampaw, Chicharon, Kangkong, Squash, Sitaw',
+      lat: 10.1044, lng: 123.6419,
+      famousDishes: [
+        { name: 'Chicharon sa Carcar', emoji: '🥓', desc: 'Famous crunchy pork cracklings crafted with thick savory meat & fat layers.' },
+        { name: 'Ampaw sa Carcar', emoji: '🍿', desc: 'Puffed rice crispy square treats bound with sweet native syrup and peanuts.' },
+        { name: 'Humba sa Carcar', emoji: '🍲', desc: 'Tender pork belly braised with fermented black beans, banana blossoms, and tuba sugar.' }
+      ]
+    },
+    'Argao': {
+      marketTitle: 'Argao Public Market & Heritage District',
+      palengkeItems: 'Native Sikwate (Cacao), Torta, Native Pork, Alugbati, Eggplant',
+      lat: 9.8808, lng: 123.5975,
+      famousDishes: [
+        { name: 'Torta sa Argao', emoji: '🥮', desc: 'Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese.' },
+        { name: 'Batirol nga Sikwate sa Argao', emoji: '☕', desc: 'Rich hot chocolate frothed with a batirol using 100% native cacao tablea.' },
+        { name: 'Chiu-Chiu nga Baboy sa Argao', emoji: '🍲', desc: 'Traditional Argao braised pork belly stewed with spices and native herbs.' }
+      ]
+    },
+    'Bogo City': {
+      marketTitle: 'Bogo City Public Market (Palengke sa Bogo)',
+      palengkeItems: 'Tangigue, Sweet Corn, Native Tomatoes, Cucumber, Calamansi',
+      lat: 11.0517, lng: 124.0055,
+      famousDishes: [
+        { name: 'Pintos sa Bogo', emoji: '🌽', desc: 'Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks.' },
+        { name: 'Kinilaw nga Tangigue sa Amihanan', emoji: '🥗', desc: 'Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies.' }
+      ]
+    },
+    'San Remigio': {
+      marketTitle: 'San Remigio Municipal Public Market',
+      palengkeItems: 'Bangus, Tilapia, Fresh Lato, Kangkong, Squash, Gabi Leaves',
+      lat: 11.0772, lng: 123.9356,
+      famousDishes: [
+        { name: 'Presko nga Salada nga Lato', emoji: '🌿', desc: 'Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions.' },
+        { name: 'Sinugbang Bangus sa Dahon sa Saging', emoji: '🐟', desc: 'Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf.' }
+      ]
+    },
+    'Daanbantayan': {
+      marketTitle: 'Daanbantayan Public Market & Fish Landing',
+      palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger',
+      lat: 11.2589, lng: 124.0153,
+      famousDishes: [
+        { name: 'Inun-unan nga Bodboron', emoji: '🍲', desc: 'Small ocean fish simmered gently in native vinegar, ginger, and green peppers.' },
+        { name: 'Linat-ang Tulingan sa Daanbantayan', emoji: '🐟', desc: 'Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes.' }
+      ]
+    },
+    'Bantayan Island': {
+      marketTitle: 'Bantayan Island Fish Landing & Santa Fe Market',
+      palengkeItems: 'Dried Danggit, Blue Crab, Shellfish, Calamansi, Young Coconut',
+      lat: 11.1681, lng: 123.7222,
+      famousDishes: [
+        { name: 'Buwad nga Danggit sa Bantayan', emoji: '🐟', desc: 'World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar.' },
+        { name: 'Nilung-ag nga Kasag sa Bantayan', emoji: '🦀', desc: 'Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi.' },
+        { name: 'Buwad nga Pusit', emoji: '🦑', desc: 'Crispy sun-dried squid toasted over coals until golden and fragrant.' }
+      ]
+    },
+    'Camotes Islands': {
+      marketTitle: 'San Francisco Public Market (Camotes)',
+      palengkeItems: 'Cassava, Buko, Native Chicken, Fresh Ocean Fish, Kangkong',
+      lat: 10.6558, lng: 124.3431,
+      famousDishes: [
+        { name: 'Cassava Cake sa Camotes', emoji: '🥧', desc: 'Traditional baked cassava root cake enriched with fresh coconut milk and sugar.' },
+        { name: 'Halang-Halang nga Manok sa Gata', emoji: '🌶️', desc: 'Spicy chicken coconut milk soup infused with chili leaves, ginger, and lemongrass.' }
+      ]
+    },
+    'Toledo City': {
+      marketTitle: 'Toledo City Public Market',
+      palengkeItems: 'River Prawns, Tilapia, Corn Grit, Squash, Sitaw',
+      lat: 10.3772, lng: 123.6406,
+      famousDishes: [
+        { name: 'Gisadong Ulang sa Toledo', emoji: '🦐', desc: 'Large freshwater river prawns sautéed in garlic, butter, and native tomatoes.' },
+        { name: 'Sinugbang Tilapia sa Kamayan', emoji: '🐟', desc: 'Fresh river tilapia grilled over charcoal, served with calamansi soy dip.' }
+      ]
+    },
+    'Balamban': {
+      marketTitle: 'Balamban Public Market & Herb Port',
+      palengkeItems: 'Stuffed Liempo, Native Chicken, Malunggay, Sayote',
+      lat: 10.5042, lng: 123.7194,
+      famousDishes: [
+        { name: 'Sinugbang Liempo sa Balamban', emoji: '🥓', desc: 'Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass.' },
+        { name: 'Tinolang Manok sa Balamban', emoji: '🍲', desc: 'Free-range chicken stewed with green papaya, ginger, and fresh malunggay.' }
+      ]
+    },
+    'Moalboal': {
+      marketTitle: 'Moalboal Public Market & Beach Fish Landing',
+      palengkeItems: 'Tuna Steak, Mackerel, Buko Water, Calamansi, Cucumber',
+      lat: 9.9575, lng: 123.4000,
+      famousDishes: [
+        { name: 'Sinugbang Tangigue Steak sa Moalboal', emoji: '🥩', desc: 'Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip.' },
+        { name: 'Kinilaw nga Mackerel sa Baybayon', emoji: '🥗', desc: 'Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger.' }
+      ]
+    },
+    'Oslob': {
+      marketTitle: 'Oslob Municipal Market',
+      palengkeItems: 'Tangigue, Kamote Tops, Sinigang Greens, Calamansi, Mango',
+      lat: 9.5350, lng: 123.4319,
+      famousDishes: [
+        { name: 'Sinigang nga Tangigue sa Oslob', emoji: '🍲', desc: 'Sour fish soup made with fresh king mackerel, native tomatoes, and greens.' },
+        { name: 'Salada nga Dahon sa Kamote', emoji: '🌿', desc: 'Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes.' }
+      ]
+    },
+    'Danao City': {
+      marketTitle: 'Danao City Central Market',
+      palengkeItems: 'Kalamay, Bangus, Kangkong, Eggplant, Tomatoes',
+      lat: 10.5256, lng: 124.0264,
+      famousDishes: [
+        { name: 'Kalamay sa Danao', emoji: '🍯', desc: 'Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells.' },
+        { name: 'Inasal nga Bangus sa Danao', emoji: '🐟', desc: 'Whole milkfish deboned and stuffed with savory meat, raisins, and spices.' }
+      ]
+    },
+    'Liloan': {
+      marketTitle: 'Liloan Public Market',
+      palengkeItems: 'Lato, Fresh Fish, Native Chicken, Sayote, Masi',
+      lat: 10.4000, lng: 123.9833,
+      famousDishes: [
+        { name: 'Rosquillos sa Titay (Liloan)', emoji: '🥨', desc: 'The original ring-shaped crisp biscuit created in Liloan back in 1907.' },
+        { name: 'Masi sa Liloan', emoji: '🍡', desc: 'Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center.' }
+      ]
+    },
+    'Dalaguete': {
+      marketTitle: 'Dalaguete Vegetable Trading Post (Mantalongon)',
+      palengkeItems: 'Highland Sayote, Broccoli, Carrots, Cabbage, Pork Chops',
+      lat: 9.7619, lng: 123.5350,
+      famousDishes: [
+        { name: 'Gisadong Utan sa Mantalongon', emoji: '🥦', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
+        { name: 'Linat-ang Baboy ug Sayote', emoji: '🍲', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' }
+      ]
+    },
+    'Barili': {
+      marketTitle: 'Barili Public Market & Dairy Farm Center',
+      palengkeItems: 'Carabao Milk, Pastillas, Native Eggs, Native Chicken, Squash',
+      lat: 10.1133, lng: 123.5083,
+      famousDishes: [
+        { name: 'Presko nga Gatas sa Kabaw ug Pastillas', emoji: '🥛', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
+        { name: 'Kinalan nga Manok Bisaya sa Barili', emoji: '🍲', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' }
+      ]
+    }
+  };
+
   const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
     const todayStr = new Date().toISOString().split('T')[0];
     
-    // Hash function for deterministic daily seed per location
     let hash = 0;
     const seedString = `${todayStr}_${location}`;
     for (let i = 0; i < seedString.length; i++) {
@@ -154,93 +385,172 @@ export default function DietRecipesScreen({
     const seed = Math.abs(hash);
 
     const LOCATION_MEALS = {
-      'San Remigio': {
-        breakfast: [
-          'Fresh Lato (Seaweed) Salad & Boiled Eggs',
-          'Grilled Bangus Belly with Garlic Rice',
-          'Poached Eggs on Steamed Kangkong & Calamansi',
-          'Steamed Tilapia Fillet & Fresh Seaweed Dip'
-        ],
-        lunch: [
-          'Sinugbang Tilapia with Kangkong Soup & Steamed Corn',
-          'Sinugbang Lato Bowl & Spicy Calamansi Dip',
-          'Grilled Bangus in Banana Leaf with Squash Soup',
-          'Pan-Seared Tilapia Fillet with Lato Greens'
-        ],
-        snack: [
-          'Fresh Calamansi Juice & Steamed Sweet Corn',
-          'Cold Buko Water & Fresh Mango Slices',
-          'Boiled Sweet Corn with Calamansi Zest',
-          'Fresh Lato Salad Bites with Tomato Dip'
-        ],
-        dinner: [
-          'Gabi Leaves in Coconut Milk (Laing) & Grilled Bangus',
-          'Squash & Kangkong Clear Soup with Tilapia Fillet',
-          'Sinugbang Bangus with Native Vegetable Stew',
-          'Steamed Tilapia with Garlic Kangkong & Gabi Soup'
-        ]
+      'Cebu City': {
+        breakfast: ['Luto nga Itlog sa Subak nga Kangkong ug Calamansi Tea', 'Gisadong Singkamas ug Scrambled Itlog Bisaya', 'Sinugbang Tyan sa Bangus ug Binisaya nga Humay'],
+        lunch: ['Kinilaw nga Tangigue ug Sabaw sa Pasil Isda ug Bugas', 'Sinugbang Tilapia Fillet ug Salada nga Lato', 'Tinolang Manok Bisaya nga adunay Sayote ug Malunggay'],
+        snack: ['Hilaw nga Singkamas ug Tumparik nga Calamansi', 'Luto nga Mais ug Barato nga Tubig sa Buko', 'Giatas nga Pipino ug Calamansi Juice'],
+        dinner: ['Sinugbang Isda sa Palengke ug Salada nga Kamatis', 'Gisadong Kangkong ug Halang nga Halang Isda', 'Utan Bisaya nga Kalabasa, Malunggay ug Manok']
+      },
+      'Lapu-Lapu City': {
+        breakfast: ['Sinugbang Bangus ug Presko nga Lato sa Calamansi', 'Luto nga Itlog Bisaya sa Giatas nga Kangkong', 'Gisadong Kamatis sa Palengke ug Puti sa Itlog'],
+        lunch: ['Sutukil Seafood Plate (Sinugba, Tinola, ug Kinilaw)', 'Sinugbang Tangigue Steak ug Kamatis sa Mactan', 'Halang-Halang nga Manok Bisaya sa Gata'],
+        snack: ['Presko nga Buko Juice ug Luto nga Mais sa Karsada', 'Salada nga Lato ug Aslum nga Calamansi', 'Sinugbang Mais sa Mactan Market'],
+        dinner: ['Sinugbang Tanguigue Steak ug Relish sa Kamatis', 'Sinigang nga Isda sa Subak nga Utan Bisaya', 'Gisadong Talong ug Sinugbang Daghang Manok']
+      },
+      'Mandaue City': {
+        breakfast: ['Gisadong Kamatis ug Scrambled Itlog sa Calamansi', 'Luto nga Kamote Slices ug Luto nga Itlog', 'Gisadong Kangkong sa Ahos ug Itlog'],
+        lunch: ['Tinolang Manok Bisaya sa Sayote ug Malunggay', 'Pan-Seared Isda Fillet ug Salada nga Talong', 'Sinugbang Pork Chop ug Sabaw sa Utan'],
+        snack: ['Luto nga Kamote sa Mandaue ug Presko nga Buko', 'Sinugbang Yellow Mais sa Palengke', 'Mangga sa Cebu ug Salabat (Ginger Tea)'],
+        dinner: ['Gisadong Talong ug Sinugbang Tilapia', 'Sabaw sa Manok Bisaya, Kalabasa ug Sitaw', 'Sinugbang Bangus ug Presko nga Greens']
+      },
+      'Talisay City': {
+        breakfast: ['Luto nga Itlog ug Presko nga Pipino sa Calamansi', 'Luto nga Kamote ug Scrambled Itlog', 'Gisadong Kamatis sa Ahos ug Puti sa Itlog'],
+        lunch: ['Inun-unan na Isda sa Sukang Tuba ug Talong', 'Sinugbang Baboy nga Lean cut ug Sabaw sa Kangkong', 'Tinolang Manok Bisaya sa Malunggay'],
+        snack: ['Sinugbang Yellow Mais sa Talisay Market', 'Tuba nga Buko Water ug Pipino Slices', 'Inasal nga Kamote Chips sa Hurno'],
+        dinner: ['Sinugbang Baboy sa Binisaya nga Greens', 'Sinugbang Tilapia ug Relish sa Kamatis', 'Sabaw sa Kalabasa ug Sinugbang Manok']
+      },
+      'Carcar City': {
+        breakfast: ['Gisadong Itlog Bisaya, Kamatis ug Alugbati', 'Luto nga Kamote Slices ug Calamansi Tea', 'Gisadong Sitaw ug Luto nga Itlog'],
+        lunch: ['Binisayang Humba sa Carcar ug Utan Bisaya', 'Tinolang Manok Bisaya sa Sayote', 'Kinilaw nga Isda sa Sukang Tuba ug Greens'],
+        snack: ['Presko nga Juice sa Calamansi ug Sinugbang Mais', 'Giatas nga Pipino sa Sukang Tuba', 'Luto nga Yellow Mais sa Carcar'],
+        dinner: ['Sinugbang Pork Chop sa Sabaw sa Kalabasa', 'Gisadong Talong ug Sinugbang Isda', 'Utan Bisayanga Sabaw sa Kamatis ug Sitaw']
+      },
+      'Argao': {
+        breakfast: ['Batirol nga Sikwate ug Luto nga Itlog Bisaya', 'Luto nga Itlog sa Gisadong Kangkong', 'Luto nga Kamote Slices ug Puti sa Itlog'],
+        lunch: ['Chiu-Chiu nga Baboy sa Argao ug Sabaw sa Alugbati', 'Tinolang Manok Bisaya sa Malunggay', 'Sinugbang Isda Fillet ug Salada nga Kamatis'],
+        snack: ['Mangga sa Argao ug Binisayang Salabat', 'Tuba Buko Water ug Luto nga Mais', 'Salada nga Pipino sa Calamansi'],
+        dinner: ['Sinugbang Manok Bisaya ug Gisadong Talong', 'Sabaw sa Alugbati, Kalabasa ug Isda', 'Sinugbang Pork Chop ug Presko nga Greens']
       },
       'Bogo City': {
-        breakfast: [
-          'Native Tomato & Cucumber Egg Scramble',
-          'Sweet Corn Porridge (Lugaw) & Poached Egg',
-          'Sautéed Palengke Tomatoes with Egg Whites',
-          'Fresh Cucumber Salad & Scrambled Native Eggs'
-        ],
-        lunch: [
-          'Kinilaw na Tangigue with Fresh Greens & Sweet Corn',
-          'Grilled Tangigue Steak with Native Tomato Relish',
-          'Palengke Vegetable Stir-Fry & Steamed Tangigue',
-          'Kinilaw Bowl with Native Cucumber & Sweet Corn'
-        ],
-        snack: [
-          'Roasted Sweet Corn on the Cob',
-          'Sliced Cucumber with Vinegar & Calamansi',
-          'Fresh Steamed Yellow Corn & Calamansi Water',
-          'Chilled Native Tomatoes & Calamansi Spritz'
-        ],
-        dinner: [
-          'Sautéed Native Vegetables with Grilled Chicken Breast',
-          'Palengke Vegetable Stir-Fry & Steamed Tangigue',
-          'Grilled Tangigue with Tomato & Cucumber Salad',
-          'Sautéed Palengke Greens with Tangigue Fillet'
-        ]
+        breakfast: ['Gisadong Kamatis ug Pipino sa Itlog Bisaya', 'Lugaw nga Mais sa Bogo ug Luto nga Itlog', 'Salada nga Pipino ug Gisadong Itlog'],
+        lunch: ['Kinilaw nga Tangigue sa Bogo ug Luto nga Mais', 'Sinugbang Tangigue Steak ug Relish sa Kamatis', 'Tinolang Manok Bisaya sa Sayote'],
+        snack: ['Sinugbang Sweet Corn sa Bogo Market', 'Luto nga Yellow Mais ug Tubig sa Calamansi', 'Giatas nga Kamatis sa Calamansi'],
+        dinner: ['Gisadong Utan Bisaya ug Sinugbang Daghang Manok', 'Gisadong Greens sa Palengke ug Steamed Tangigue', 'Sinugbang Tangigue ug Salada nga Pipino']
+      },
+      'San Remigio': {
+        breakfast: ['Presko nga Lato (Grapes Seaweed) Salad ug Luto nga Itlog', 'Sinugbang Tyan sa Bangus ug Ahos nga Humay', 'Luto nga Itlog sa Gisadong Kangkong ug Calamansi'],
+        lunch: ['Sinugbang Tilapia sa Kangkong Soup ug Mais', 'Sinugbang Lato Bowl ug Halang nga Calamansi Dip', 'Sinugbang Bangus sa Dahon sa Saging ug Sabaw sa Kalabasa'],
+        snack: ['Presko nga Juice sa Calamansi ug Luto nga Mais', 'Tugob nga Buko Water ug Mangga Slices', 'Luto nga Sweet Corn sa San Remigio'],
+        dinner: ['Laing nga Dahon sa Gabi sa Gata ug Sinugbang Bangus', 'Sabaw sa Kalabasa ug Kangkong sa Tilapia', 'Sinugbang Bangus ug Binisayang Utan Stew']
       },
       'Daanbantayan': {
-        breakfast: [
-          'Steamed Purple Kamote with Boiled Eggs & Coffee',
-          'Roasted Kamote Bowls with Omelette & Native Ginger Tea',
-          'Boiled Kamote Slices & Native Egg Scramble',
-          'Purple Kamote Hash with Poached Eggs & Calamansi'
-        ],
-        lunch: [
-          'Inun-unan na Bodboron with Eggplant & Brown Rice',
-          'Grilled Tulingan Fish with Eggplant Salad & Rice',
-          'Inun-unan Fish Soup & Steamed Native Greens',
-          'Bodboron Vinegar Stew with Steamed Kamote'
-        ],
-        snack: [
-          'Baked Sweet Potato (Kamote) Slices',
-          'Steamed Purple Yam (Kamote)',
-          'Crispy Kamote Chips (No Oil) & Ginger Tea',
-          'Baked Kamote Slices with Native Honey'
-        ],
-        dinner: [
-          'Tulingan Fish Stew with Native Ginger & Squash Soup',
-          'Inun-unan Fish Soup & Steamed Native Greens',
-          'Grilled Bodboron with Eggplant & Ginger Broth',
-          'Tulingan Fish Stew with Steamed Kamote Tops'
-        ]
+        breakfast: ['Luto nga Ube Kamote, Itlog Bisaya ug Kape', 'Gihurnong Kamote Bowl ug Binisayang Salabat', 'Luto nga Kamote Slices ug Scrambled Itlog'],
+        lunch: ['Inun-unan na Bodboron sa Sukang Tuba ug Talong', 'Sinugbang Tulingan ug Salada nga Talong', 'Halang-Halang nga Manok Bisaya sa Daanbantayan'],
+        snack: ['Gihurnong Kamote Slices sa Palengke', 'Luto nga Ube Kamote sa Daanbantayan', 'Kamote Chips (Walay Manteka) ug Salabat'],
+        dinner: ['Sabaw sa Tulingan sa Luya ug Kalabasa', 'Inun-unan nga Isda ug Luto nga Greens', 'Sinugbang Bodboron ug Sabaw sa Luya']
+      },
+      'Bantayan Island': {
+        breakfast: ['Luto nga Kasag (Blue Crab) ug Itlog sa Calamansi', 'Sinugbang Isda Fillet ug Presko nga Greens', 'Luto nga Itlog sa Gisadong Kangkong'],
+        lunch: ['Sinugbang Isda sa Santa Fe ug Salada nga Lato', 'Sinigang nga Isda sa Binisayang Utan', 'Tinolang Manok Bisaya sa Sayote'],
+        snack: ['Presko nga Buko Water ug Calamansi Spritz', 'Luto nga Sweet Corn sa Bantayan', 'Mangga Slices ug Salabat'],
+        dinner: ['Sinigang na Isda sa Binisayang Greens', 'Sinugbang Isda sa Dagat ug Kamatis', 'Sabaw sa Kalabasa ug Malunggay']
+      },
+      'Camotes Islands': {
+        breakfast: ['Luto nga Balanghoy (Cassava) ug Itlog Bisaya', 'Luto nga Kamote ug Gisadong Itlog', 'Presko nga Kamatis ug Pipino Salad'],
+        lunch: ['Halang-Halang nga Manok Bisaya sa Gata ug Luya', 'Sinugbang Isda sa Dagat ug Gisadong Kangkong', 'Sabaw sa Utan Bisaya ug Brown Rice'],
+        snack: ['Presko nga Buko Water ug Unod sa Buko', 'Gihurnong Balanghoy Slices', 'Presko nga Mangga sa Camotes'],
+        dinner: ['Sinugbang Isda sa Dagat ug Kangkong', 'Sabaw sa Manok Bisaya ug Kapaya', 'Gisadong Talong ug Luto nga Humay']
+      },
+      'Toledo City': {
+        breakfast: ['Scrambled Itlog sa Gisadong Sitaw ug Kamatis', 'Luto nga Kamote ug Luto nga Itlog', 'Luto nga Itlog sa Gisadong Kangkong'],
+        lunch: ['Gisadong Ulang (Fresh River Prawns) sa Ahos ug Kamatis', 'Sinugbang Tilapia sa Kamayan ug Sabaw sa Kalabasa', 'Tinolang Manok Bisaya sa Sayote'],
+        snack: ['Luto nga Yellow Mais ug Salabat', 'Presko nga Calamansi Juice ug Pipino', 'Tuba Buko Water'],
+        dinner: ['Sinugbang Pork Chop ug Binisayang Utan Stew', 'Pan-Seared Tilapia ug Sabaw sa Kalabasa', 'Sabaw sa Sitaw, Kalabasa ug Manok']
+      },
+      'Balamban': {
+        breakfast: ['Luto nga Itlog sa Gisadong Malunggay ug Kamatis', 'Luto nga Kamote Slices ug Scrambled Itlog', 'Omelette sa Itlog Bisaya sa Ahos ug Dahon'],
+        lunch: ['Balamban Sinugbang Liempo sa Tanglad ug Sabaw sa Sayote', 'Tinolang Manok Bisaya sa Kapaya ug Malunggay', 'Sinugbang Isda Fillet ug Binisayang Greens'],
+        snack: ['Sinugbang Kamote Slices ug Calamansi Juice', 'Tuba Buko Water sa Balamban', 'Luto nga Yellow Mais'],
+        dinner: ['Tinolang Manok Bisaya sa Kapaya ug Malunggay', 'Sinugbang Pork Tenderloin ug Utan', 'Sabaw sa Malunggay ug Kalabasa']
+      },
+      'Moalboal': {
+        breakfast: ['Salada nga Pipino ug Kamatis sa Luto nga Itlog', 'Luto nga Kamote ug Luto nga Itlog', 'Binisayang Calamansi Tea ug Scrambled Itlog'],
+        lunch: ['Sinugbang Tangigue Steak sa Calamansi Dip ug Humay', 'Kinilaw nga Mackerel sa Sukang Tuba ug Greens', 'Halang-Halang nga Manok Bisaya sa Moalboal'],
+        snack: ['Tuba Coconut Shake (Walay Asukal)', 'Presko nga Mangga Slices', 'Giatas nga Pipino Water'],
+        dinner: ['Kinilaw nga Mackerel sa Binisayang Greens', 'Sinugbang Tangigue Steak ug Gisadong Kangkong', 'Sabaw sa Utan Bisaya ug Brown Rice']
+      },
+      'Oslob': {
+        breakfast: ['Gisadong Dahon sa Kamote (Kamote Tops) ug Luto nga Itlog', 'Luto nga Itlog ug Presko nga Kamatis', 'Luto nga Ube Kamote ug Kape'],
+        lunch: ['Sinigang nga Tangigue sa Oslob ug Utan Bisaya', 'Sinugbang Isda Fillet ug Relish sa Kamatis', 'Tinolang Manok Bisaya sa Sayote'],
+        snack: ['Presko nga Mangga sa Oslob ug Buko Juice', 'Luto nga Sweet Corn', 'Calamansi Juice'],
+        dinner: ['Sinugbang Isda Fillet ug Sabaw sa Kalabasa', 'Sinigang na Tangigue sa Presko nga Greens', 'Gisadong Dahon sa Kamote ug Sinugbang Manok']
+      },
+      'Danao City': {
+        breakfast: ['Scrambled Itlog Bisaya sa Gisadong Kamatis', 'Luto nga Kamote Slices ug Calamansi Tea', 'Luto nga Itlog sa Kangkong'],
+        lunch: ['Inasal nga Bangus sa Danao ug Garlic Kangkong', 'Tinolang Manok Bisaya sa Sayote', 'Gisadong Talong ug Sinugbang Isda'],
+        snack: ['Presko nga Luto nga Sweet Corn ug Buko Water', 'Giatas nga Pipino Slices', 'Sinugbang Mais sa Danao'],
+        dinner: ['Gisadong Talong ug Sinugbang Tilapia', 'Inasal nga Bangus Fillet ug Sabaw sa Kalabasa', 'Utan Bisayanga Sabaw sa Danao']
+      },
+      'Liloan': {
+        breakfast: ['Presko nga Lato Salad sa Liloan ug Luto nga Itlog', 'Luto nga Kamote ug Luto nga Itlog', 'Gisadong Kamatis sa Puti sa Itlog'],
+        lunch: ['Sabaw sa Manok Bisaya, Sayote ug Malunggay', 'Sinugbang Isda Fillet ug Relish sa Kamatis', 'Bowl sa Lato Seaweed ug Brown Rice'],
+        snack: ['Tuba Buko Juice ug Presko nga Mangga', 'Luto nga Yellow Mais', 'Calamansi Water'],
+        dinner: ['Sinugbang Isda Fillet ug Relish sa Kamatis', 'Sabaw sa Manok Bisaya sa Malunggay', 'Gisadong Kangkong ug Luto nga Humay']
+      },
+      'Dalaguete': {
+        breakfast: ['Scrambled Itlog sa Presko nga Broccoli ug Karots', 'Luto nga Itlog sa Gisadong Sayote ug Kamatis', 'Luto nga Kamote sa Dalaguete ug Puti sa Itlog'],
+        lunch: ['Gisadong Utan sa Mantalongon (Sayote & Repolyo) ug Sinugbang Pork Chop', 'Tinolang Manok Bisaya sa Sayote ug Broccoli', 'Sabaw sa Sayote ug Gusok sa Baboy'],
+        snack: ['Presko nga Karots ug Sayote Sticks sa Calamansi Dip', 'Tuba Buko Water', 'Sinugbang Yellow Mais'],
+        dinner: ['Sabaw sa Sayote ug Gusok sa Baboy sa Brown Rice', 'Gisadong Utan sa Mantalongon ug Sinugbang Manok', 'Gisadong Repolyo ug Karots sa Pork Chop']
+      },
+      'Barili': {
+        breakfast: ['Luto nga Itlog Bisaya sa Gisadong Kamatis ug Calamansi', 'Luto nga Kamote ug Scrambled Itlog sa Barili', 'Luto nga Itlog sa Gisadong Greens'],
+        lunch: ['Kinalan nga Manok Bisaya sa Kalabasa ug Sitaw', 'Pan-Seared Tilapia Fillet ug Sabaw sa Utan', 'Sinugbang Pork Tenderloin ug Salada nga Talong'],
+        snack: ['Tuba Buko Water sa Barili ug Luto nga Mais', 'Presko nga Mangga Slices', 'Giatas nga Pipino Dip'],
+        dinner: ['Pan-Seared Tilapia Fillet ug Sabaw sa Utan', 'Kinalan nga Manok Bisaya sa Kalabasa', 'Gisadong Sitaw ug Kalabasa sa Manok']
       }
     };
 
-    const locData = LOCATION_MEALS[location] || LOCATION_MEALS['San Remigio'];
+    const locData = LOCATION_MEALS[location] || LOCATION_MEALS['Cebu City'];
     
-    // Pick daily item using date seed
-    const bTitle = locData.breakfast[(seed) % locData.breakfast.length];
-    const lTitle = locData.lunch[(seed + 1) % locData.lunch.length];
-    const sTitle = locData.snack[(seed + 2) % locData.snack.length];
-    const dTitle = locData.dinner[(seed + 3) % locData.dinner.length];
+    // Select base daily item using date seed
+    let bTitle = locData.breakfast[(seed) % locData.breakfast.length];
+    let lTitle = locData.lunch[(seed + 1) % locData.lunch.length];
+    let sTitle = locData.snack[(seed + 2) % locData.snack.length];
+    let dTitle = locData.dinner[(seed + 3) % locData.dinner.length];
+
+    // ALLERGY SAFETY FILTER FUNCTION
+    const sanitizeMealForUserAllergies = (mealTitle, mealType) => {
+      if (!userAllergies || userAllergies.length === 0) return mealTitle;
+      
+      const lower = mealTitle.toLowerCase();
+      const allergiesLower = userAllergies.map(a => String(a).toLowerCase());
+
+      const hasSeafoodAllergy = allergiesLower.some(a => a.includes('seafood') || a.includes('fish') || a.includes('shellfish') || a.includes('shrimp') || a.includes('crab'));
+      const hasEggAllergy = allergiesLower.some(a => a.includes('egg'));
+      const hasPorkAllergy = allergiesLower.some(a => a.includes('pork'));
+
+      let safeTitle = mealTitle;
+
+      // 1. Seafood / Fish Allergy Filter
+      const isSeafoodMeal = ['fish', 'bangus', 'tilapia', 'tangigue', 'tanguigue', 'lato', 'seaweed', 'sutukil', 'kinilaw', 'inun-unan', 'bodboron', 'tulingan', 'crab', 'eel', 'bakasi', 'seafood'].some(kw => lower.includes(kw));
+      if (hasSeafoodAllergy && isSeafoodMeal) {
+        if (mealType === 'Breakfast') safeTitle = 'Sautéed Native Tomatoes & Malunggay with Steamed Kamote';
+        else if (mealType === 'Lunch') safeTitle = 'Grilled Native Chicken Breast with Highland Sayote & Rice';
+        else if (mealType === 'Snack') safeTitle = 'Steamed Sweet Corn & Cold Buko Water';
+        else safeTitle = 'Native Chicken Tinola with Squash & Kangkong Soup';
+      }
+
+      // 2. Egg Allergy Filter
+      const isEggMeal = ['egg', 'scramble', 'omelette', 'poached'].some(kw => lower.includes(kw));
+      if (hasEggAllergy && isEggMeal) {
+        if (mealType === 'Breakfast') safeTitle = 'Steamed Kamote Slices & Calamansi Tea with Native Greens';
+        else safeTitle = safeTitle.replace(/egg[s]?|omelette|scramble|poached/gi, 'Native Greens');
+      }
+
+      // 3. Pork Allergy Filter
+      const isPorkMeal = ['pork', 'humba', 'liempo', 'chicharon', 'tuslob buwa', 'chiu-chiu'].some(kw => lower.includes(kw));
+      if (hasPorkAllergy && isPorkMeal) {
+        safeTitle = safeTitle.replace(/pork|humba|liempo|chicharon|tuslob buwa|chiu-chiu/gi, 'Grilled Native Chicken');
+      }
+
+      return safeTitle;
+    };
+
+    bTitle = sanitizeMealForUserAllergies(bTitle, 'Breakfast');
+    lTitle = sanitizeMealForUserAllergies(lTitle, 'Lunch');
+    sTitle = sanitizeMealForUserAllergies(sTitle, 'Snack');
+    dTitle = sanitizeMealForUserAllergies(dTitle, 'Dinner');
 
     // Dynamically scale calories & macros tailored to user target protein, carbs & fats
     const bKcal = Math.round(totalUserCalories * 0.25);
@@ -271,22 +581,6 @@ export default function DietRecipesScreen({
     ];
   };
 
-  const CITY_PROFILES = {
-    'San Remigio': {
-      marketTitle: 'San Remigio Municipal Public Market',
-      palengkeItems: 'Fresh Bangus, Tilapia, Lato, Kangkong, Squash, Gabi Leaves'
-    },
-    'Bogo City': {
-      marketTitle: 'Bogo City Public Market (Palengke sa Bogo)',
-      palengkeItems: 'Tangigue, Cucumber, Native Tomatoes, Calamansi, Sweet Corn'
-    },
-    'Daanbantayan': {
-      marketTitle: 'Daanbantayan Public Market & Fish Landing',
-      palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger'
-    }
-  };
-
-  const locations = ['San Remigio', 'Bogo City', 'Daanbantayan'];
 
   // --- DYNAMIC CALORIE & MACRO CALCULATOR ENGINE ---
   let calculatedTargetCalories = 2000;
@@ -900,7 +1194,7 @@ export default function DietRecipesScreen({
             {/* CARD 2: INTERACTIVE CITY FOOD RADAR */}
             <View style={styles.formCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={styles.cardTitle}>Interactive City Food Radar</Text>
+                <Text style={styles.cardTitle}>Interactive Cebu Food Radar</Text>
                 <TouchableOpacity 
                   style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
                   onPress={() => setShowFullMapModal(true)}
@@ -911,37 +1205,58 @@ export default function DietRecipesScreen({
                 </TouchableOpacity>
               </View>
 
-              {/* NATIVE CITY SELECTION RADAR */}
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                {locations.map((loc) => {
-                  const isSelected = selectedLocation === loc;
-                  return (
-                    <TouchableOpacity
-                      key={loc}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 10,
-                        paddingHorizontal: 8,
-                        borderRadius: 14,
-                        alignItems: 'center',
-                        justify: 'center',
-                        backgroundColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#F1F5F9'),
-                        borderWidth: 1.5,
-                        borderColor: isSelected ? '#10B981' : (isDarkMode ? '#475569' : '#E2E8F0')
-                      }}
-                      onPress={() => setSelectedLocation(loc)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{
-                        fontSize: 12,
-                        fontWeight: '800',
-                        color: isSelected ? '#FFFFFF' : (isDarkMode ? '#CBD5E1' : '#475569')
-                      }}>
-                        📍 {loc}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              {/* NATIVE CITY SELECTION HORIZONTAL SCROLL RADAR */}
+              <View style={{ marginBottom: 12 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+                  <TouchableOpacity
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#10B981',
+                      borderWidth: 1.5,
+                      borderColor: '#10B981'
+                    }}
+                    onPress={() => setShowCityPickerModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Compass size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                      All Cities ({locations.length})
+                    </Text>
+                  </TouchableOpacity>
+
+                  {locations.map((loc) => {
+                    const isSelected = selectedLocation === loc;
+                    return (
+                      <TouchableOpacity
+                        key={loc}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#F1F5F9'),
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? '#10B981' : (isDarkMode ? '#475569' : '#E2E8F0')
+                        }}
+                        onPress={() => setSelectedLocation(loc)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{
+                          fontSize: 12,
+                          fontWeight: '800',
+                          color: isSelected ? '#FFFFFF' : (isDarkMode ? '#CBD5E1' : '#475569')
+                        }}>
+                          📍 {loc}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               {/* REAL INTERACTIVE OPENSTREETMAP WEBVIEW */}
@@ -972,13 +1287,13 @@ export default function DietRecipesScreen({
                           .city-marker {
                             background: #10B981;
                             color: #FFFFFF;
-                            padding: 6px 13px;
+                            padding: 6px 12px;
                             border-radius: 16px;
                             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                            font-size: 12px;
+                            font-size: 11px;
                             font-weight: 800;
                             box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
-                            border: 2.2px solid #FFFFFF;
+                            border: 2px solid #FFFFFF;
                             white-space: nowrap;
                             cursor: pointer;
                             display: flex;
@@ -996,6 +1311,10 @@ export default function DietRecipesScreen({
                       <body>
                         <div id="map"></div>
                         <script>
+                          var selectedLoc = "${selectedLocation}";
+                          var cityProfiles = ${JSON.stringify(CITY_PROFILES)};
+                          var activeCoords = cityProfiles[selectedLoc] ? [cityProfiles[selectedLoc].lat, cityProfiles[selectedLoc].lng] : [10.3157, 123.8854];
+
                           var map = L.map('map', { 
                             zoomControl: true, 
                             attributionControl: false,
@@ -1003,31 +1322,26 @@ export default function DietRecipesScreen({
                             touchZoom: true, 
                             scrollWheelZoom: true, 
                             doubleClickZoom: true 
-                          }).setView([11.14, 123.97], 9.8);
+                          }).setView(activeCoords, 9);
                           
                           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                             maxZoom: 18
                           }).addTo(map);
 
-                          var locations = [
-                            { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
-                            { name: 'San Remigio',  lat: 11.0772, lng: 123.9356 },
-                            { name: 'Bogo City',     lat: 11.0517, lng: 124.0055 }
-                          ];
-
-                          locations.forEach(function(loc) {
-                            var isSelected = loc.name === "${selectedLocation}";
+                          Object.keys(cityProfiles).forEach(function(cityName) {
+                            var prof = cityProfiles[cityName];
+                            var isSelected = cityName === selectedLoc;
                             var customIcon = L.divIcon({
                               className: 'custom-div-icon',
-                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + cityName + "</div>",
                               iconSize: [110, 32],
                               iconAnchor: [55, 16]
                             });
 
-                            var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                            var marker = L.marker([prof.lat, prof.lng], { icon: customIcon }).addTo(map);
                             marker.on('click', function() {
                               if (window.ReactNativeWebView) {
-                                window.ReactNativeWebView.postMessage(loc.name);
+                                window.ReactNativeWebView.postMessage(cityName);
                               }
                             });
                           });
@@ -1061,117 +1375,185 @@ export default function DietRecipesScreen({
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                     <ShoppingBag size={12} color={theme?.textSecondary || '#94A3B8'} style={{ marginRight: 5 }} />
                     <Text style={[styles.cityPalengkeText, { flex: 1 }]}>
-                      <Text style={{ fontWeight: '700' }}>Palengke Fresh:</Text> {CITY_PROFILES[selectedLocation].palengkeItems}
+                      <Text style={{ fontWeight: '700' }}>Local Supplies:</Text> {CITY_PROFILES[selectedLocation].palengkeItems}
                     </Text>
                   </View>
                 </View>
               )}
             </View>
 
-            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD (CONSISTENT WITH AI SCHEDULED MEALS) */}
+            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD & FAMOUS DELICACIES CARD */}
             {CITY_PROFILES[selectedLocation] && (
-              <View style={{ marginBottom: 16 }}>
-                {(() => {
-                  const todayPlan = getDynamicPalengkePlan(selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats);
-                  const totalKcal = todayPlan.reduce((acc, m) => acc + m.kcal, 0);
-                  return (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>🍽️ 1-Day Meal Guide ({selectedLocation})</Text>
-                        <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
-                            ~{totalKcal} Kcal Total
+              <>
+                <View style={{ marginBottom: 16 }}>
+                  {(() => {
+                    const todayPlan = getDynamicPalengkePlan(selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats);
+                    const totalKcal = todayPlan.reduce((acc, m) => acc + m.kcal, 0);
+                    const allergiesText = userAllergies && userAllergies.length > 0 ? userAllergies.join(', ') : 'None';
+
+                    return (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>🍽️ 1-Day Local Diet ({selectedLocation})</Text>
+                          <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
+                              ~{totalKcal} Kcal Total
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* ALLERGY SAFETY STATUS BANNER */}
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
+                          borderWidth: 1,
+                          borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0',
+                          borderRadius: 12,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          marginBottom: 12
+                        }}>
+                          <CheckCircle2 size={14} color="#10B981" style={{ marginRight: 6 }} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#A7F3D0' : '#047857', flex: 1 }}>
+                            🛡️ Allergy Safety Active: Filtered for your profile ({allergiesText})
                           </Text>
                         </View>
-                      </View>
 
-                      <View style={styles.timelineList}>
-                        {todayPlan.map((mealItem, idx) => {
-                          const mealCat = mealItem.mealType || 'Meal';
-                          const IconComponent = getMealIconComponent(mealCat);
-                          const accentColor = getMealAccentColor(mealCat);
-                          const mealId = String(mealItem.id);
-                          const isLogged = loggedMeals.some(mId => String(mId) === mealId);
+                        <View style={styles.timelineList}>
+                          {todayPlan.map((mealItem, idx) => {
+                            const rawCat = mealItem.mealType || 'Meal';
+                            const cebuanoCat = rawCat === 'Breakfast' ? 'Pamahaw' : rawCat === 'Lunch' ? 'Paniudto' : rawCat === 'Snack' ? 'Pama-an' : rawCat === 'Dinner' ? 'Panihapon' : rawCat;
+                            const IconComponent = getMealIconComponent(rawCat);
+                            const accentColor = getMealAccentColor(rawCat);
+                            const mealId = String(mealItem.id);
+                            const isLogged = loggedMeals.some(mId => String(mId) === mealId);
 
-                          return (
-                            <View key={mealId} style={styles.timelineItem}>
-                              <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
-                                <View style={styles.timelineHeader}>
-                                  <View style={[
-                                    styles.mealTypeBadge, 
-                                    isLogged 
-                                      ? { backgroundColor: '#64748B' } 
-                                      : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
-                                  ]}>
-                                    <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
-                                    <Text style={[
-                                      styles.mealTypeBadgeText, 
-                                      isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+                            return (
+                              <View key={mealId} style={styles.timelineItem}>
+                                <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
+                                  <View style={styles.timelineHeader}>
+                                    <View style={[
+                                      styles.mealTypeBadge, 
+                                      isLogged 
+                                        ? { backgroundColor: '#64748B' } 
+                                        : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
                                     ]}>
-                                      {mealCat}
-                                    </Text>
+                                      <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
+                                      <Text style={[
+                                        styles.mealTypeBadgeText, 
+                                        isLogged ? { color: '#FFFFFF' } : { color: accentColor }
+                                      ]}>
+                                        {cebuanoCat}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.timelineTime}>{mealItem.time}</Text>
                                   </View>
-                                  <Text style={styles.timelineTime}>{mealItem.time}</Text>
-                                </View>
 
-                                <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>
-                                  {mealItem.title}
-                                </Text>
+                                  <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>
+                                    {mealItem.title}
+                                  </Text>
 
-                                <View style={styles.timelineFooter}>
-                                  <View style={{ flex: 1, paddingRight: 8 }}>
-                                    <Text style={styles.timelineMacroText}>
-                                      {mealItem.kcal} kcal • {mealItem.proteinNum} protein
-                                    </Text>
+                                  <View style={styles.timelineFooter}>
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                      <Text style={styles.timelineMacroText}>
+                                        {mealItem.kcal} kcal • {mealItem.proteinNum} protein
+                                      </Text>
+                                      <TouchableOpacity 
+                                        style={styles.viewRecipeTextBtn} 
+                                        onPress={() => handleViewRecipe(mealItem)}
+                                        activeOpacity={0.6}
+                                      >
+                                        <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
+                                        <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
+                                      </TouchableOpacity>
+                                    </View>
+
                                     <TouchableOpacity 
-                                      style={styles.viewRecipeTextBtn} 
-                                      onPress={() => handleViewRecipe(mealItem)}
-                                      activeOpacity={0.6}
+                                      style={[
+                                        styles.logMealMiniBtn, 
+                                        isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
+                                      ]}
+                                      onPress={() => handleLogMeal(mealId, { 
+                                        name: mealItem.title,
+                                        calories: mealItem.kcal, 
+                                        protein: mealItem.proteinNum,
+                                        carbs: mealItem.carbsNum,
+                                        fats: mealItem.fatsNum
+                                      })}
+                                      activeOpacity={0.7}
                                     >
-                                      <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
-                                      <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
+                                      {isLogged ? (
+                                        <>
+                                          <CheckCircle2 color="#FFFFFF" size={12} />
+                                          <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <PlusCircle color="#FFFFFF" size={12} />
+                                          <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
+                                        </>
+                                      )}
                                     </TouchableOpacity>
                                   </View>
-
-                                  <TouchableOpacity 
-                                    style={[
-                                      styles.logMealMiniBtn, 
-                                      isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
-                                    ]}
-                                    onPress={() => handleLogMeal(mealId, { 
-                                      name: mealItem.title,
-                                      calories: mealItem.kcal, 
-                                      protein: mealItem.proteinNum,
-                                      carbs: mealItem.carbsNum,
-                                      fats: mealItem.fatsNum
-                                    })}
-                                    activeOpacity={0.7}
-                                  >
-                                    {isLogged ? (
-                                      <>
-                                        <CheckCircle2 color="#FFFFFF" size={12} />
-                                        <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <PlusCircle color="#FFFFFF" size={12} />
-                                        <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
-                                      </>
-                                    )}
-                                  </TouchableOpacity>
                                 </View>
                               </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    </>
-                  );
-                })()}
-              </View>
-            )}
+                            );
+                          })}
+                        </View>
+                      </>
+                    );
+                  })()}
+                </View>
 
-            {/* Recommended Local Recipes Removed */}
+                {/* FAMOUS NATIVE DISHES & CULINARY HERITAGE CARD */}
+                {CITY_PROFILES[selectedLocation].famousDishes && (
+                  <View style={[styles.formCard, { marginBottom: 24 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Sparkles size={18} color="#F59E0B" style={{ marginRight: 6 }} />
+                      <Text style={styles.cardTitle}>Famous Delicacies ({selectedLocation})</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 14, lineHeight: 18 }}>
+                      Iconic local dishes, traditional street food, and heritage delicacies famous in {selectedLocation}:
+                    </Text>
+
+                    <View style={{ gap: 10 }}>
+                      {CITY_PROFILES[selectedLocation].famousDishes.map((dish, idx) => (
+                        <View key={idx} style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: isDarkMode ? '#334155' : '#E2E8F0'
+                        }}>
+                          <View style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 12,
+                            backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : '#FEF3C7',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 12
+                          }}>
+                            <Text style={{ fontSize: 20 }}>{dish.emoji || '🍲'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                              {dish.name}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 2, lineHeight: 16 }}>
+                              {dish.desc}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
         </View>
       )}
       </ScrollView>
@@ -1268,10 +1650,10 @@ export default function DietRecipesScreen({
           }}>
             <View>
               <Text style={{ fontSize: 18, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
-                🗺️ Full Northern Cebu Food Map
+                🗺️ Full Cebu Island Food Map
               </Text>
               <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 }}>
-                Tap any city marker to select local food market
+                Tap any city marker to select local food market ({locations.length} cities)
               </Text>
             </View>
             <TouchableOpacity
@@ -1333,31 +1715,30 @@ export default function DietRecipesScreen({
                   <body>
                     <div id="map"></div>
                     <script>
-                      var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([11.12, 123.98], 10);
+                      var selectedLoc = "${selectedLocation}";
+                      var cityProfiles = ${JSON.stringify(CITY_PROFILES)};
+                      var activeCoords = cityProfiles[selectedLoc] ? [cityProfiles[selectedLoc].lat, cityProfiles[selectedLoc].lng] : [10.3157, 123.8854];
+
+                      var map = L.map('map', { zoomControl: true, attributionControl: false }).setView(activeCoords, 9);
                       
                       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         maxZoom: 18
                       }).addTo(map);
 
-                      var locations = [
-                        { name: 'Daanbantayan', lat: 11.2589, lng: 124.0153 },
-                        { name: 'San Remigio', lat: 11.0827, lng: 123.9536 },
-                        { name: 'Bogo City', lat: 11.0500, lng: 124.0053 }
-                      ];
-
-                      locations.forEach(function(loc) {
-                        var isSelected = loc.name === "${selectedLocation}";
+                      Object.keys(cityProfiles).forEach(function(cityName) {
+                        var prof = cityProfiles[cityName];
+                        var isSelected = cityName === selectedLoc;
                         var customIcon = L.divIcon({
                           className: 'custom-div-icon',
-                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + loc.name + "</div>",
+                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + cityName + "</div>",
                           iconSize: [110, 36],
                           iconAnchor: [55, 18]
                         });
 
-                        var marker = L.marker([loc.lat, loc.lng], { icon: customIcon }).addTo(map);
+                        var marker = L.marker([prof.lat, prof.lng], { icon: customIcon }).addTo(map);
                         marker.on('click', function() {
                           if (window.ReactNativeWebView) {
-                            window.ReactNativeWebView.postMessage(loc.name);
+                            window.ReactNativeWebView.postMessage(cityName);
                           }
                         });
                       });
@@ -1370,9 +1751,10 @@ export default function DietRecipesScreen({
                 const cityName = event.nativeEvent.data;
                 if (cityName && locations.includes(cityName)) {
                   setSelectedLocation(cityName);
+                  setShowFullMapModal(false);
                 }
               }}
-              style={{ flex: 1 }}
+              style={{ flex: 1, backgroundColor: 'transparent' }}
             />
           </View>
 

@@ -108,12 +108,13 @@ export default function LoginScreen({
         if (setCurrentUserId && userId) {
           setCurrentUserId(userId);
         }
+        if (userId) {
+          await saveUserId(userId);
+        }
         await setRememberMe(rememberMe);
         if (rememberMe) {
-          await saveUserId(userId);
           await saveRememberedCredentials(email, password);
         } else {
-          await clearSavedUserId();
           await clearRememberedCredentials();
         }
         onLoginSuccess(userId, data.is_onboarded);

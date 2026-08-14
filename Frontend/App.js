@@ -540,11 +540,10 @@ function MainApp() {
   // ----------------------------------------------------
   const handleAppReady = async () => {
     try {
-      const rememberEnabled = await isRememberMeEnabled();
       const savedId = await getSavedUserId();
-      if (rememberEnabled && savedId) {
+      if (savedId && typeof savedId === 'string' && savedId.trim() !== '') {
         setUserId(savedId);
-        fetchDashboardData(savedId);
+        await fetchDashboardData(savedId);
         setCurrentScreen('DASHBOARD');
         return;
       }
@@ -570,9 +569,11 @@ function MainApp() {
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
         onLoginSuccess={(loggedInUserId, isOnboarded) => {
-          if (loggedInUserId) setUserId(loggedInUserId);
-          if (isOnboarded === true) {
+          if (loggedInUserId) {
+            setUserId(loggedInUserId);
             saveUserId(loggedInUserId);
+          }
+          if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
             setCurrentScreen("STEP_ONE");
@@ -602,21 +603,17 @@ function MainApp() {
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
         onSignUpSuccess={(newUserId, newName, newEmail, newPassword, isOnboarded) => {
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
+          if (newUserId) {
+            setUserId(newUserId);
+            saveUserId(newUserId);
+            setUserProfile({ name: newName || 'User', email: newEmail || '' });
+          }
           if (isOnboarded === true) {
-            if (newUserId) {
-              setUserId(newUserId);
-              saveUserId(newUserId);
-              setUserProfile({ name: newName || 'User', email: newEmail || '' });
-            }
             setCurrentScreen("DASHBOARD");
           } else if (newPassword === null) {
-            // Skips verification if direct bypass
-            if (newUserId) setUserId(newUserId); 
-            setUserProfile({ name: newName || 'User', email: newEmail || '' });
             setCurrentScreen("STEP_ONE");
           } else {
             // First time signup / Google OTP signup -> goes to Verify
-            setUserProfile({ name: newName || 'User', email: newEmail || '' });
             setResetEmail(newEmail || '');
             setTempPassword(newPassword || '');
             setCurrentScreen("VERIFY_SIGNUP");
@@ -636,8 +633,8 @@ function MainApp() {
         onVerified={(newUserId, isOnboarded) => {
           if (!newUserId) return;
           setUserId(newUserId);
+          saveUserId(newUserId);
           if (isOnboarded === true) {
-            saveUserId(newUserId);
             setCurrentScreen("DASHBOARD");
           } else {
             setCurrentScreen("STEP_ONE");
@@ -656,8 +653,8 @@ function MainApp() {
         onVerified={(newUserId, isOnboarded) => {
           if (!newUserId) return;
           setUserId(newUserId);
+          saveUserId(newUserId);
           if (isOnboarded === true) {
-            saveUserId(newUserId);
             setCurrentScreen("DASHBOARD");
           } else {
             setCurrentScreen("STEP_ONE");

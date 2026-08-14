@@ -469,8 +469,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         { 
           text: "Log Out", 
           style: "destructive", 
-          onPress: () => {
-            if (onTabChange) {
+          onPress: async () => {
+            try {
+              await clearSavedUserId();
+            } catch (e) {}
+            if (onLogout) {
+              onLogout();
+            } else if (onTabChange) {
               onTabChange('AUTH');
             }
           } 
