@@ -30,8 +30,15 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Live on-screen inline validation indicators
-  const isPasswordTooShort = newPassword.length > 0 && newPassword.length < 8;
+  // Live password rules
+  const pwRules = [
+    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
+    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
+    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
+    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
+    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
+  ];
+  const allRulesPass = pwRules.every(r => r.ok);
   const doPasswordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +47,11 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
       showAlert("Error", "Please fill all fields.");
+      return;
+    }
+
+    if (!allRulesPass) {
+      showAlert("Weak Password", "Your password does not meet all requirements. Please check the checklist.");
       return;
     }
 
@@ -135,11 +147,35 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                   )}
                 </TouchableOpacity>
               </View>
-              {/* Dynamic live length alert notice */}
-              {isPasswordTooShort && (
-                <View style={styles.warningContainer}>
-                  <AlertCircle color="#EF4444" size={14} />
-                  <Text style={styles.warningText}>Password must be at least 8 characters</Text>
+              {/* Live password requirements checklist */}
+              {newPassword.length > 0 && (
+                <View style={{
+                  backgroundColor: 'rgba(15, 23, 42, 0.04)',
+                  borderRadius: 12,
+                  padding: 12,
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
+                  {pwRules.map((rule, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                      <View style={{
+                        width: 18, height: 18, borderRadius: 9,
+                        backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
+                        alignItems: 'center', justifyContent: 'center',
+                        marginRight: 8, borderWidth: 1,
+                        borderColor: rule.ok ? '#10B981' : '#EF4444',
+                      }}>
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
+                          {rule.ok ? '✓' : '✕'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
+                        {rule.label}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </View>
