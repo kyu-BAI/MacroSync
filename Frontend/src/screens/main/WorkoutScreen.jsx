@@ -127,9 +127,9 @@ export default function WorkoutScreen({
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
   const [workoutRoutines, setWorkoutRoutines] = useState([
-    { id: 'w1', title: 'Full Body Home Blitz', duration: '25 min', caloriesBurned: 220, intensity: 'Moderate', level: 'Beginner', exercisesCount: 5 },
-    { id: 'w2', title: 'Core Strength & Stability', duration: '15 min', caloriesBurned: 140, intensity: 'Light', level: 'Beginner', exercisesCount: 4 },
-    { id: 'w3', title: 'High Intensity Cardio Burn', duration: '30 min', caloriesBurned: 310, intensity: 'Intense', level: 'Intermediate', exercisesCount: 6 }
+    { id: 'w1', title: 'Full Body Home Blitz', description: 'Full-body bodyweight circuit to boost endurance and strength.', duration: '25 min', caloriesBurned: 220, intensity: 'Moderate', level: 'Beginner', exercisesCount: 5 },
+    { id: 'w2', title: 'Core Strength & Stability', description: 'Quick core routine targeting abs and lower back stability.', duration: '15 min', caloriesBurned: 140, intensity: 'Light', level: 'Beginner', exercisesCount: 4 },
+    { id: 'w3', title: 'High Intensity Cardio Burn', description: 'Fast-paced cardio movements for maximum calorie burn.', duration: '30 min', caloriesBurned: 310, intensity: 'Intense', level: 'Intermediate', exercisesCount: 6 }
   ]);
   const [loading, setLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
@@ -577,7 +577,15 @@ export default function WorkoutScreen({
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text style={styles.workoutDescriptionText} numberOfLines={2} ellipsizeMode="tail">{workout.description}</Text>
+                  <Text style={styles.workoutDescriptionText} numberOfLines={2}>
+                    {(() => {
+                      const desc = workout.description || '';
+                      if (desc.length <= 85) return desc;
+                      const cut = desc.slice(0, 85);
+                      const lastSpace = cut.lastIndexOf(' ');
+                      return (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim() + '.';
+                    })()}
+                  </Text>
                 </View>
               </View>
 

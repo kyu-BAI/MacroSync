@@ -2377,7 +2377,7 @@ def recommend_workouts(user_id: str):
         - "duration" (string, e.g. "15 mins", "20 mins", "25 mins")
         - "targetGains" (string, the main benefit, e.g. "Fat Loss & Conditioning", "Hypertrophy")
         - "caloriesBurn" (integer, estimated calorie burn)
-        - "description" (string, brief summary of the routine)
+        - "description" (string, concise 1-sentence summary under 75 characters)
         - "tutorials" (a list of exactly 3 exercise objects, each containing:
             - "name" (string, exercise name)
             - "target" (string, reps/sets or duration, e.g. "3 Sets x 12 Reps")
