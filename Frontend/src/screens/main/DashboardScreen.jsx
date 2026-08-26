@@ -163,9 +163,6 @@ export default function DashboardScreen({
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState('');
 
-  // ── Steps Tracker Modal State ──
-  const [showStepsModal, setShowStepsModal] = useState(false);
-  const [stepsInput, setStepsInput] = useState('');
 
   // ── Live Pedometer (expo-sensors) ──
   const pedometerBaseRef = useRef(null); // steps at session start
@@ -331,43 +328,6 @@ export default function DashboardScreen({
   const targetSteps = dailyExercise?.targetSteps || 10000;
   const stepsPct = Math.min(currentSteps / targetSteps, 1);
 
-  const handleAddSteps = async (additionalAmount) => {
-    const parsedAdd = parseInt(additionalAmount) || 0;
-    if (parsedAdd <= 0) {
-      showAlert("Invalid Steps Amount", "Please enter a valid step number greater than zero.");
-      return;
-    }
-
-    const newSteps = currentSteps + parsedAdd;
-    const addedCalories = Math.round(parsedAdd * 0.04);
-    const addedMins = Math.round(parsedAdd / 100);
-
-    if (setDailyExercise) {
-      setDailyExercise(prev => ({
-        ...prev,
-        steps: newSteps,
-        caloriesBurned: (prev?.caloriesBurned || 0) + addedCalories,
-        activeMinutes: (prev?.activeMinutes || 0) + addedMins,
-        targetSteps,
-      }));
-    }
-
-    await pushNotificationIfAllowed({
-      id: `n-${Date.now()}`,
-      title: 'Steps Tracked! 👟',
-      category: 'workout',
-      time: 'Just Now',
-      read: false,
-      message: `Logged +${parsedAdd.toLocaleString()} steps! You burned ~${addedCalories} kcal.`
-    }, setNotifications);
-
-    showAlert(
-      "Steps Updated! 👟",
-      `Logged +${parsedAdd.toLocaleString()} steps!\n\nTotal Today: ${newSteps.toLocaleString()} / ${targetSteps.toLocaleString()} steps (${Math.round((newSteps / targetSteps) * 100)}% of daily goal)`
-    );
-    setShowStepsModal(false);
-    setStepsInput('');
-  };
 
   // Real streak from backend — no more fake fallback
   const currentStreak = userProfile?.streakDays || 0;
@@ -832,7 +792,6 @@ export default function DashboardScreen({
                 icon: <Footprints color="#3B82F6" size={22} strokeWidth={2.5} />, 
                 val: currentSteps >= 1000 ? `${(currentSteps / 1000).toFixed(1)}k` : `${currentSteps}`, 
                 label: 'Steps Today',
-                onPress: () => setShowStepsModal(true)
               },
             ].map((item, i) => (
               <TouchableOpacity 
@@ -1088,77 +1047,6 @@ export default function DashboardScreen({
         </View>
       </Modal>
 
-      {/* ── STEPS TRACKER MODAL ── */}
-      <Modal visible={showStepsModal} transparent animationType="fade" onRequestClose={() => setShowStepsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '85%' }}>
-            <View style={[styles.modalContent, { padding: 24, borderRadius: 24 }]}>
-              {/* Header */}
-              <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                <View style={{
-                  width: 56, height: 56, borderRadius: 28,
-                  backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                  alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 1.5, borderColor: 'rgba(59, 130, 246, 0.3)', marginBottom: 10,
-                }}>
-                  <Footprints color="#3B82F6" size={28} strokeWidth={2.5} />
-                </View>
-                <Text style={[styles.modalTitle, { fontSize: 20 }]}>Log Steps Today</Text>
-                <Text style={[styles.modalSubtitle, { marginBottom: 0 }]}>
-                  Current: <Text style={{ color: '#3B82F6', fontWeight: '900' }}>{currentSteps.toLocaleString()}</Text> / {targetSteps.toLocaleString()} steps
-                </Text>
-              </View>
-
-              {/* Progress Bar */}
-              <View style={{ height: 8, backgroundColor: 'rgba(59, 130, 246, 0.12)', borderRadius: 4, marginBottom: 18, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${Math.min(stepsPct * 100, 100)}%`, backgroundColor: '#3B82F6', borderRadius: 4 }} />
-              </View>
-
-              {/* Quick-Add Chips */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#94A3B8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Quick Add</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
-                {[500, 1000, 2000, 5000].map((amt) => (
-                  <TouchableOpacity
-                    key={amt}
-                    onPress={() => handleAddSteps(amt)}
-                    activeOpacity={0.75}
-                    style={{
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, marginRight: 8, marginBottom: 8,
-                      backgroundColor: 'rgba(59, 130, 246, 0.10)',
-                      borderWidth: 1.2, borderColor: 'rgba(59, 130, 246, 0.30)',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#3B82F6' }}>+{amt >= 1000 ? `${amt / 1000}k` : amt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Manual Input */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#94A3B8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>Or Enter Custom Amount</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={stepsInput}
-                onChangeText={setStepsInput}
-                keyboardType="numeric"
-                placeholder="e.g. 3500"
-                placeholderTextColor={theme?.textSecondary || '#94A3B8'}
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowStepsModal(false); setStepsInput(''); }}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalSave, { backgroundColor: '#3B82F6' }]}
-                  onPress={() => handleAddSteps(parseInt(stepsInput))}
-                >
-                  <Text style={styles.modalSaveText}>Add Steps</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       {/* ── NEW GOAL MODAL (shown on goal completion) ── */}
       <Modal visible={showNewGoalModal} transparent animationType="fade">
