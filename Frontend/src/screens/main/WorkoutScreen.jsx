@@ -572,29 +572,13 @@ export default function WorkoutScreen({
 
         {filteredWorkouts.map((workout) => {
           if (!workout) return null;
-          const isExpanded = !!expandedInstructions[workout.id];
           return (
             <View key={workout.id} style={styles.workoutFormCard}>
               <View style={styles.workoutHeaderRow}>
-                <TouchableOpacity 
-                  style={styles.workoutTitleContainer}
-                  activeOpacity={0.7}
-                  onPress={() => toggleInstructionExpand(workout.id)}
-                >
+                <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text 
-                    style={styles.workoutDescriptionText} 
-                    numberOfLines={isExpanded ? undefined : 2} 
-                    ellipsizeMode="tail"
-                  >
-                    {workout.description}
-                  </Text>
-                  {workout.description && workout.description.length > 50 && (
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: logoGreen, marginTop: 4 }}>
-                      {isExpanded ? 'Show Less ▲' : 'Show More ▼'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
+                </View>
               </View>
 
               <View style={styles.glassDivider} />
