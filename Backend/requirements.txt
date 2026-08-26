@@ -1,0 +1,7 @@
+fastapi
+pydantic
+supabase
+python-dotenv
+resend
+requests
+uvicorn
