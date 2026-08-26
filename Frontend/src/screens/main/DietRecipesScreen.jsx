@@ -1035,34 +1035,8 @@ export default function DietRecipesScreen({
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>Your AI Scheduled Meals</Text>
-              <TouchableOpacity
-                onPress={async () => {
-                  try {
-                    setIsGeneratingMealPlan(true);
-                    const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
-                    if (res.ok) {
-                      const data = await res.json();
-                      if (Array.isArray(data) && data.length > 0) {
-                        setDailyPlan(data);
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const CACHE_KEY = `ms_meals_cache_${userId}`;
-                        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
-                      }
-                    }
-                  } catch (e) {
-                    showAlert("Error", "Could not regenerate AI meals. Please check connection.");
-                  } finally {
-                    setIsGeneratingMealPlan(false);
-                  }
-                }}
-                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#E2E8F0' }}
-                activeOpacity={0.7}
-              >
-                <Sparkles color="#10B981" size={13} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>Regenerate</Text>
-              </TouchableOpacity>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.sectionLabelTitle}>Your Daily AI Meal Plan</Text>
             </View>
             {/* SMART DYNAMIC MACRO REBALANCER CALCULATOR */}
             {(() => {

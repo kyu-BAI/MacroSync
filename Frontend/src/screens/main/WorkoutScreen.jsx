@@ -41,28 +41,35 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
 };
 
 const getExerciseSource = (exerciseName) => {
-  if (!exerciseName) return null;
+  const EXERCISEDB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+  const DEFAULT_PUSHUP = `${EXERCISEDB_BASE}Pushups/0.jpg`;
+  
+  if (!exerciseName) return DEFAULT_PUSHUP;
   const name = exerciseName.toLowerCase();
   
-  // Custom local GIF / image assets can be added to Frontend/assets/workouts/ and required here:
-  // if (name.includes('wall')) return require('../../assets/workouts/wall_pushups.gif');
-
-  if (name.includes('push') || name.includes('wall')) {
-    return 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('squat') || name.includes('leg') || name.includes('glute') || name.includes('lower body')) {
+    return `${EXERCISEDB_BASE}Bodyweight_Squat/0.jpg`;
   }
-  if (name.includes('squat')) {
-    return 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('plank') || name.includes('core') || name.includes('hold') || name.includes('abs') || name.includes('burnout')) {
+    return `${EXERCISEDB_BASE}Plank/0.jpg`;
   }
-  if (name.includes('plank') || name.includes('core') || name.includes('hold')) {
-    return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('lunge') || name.includes('step') || name.includes('walk')) {
+    return `${EXERCISEDB_BASE}Bodyweight_Walking_Lunge/0.jpg`;
   }
-  if (name.includes('jack') || name.includes('jump') || name.includes('cardio') || name.includes('burpee')) {
-    return 'https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('crunch') || name.includes('situp') || name.includes('twist') || name.includes('v-up')) {
+    return `${EXERCISEDB_BASE}Crunches/0.jpg`;
   }
-  if (name.includes('lunge')) {
-    return 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('dip') || name.includes('tricep') || name.includes('arm')) {
+    return `${EXERCISEDB_BASE}Bench_Dips/0.jpg`;
   }
-  return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
+  if (name.includes('climber') || name.includes('mountain')) {
+    return `${EXERCISEDB_BASE}Mountain_Climbers/0.jpg`;
+  }
+  if (name.includes('push') || name.includes('wall') || name.includes('chest') || name.includes('power') || name.includes('warm') || name.includes('prep') || name.includes('blitz') || name.includes('cardio')) {
+    return `${EXERCISEDB_BASE}Pushups/0.jpg`;
+  }
+  
+  return DEFAULT_PUSHUP;
 };
 
 export default function WorkoutScreen({ 
@@ -434,7 +441,7 @@ export default function WorkoutScreen({
 
               <View style={styles.playerGlassDivider} />
 
-              {/* EXPANDED INSTRUCTION MANUAL TEXTS WITH SHOW MORE / SHOW LESS */}
+              {/* FULL UNABBREVIATED INSTRUCTION MANUAL TEXTS (NO SHOW MORE / SHOW LESS) */}
               <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
                 <View style={{
                   backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
@@ -444,28 +451,10 @@ export default function WorkoutScreen({
                   borderWidth: 1.2,
                   borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
                 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 0 }]}>How to Set Up:</Text>
-                    <TouchableOpacity 
-                      onPress={() => toggleInstructionExpand(`setup_${currentStepIndex}`)} 
-                      activeOpacity={0.7} 
-                      style={{ flexDirection: 'row', alignItems: 'center' }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: logoGreen, marginRight: 2 }}>
-                        {expandedInstructions[`setup_${currentStepIndex}`] ? 'Show Less' : 'Show More'}
-                      </Text>
-                      {expandedInstructions[`setup_${currentStepIndex}`] ? (
-                        <ChevronUp color={logoGreen} size={14} />
-                      ) : (
-                        <ChevronDown color={logoGreen} size={14} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                  <Text 
-                    style={styles.instructionParagraphText} 
-                    numberOfLines={expandedInstructions[`setup_${currentStepIndex}`] ? undefined : 2}
-                    ellipsizeMode="tail"
-                  >
+                  <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>
+                    📍 How to Set Up:
+                  </Text>
+                  <Text style={[styles.instructionParagraphText, { fontSize: 13, lineHeight: 19 }]}>
                     {activeRoutine.tutorials[currentStepIndex].setup}
                   </Text>
                 </View>
@@ -478,28 +467,10 @@ export default function WorkoutScreen({
                   borderWidth: 1.2,
                   borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
                 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 0 }]}>Proper Execution Form:</Text>
-                    <TouchableOpacity 
-                      onPress={() => toggleInstructionExpand(`form_${currentStepIndex}`)} 
-                      activeOpacity={0.7} 
-                      style={{ flexDirection: 'row', alignItems: 'center' }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0EA5E9', marginRight: 2 }}>
-                        {expandedInstructions[`form_${currentStepIndex}`] ? 'Show Less' : 'Show More'}
-                      </Text>
-                      {expandedInstructions[`form_${currentStepIndex}`] ? (
-                        <ChevronUp color="#0EA5E9" size={14} />
-                      ) : (
-                        <ChevronDown color="#0EA5E9" size={14} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                  <Text 
-                    style={styles.instructionParagraphText} 
-                    numberOfLines={expandedInstructions[`form_${currentStepIndex}`] ? undefined : 2}
-                    ellipsizeMode="tail"
-                  >
+                  <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>
+                    💪 Proper Execution Form:
+                  </Text>
+                  <Text style={[styles.instructionParagraphText, { fontSize: 13, lineHeight: 19 }]}>
                     {activeRoutine.tutorials[currentStepIndex].form}
                   </Text>
                 </View>
@@ -644,8 +615,6 @@ export default function WorkoutScreen({
                   </View>
                 </View>
               </View>
-
-              <View style={styles.glassDivider} />
 
               {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
               <TouchableOpacity 
@@ -857,6 +826,7 @@ const getStyles = (theme) => StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: logoGreen,
     paddingVertical: 12,
+    marginTop: 14,
     borderRadius: 16,
     shadowOpacity: 0,
     elevation: 0,
