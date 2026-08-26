@@ -110,7 +110,8 @@ export async function clearRememberedGoogleEmail() {
 export async function saveRememberedCredentials(email, password) {
   try {
     if (email) await AsyncStorage.setItem(KEYS.REMEMBERED_EMAIL, email.trim());
-    if (password) await AsyncStorage.setItem(KEYS.REMEMBERED_PASSWORD, password);
+    // Security: Do not store raw plain-text passwords in unencrypted AsyncStorage
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_PASSWORD);
   } catch (e) {
     console.warn('OfflineStorage: Failed to save remembered credentials', e);
   }
@@ -119,8 +120,7 @@ export async function saveRememberedCredentials(email, password) {
 export async function getRememberedCredentials() {
   try {
     const email = await AsyncStorage.getItem(KEYS.REMEMBERED_EMAIL);
-    const password = await AsyncStorage.getItem(KEYS.REMEMBERED_PASSWORD);
-    return { email: email || '', password: password || '' };
+    return { email: email || '', password: '' };
   } catch (e) {
     return { email: '', password: '' };
   }

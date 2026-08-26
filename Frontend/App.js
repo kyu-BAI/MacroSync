@@ -3,7 +3,6 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { CustomAlertProvider } from './src/context/CustomAlertContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { 
-  StyleSheet, 
   View,
   Alert,
   Text,
@@ -56,6 +55,8 @@ import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
+import OfflineBanner from "./src/components/OfflineBanner";
+import { styles } from "./App.styles";
 import API_URL from "./src/screens/config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from './src/services/NotificationService';
@@ -799,24 +800,90 @@ function MainApp() {
     setActiveTab('DASHBOARD');
   };
 
-  // ── Sleek Floating Offline Banner ────────────────────────────────────────
-  const OfflineBanner = () => {
-    if (isOnline) return null;
-    return (
-      <SafeAreaView style={styles.offlineBannerContainer}>
-        <View style={styles.offlineBannerPill}>
-          <Text style={styles.offlineBannerIcon}>📴</Text>
-          <Text style={styles.offlineBannerText}>
-            Offline Mode — Showing cached data. Logs will sync when back online.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
+  const handleLogScannedMeal = async (macros) => {
+    if (!userId) {
+      Alert.alert('Authentication Error', 'You must be logged in to log meals.');
+      return;
+    }
+    const hour = new Date().getHours();
+    let category = 'Breakfast';
+    if (hour >= 11 && hour < 15) category = 'Lunch';
+    else if (hour >= 15 && hour < 18) category = 'Snack';
+    else if (hour >= 18 || hour < 5) category = 'Dinner';
+
+    const mealType = macros.category || macros.mealType || category;
+    const mealId = `meal-${Date.now()}`;
+    const mealPayload = {
+      id: mealId,
+      user_id: userId,
+      name: macros.name || 'Scanned Food',
+      calories: macros.calories || 0,
+      protein: macros.protein || 0,
+      carbs: macros.carbs || 0,
+      fats: macros.fats || 0,
+      mealType: mealType
+    };
+
+    if (!isOnline) {
+      await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+      setDailyNutrition(prev => ({
+        ...prev,
+        consumedCalories: prev.consumedCalories + mealPayload.calories,
+        protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+        carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+        fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+      }));
+      setGlobalLoggedMeals(prev => [...prev, mealPayload]);
+      
+      setNotifications(prev => [{
+        id: `n-${Date.now()}`,
+        title: 'Food Scanned & Logged! 🔍',
+        category: 'meal',
+        time: 'Just Now',
+        read: false,
+        message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
+      }, ...prev]);
+
+      Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/meals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mealPayload),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to log meal');
+      }
+      setDailyNutrition(prev => ({
+        ...prev,
+        consumedCalories: prev.consumedCalories + mealPayload.calories,
+        protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+        carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+        fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+      }));
+      setGlobalLoggedMeals(prev => [...prev, mealPayload]);
+
+      setNotifications(prev => [{
+        id: `n-${Date.now()}`,
+        title: 'Food Scanned & Logged! 🔍',
+        category: 'meal',
+        time: 'Just Now',
+        read: false,
+        message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
+      }, ...prev]);
+    } catch (error) {
+      console.error('Error logging scanned food:', error);
+      Alert.alert('Error', error.message || 'Failed to log meal to server.');
+    }
   };
 
   return (
     <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
-      <OfflineBanner />
+      <OfflineBanner isOnline={isOnline} />
       {activeTab === 'DASHBOARD' && (
         <DashboardScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
@@ -877,88 +944,7 @@ function MainApp() {
           userId={userId}
           userProfile={userProfile}
           dailyNutrition={dailyNutrition}
-          onLogMeal={async (macros) => {
-            if (!userId) {
-              Alert.alert('Authentication Error', 'You must be logged in to log meals.');
-              return;
-            }
-            const hour = new Date().getHours();
-            let category = 'Breakfast';
-            if (hour >= 11 && hour < 15) category = 'Lunch';
-            else if (hour >= 15 && hour < 18) category = 'Snack';
-            else if (hour >= 18 || hour < 5) category = 'Dinner';
-
-            const mealType = macros.category || macros.mealType || category;
-
-            const mealId = `meal-${Date.now()}`;
-            const mealPayload = {
-              id: mealId,
-              user_id: userId,
-              name: macros.name || 'Scanned Food',
-              calories: macros.calories || 0,
-              protein: macros.protein || 0,
-              carbs: macros.carbs || 0,
-              fats: macros.fats || 0,
-              mealType: mealType
-            };
-
-            if (!isOnline) {
-              // Offline: queue it and update UI optimistically
-              await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealPayload]);
-              
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
-              }, ...prev]);
-
-              Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
-              return;
-            }
-
-            try {
-              const response = await fetch(`${API_URL}/meals`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(mealPayload),
-              });
-              if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.detail || 'Failed to log meal');
-              }
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealPayload]);
-
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
-              }, ...prev]);
-            } catch (error) {
-              console.error('Error logging scanned food:', error);
-              Alert.alert('Error', error.message || 'Failed to log meal to server.');
-            }
-          }}
+          onLogMeal={handleLogScannedMeal}
         />
       )}
       {activeTab === 'WORKOUT' && (
@@ -1004,50 +990,7 @@ function MainApp() {
   );
 }
 
-// Uniform High-Contrast System Theme Setup Tokens
-const baseColor = '#F0F4F2';
 
-const styles = StyleSheet.create({
-  appContainerRoot: {
-    flex: 1,
-    backgroundColor: baseColor
-  },
-  offlineBannerContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 32,
-    left: 0,
-    right: 0,
-    zIndex: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  offlineBannerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#92400E',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    maxWidth: '90%',
-  },
-  offlineBannerIcon: {
-    marginRight: 6,
-    fontSize: 12,
-  },
-  offlineBannerText: {
-    color: '#FEF3C7',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-});
 
 export default function App() {
   return (

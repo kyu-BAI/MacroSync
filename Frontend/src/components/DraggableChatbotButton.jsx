@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  StyleSheet,
   TouchableOpacity,
   Animated,
   PanResponder,
@@ -8,11 +7,9 @@ import {
   Platform
 } from 'react-native';
 import { BotMessageSquare } from 'lucide-react-native';
+import { styles } from './DraggableChatbotButton.styles';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-// Logo colors
-const logoGreen = '#10B981';
 
 // Spacing bounds to clear header and absolute bottom navigation bar
 const TOP_BOUND = Platform.OS === 'ios' ? 80 : 60;
@@ -94,25 +91,4 @@ export default function DraggableChatbotButton({ onPress }) {
       </TouchableOpacity>
     </Animated.View>
   );
-}
-
-const styles = StyleSheet.create({
-  floatingChatbotContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    zIndex: 9999,
-    width: 56,
-    height: 56,
-  },
-  chatbotFloatingButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-  }
-});
+}
