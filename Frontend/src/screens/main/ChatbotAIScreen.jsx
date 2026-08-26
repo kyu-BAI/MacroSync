@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import {
   StyleSheet,
   Text,
@@ -52,45 +51,51 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
-  // --- NATIVE SPEECH RECOGNITION (expo-speech-recognition) ---
-  useSpeechRecognitionEvent('start', () => setIsListening(true));
-  useSpeechRecognitionEvent('end', () => setIsListening(false));
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results?.[0]?.transcript;
-    if (transcript) {
-      setInputText(transcript);
-    }
-  });
-  useSpeechRecognitionEvent('error', (event) => {
-    if (__DEV__) console.log('Speech recognition error:', event.error, event.message);
-    setIsListening(false);
-  });
-
-  const handleToggleVoiceDictation = async () => {
+  const handleToggleVoiceDictation = () => {
     if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
       setIsListening(false);
       return;
     }
 
-    // Request microphone permission and start listening
-    try {
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!result.granted) {
-        if (__DEV__) console.log('Microphone permission denied');
+    // Web Speech API — works on Chrome / Expo Web
+    const SpeechRecognition =
+      typeof window !== 'undefined' &&
+      (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.onstart  = () => setIsListening(true);
+        recognition.onresult = (evt) => {
+          let t = '';
+          for (let i = evt.resultIndex; i < evt.results.length; i++) {
+            t += evt.results[i][0].transcript;
+          }
+          if (t) setInputText(t);
+        };
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend   = () => setIsListening(false);
+        recognitionRef.current = recognition;
+        recognition.start();
         return;
-      }
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: true,
-        maxAlternatives: 1,
-        continuous: false,
-      });
-    } catch (err) {
-      if (__DEV__) console.log('Speech recognition start failed:', err);
-      setIsListening(false);
+      } catch (e) {/* fall through */}
     }
+
+    // Mobile Expo Go fallback — guide user to use keyboard mic
+    showAlert(
+      '🎙️ Use Your Keyboard Mic',
+      'Tap the microphone icon on your phone keyboard (🎤) to speak. Your spoken words will appear in the text box automatically.',
+      [{ text: 'Got it!', style: 'cancel' }]
+    );
   };
 
   // Chat remaining limits tracking state
