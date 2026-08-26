@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import {
   StyleSheet,
   Text,
@@ -32,7 +33,9 @@ import {
   Info,
   Flame,
   ChefHat,
-  ShieldCheck
+  ShieldCheck,
+  Mic,
+  MicOff
 } from 'lucide-react-native';
 
 import API_URL from '../config/api';
@@ -48,6 +51,47 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  // --- NATIVE SPEECH RECOGNITION (expo-speech-recognition) ---
+  useSpeechRecognitionEvent('start', () => setIsListening(true));
+  useSpeechRecognitionEvent('end', () => setIsListening(false));
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results?.[0]?.transcript;
+    if (transcript) {
+      setInputText(transcript);
+    }
+  });
+  useSpeechRecognitionEvent('error', (event) => {
+    if (__DEV__) console.log('Speech recognition error:', event.error, event.message);
+    setIsListening(false);
+  });
+
+  const handleToggleVoiceDictation = async () => {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // Request microphone permission and start listening
+    try {
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) {
+        if (__DEV__) console.log('Microphone permission denied');
+        return;
+      }
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: false,
+      });
+    } catch (err) {
+      if (__DEV__) console.log('Speech recognition start failed:', err);
+      setIsListening(false);
+    }
+  };
 
   // Chat remaining limits tracking state
   const [chatInfo, setChatInfo] = useState({ isPremium: false, remaining: 10 });
@@ -95,7 +139,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
           id: 1,
           sender: 'ai',
           text: `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
         }
       ]);
     }
@@ -121,7 +165,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
       id: Date.now(),
       sender: 'user',
       text: inputText,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -174,7 +218,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             id: Date.now(),
             sender: 'ai',
             text: data.response,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
           }
         ]);
       } else {
@@ -184,7 +228,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
             id: Date.now(),
             sender: 'ai',
             text: `Error: ${data.detail || "Failed to get response from Vita AI."}`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
           }
         ]);
       }
@@ -196,7 +240,7 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
           id: Date.now(),
           sender: 'ai',
           text: "Sorry, Vita AI is having trouble connecting right now. Please check your connection and try again.",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
         }
       ]);
     } finally {
@@ -364,15 +408,61 @@ export default function ChatbotAIScreen({ onTabChange, userId, userProfile, mess
 
         {/* CHAT INPUT BAR HUB */}
         <View style={styles.chatInputFormCard}>
+          {isListening && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: 'rgba(239, 68, 68, 0.3)'
+            }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 6 }} />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#EF4444', flex: 1 }}>
+                🎙️ Listening to your voice... Speak now!
+              </Text>
+              <TouchableOpacity onPress={() => setIsListening(false)}>
+                <X color="#EF4444" size={14} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.chatInputInnerLayoutRow}>
             <TextInput
               style={styles.chatTextInputField}
-              placeholder="Ask Vita AI about diet, macros, or workouts..."
-              placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
+              placeholder={isListening ? "Listening... speak now..." : "Ask Vita AI about diet, macros, or workouts..."}
+              placeholderTextColor={isListening ? "#EF4444" : (isDarkMode ? "#64748B" : "#94A3B8")}
               value={inputText}
               onChangeText={setInputText}
               multiline={true}
             />
+
+            {/* VOICE DICTATION MICROPHONE BUTTON */}
+            <TouchableOpacity
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                backgroundColor: isListening ? '#EF4444' : (isDarkMode ? '#334155' : '#F1F5F9'),
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 8,
+                borderWidth: 1,
+                borderColor: isListening ? '#DC2626' : (isDarkMode ? '#475569' : '#E2E8F0')
+              }}
+              activeOpacity={0.7}
+              onPress={handleToggleVoiceDictation}
+            >
+              {isListening ? (
+                <MicOff color="#FFFFFF" size={17} />
+              ) : (
+                <Mic color={isDarkMode ? '#F8FAFC' : '#0F172A'} size={17} />
+              )}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.sendActionButton,

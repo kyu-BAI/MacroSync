@@ -468,7 +468,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           mealType: selectedMealType,
           imageUri: capturedImage,
           timestamp: new Date().toISOString(),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
         };
         onLogMeal(mealItem);
 
@@ -973,7 +973,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
                           onLogMeal({
                             ...item,
                             id: `relog-${Date.now()}`,
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                           });
                           showAlert("Meal Re-Logged 🍽️", `Re-logged ${item.name} (${item.calories} kcal) to your daily nutrition!`);
                           setShowHistoryModal(false);

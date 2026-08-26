@@ -20,7 +20,7 @@ const UI_STRINGS = {
   // ── MEAL CATEGORIES ───────────────────────────────────────
   'Breakfast': { English: 'Breakfast', Tagalog: 'Almusal',     Cebuano: 'Pamahaw'   },
   'Lunch':     { English: 'Lunch',     Tagalog: 'Tanghalian',  Cebuano: 'Paniudto'  },
-  'Snack':     { English: 'Snack',     Tagalog: 'Meryenda',    Cebuano: 'Pama-an'   },
+  'Snack':     { English: 'Snack',     Tagalog: 'Meryenda',    Cebuano: 'Merienda'  },
   'Dinner':    { English: 'Dinner',    Tagalog: 'Hapunan',     Cebuano: 'Panihapon' },
   'Meal':      { English: 'Meal',      Tagalog: 'Pagkain',     Cebuano: 'Pagkaon'   },
 
@@ -347,7 +347,7 @@ export const LanguageProvider = ({ children }) => {
     } else if (targetLang === 'Cebuano') {
       if (cleanCat === 'Breakfast') return 'Pamahaw';
       if (cleanCat === 'Lunch') return 'Paniudto';
-      if (cleanCat === 'Snack') return 'Pama-an';
+      if (cleanCat === 'Snack') return 'Merienda';
       if (cleanCat === 'Dinner') return 'Panihapon';
     }
     return cleanCat;
