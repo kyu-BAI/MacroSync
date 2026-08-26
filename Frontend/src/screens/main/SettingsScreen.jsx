@@ -54,6 +54,16 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // --- LIVE PASSWORD RULES ---
+  const pwRules = [
+    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
+    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
+    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
+    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
+    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
+  ];
+  const allRulesPass = pwRules.every(r => r.ok);
+
   // --- PAYMENT FLOW STATE ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentPlan, setPaymentPlan] = useState({ name: '', price: '' });
@@ -387,8 +397,8 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       showAlert("Validation Error", "Please enter a new password.");
       return;
     }
-    if (newPassword.length < 8) {
-      showAlert("Validation Error", "Password must be at least 8 characters long.");
+    if (!allRulesPass) {
+      showAlert("Weak Password", "Your new password does not meet all the requirements. Please check the checklist and try again.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -990,6 +1000,39 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                 )}
               </TouchableOpacity>
             </View>
+
+            {/* ── LIVE PASSWORD REQUIREMENTS ── */}
+            {newPassword.length > 0 && (
+              <View style={{
+                backgroundColor: 'rgba(15, 23, 42, 0.06)',
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
+                {pwRules.map((rule, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                    <View style={{
+                      width: 18, height: 18, borderRadius: 9,
+                      backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
+                      alignItems: 'center', justifyContent: 'center',
+                      marginRight: 8,
+                      borderWidth: 1,
+                      borderColor: rule.ok ? '#10B981' : '#EF4444',
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
+                        {rule.ok ? '✓' : '✕'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
+                      {rule.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.inputLabel}>Confirm New Password</Text>
             <View style={styles.passwordInputContainer}>
