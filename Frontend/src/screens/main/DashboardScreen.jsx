@@ -20,6 +20,7 @@ import {
 import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User, Flame, Clock, Trophy, ChevronRight, ChevronLeft, Sparkles, Target } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import { Pedometer } from 'expo-sensors';
 
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -165,6 +166,65 @@ export default function DashboardScreen({
   // ── Steps Tracker Modal State ──
   const [showStepsModal, setShowStepsModal] = useState(false);
   const [stepsInput, setStepsInput] = useState('');
+
+  // ── Live Pedometer (expo-sensors) ──
+  const pedometerBaseRef = useRef(null); // steps at session start
+  const pedometerSubRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const startPedometer = async () => {
+      try {
+        const { status } = await Pedometer.requestPermissionsAsync();
+        if (status !== 'granted') return;
+
+        const isAvailable = await Pedometer.isAvailableAsync();
+        if (!isAvailable) return;
+
+        // Record the base step count at session start
+        pedometerBaseRef.current = null;
+
+        pedometerSubRef.current = Pedometer.watchStepCount(result => {
+          if (!active) return;
+          if (pedometerBaseRef.current === null) {
+            pedometerBaseRef.current = result.steps;
+          }
+          const sessionSteps = result.steps - pedometerBaseRef.current;
+          if (sessionSteps > 0 && setDailyExercise) {
+            setDailyExercise(prev => {
+              const prevBase = prev?._pedometerBase ?? 0;
+              const alreadyAdded = prev?._pedometerAdded ?? 0;
+              const newAdded = sessionSteps;
+              const delta = newAdded - alreadyAdded;
+              if (delta <= 0) return prev;
+              return {
+                ...prev,
+                steps: (prev?.steps || 0) + delta,
+                caloriesBurned: (prev?.caloriesBurned || 0) + Math.round(delta * 0.04),
+                activeMinutes: (prev?.activeMinutes || 0) + Math.round(delta / 100),
+                _pedometerBase: prevBase,
+                _pedometerAdded: newAdded,
+              };
+            });
+          }
+        });
+      } catch (err) {
+        if (__DEV__) console.log('Pedometer error:', err);
+      }
+    };
+
+    startPedometer();
+
+    return () => {
+      active = false;
+      if (pedometerSubRef.current) {
+        pedometerSubRef.current.remove();
+        pedometerSubRef.current = null;
+      }
+    };
+  }, []);
+
 
   // ── New Goal Modal (shown when user hits 100% progress) ──
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
