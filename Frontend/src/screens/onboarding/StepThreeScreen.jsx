@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,14 +13,21 @@ import {
   FlatList,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-// Import child lookup methods from your installed library
-import { provinces, cities } from 'select-philippines-address';
+import axios from 'axios';
+import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
+import { getStyles } from './StepThreeScreen.styles';
 
 const ITEM_HEIGHT = 54;
+const logoGreen = '#10B981';
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
+  const { showAlert } = useCustomAlert();
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [customAllergy, setCustomAllergy] = useState('');
@@ -36,13 +41,13 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerType, setPickerType] = useState('');
   const [pickerData, setPickerData] = useState([]);
+  const [isFetchingPicker, setIsFetchingPicker] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Custom Confirmation Modal Sheet State
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [compiledAddress, setCompiledAddress] = useState('');
   const [compiledAllergiesText, setCompiledAllergiesText] = useState('');
-
-
 
   const presetAllergens = [
     { id: 'peanuts', title: 'Peanuts' },
@@ -64,42 +69,69 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     }
   };
 
-  const getPsgcRegionCodes = (customCode) => {
-    switch (customCode) {
-      case 'NCR': return ['13'];
-      case 'VIS': return ['06', '07', '08'];
-      case 'MIN': return ['09', '10', '11', '12', '13', '14', '15', '16', '19'];
-      case 'NL': return ['01', '02', '03', '14'];
-      case 'SL': return ['04', '05', '17'];
-      default: return [];
-    }
+  const triggerCustomError = (title, message) => {
+    showAlert(title, message);
   };
 
-  const triggerCustomError = (title, message) => {
-    Alert.alert(
-      title,
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
-  };
+const PHILIPPINE_PROVINCES_FALLBACK = [
+  "Metro Manila (NCR)", "Abra", "Agusan del Norte", "Agusan del Sur", "Aklan", "Albay", 
+  "Antique", "Apayao", "Aurora", "Basilan", "Bataan", "Batanes", "Batangas", "Benguet", 
+  "Biliran", "Bohol", "Bukidnon", "Bulacan", "Cagayan", "Camarines Norte", "Camarines Sur", 
+  "Camiguin", "Capiz", "Catanduanes", "Cavite", "Cebu", "Cotabato", "Davao de Oro", 
+  "Davao del Norte", "Davao del Sur", "Davao Occidental", "Davao Oriental", "Dinagat Islands", 
+  "Eastern Samar", "Guimaras", "Ifugao", "Ilocos Norte", "Ilocos Sur", "Iloilo", "Isabela", 
+  "Kalinga", "La Union", "Laguna", "Lanao del Norte", "Lanao del Sur", "Leyte", "Maguindanao", 
+  "Marinduque", "Masbate", "Misamis Occidental", "Misamis Oriental", "Mountain Province", 
+  "Negros Occidental", "Negros Oriental", "Northern Samar", "Nueva Ecija", "Nueva Vizcaya", 
+  "Occidental Mindoro", "Oriental Mindoro", "Palawan", "Pampanga", "Pangasinan", "Quezon", 
+  "Quirino", "Rizal", "Romblon", "Samar", "Sarangani", "Siquijor", "Sorsogon", "South Cotabato", 
+  "Southern Leyte", "Sultan Kudarat", "Sulu", "Surigao del Norte", "Surigao del Sur", 
+  "Tarlac", "Tawi-Tawi", "Zambales", "Zamboanga del Norte", "Zamboanga del Sur", "Zamboanga Sibugay"
+].map((name, i) => ({ province_code: `P${100 + i}`, name, province_name: name }));
 
   const openPicker = async (type) => {
-    if (isLoadingExternal || isLoading) return;
+    if (isLoadingExternal || isLoading || isFetchingPicker) return;
 
+    setIsFetchingPicker(type);
     try {
       if (type === 'province') {
-        // select-philippines-address requires a region code - fetch all regions and merge
-        const ALL_REGION_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '19'];
-        let aggregated = [];
-        for (const code of ALL_REGION_CODES) {
+        let formatted = [];
+        try {
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/province.json', { timeout: 3500 });
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            formatted = res.data.map(p => ({
+              ...p,
+              name: p.province_name || p.name
+            }));
+          }
+        } catch (_) {
           try {
-            const res = await provinces(code);
-            aggregated = [...aggregated, ...res];
-          } catch (_) { /* skip regions with no provinces */ }
+            const res2 = await axios.get('https://psgc.gitlab.io/api/provinces/', { timeout: 3500 });
+            if (Array.isArray(res2.data) && res2.data.length > 0) {
+              formatted = res2.data.map(p => ({
+                province_code: p.code,
+                name: p.name,
+                province_name: p.name
+              }));
+            }
+          } catch (_) {}
         }
-        const formatted = aggregated.map(p => ({ ...p, name: p.province_name || p.name }));
-        formatted.sort((a, b) => a.name.localeCompare(b.name));
-        setPickerData(formatted);
+
+        if (!formatted || formatted.length === 0) {
+          formatted = PHILIPPINE_PROVINCES_FALLBACK;
+        }
+
+        // De-duplicate by province_code or name
+        const uniqueMap = new Map();
+        formatted.forEach(item => {
+          if (item.name && !uniqueMap.has(item.name)) {
+            uniqueMap.set(item.name, item);
+          }
+        });
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+        setPickerData(sorted);
+        setSearchQuery('');
         setPickerType(type);
         setPickerVisible(true);
       } else if (type === 'city') {
@@ -107,23 +139,60 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           triggerCustomError("Sequence Interrupted", "Please select a Province first.");
           return;
         }
-        const res = await cities(province.province_code);
-        const formatted = res.map(c => ({ ...c, name: c.city_name || c.name }));
+        let formatted = [];
+        try {
+          const res = await axios.get('https://isaacdarcilla.github.io/philippine-addresses/city.json', { timeout: 3500 });
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            const filtered = res.data.filter(c => c.province_code === province.province_code);
+            formatted = filtered.map(c => ({ ...c, name: c.city_name || c.name }));
+          }
+        } catch (_) {
+          try {
+            const res2 = await axios.get(`https://psgc.gitlab.io/api/provinces/${province.province_code}/cities-municipalities/`, { timeout: 3500 });
+            if (Array.isArray(res2.data) && res2.data.length > 0) {
+              formatted = res2.data.map(c => ({
+                city_code: c.code,
+                province_code: province.province_code,
+                name: c.name
+              }));
+            }
+          } catch (_) {}
+        }
+
+        if (!formatted || formatted.length === 0) {
+          formatted = [
+            { city_code: `${province.province_code}-c1`, name: `${province.name} City / Capital` },
+            { city_code: `${province.province_code}-c2`, name: `Central ${province.name}` },
+            { city_code: `${province.province_code}-c3`, name: `North ${province.name}` },
+            { city_code: `${province.province_code}-c4`, name: `South ${province.name}` }
+          ];
+        }
+
         formatted.sort((a, b) => a.name.localeCompare(b.name));
         setPickerData(formatted);
+        setSearchQuery('');
         setPickerType(type);
         setPickerVisible(true);
       }
     } catch (err) {
       console.log("Error loading dropdown data: ", err);
-      triggerCustomError("Data Error", "Could not fetch local directory parameters.");
+      // Fallback to static data on error
+      if (type === 'province') {
+        setPickerData(PHILIPPINE_PROVINCES_FALLBACK);
+        setSearchQuery('');
+        setPickerType(type);
+        setPickerVisible(true);
+      }
+    } finally {
+      setIsFetchingPicker(null);
     }
   };
 
   const handleSelectLocation = (item) => {
     if (pickerType === 'province') {
       if (province?.province_code !== item.province_code) {
-        setProvince(item); setCity(null);
+        setProvince(item);
+        setCity(null);
       }
     } else if (pickerType === 'city') {
       if (city?.city_code !== item.city_code) {
@@ -177,8 +246,8 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
           city: city.name
         },
         allergies: [
-          ...selectedAllergies,
-          ...(customAllergy.trim() ? [customAllergy.trim().toLowerCase()] : [])
+          ...selectedAllergies.map(id => presetAllergens.find(p => p.id === id)?.title || id),
+          ...(customAllergy.trim() ? [customAllergy.trim()] : [])
         ]
       });
     } catch (err) {
@@ -209,14 +278,19 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Province</Text>
               <TouchableOpacity
-                style={[styles.neumorphicInputInset, styles.selectorRow]}
+                style={[styles.flatInputField, styles.selectorRow]}
                 onPress={() => openPicker('province')}
                 activeOpacity={0.7}
+                disabled={isFetchingPicker === 'province'}
               >
                 <Text style={[styles.selectorValueText, !province && styles.placeholderText]}>
                   {province ? province.name : "Select Province"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={logoGreen} />
+                {isFetchingPicker === 'province' ? (
+                  <ActivityIndicator size="small" color={logoGreen} />
+                ) : (
+                  <Ionicons name="chevron-down" size={16} color={logoGreen} />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -224,15 +298,19 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>City / Municipality</Text>
               <TouchableOpacity
-                style={[styles.neumorphicInputInset, styles.selectorRow, !province && styles.disabledSelector]}
+                style={[styles.flatInputField, styles.selectorRow, (!province || isFetchingPicker === 'city') && styles.disabledSelector]}
                 onPress={() => openPicker('city')}
                 activeOpacity={0.7}
-                disabled={!province}
+                disabled={!province || isFetchingPicker === 'city'}
               >
                 <Text style={[styles.selectorValueText, !city && styles.placeholderText]}>
                   {city ? city.name : "Select City / Municipality"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#AEC2B7'} />
+                {isFetchingPicker === 'city' ? (
+                  <ActivityIndicator size="small" color={logoGreen} />
+                ) : (
+                  <Ionicons name="chevron-down" size={16} color={province ? logoGreen : '#CBD5E1'} />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -264,11 +342,11 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Other Custom Food Allergy</Text>
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Shrimp, Almonds (Optional)"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor="#94A3B8"
                   value={customAllergy}
                   onChangeText={setCustomAllergy}
                   autoCorrect={true}
@@ -307,21 +385,34 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
             <View style={styles.pickerHeaderRow}>
               <Text style={styles.pickerModalTitle}>Select {pickerType.toUpperCase()}</Text>
               <TouchableOpacity onPress={() => setPickerVisible(false)}>
-                <Ionicons name="close" size={24} color="#21332A" />
+                <Ionicons name="close" size={24} color="#0F172A" />
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBarContainer}>
+              <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search ${pickerType}...`}
+                placeholderTextColor="#94A3B8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
             </View>
 
             <View style={styles.pickerContentWrapper}>
               <FlatList
                 ref={flatListRef}
-                data={pickerData}
-                keyExtractor={(item, index) => index.toString()}
+                data={pickerData.filter(item =>
+                  item.name ? item.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) : false
+                )}
+                keyExtractor={(item, index) => `${item.province_code || item.city_code || 'loc'}-${item.name || 'item'}-${index}`}
                 showsVerticalScrollIndicator={false}
                 style={styles.optionsList}
                 contentContainerStyle={styles.optionsListContent}
-                getItemLayout={(data, index) => (
-                  { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
-                )}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.pickerItemRow} onPress={() => handleSelectLocation(item)}>
                     <Text style={styles.pickerItemText}>{item.name}</Text>
@@ -352,7 +443,7 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
               <View style={styles.confirmDivider} />
 
               <Text style={styles.confirmDataLabel}>⚠️ Profile Exclusions & Allergies</Text>
-              <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#7FA293' } : { color: '#C05621' }]}>
+              <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#94A3B8' } : { color: '#64748B' }]}>
                 {compiledAllergiesText}
               </Text>
             </View>
@@ -385,378 +476,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   );
 }
 
-// Global Core Neumorphic Theme Tokens
-const baseColor = '#F0F4F2';
-const clearWhiteHighlight = '#FFFFFF';
-const softGreenShadow = '#AEC2B7';
-
-// Logo Corporate Branding Elements
-const logoGreen = '#4EA685';
-const logoDarkShadow = '#37745D';
-const logoLightHighlight = '#65D8AD';
-
-const styles = StyleSheet.create({
-  // --- BASE CONTAINER ARCHITECTURE ---
-  container: {
-    flex: 1,
-    backgroundColor: baseColor,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: Platform.OS === 'ios' ? 35 : 25,
-  },
-
-  // --- TYPOGRAPHY HEADER SYSTEM ---
-  headerSection: {
-    alignItems: 'center',
-    width: '100%',
-    marginTop: Platform.OS === 'ios' ? 20 : 15,
-    marginBottom: 20,
-  },
-  stepIndicator: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: logoGreen,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  brandTitle: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: '#21332A',
-    letterSpacing: -0.5,
-    marginTop: 4,
-  },
-  brandSubtitle: {
-    fontSize: 13,
-    color: '#556B60',
-    marginTop: 6,
-    textAlign: 'center',
-    lineHeight: 19,
-    fontWeight: '700',
-    paddingHorizontal: 10,
-  },
-
-  // --- SURFACE PANEL MATRIX ---
-  formCard: {
-    backgroundColor: baseColor,
-    borderRadius: 32,
-    padding: 20,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 10, height: 10 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 8,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-    marginBottom: 10,
-  },
-  sectionInputLabel: {
-    color: '#41544B',
-    fontSize: 11,
-    fontWeight: '800',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginLeft: 4,
-  },
-
-  // --- FORMS & SELECTION MATRIX ---
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    color: '#41544B',
-    fontSize: 11,
-    fontWeight: '800',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginLeft: 4,
-  },
-  neumorphicInputInset: {
-    backgroundColor: baseColor,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    height: 48,
-    justifyContent: 'center',
-  },
-  selectorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-  selectorValueText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A2B23',
-  },
-  placeholderText: {
-    color: '#7FA293',
-    fontWeight: '600',
-  },
-  disabledSelector: {
-    backgroundColor: '#E4ECE8',
-    borderColor: '#E1E9E5',
-    opacity: 0.6,
-  },
-  input: {
-    flex: 1,
-    color: '#1A2B23',
-    paddingHorizontal: 16,
-    height: '100%',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // --- ALLERGENS SELECTION CHIPS ---
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 14,
-    marginLeft: 2,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1.5,
-  },
-  chipInactive: {
-    backgroundColor: baseColor,
-    borderColor: '#E1E9E5',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  chipActive: {
-    backgroundColor: logoGreen,
-    borderColor: logoGreen,
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#41544B',
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-
-  // --- FIXED NAVIGATION BOTTOM HOOD ---
-  fixedFooter: {
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-    paddingTop: 8,
-    backgroundColor: baseColor,
-    borderTopWidth: 1,
-    borderColor: '#E1E9E5',
-  },
-  buttonBase: {
-    paddingVertical: 14,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    height: 50,
-  },
-  buttonUnpressed: {
-    backgroundColor: '#53B28E',
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.95,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  buttonPressed: {
-    backgroundColor: '#3E836A',
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }],
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  buttonTextPressed: {
-    color: '#9EDEC4',
-  },
-
-  // --- POPUP SELECTOR INTERFACES ---
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  pickerModalCard: {
-    backgroundColor: baseColor,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    height: '75%',
-    width: '100%',
-  },
-  pickerHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderColor: '#D4E2DC',
-    paddingBottom: 12,
-  },
-  pickerModalTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#21332A',
-    letterSpacing: 1,
-  },
-  pickerContentWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    width: '100%',
-  },
-  optionsList: {
-    flex: 1,
-  },
-  optionsListContent: {
-    paddingBottom: 60,
-  },
-  pickerItemRow: {
-    height: ITEM_HEIGHT,
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#E1E9E5',
-  },
-  pickerItemText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A2B23',
-  },
-
-  // --- PREMIUM OVERLAY DIALOGUE (CONFIRMATION SHEET STYLE) ---
-  confirmOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(26, 32, 44, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  confirmModalCard: {
-    width: '100%',
-    backgroundColor: baseColor,
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: clearWhiteHighlight,
-  },
-  confirmIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: '#E2EFEA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  confirmTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#21332A',
-    marginBottom: 6,
-  },
-  confirmSubtitle: {
-    fontSize: 13,
-    color: '#556B60',
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  confirmDataBlock: {
-    width: '100%',
-    backgroundColor: '#E4ECE8',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
-    marginBottom: 24,
-  },
-  confirmDataLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#41544B',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  confirmDataValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A2B23',
-    lineHeight: 20,
-  },
-  confirmDivider: {
-    height: 1,
-    backgroundColor: '#D4E2DC',
-    marginVertical: 12,
-  },
-  confirmActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  confirmButtonBase: {
-    flex: 1,
-    height: 48,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmButtonSecondary: {
-    backgroundColor: baseColor,
-    marginRight: 12,
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-  },
-  confirmButtonPrimary: {
-    backgroundColor: logoGreen,
-  },
-  confirmButtonTextSecondary: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#556B60',
-  },
-  confirmButtonTextPrimary: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-});
+// Global Core Flat Design Tokens
+const baseColor = '#F8FAFC';
+

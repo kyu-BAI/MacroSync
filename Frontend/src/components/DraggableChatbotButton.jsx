@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  StyleSheet,
   TouchableOpacity,
   Animated,
   PanResponder,
@@ -8,27 +7,30 @@ import {
   Platform
 } from 'react-native';
 import { BotMessageSquare } from 'lucide-react-native';
+import { styles } from './DraggableChatbotButton.styles';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Logo colors
-const logoGreen = '#4EA685';
-const logoDarkShadow = '#37745D';
-const logoLightHighlight = '#65D8AD';
-
 // Spacing bounds to clear header and absolute bottom navigation bar
-const NAV_BAR_HEIGHT = Platform.OS === 'ios' ? 116 : 98;
 const TOP_BOUND = Platform.OS === 'ios' ? 80 : 60;
-const BOTTOM_BOUND = screenHeight - NAV_BAR_HEIGHT - 65;
+const BOTTOM_BOUND = screenHeight - (Platform.OS === 'ios' ? 168 : 158);
 const LEFT_BOUND = 16;
 const RIGHT_BOUND = screenWidth - 56 - 16;
 
 export default function DraggableChatbotButton({ onPress }) {
-  // Initialize position to bottom right
+  // Initialize position to bottom right, sitting neatly above bottom nav bar
   const pan = useRef(new Animated.ValueXY({
     x: RIGHT_BOUND,
-    y: BOTTOM_BOUND - 20
+    y: BOTTOM_BOUND
   })).current;
+
+  // Sync animation position whenever BOTTOM_BOUND changes
+  useEffect(() => {
+    pan.setValue({
+      x: RIGHT_BOUND,
+      y: BOTTOM_BOUND
+    });
+  }, [BOTTOM_BOUND]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -89,31 +91,4 @@ export default function DraggableChatbotButton({ onPress }) {
       </TouchableOpacity>
     </Animated.View>
   );
-}
-
-const styles = StyleSheet.create({
-  floatingChatbotContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    zIndex: 9999,
-    width: 56,
-    height: 56,
-  },
-  chatbotFloatingButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    borderWidth: 1.5,
-    borderColor: logoLightHighlight,
-    // Premium soft Neumorphic shadow styling
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-  }
-});
+}

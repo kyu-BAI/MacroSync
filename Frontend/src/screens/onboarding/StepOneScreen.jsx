@@ -1,43 +1,46 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
+import { getStyles } from './StepOneScreen.styles';
 
 // ==========================================
 // THEME CONFIGURATION & BRANDING TOKENS
 // ==========================================
 const COLORS = {
-  base: '#F0F4F2',
+  base: '#F8FAFC',
   whiteHighlight: '#FFFFFF',
-  softGreenShadow: '#AEC2B7',
-  logoGreen: '#4EA685',
-  logoDarkShadow: '#37745D',
-  logoLightHighlight: '#65D8AD',
-  textDark: '#1A2B23',
-  textMuted: '#556B60',
-  textPlaceholder: '#7FA293',
-  borderLight: '#D4E2DC',
-  borderItem: '#E1E9E5',
-  bgPill: '#E4ECE8',
+  logoGreen: '#10B981',
+  textDark: '#0F172A',
+  textMuted: '#64748B',
+  textPlaceholder: '#94A3B8',
+  borderLight: '#E2E8F0',
+  borderItem: '#E2E8F0',
+  bgPill: '#F1F5F9',
   
   // BMI Status Colors
-  underweight: '#2B6CB0',
-  normal: '#4EA685',
-  overweight: '#C05621',
-  obese: '#C53030'
+  underweight: '#10B981',
+  normal: '#10B981',
+  overweight: '#64748B',
+  obese: '#64748B'
 };
 
 export default function StepOneScreen({ onNext }) {
+  const { showAlert } = useCustomAlert();
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   // --- Core Inputs ---
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -57,11 +60,7 @@ export default function StepOneScreen({ onNext }) {
   // BUSINESS LOGIC & CONVERSIONS (DEBUG HUB)
   // ==========================================
   const triggerSafetyWarning = (title, message) => {
-    Alert.alert(
-      title,
-      message,
-      [{ text: "Acknowledge", fontWeight: '800' }]
-    );
+    showAlert(title, message);
   };
 
   const getWeightInKg = () => {
@@ -114,9 +113,16 @@ export default function StepOneScreen({ onNext }) {
       triggerSafetyWarning("Missing Metrics", "Please fill in your age before proceeding.");
       return;
     }
-    if (!heightFt.trim() && !heightIn.trim()) {
-      triggerSafetyWarning("Missing Metrics", "Please specify your height in feet and inches.");
-      return;
+    if (heightUnit === 'cm') {
+      if (!height.trim()) {
+        triggerSafetyWarning("Missing Metrics", "Please specify your height in centimeters.");
+        return;
+      }
+    } else {
+      if (!heightFt.trim() && !heightIn.trim()) {
+        triggerSafetyWarning("Missing Metrics", "Please specify your height in feet and inches.");
+        return;
+      }
     }
     if (!weight.trim()) {
       triggerSafetyWarning("Missing Metrics", "Please fill in your weight metric.");
@@ -170,8 +176,10 @@ export default function StepOneScreen({ onNext }) {
 
             {/* FIELD BLOCK: AGE */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Age</Text>
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.rowLabelWrapper}>
+                <Text style={styles.inputLabel}>Age</Text>
+              </View>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your age"
@@ -191,7 +199,7 @@ export default function StepOneScreen({ onNext }) {
               </View>
 
               <View style={styles.splitInputRow}>
-                <View style={[styles.neumorphicInputInset, { flex: 1, marginRight: 10 }]}>
+                <View style={[styles.flatInputField, { flex: 1, marginRight: 10 }]}>
                   <TextInput
                     style={styles.input}
                     placeholder="ft"
@@ -202,7 +210,7 @@ export default function StepOneScreen({ onNext }) {
                     autoCorrect={false}
                   />
                 </View>
-                <View style={[styles.neumorphicInputInset, { flex: 1 }]}>
+                <View style={[styles.flatInputField, { flex: 1 }]}>
                   <TextInput
                     style={styles.input}
                     placeholder="in"
@@ -222,7 +230,7 @@ export default function StepOneScreen({ onNext }) {
                 <Text style={styles.inputLabel}>Weight (kg)</Text>
               </View>
               
-              <View style={styles.neumorphicInputInset}>
+              <View style={styles.flatInputField}>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter weight in kg"
@@ -273,219 +281,4 @@ export default function StepOneScreen({ onNext }) {
     </SafeAreaView>
   );
 }
-
-// ==========================================
-// STYLE DEFINITIONS SYSTEM Namespace Architecture
-// ==========================================
-const styles = StyleSheet.create({
-  // --- Architectural Core Blocks ---
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.base 
-  },
-  scrollContainer: { 
-    flexGrow: 1, 
-    justifyContent: 'center', 
-    paddingHorizontal: 24, 
-    paddingVertical: 16 
-  },
-  
-  // --- Typography Header Formatting ---
-  headerSection: { 
-    marginBottom: 35, 
-    alignItems: 'center', 
-    width: '100%' 
-  },
-  stepIndicator: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: COLORS.logoGreen, 
-    letterSpacing: 2, 
-    textTransform: 'uppercase' 
-  },
-  brandTitle: { 
-    fontSize: 42, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    letterSpacing: -0.5, 
-    marginTop: 6 
-  },
-  brandSubtitle: { 
-    fontSize: 14, 
-    color: COLORS.textMuted, 
-    marginTop: 10, 
-    textAlign: 'center', 
-    lineHeight: 22, 
-    fontWeight: '700' 
-  },
-  
-  // --- Surface Panel Structures ---
-  formCard: {
-    backgroundColor: COLORS.base,
-    borderRadius: 40, 
-    padding: 24,
-    shadowColor: COLORS.softGreenShadow,
-    shadowOffset: { width: 14, height: 14 }, 
-    shadowOpacity: 1,
-    shadowRadius: 16, 
-    elevation: 12,    
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: COLORS.whiteHighlight,
-    borderLeftColor: COLORS.whiteHighlight,
-  },
-  inputGroup: { 
-    marginBottom: 22 
-  },
-  rowLabelWrapper: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 8, 
-    paddingHorizontal: 4 
-  },
-  inputLabel: { 
-    color: '#41544B', 
-    fontSize: 11, 
-    fontWeight: '800', 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2 
-  },
-  splitInputRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center' 
-  },
-  
-  // --- Unit Selector Controls ---
-  togglePillContainer: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.bgPill,
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight
-  },
-  toggleBtn: { 
-    paddingVertical: 4, 
-    paddingHorizontal: 10, 
-    borderRadius: 9 
-  },
-  toggleBtnActive: { 
-    backgroundColor: COLORS.logoGreen 
-  },
-  toggleBtnText: { 
-    fontSize: 10, 
-    fontWeight: '800', 
-    color: COLORS.textMuted 
-  },
-  toggleBtnTextActive: { 
-    color: COLORS.whiteHighlight 
-  },
-
-  // --- Core Form Elements ---
-  neumorphicInputInset: {
-    backgroundColor: COLORS.base,
-    borderRadius: 24, 
-    borderWidth: 1.5, 
-    borderColor: COLORS.borderLight,
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
-  },
-  input: { 
-    flex: 1, 
-    color: COLORS.textDark, 
-    paddingHorizontal: 18, 
-    paddingVertical: 15, 
-    fontSize: 16, 
-    fontWeight: '700' 
-  },
-  
-  // --- Metrics Display Panel Layouts ---
-  bmiPanelRecess: {
-    backgroundColor: COLORS.base,
-    borderRadius: 24,
-    padding: 20,
-    marginTop: 6,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: -3, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 110,
-  },
-  bmiContentCenter: { 
-    alignItems: 'center', 
-    justifyContent: 'center' 
-  },
-  bmiLabel: { 
-    fontSize: 11, 
-    fontWeight: '800', 
-    color: COLORS.textMuted, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1 
-  },
-  bmiNumber: { 
-    fontSize: 38, 
-    fontWeight: '900', 
-    color: COLORS.textDark, 
-    marginVertical: 4 
-  },
-  bmiCategory: { 
-    fontSize: 15, 
-    fontWeight: '800' 
-  },
-  bmiPlaceholder: { 
-    color: COLORS.textPlaceholder, 
-    fontSize: 13, 
-    fontWeight: '700', 
-    textAlign: 'center', 
-    lineHeight: 20 
-  },
-  
-  // --- Dispatch Button States ---
-  buttonBase: { 
-    paddingVertical: 16, 
-    borderRadius: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    width: '100%', 
-    marginTop: 16 
-  },
-  buttonUnpressed: {
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: COLORS.logoLightHighlight,
-    borderLeftColor: COLORS.logoLightHighlight,
-    shadowColor: COLORS.logoDarkShadow,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  buttonPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: COLORS.logoDarkShadow, 
-    transform: [{ translateY: 2 }] 
-  },
-  buttonText: { 
-    color: COLORS.whiteHighlight, 
-    fontSize: 16, 
-    fontWeight: '800', 
-    letterSpacing: 0.5, 
-    textShadowColor: COLORS.logoDarkShadow, 
-    textShadowOffset: { width: 0, height: 1 }, 
-    textShadowRadius: 2 
-  },
-  buttonTextPressed: { 
-    color: '#9EDEC4' 
-  },
-});
+

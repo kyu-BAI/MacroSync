@@ -12,53 +12,50 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF"
       },
-      "package": "com.anonymous.Frontend",
+      "package": "com.kyubibiasalah.macrosync",
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font",
-      "expo-asset",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0F172A",
           "android": {
             "image": "./assets/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 150
           }
         }
       ],
-      "expo-router",
-      "expo-image",
       "expo-status-bar",
       [
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "enableProguardInReleaseBuilds": false,
+            "enableShrinkResourcesInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": false
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": false
     },
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6bd1dc63-e86a-459c-9bf3-8501b5231be1"
+        "projectId": "d9200fb9-8403-4190-a2ab-a40c6d5b062a"
       }
     },
-    "owner": "kyubi.karlsefni"
+    "owner": "kyubi.biasalah"
   }
 }

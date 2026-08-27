@@ -1,13 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { CustomAlertProvider } from './src/context/CustomAlertContext';
+import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { 
-  StyleSheet, 
   View,
   Alert,
   Text,
   Linking,
+  LogBox,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
-import { recommendedRecipesPool } from './src/data/recipes';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+LogBox.ignoreLogs([
+  'Cannot connect to Expo CLI',
+  'ImagePicker.MediaTypeOptions',
+  'The <CameraView> component does not support children',
+]);
 import NetInfo from '@react-native-community/netinfo';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -16,6 +26,7 @@ import {
   saveUserId,
   getSavedUserId,
   clearSavedUserId,
+  isRememberMeEnabled,
   addToSyncQueue,
   syncQueueToBackend,
 } from './src/services/OfflineStorage';
@@ -44,12 +55,16 @@ import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
+import OfflineBanner from "./src/components/OfflineBanner";
+import { styles } from "./App.styles";
 import API_URL from "./src/screens/config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from './src/services/NotificationService';
+import { Pedometer } from 'expo-sensors';
 
 
 function MainApp() {
+  const { theme } = useTheme();
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [activeTab, setActiveTab] = useState('DASHBOARD');
@@ -90,10 +105,64 @@ function MainApp() {
   });
 
   const [dailyExercise, setDailyExercise] = useState({
-    caloriesBurned: 320,
-    activeMinutes: 45,
-    recentExercise: 'Full Body HIIT - 45 mins'
+    caloriesBurned: 0,
+    activeMinutes: 0,
+    steps: 0,
+    targetSteps: 10000,
+    recentExercise: 'None'
   });
+
+  // ── Real Pedometer Step Tracking ─────────────────────────────────────────
+  useEffect(() => {
+    let subscription = null;
+
+    const startPedometer = async () => {
+      const isAvailable = await Pedometer.isAvailableAsync();
+      if (!isAvailable) {
+        console.log('Pedometer not available on this device/emulator.');
+        return;
+      }
+
+      // Count steps from midnight today
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(0, 0, 0, 0);
+
+      // Get the total steps since midnight on mount (iOS supports historic date range queries)
+      if (Platform.OS === 'ios') {
+        try {
+          const result = await Pedometer.getStepCountAsync(midnight, now);
+          if (result?.steps !== undefined) {
+            setDailyExercise(prev => ({ ...prev, steps: result.steps, _midnightBase: result.steps }));
+          }
+        } catch (e) {
+          if (__DEV__) console.log('Could not get historic step count:', e);
+        }
+      }
+
+      // Subscribe to live step updates (supported on both Android & iOS)
+      try {
+        subscription = Pedometer.watchStepCount(result => {
+          if (result?.steps !== undefined) {
+            setDailyExercise(prev => {
+              const baseSteps = prev._midnightBase || 0;
+              return { ...prev, steps: baseSteps + result.steps };
+            });
+          }
+        });
+      } catch (err) {
+        if (__DEV__) console.log('Pedometer watch error:', err);
+      }
+    };
+
+    startPedometer();
+
+    return () => {
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      }
+    };
+  }, []);
 
   // Persisted Dashboard Local State
   const [globalLoggedWeight, setGlobalLoggedWeight] = useState(null);
@@ -164,7 +233,8 @@ function MainApp() {
       name: data.profile.name || 'User',
       email: data.profile.email || prev.email || '',
       profileImage: data.profile.profileImage || null,
-      isPremium: !!data.nutrition.isPremium
+      isPremium: !!data.nutrition.isPremium,
+      streakDays: data.streakDays || 0
     }));
   };
 
@@ -213,7 +283,17 @@ function MainApp() {
           setUserId(uid);
           setUserProfile({ name: name, email: email });
         }
-        setCurrentScreen("DASHBOARD");
+        if (data.is_new_user) {
+          setResetEmail(email);
+          setTempPassword(data.temp_password || '');
+          setGoogleIsLoginOtp(false);
+          setCurrentScreen("VERIFY_SIGNUP");
+        } else if (data.is_onboarded === true) {
+          if (uid) saveUserId(uid);
+          setCurrentScreen("DASHBOARD");
+        } else {
+          setCurrentScreen("STEP_ONE");
+        }
       } else {
         Alert.alert("Authentication Failed", data.detail || "Google sign-in failed.");
       }
@@ -301,13 +381,18 @@ function MainApp() {
       try {
         const granted = await NotificationService.requestPermissions();
         if (granted) {
-          console.log("Native notifications permission granted. Scheduling daily reminders...");
-          await NotificationService.scheduleDailyReminders();
+          if (__DEV__) console.log("Native notifications permission granted. Scheduling daily reminders...");
+          let prefs = { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+          try {
+            const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+            if (stored) prefs = JSON.parse(stored);
+          } catch (e) {}
+          await NotificationService.scheduleDailyReminders(prefs);
         } else {
-          console.log("Native notifications permission denied.");
+          if (__DEV__) console.log("Native notifications permission denied.");
         }
       } catch (err) {
-        console.log("Failed to initialize native notifications:", err);
+        if (__DEV__) console.log("Failed to initialize native notifications:", err);
       }
     };
     initNotifications();
@@ -348,6 +433,46 @@ function MainApp() {
     saveNotifications();
   }, [notifications, userId]);
 
+  // ── Load & Save Account-Based Chat History ────────────────────────────────
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (userId) {
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const cached = await AsyncStorage.getItem(`ms_chat_history_${userId}_${todayStr}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setChatMessages(parsed);
+            } else {
+              setChatMessages([]);
+            }
+          } else {
+            // New day — clear yesterday's chat history so user starts fresh today
+            setChatMessages([]);
+          }
+        } catch (err) {
+          console.log("Error loading chat history:", err);
+        }
+      }
+    };
+    loadChatHistory();
+  }, [userId]);
+
+  useEffect(() => {
+    const saveChatHistory = async () => {
+      if (userId && Array.isArray(chatMessages)) {
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          await AsyncStorage.setItem(`ms_chat_history_${userId}_${todayStr}`, JSON.stringify(chatMessages));
+        } catch (err) {
+          console.log("Error saving chat history:", err);
+        }
+      }
+    };
+    saveChatHistory();
+  }, [chatMessages, userId]);
+
   // ── Premium Status Upgrade Notification Listener ───────────────────────────
   const prevIsPremiumRef = useRef(null);
   useEffect(() => {
@@ -377,21 +502,63 @@ function MainApp() {
   }, [userId, currentScreen]);
 
   useEffect(() => {
-    if (userId) {
-      const shuffled = [...recommendedRecipesPool].sort(() => 0.5 - Math.random());
-      setSessionRecipes(shuffled.slice(0, 8));
-    } else {
-      setSessionRecipes([]);
-    }
-  }, [userId]);
+    const fetchRecommendedMeals = async () => {
+      if (!userId) return;
+
+      const CACHE_KEY = `ms_meals_cache_${userId}`;
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // 1. Load from cache instantly first for 0ms load speed
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
+            setSessionRecipes(parsed.meals);
+          }
+        }
+      } catch (e) {}
+
+      // 2. Fetch fresh recommendations from backend to ensure up-to-date allergy safety & analytics
+      try {
+        const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setSessionRecipes(data);
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching AI recommended meals:", err);
+      }
+    };
+
+    fetchRecommendedMeals();
+  }, [userId, currentScreen]);
 
   // ----------------------------------------------------
   // INITIAL INITIALIZATION STATE VIEWPORT CONTROL
   // ----------------------------------------------------
+  const handleAppReady = async () => {
+    try {
+      const savedId = await getSavedUserId();
+      if (savedId && typeof savedId === 'string' && savedId.trim() !== '') {
+        setUserId(savedId);
+        await fetchDashboardData(savedId);
+        setCurrentScreen('DASHBOARD');
+        return;
+      }
+    } catch (e) {
+      console.log('Error during auto-login check:', e);
+    }
+    setCurrentScreen('LOGIN');
+  };
+
   if (currentScreen === 'SPLASH') {
     return (
       <SplashScreen 
-        onAppReady={() => setCurrentScreen('LOGIN')} 
+        onAppReady={handleAppReady} 
       />
     );
   }
@@ -403,7 +570,17 @@ function MainApp() {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
-        onLoginSuccess={() => setCurrentScreen("DASHBOARD")}
+        onLoginSuccess={(loggedInUserId, isOnboarded) => {
+          if (loggedInUserId) {
+            setUserId(loggedInUserId);
+            saveUserId(loggedInUserId);
+          }
+          if (isOnboarded === true) {
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
+        }}
         onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
         setCurrentUserId={(id) => setUserId(id)} 
         onGoogleOtpSent={(isNewUser, email, name, dummyPassword, isLoginOtp) => {
@@ -426,16 +603,19 @@ function MainApp() {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(newUserId, newName, newEmail, newPassword) => {
+        onSignUpSuccess={(newUserId, newName, newEmail, newPassword, isOnboarded) => {
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
-          if (newPassword === null) {
-            // Google Sign Up skips verification
-            setUserId(newUserId); 
+          if (newUserId) {
+            setUserId(newUserId);
+            saveUserId(newUserId);
             setUserProfile({ name: newName || 'User', email: newEmail || '' });
+          }
+          if (isOnboarded === true) {
+            setCurrentScreen("DASHBOARD");
+          } else if (newPassword === null) {
             setCurrentScreen("STEP_ONE");
           } else {
-            // Normal Sign Up goes to Verify
-            setUserProfile({ name: newName || 'User', email: newEmail || '' });
+            // First time signup / Google OTP signup -> goes to Verify
             setResetEmail(newEmail || '');
             setTempPassword(newPassword || '');
             setCurrentScreen("VERIFY_SIGNUP");
@@ -448,13 +628,19 @@ function MainApp() {
   if (currentScreen === "VERIFY_SIGNUP") {
     return (
       <VerifyEmailScreen
-        email={resetEmail}
-        name={userProfile.name}
-        password={tempPassword}
+        email={resetEmail || userProfile?.email || ''}
+        name={userProfile?.name || 'User'}
+        password={tempPassword || ''}
         isLogin={googleIsLoginOtp}
-        onVerified={(newUserId) => {
+        onVerified={(newUserId, isOnboarded) => {
+          if (!newUserId) return;
           setUserId(newUserId);
-          setCurrentScreen("STEP_ONE");
+          saveUserId(newUserId);
+          if (isOnboarded === true) {
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
         }}
         onNavigateBack={() => setCurrentScreen("SIGNUP")}
       />
@@ -466,9 +652,15 @@ function MainApp() {
       <VerifyEmailScreen
         email={resetEmail}
         isLogin={true}
-        onVerified={(newUserId) => {
+        onVerified={(newUserId, isOnboarded) => {
+          if (!newUserId) return;
           setUserId(newUserId);
-          setCurrentScreen("DASHBOARD");
+          saveUserId(newUserId);
+          if (isOnboarded === true) {
+            setCurrentScreen("DASHBOARD");
+          } else {
+            setCurrentScreen("STEP_ONE");
+          }
         }}
         onNavigateBack={() => setCurrentScreen("LOGIN")}
       />
@@ -573,6 +765,7 @@ function MainApp() {
               targetDate: finalData.targetDate || userGoals.targetDate,
             });
           }
+          if (userId) saveUserId(userId);
           setCurrentScreen('DASHBOARD');
         }}
       />
@@ -607,23 +800,90 @@ function MainApp() {
     setActiveTab('DASHBOARD');
   };
 
-  // ── Offline banner shown at top of screen ───────────────────────────────
-  const OfflineBanner = () => {
-    if (isOnline) return null;
-    return (
-      <View style={styles.offlineBanner}>
-        <Text style={styles.offlineBannerText}>
-          {isLoadedFromCache
-            ? '📴 Offline — Showing cached data. Changes will sync when back online.'
-            : '📴 No internet connection. Logs saved and will sync automatically.'}
-        </Text>
-      </View>
-    );
+  const handleLogScannedMeal = async (macros) => {
+    if (!userId) {
+      Alert.alert('Authentication Error', 'You must be logged in to log meals.');
+      return;
+    }
+    const hour = new Date().getHours();
+    let category = 'Breakfast';
+    if (hour >= 11 && hour < 15) category = 'Lunch';
+    else if (hour >= 15 && hour < 18) category = 'Snack';
+    else if (hour >= 18 || hour < 5) category = 'Dinner';
+
+    const mealType = macros.category || macros.mealType || category;
+    const mealId = `meal-${Date.now()}`;
+    const mealPayload = {
+      id: mealId,
+      user_id: userId,
+      name: macros.name || 'Scanned Food',
+      calories: macros.calories || 0,
+      protein: macros.protein || 0,
+      carbs: macros.carbs || 0,
+      fats: macros.fats || 0,
+      mealType: mealType
+    };
+
+    if (!isOnline) {
+      await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+      setDailyNutrition(prev => ({
+        ...prev,
+        consumedCalories: prev.consumedCalories + mealPayload.calories,
+        protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+        carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+        fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+      }));
+      setGlobalLoggedMeals(prev => [...prev, mealPayload]);
+      
+      setNotifications(prev => [{
+        id: `n-${Date.now()}`,
+        title: 'Food Scanned & Logged! 🔍',
+        category: 'meal',
+        time: 'Just Now',
+        read: false,
+        message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
+      }, ...prev]);
+
+      Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/meals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mealPayload),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to log meal');
+      }
+      setDailyNutrition(prev => ({
+        ...prev,
+        consumedCalories: prev.consumedCalories + mealPayload.calories,
+        protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+        carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+        fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+      }));
+      setGlobalLoggedMeals(prev => [...prev, mealPayload]);
+
+      setNotifications(prev => [{
+        id: `n-${Date.now()}`,
+        title: 'Food Scanned & Logged! 🔍',
+        category: 'meal',
+        time: 'Just Now',
+        read: false,
+        message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
+      }, ...prev]);
+    } catch (error) {
+      console.error('Error logging scanned food:', error);
+      Alert.alert('Error', error.message || 'Failed to log meal to server.');
+    }
   };
 
   return (
-    <View style={styles.appContainerRoot}>
-      <OfflineBanner />
+    <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
+      <OfflineBanner isOnline={isOnline} />
       {activeTab === 'DASHBOARD' && (
         <DashboardScreen 
           onTabChange={(tab) => setActiveTab(tab)} 
@@ -631,6 +891,7 @@ function MainApp() {
           userGoals={userGoals}
           dailyNutrition={dailyNutrition}
           dailyExercise={dailyExercise}
+          setDailyExercise={setDailyExercise}
           notifications={notifications}
           setNotifications={setNotifications}
           globalLoggedWeight={globalLoggedWeight}
@@ -682,79 +943,8 @@ function MainApp() {
           onTabChange={(tab) => setActiveTab(tab)} 
           userId={userId}
           userProfile={userProfile}
-          onLogMeal={async (macros) => {
-            if (!userId) {
-              Alert.alert('Authentication Error', 'You must be logged in to log meals.');
-              return;
-            }
-            const mealId = `meal-${Date.now()}`;
-            const mealPayload = {
-              id: mealId,
-              user_id: userId,
-              name: macros.name || 'Scanned Food',
-              calories: macros.calories || 0,
-              protein: macros.protein || 0,
-              carbs: macros.carbs || 0,
-              fats: macros.fats || 0
-            };
-
-            if (!isOnline) {
-              // Offline: queue it and update UI optimistically
-              await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealId]);
-              
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
-              }, ...prev]);
-
-              Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
-              return;
-            }
-
-            try {
-              const response = await fetch(`${API_URL}/meals`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(mealPayload),
-              });
-              if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.detail || 'Failed to log meal');
-              }
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealId]);
-
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
-              }, ...prev]);
-            } catch (error) {
-              console.error('Error logging scanned food:', error);
-              Alert.alert('Error', error.message || 'Failed to log meal to server.');
-            }
-          }}
+          dailyNutrition={dailyNutrition}
+          onLogMeal={handleLogScannedMeal}
         />
       )}
       {activeTab === 'WORKOUT' && (
@@ -800,32 +990,18 @@ function MainApp() {
   );
 }
 
-// Uniform High-Contrast System Theme Setup Tokens
-const baseColor = '#F0F4F2';
 
-const styles = StyleSheet.create({
-  appContainerRoot: {
-    flex: 1,
-    backgroundColor: baseColor
-  },
-  offlineBanner: {
-    backgroundColor: '#92400E',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    zIndex: 999,
-  },
-  offlineBannerText: {
-    color: '#FEF3C7',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-});
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <MainApp />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <CustomAlertProvider>
+            <MainApp />
+          </CustomAlertProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,90 +1,315 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Platform,
   Dimensions,
   Alert,
   Modal,
-  ActivityIndicator
-} from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle, Sparkles } from 'lucide-react-native';
+  ActivityIndicator,
+  Image,
+} from "react-native";
+import {
+  Flame,
+  Clock,
+  Trophy,
+  Play,
+  ArrowLeft,
+  CheckCircle2,
+  RotateCcw,
+  HelpCircle,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react-native";
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { recommendedRecipesPool } from '../../data/recipes';
-import API_URL from '../config/api';
-import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
-export default function WorkoutScreen({ 
-  onTabChange, 
-  userId, 
-  onRefreshDashboard, 
-  isOnline = true, 
-  dailyExercise, 
+import API_URL from "../config/api";
+import {
+  addToSyncQueue,
+  updateCachedDashboardField,
+} from "../../services/OfflineStorage";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
+import AILoadingModal from "../../components/AILoadingModal";
+import { getStyles } from "./WorkoutScreen.styles";
+const logoGreen = "#10B981";
+
+const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
+  if (!setNotifications) return;
+  try {
+    const stored = await AsyncStorage.getItem("@ms_notification_preferences");
+    const prefs = stored
+      ? JSON.parse(stored)
+      : {
+          habitReminders: true,
+          motivationalUpdates: true,
+          personalizedAlerts: true,
+        };
+    const category = newNotif.category;
+    if (
+      (category === "hydration" || category === "meal") &&
+      prefs.habitReminders === false
+    )
+      return;
+    if (
+      (category === "workout" || category === "achievement") &&
+      prefs.motivationalUpdates === false
+    )
+      return;
+    if (category === "smart" && prefs.personalizedAlerts === false) return;
+    setNotifications((prev) => [newNotif, ...prev]);
+  } catch (e) {
+    setNotifications((prev) => [newNotif, ...prev]);
+  }
+};
+
+const getExerciseSource = (exerciseName) => {
+  const EXERCISEDB_BASE =
+    "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/";
+  const DEFAULT_PUSHUP = `${EXERCISEDB_BASE}Pushups/0.jpg`;
+
+  if (!exerciseName) return DEFAULT_PUSHUP;
+  const name = exerciseName.toLowerCase();
+
+  if (
+    name.includes("squat") ||
+    name.includes("leg") ||
+    name.includes("glute") ||
+    name.includes("lower body")
+  ) {
+    return `${EXERCISEDB_BASE}Bodyweight_Squat/0.jpg`;
+  }
+  if (
+    name.includes("plank") ||
+    name.includes("core") ||
+    name.includes("hold") ||
+    name.includes("abs") ||
+    name.includes("burnout")
+  ) {
+    return `${EXERCISEDB_BASE}Plank/0.jpg`;
+  }
+  if (
+    name.includes("lunge") ||
+    name.includes("step") ||
+    name.includes("walk")
+  ) {
+    return `${EXERCISEDB_BASE}Bodyweight_Walking_Lunge/0.jpg`;
+  }
+  if (
+    name.includes("crunch") ||
+    name.includes("situp") ||
+    name.includes("twist") ||
+    name.includes("v-up")
+  ) {
+    return `${EXERCISEDB_BASE}Crunches/0.jpg`;
+  }
+  if (name.includes("dip") || name.includes("tricep") || name.includes("arm")) {
+    return `${EXERCISEDB_BASE}Bench_Dips/0.jpg`;
+  }
+  if (name.includes("climber") || name.includes("mountain")) {
+    return `${EXERCISEDB_BASE}Mountain_Climbers/0.jpg`;
+  }
+  if (
+    name.includes("push") ||
+    name.includes("wall") ||
+    name.includes("chest") ||
+    name.includes("power") ||
+    name.includes("warm") ||
+    name.includes("prep") ||
+    name.includes("blitz") ||
+    name.includes("cardio")
+  ) {
+    return `${EXERCISEDB_BASE}Pushups/0.jpg`;
+  }
+
+  return DEFAULT_PUSHUP;
+};
+
+export default function WorkoutScreen({
+  onTabChange,
+  userId,
+  onRefreshDashboard,
+  isOnline = true,
+  dailyExercise,
   setDailyExercise,
-  setNotifications
+  setNotifications,
+  userGoals,
+  userBaseline,
 }) {
-  const styles = getStyles();
+  const { showAlert } = useCustomAlert();
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
-  const [selectedIntensity, setSelectedIntensity] = useState('All');
-  
+  const [selectedIntensity, setSelectedIntensity] = useState("All");
+
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [expandedInstructions, setExpandedInstructions] = useState({});
 
-  const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
+  const toggleInstructionExpand = (key) => {
+    setExpandedInstructions((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  // --- REST TIMER STATE ---
+  const [restTimer, setRestTimer] = useState(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (isTimerRunning && restTimer > 0) {
+      interval = setInterval(() => {
+        setRestTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (restTimer === 0) {
+      setIsTimerRunning(false);
+      showAlert(
+        "Rest Period Complete! ⏱️",
+        "Ready for your next set or exercise step?",
+      );
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, restTimer]);
+
+  const handleStartRestTimer = (seconds = 45) => {
+    setRestTimer(seconds);
+    setIsTimerRunning(true);
+  };
+
+  const intensityTiers = ["All", "Light", "Moderate", "Intense"];
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
-  const [workoutRoutines, setWorkoutRoutines] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [workoutRoutines, setWorkoutRoutines] = useState([
+    {
+      id: "w1",
+      title: "Full Body Home Blitz",
+      description:
+        "Full-body bodyweight circuit to boost endurance and strength.",
+      duration: "25 min",
+      caloriesBurned: 220,
+      intensity: "Moderate",
+      level: "Beginner",
+      exercisesCount: 5,
+    },
+    {
+      id: "w2",
+      title: "Core Strength & Stability",
+      description: "Quick core routine targeting abs and lower back stability.",
+      duration: "15 min",
+      caloriesBurned: 140,
+      intensity: "Light",
+      level: "Beginner",
+      exercisesCount: 4,
+    },
+    {
+      id: "w3",
+      title: "High Intensity Cardio Burn",
+      description: "Fast-paced cardio movements for maximum calorie burn.",
+      duration: "30 min",
+      caloriesBurned: 310,
+      intensity: "Intense",
+      level: "Intermediate",
+      exercisesCount: 6,
+    },
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
+
+  const handleRegenerateWorkouts = useCallback(async () => {
+    setIsGeneratingWorkout(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/workouts/recommend/${userId || "default"}`,
+        {
+          method: "GET",
+          headers: { "Cache-Control": "no-cache" },
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setWorkoutRoutines(data);
+        const todayStr = new Date().toISOString().split("T")[0];
+        await AsyncStorage.setItem(
+          "ms_workouts_cache",
+          JSON.stringify({
+            userId,
+            date: todayStr,
+            workouts: data,
+          }),
+        );
+        showAlert(
+          "AI Workouts Customized",
+          "Your personalized home routines have been regenerated with AI!",
+        );
+      }
+    } catch (err) {
+      if (__DEV__) console.warn("REGENERATE WORKOUT ERROR:", err);
+      showAlert(
+        "Customization Error",
+        "Failed to customize workouts. Please check your network connection.",
+      );
+    } finally {
+      setIsGeneratingWorkout(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     const loadCachedOrFetchWorkouts = async () => {
       try {
-        setLoading(true);
-        const todayStr = new Date().toISOString().split('T')[0]; // e.g. "2026-07-09"
-        
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
         // 1. Check local cache
-        const cachedRaw = await AsyncStorage.getItem('ms_workouts_cache');
+        const cachedRaw = await AsyncStorage.getItem("ms_workouts_cache");
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (parsed.userId === userId && parsed.date === todayStr && Array.isArray(parsed.workouts)) {
+          if (
+            String(parsed.userId) === String(userId) &&
+            Array.isArray(parsed.workouts) &&
+            parsed.workouts.length > 0
+          ) {
             setWorkoutRoutines(parsed.workouts);
-            setLoading(false);
-            return; // Cache hit!
+            if (parsed.date === todayStr) return; // Fresh cache hit!
           }
         }
-        
-        // 2. Cache miss: Fetch from backend
-        const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
-        if (!res.ok) {
-          throw new Error("Failed to fetch custom workouts");
+
+        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
+        const res = await fetch(
+          `${API_URL}/workouts/recommend/${userId || "default"}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setWorkoutRoutines(data);
+          await AsyncStorage.setItem(
+            "ms_workouts_cache",
+            JSON.stringify({
+              userId,
+              date: todayStr,
+              workouts: data,
+            }),
+          );
         }
-        const data = await res.json();
-        setWorkoutRoutines(data);
-        
-        // 3. Save to local cache
-        const cachePayload = {
-          userId,
-          date: todayStr,
-          workouts: data
-        };
-        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify(cachePayload));
       } catch (err) {
-        console.warn("WORKOUT LOAD/FETCH ERROR:", err);
-      } finally {
-        setLoading(false);
+        if (__DEV__) console.log("WORKOUT SILENT BG FETCH ERROR:", err);
       }
     };
 
     if (userId) {
-      loadCachedOrFetchWorkouts();
+      // Defer heavy fetch until after tab animation completes
+      const timer = setTimeout(() => {
+        loadCachedOrFetchWorkouts();
+      }, 150);
+      return () => clearTimeout(timer);
     } else {
       setLoading(false);
     }
@@ -94,25 +319,59 @@ export default function WorkoutScreen({
   const handlePressOut = () => setIsPressedBtn(null);
 
   const handleStartTutorialEngine = (routine) => {
-    setActiveRoutine(routine);
+    if (!routine) return;
+
+    let tutorials = routine.tutorials;
+    if (!Array.isArray(tutorials) || tutorials.length === 0) {
+      const rTitle = routine.title || "Home Workout";
+      tutorials = [
+        {
+          name: `${rTitle} - Warm-up & Prep`,
+          target: "3 Sets x 45 Seconds",
+          setup:
+            "Stand tall in an open area with knees slightly bent and core engaged.",
+          form: "Maintain steady breathing. Keep movements smooth, controlled, and engage your core throughout.",
+        },
+        {
+          name: `${rTitle} - Main Power Set`,
+          target: "4 Sets x 12 Reps",
+          setup:
+            "Position your feet shoulder-width apart, spine aligned and chest open.",
+          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles at the top.",
+        },
+        {
+          name: `${rTitle} - Burnout & Cool-down`,
+          target: "2 Sets x 60 Seconds",
+          setup:
+            "Lower down onto your yoga mat or clean floor, keeping hands aligned with shoulders.",
+          form: "Hold steady isometric tension, breathing slowly into your diaphragm to regulate heart rate.",
+        },
+      ];
+    }
+
+    setActiveRoutine({
+      ...routine,
+      tutorials,
+      caloriesBurn: routine.caloriesBurn || routine.caloriesBurned || 200,
+    });
     setCurrentStepIndex(0);
   };
 
   const handleExitWorkout = () => {
-    Alert.alert(
-      "Don't Give Up Yet!",
-      "You are on your way to crushing your goals! You must finish the workout to log it.",
+    showAlert(
+      "End Workout Early?",
+      "Are you sure you want to exit? Your current workout progress will not be logged.",
       [
         {
           text: "Keep Going",
-          style: "cancel"
+          style: "cancel",
         },
         {
           text: "Quit Workout",
           style: "destructive",
-          onPress: () => setActiveRoutine(null)
-        }
-      ]
+          onPress: () => setActiveRoutine(null),
+        },
+      ],
     );
   };
 
@@ -121,34 +380,45 @@ export default function WorkoutScreen({
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
       if (!userId) {
-        Alert.alert("Authentication Error", "You must be logged in to log workouts.");
+        showAlert(
+          "Authentication Error",
+          "You must be logged in to log workouts.",
+        );
         return;
       }
 
       // Optimistic UI updates
       const workoutDuration = parseInt(activeRoutine.duration) || 15;
-      let newExercise = null;
+      const workoutSteps = workoutDuration * 100;
+      const newExercise = {
+        caloriesBurned:
+          (dailyExercise?.caloriesBurned || 0) +
+          (activeRoutine?.caloriesBurn || 0),
+        activeMinutes: (dailyExercise?.activeMinutes || 0) + workoutDuration,
+        steps: (dailyExercise?.steps || 0) + workoutSteps,
+        targetSteps: dailyExercise?.targetSteps || 10000,
+        recentExercise: activeRoutine?.title || "Workout",
+      };
+
       if (setDailyExercise) {
-        setDailyExercise(prev => {
-          const next = {
-            caloriesBurned: (prev?.caloriesBurned || 0) + activeRoutine.caloriesBurn,
-            activeMinutes: (prev?.activeMinutes || 0) + workoutDuration,
-            recentExercise: activeRoutine.title
-          };
-          newExercise = next;
-          return next;
-        });
+        setDailyExercise((prev) => ({
+          ...prev,
+          ...newExercise,
+        }));
       }
 
-      if (setNotifications && activeRoutine) {
-        setNotifications(prev => [{
-          id: `n-${Date.now()}`,
-          title: 'Workout Complete! 🔥',
-          category: 'achievement',
-          time: 'Just Now',
-          read: false,
-          message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`
-        }, ...prev]);
+      if (activeRoutine) {
+        await pushNotificationIfAllowed(
+          {
+            id: `n-${Date.now()}`,
+            title: "Workout Completed! 🏋️‍♂️",
+            category: "workout",
+            time: "Just Now",
+            read: false,
+            message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`,
+          },
+          setNotifications,
+        );
       }
 
       const workoutPayload = {
@@ -156,92 +426,86 @@ export default function WorkoutScreen({
         user_id: userId,
         name: activeRoutine.title,
         calories_burned: activeRoutine.caloriesBurn,
-        active_minutes: workoutDuration
+        active_minutes: workoutDuration,
       };
 
       if (!isOnline) {
-        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        await addToSyncQueue({ type: "LOG_WORKOUT", payload: workoutPayload });
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
-        Alert.alert(
+        showAlert(
           "Workout Complete! (Offline)",
           `Awesome work! You crushed "${activeRoutine?.title}". Since you are offline, it was saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
         return;
       }
 
       try {
         const response = await fetch(`${API_URL}/workouts`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(workoutPayload),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to log workout on server');
+          throw new Error("Failed to log workout on server");
         }
 
         if (onRefreshDashboard) {
           onRefreshDashboard();
         }
 
-        Alert.alert(
+        showAlert(
           "Workout Complete!",
           `Awesome work! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
       } catch (error) {
-        console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
-        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        if (__DEV__)
+          console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: "LOG_WORKOUT", payload: workoutPayload });
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
-        Alert.alert(
+        showAlert(
           "Workout Saved Locally",
           `Could not reach the server. "${activeRoutine?.title}" has been saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null), fontWeight: '900' }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
       }
     }
   };
 
-  const filteredWorkouts = workoutRoutines.filter(workout => {
-    return selectedIntensity === 'All' || workout.intensity === selectedIntensity;
-  });
-
-  if (loading) {
+  const filteredWorkouts = workoutRoutines.filter((workout) => {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: baseColor }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
-        <View style={styles.loaderOuterNeu}>
-          <ActivityIndicator size="large" color={logoGreen} />
-        </View>
-        <Text style={styles.loaderTextTitle}>AI Trainer Active</Text>
-        <Text style={styles.loaderTextDesc}>Tailoring today's routines to help you crush your goal weight...</Text>
-      </View>
+      selectedIntensity === "All" || workout.intensity === selectedIntensity
     );
-  }
+  });
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-      
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent={true}
+      />
+
       {/* ── WORKOUT TUTORIAL PLAYER (FULL SCREEN MODAL) ── */}
-      <Modal 
-        visible={activeRoutine !== null} 
-        transparent={false} 
-        animationType="slide" 
+      <Modal
+        visible={activeRoutine !== null}
+        transparent={false}
+        animationType="slide"
         onRequestClose={handleExitWorkout}
       >
         {activeRoutine && (
           <View style={styles.playerWrapper}>
             {/* PLAYER HEADER AREA */}
             <View style={styles.playerHeaderRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.playerBackNeuButton}
                 activeOpacity={0.8}
                 onPress={handleExitWorkout}
@@ -249,40 +513,190 @@ export default function WorkoutScreen({
                 <ArrowLeft color={logoGreen} size={20} strokeWidth={2.5} />
               </TouchableOpacity>
               <View style={styles.playerHeaderCenterText}>
-                <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
-                <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
+                <Text style={styles.playerRoutineSubTitle}>
+                  {activeRoutine.title}
+                </Text>
+                <Text style={styles.playerStepIndicator}>
+                  Exercise {currentStepIndex + 1} of{" "}
+                  {activeRoutine.tutorials.length}
+                </Text>
               </View>
-              <HelpCircle color="#7FA293" size={22} />
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                }}
+                onPress={() => handleStartRestTimer(45)}
+                activeOpacity={0.7}
+              >
+                <Clock color={logoGreen} size={18} />
+              </TouchableOpacity>
+            </View>
+
+            {/* PROGRESS BAR TRACK */}
+            <View
+              style={{
+                height: 4,
+                backgroundColor: isDarkMode ? "#334155" : "#E2E8F0",
+                width: "100%",
+                marginBottom: 12,
+              }}
+            >
+              <View
+                style={{
+                  height: "100%",
+                  backgroundColor: logoGreen,
+                  width: `${((currentStepIndex + 1) / activeRoutine.tutorials.length) * 100}%`,
+                  borderRadius: 2,
+                }}
+              />
             </View>
 
             {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
             <View style={styles.playerMainCard}>
-              
-              {/* ANIMATION COMPONENT PLACEHOLDER FRAME */}
-              <View style={styles.animationPlaceholderFrame}>
-                <SportShoe color={logoGreen} size={64} strokeWidth={1.5} style={styles.placeholderAnimateIcon} />
-                <View style={styles.liveActivityBadge}>
+              {/* TUTORIAL STATUS PILL */}
+              <View style={{ alignItems: "center", marginBottom: 12 }}>
+                <View
+                  style={[
+                    styles.liveActivityBadge,
+                    { position: "relative", top: 0, left: 0 },
+                  ]}
+                >
                   <View style={styles.pulseDot} />
-                  <Text style={styles.liveBadgeText}>HOME TUTORIAL ACTIVE</Text>
+                  <Text style={styles.liveBadgeText}>
+                    {isTimerRunning
+                      ? `REST TIMER: 00:${restTimer < 10 ? "0" : ""}${restTimer}`
+                      : "TUTORIAL GUIDE ACTIVE"}
+                  </Text>
                 </View>
               </View>
 
-              {/* EXERCISE NAMES & METRIC SCORES */}
-              <Text style={styles.playerExerciseTitle}>{activeRoutine.tutorials[currentStepIndex].name}</Text>
-              <View style={styles.targetMetricChipBox}>
-                <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
+              {/* EXERCISE TITLE & METRIC SCORES */}
+              <Text
+                style={[
+                  styles.playerExerciseTitle,
+                  {
+                    textAlign: "center",
+                    fontSize: 22,
+                    fontWeight: "900",
+                    marginBottom: 10,
+                  },
+                ]}
+              >
+                {activeRoutine.tutorials[currentStepIndex].name}
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                <View style={styles.targetMetricChipBox}>
+                  <Trophy
+                    color="#FFFFFF"
+                    size={14}
+                    fill="#FFFFFF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.targetMetricChipText}>
+                    {activeRoutine.tutorials[currentStepIndex].target}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.targetMetricChipBox,
+                    { backgroundColor: isTimerRunning ? "#F59E0B" : "#0EA5E9" },
+                  ]}
+                  onPress={() =>
+                    isTimerRunning
+                      ? setIsTimerRunning(false)
+                      : handleStartRestTimer(45)
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Clock color="#FFFFFF" size={14} style={{ marginRight: 6 }} />
+                  <Text style={styles.targetMetricChipText}>
+                    {isTimerRunning
+                      ? `Rest: ${restTimer}s`
+                      : "⏱️ 45s Rest Timer"}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.playerGlassDivider} />
 
-              {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
-                <Text style={styles.instructionSectionTitleLabel}>How to Set Up:</Text>
-                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
-                
-                <Text style={[styles.instructionSectionTitleLabel, { marginTop: 14 }]}>Proper Execution Form:</Text>
-                <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+              {/* FULL UNABBREVIATED INSTRUCTION MANUAL TEXTS (NO SHOW MORE / SHOW LESS) */}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.instructionsTextScroll}
+              >
+                <View
+                  style={{
+                    backgroundColor:
+                      theme?.surface || (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 12,
+                    borderWidth: 1.2,
+                    borderColor:
+                      theme?.border || (isDarkMode ? "#334155" : "#E2E8F0"),
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.instructionSectionTitleLabel,
+                      { color: logoGreen, marginBottom: 6 },
+                    ]}
+                  >
+                    📍 How to Set Up:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.instructionParagraphText,
+                      { fontSize: 13, lineHeight: 19 },
+                    ]}
+                  >
+                    {activeRoutine.tutorials[currentStepIndex].setup}
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor:
+                      theme?.surface || (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 12,
+                    borderWidth: 1.2,
+                    borderColor:
+                      theme?.border || (isDarkMode ? "#334155" : "#E2E8F0"),
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.instructionSectionTitleLabel,
+                      { color: "#0EA5E9", marginBottom: 6 },
+                    ]}
+                  >
+                    💪 Proper Execution Form:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.instructionParagraphText,
+                      { fontSize: 13, lineHeight: 19 },
+                    ]}
+                  >
+                    {activeRoutine.tutorials[currentStepIndex].form}
+                  </Text>
+                </View>
               </ScrollView>
 
               <View style={styles.playerGlassDivider} />
@@ -290,37 +704,51 @@ export default function WorkoutScreen({
               {/* CONTROLS TOGGLE HUB BUTTONS */}
               <View style={styles.playerControlActionRow}>
                 {currentStepIndex > 0 && (
-                  <TouchableOpacity 
-                    style={styles.playerSecondaryNeuActionBtn} 
+                  <TouchableOpacity
+                    style={styles.playerSecondaryNeuActionBtn}
                     activeOpacity={0.8}
                     onPress={() => setCurrentStepIndex(currentStepIndex - 1)}
                   >
-                    <RotateCcw color="#556B60" size={16} style={{ marginRight: 4 }} />
-                    <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
+                    <RotateCcw
+                      color={theme?.textSecondary || "#64748B"}
+                      size={16}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={styles.playerSecondaryActionBtnText}>
+                      Previous
+                    </Text>
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity 
-                  style={[styles.playerPrimaryActionBtn, { flex: currentStepIndex === 0 ? 1 : 1.3 }]} 
+                <TouchableOpacity
+                  style={[
+                    styles.playerPrimaryActionBtn,
+                    { flex: currentStepIndex === 0 ? 1 : 1.3 },
+                  ]}
                   activeOpacity={0.8}
                   onPress={handleNextStep}
                 >
-                  <CheckCircle2 color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                  <CheckCircle2
+                    color="#FFFFFF"
+                    size={16}
+                    style={{ marginRight: 6 }}
+                  />
                   <Text style={styles.playerPrimaryActionBtnText}>
-                    {currentStepIndex === activeRoutine.tutorials.length - 1 ? 'Complete Workout' : 'Next Exercise Step'}
+                    {currentStepIndex === activeRoutine.tutorials.length - 1
+                      ? "Complete Workout"
+                      : "Next Exercise Step"}
                   </Text>
                 </TouchableOpacity>
               </View>
-
             </View>
           </View>
         )}
       </Modal>
 
       {/* STANDARD ROUTINES SELECTION HUB LIST VIEW */}
-      <ScrollView 
-        style={styles.container} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* HEADER BRANDING SECTION */}
@@ -328,31 +756,96 @@ export default function WorkoutScreen({
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Daily Home Workouts</Text>
-            <Text style={styles.subGreeting}>Zero-equipment routines generated dynamically by Gemini AI</Text>
-            <View style={styles.aiBadgeRow}>
-              <Sparkles color={logoGreen} size={12} style={{ marginRight: 6 }} />
-              <Text style={styles.aiBadgeText}>AI RECOMMENDED WORKOUTS</Text>
-            </View>
+            <Text style={styles.subGreeting}>
+              Zero-equipment home workout routines
+            </Text>
           </View>
         </View>
+
+        {/* OVER-EXERCISING / ACTIVE RECOVERY SMART ALERT BANNER */}
+        {((dailyExercise?.caloriesBurned || 0) >= 500 ||
+          (dailyExercise?.activeMinutes || 0) >= 60) && (
+          <View
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: isDarkMode
+                  ? "rgba(245, 158, 11, 0.14)"
+                  : "rgba(245, 158, 11, 0.08)",
+                borderColor: "rgba(245, 158, 11, 0.3)",
+                borderWidth: 1,
+                marginBottom: 16,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              <View
+                style={{
+                  backgroundColor: "#F59E0B",
+                  padding: 8,
+                  borderRadius: 12,
+                  marginRight: 12,
+                  marginTop: 2,
+                }}
+              >
+                <Flame color="#FFFFFF" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "800",
+                    color: "#F59E0B",
+                    marginBottom: 2,
+                  }}
+                >
+                  Active Recovery Recommended 🧘
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: theme?.textSecondary || "#64748B",
+                    lineHeight: 17,
+                  }}
+                >
+                  Great effort today! You burned{" "}
+                  {dailyExercise?.caloriesBurned || 0} kcal across{" "}
+                  {dailyExercise?.activeMinutes || 0} active minutes. Consider
+                  taking a light rest or stretching day tomorrow to prevent
+                  overtraining.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* WORKOUT INTENSITY FILTER CHOICES */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Exercise Intensity Preferences</Text>
+
           <View style={styles.filterButtonGroupRow}>
             {intensityTiers.map((tier) => (
               <TouchableOpacity
                 key={tier}
                 style={[
-                  styles.filterChipButton, 
-                  selectedIntensity === tier ? styles.filterChipActive : styles.filterChipInactive
+                  styles.filterChipButton,
+                  selectedIntensity === tier
+                    ? styles.filterChipActive
+                    : styles.filterChipInactive,
                 ]}
                 onPress={() => setSelectedIntensity(tier)}
               >
-                <Text style={[
-                  styles.filterChipText, 
-                  { color: selectedIntensity === tier ? '#FFFFFF' : '#21332A' }
-                ]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color:
+                        selectedIntensity === tier
+                          ? "#FFFFFF"
+                          : theme?.textPrimary || "#0F172A",
+                    },
+                  ]}
+                >
                   {tier}
                 </Text>
               </TouchableOpacity>
@@ -361,7 +854,9 @@ export default function WorkoutScreen({
         </View>
 
         {/* WORKOUT PLAN CARD LISTINGS */}
-        <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
+        <Text style={styles.sectionLabelTitle}>
+          Your Tailored Home Routines
+        </Text>
 
         {filteredWorkouts.map((workout) => {
           if (!workout) return null;
@@ -370,7 +865,20 @@ export default function WorkoutScreen({
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
+                  <Text style={styles.workoutDescriptionText} numberOfLines={2}>
+                    {(() => {
+                      const desc = workout.description || "";
+                      if (desc.length <= 85) return desc;
+                      const cut = desc.slice(0, 85);
+                      const lastSpace = cut.lastIndexOf(" ");
+                      return (
+                        (lastSpace > 40
+                          ? cut.slice(0, lastSpace)
+                          : cut
+                        ).trim() + "."
+                      );
+                    })()}
+                  </Text>
                 </View>
               </View>
 
@@ -379,565 +887,97 @@ export default function WorkoutScreen({
               {/* QUICK METRICS TILES */}
               <View style={styles.workoutMetricsSummaryGrid}>
                 <View style={styles.metricItemBox}>
-                  <Clock color={logoGreen} size={14} style={styles.metricIconSpacer} />
+                  <View
+                    style={{
+                      backgroundColor: "rgba(14, 165, 233, 0.12)",
+                      borderRadius: 8,
+                      padding: 5,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Clock color={"#0EA5E9"} size={13} />
+                  </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Duration</Text>
-                    <Text style={styles.metricTileValue}>{workout.duration}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.metricItemBox}>
-                  <Flame color="#E53E3E" size={14} style={styles.metricIconSpacer} />
-                  <View>
-                    <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                    <Text style={styles.metricTileValue}>{workout?.caloriesBurn} kcal</Text>
+                    <Text
+                      style={[styles.metricTileValue, { color: "#0EA5E9" }]}
+                    >
+                      {workout.duration}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.metricItemBox}>
-                  <Trophy color="#D69E2E" size={14} style={styles.metricIconSpacer} />
+                  <View
+                    style={{
+                      backgroundColor: "rgba(249, 115, 22, 0.12)",
+                      borderRadius: 8,
+                      padding: 5,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Flame color={"#F97316"} size={13} />
+                  </View>
+                  <View>
+                    <Text style={styles.metricTileLabel}>Est. Burn</Text>
+                    <Text
+                      style={[styles.metricTileValue, { color: "#F97316" }]}
+                    >
+                      {workout?.caloriesBurn} kcal
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.metricItemBox}>
+                  <View
+                    style={{
+                      backgroundColor: "rgba(245, 158, 11, 0.12)",
+                      borderRadius: 8,
+                      padding: 5,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Trophy color={"#F59E0B"} size={13} />
+                  </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Intensity</Text>
-                    <Text style={styles.metricTileValue}>{workout?.intensity}</Text>
+                    <Text
+                      style={[styles.metricTileValue, { color: "#F59E0B" }]}
+                    >
+                      {workout?.intensity}
+                    </Text>
                   </View>
                 </View>
               </View>
 
-              <View style={styles.glassDivider} />
-
               {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
-              <TouchableOpacity 
-                style={styles.startWorkoutActionButton} 
+              <TouchableOpacity
+                style={styles.startWorkoutActionButton}
                 activeOpacity={0.8}
                 onPress={() => handleStartTutorialEngine(workout)}
               >
-                <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
+                <Play
+                  color="#FFFFFF"
+                  size={14}
+                  fill="#FFFFFF"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.startWorkoutButtonText}>
+                  Begin Active Routine
+                </Text>
               </TouchableOpacity>
             </View>
           );
         })}
-
       </ScrollView>
 
-      {/* --- FLOATING AI CHATBOT SYSTEM --- */}
+      {/* UIverse Inspired AI Customization Loading Modal */}
+      <AILoadingModal
+        visible={isGeneratingWorkout || loading}
+        type="workout"
+        title="Customizing Workout Routine"
+        subtitle="Vita AI is calculating optimal home exercises"
+      />
     </View>
   );
 }
-
-           
-    
-      
-        
-   
- 
-
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
-
-const getStyles = () => StyleSheet.create({
-  fullscreenOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    width: screenWidth, 
-    height: screenHeight, 
-    backgroundColor: baseColor,
-  },
-  container: { 
-    flex: 1,
-  },
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115,
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12, 
-    paddingHorizontal: 4, 
-    width: '100%',
-  },
-  headerTextGroup: { 
-    flex: 1, 
-    paddingRight: 12,
-  },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
-    marginBottom: 2,
-  },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    letterSpacing: -0.5,
-  },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: '#556B60', 
-    marginTop: 2,
-  },
-  formCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 32, 
-    padding: 18, 
-    marginBottom: 16, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  cardTitle: { 
-    fontSize: 11, 
-    color: '#21332A', 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
-    marginBottom: 12, 
-    fontWeight: '800', 
-    marginLeft: 2,
-  },
-  filterButtonGroupRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-  },
-  filterChipButton: { 
-    paddingHorizontal: 14, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    marginRight: 8, 
-    marginBottom: 8, 
-    backgroundColor: baseColor,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  filterChipInactive: { 
-    backgroundColor: baseColor,
-  },
-  filterChipActive: { 
-    backgroundColor: logoGreen, 
-    borderWidth: 1.5,
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  filterChipText: { 
-    fontSize: 12, 
-    fontWeight: '800',
-  },
-  sectionLabelTitle: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    marginBottom: 12, 
-    marginLeft: 4, 
-    letterSpacing: -0.2,
-  },
-  workoutFormCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 28, 
-    padding: 16, 
-    marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  workoutHeaderRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start',
-  },
-  workoutTitleContainer: { 
-    flex: 1,
-  },
-  workoutMainTitle: { 
-    fontSize: 16, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    marginBottom: 6, 
-    lineHeight: 20,
-  },
-  workoutDescriptionText: {
-    fontSize: 13,
-    color: '#556B60',
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  glassDivider: { 
-    height: 1, 
-    backgroundColor: '#D4E2DC', 
-    marginVertical: 12,
-  },
-  workoutMetricsSummaryGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  metricItemBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricIconSpacer: {
-    marginRight: 6,
-  },
-  metricTileLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#7FA293',
-  },
-  metricTileValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#21332A',
-    marginTop: 1,
-  },
-  startWorkoutActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 12,
-    borderRadius: 16,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  startWorkoutButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  floatingChatbotContainer: { 
-    position: 'absolute', 
-    bottom: 104, 
-    right: 20, 
-    zIndex: 99,
-  },
-  chatbotFloatingButton: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  chatbotUnpressed: { 
-    backgroundColor: '#4EA685', 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 3, height: 4 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 6, 
-    elevation: 5,
-  },
-  chatbotPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    transform: [{ scale: 0.95 }],
-  },
-
-
-  // --- RE-ENGINEERED HOME ENGINE PLAYER COMPONENT STYLES ---
-  playerWrapper: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 54 : 48,
-    paddingBottom: 24,
-    backgroundColor: baseColor,
-  },
-  playerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    width: '100%',
-  },
-  playerBackNeuButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  playerHeaderCenterText: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  playerRoutineSubTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#7FA293',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  playerStepIndicator: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#21332A',
-    marginTop: 1,
-  },
-  playerMainCard: {
-    flex: 1,
-    backgroundColor: baseColor,
-    borderRadius: 36,
-    padding: 20,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 5, height: 5 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 6, 
-    elevation: 4,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  animationPlaceholderFrame: {
-    height: '42%',
-    backgroundColor: '#E8F1EC',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 0,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderColor: '#FFFFFF',
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-  },
-  placeholderAnimateIcon: {
-    transform: [{ scale: 1.1 }],
-  },
-  liveActivityBadge: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
-    elevation: 0,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E53E3E',
-    marginRight: 6,
-  },
-  liveBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#21332A',
-    letterSpacing: 0.5,
-  },
-  playerExerciseTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#21332A',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  targetMetricChipBox: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: logoGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginTop: 8,
-  },
-  targetMetricChipText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  playerGlassDivider: {
-    height: 1,
-    backgroundColor: '#D4E2DC',
-    marginVertical: 14,
-  },
-  instructionsTextScroll: {
-    flex: 1,
-    paddingHorizontal: 2,
-  },
-  instructionSectionTitleLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#21332A',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  instructionParagraphText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#556B60',
-    lineHeight: 19,
-  },
-  playerControlActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  playerSecondaryNeuActionBtn: {
-    flex: 0.7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: baseColor,
-    paddingVertical: 14,
-    borderRadius: 16,
-    marginRight: 10,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 2, height: 2 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 3, 
-    elevation: 0,
-    borderTopWidth: 1, 
-    borderLeftWidth: 1, 
-    borderColor: '#FFFFFF',
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  playerSecondaryActionBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#556B60',
-  },
-  playerPrimaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 14,
-    borderRadius: 16,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  playerPrimaryActionBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  loaderOuterNeu: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
-    borderWidth: 1.5,
-    borderColor: clearWhiteHighlight,
-  },
-  loaderTextTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#1A2B23',
-    marginBottom: 8,
-  },
-  loaderTextDesc: {
-    fontSize: 14,
-    color: '#7FA293',
-    fontWeight: '600',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 20,
-  },
-  aiBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EBF5F0',
-    alignSelf: 'flex-start',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#C6E0D4',
-  },
-  aiBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#37745D',
-    letterSpacing: 0.5,
-  },
-});

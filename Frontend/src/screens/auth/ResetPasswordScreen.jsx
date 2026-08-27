@@ -1,22 +1,29 @@
 import React, { useState } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import API_URL from '../config/api';
+import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
+import { getStyles } from './ResetPasswordScreen.styles';
+
+const baseColor = '#F8FAFC';
 
 export default function ResetPasswordScreen({ email, onResetSuccess }) {
+  const { showAlert } = useCustomAlert();
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPressed, setIsPressed] = useState(false);
@@ -25,8 +32,15 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Live on-screen inline validation indicators
-  const isPasswordTooShort = newPassword.length > 0 && newPassword.length < 8;
+  // Live password rules
+  const pwRules = [
+    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
+    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
+    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
+    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
+    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
+  ];
+  const allRulesPass = pwRules.every(r => r.ok);
   const doPasswordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   const [isLoading, setIsLoading] = useState(false);
@@ -34,12 +48,17 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   // --- PASSWORD UPDATE LIFE CYCLES ---
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert("Error", "Please fill all fields.");
+      showAlert("Error", "Please fill all fields.");
+      return;
+    }
+
+    if (!allRulesPass) {
+      showAlert("Weak Password", "Your password does not meet all requirements. Please check the checklist.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      showAlert("Error", "Passwords do not match.");
       return;
     }
 
@@ -61,14 +80,14 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert("Success", "Password updated successfully.");
+        showAlert("Success", "Password updated successfully.");
         onResetSuccess();
       } else {
-        Alert.alert("Error", data.detail || "Failed to update password. Please try again.");
+        showAlert("Error", data.detail || "Failed to update password. Please try again.");
       }
     } catch (error) {
       console.log("UPDATE PASSWORD ERROR:", error);
-      Alert.alert(
+      showAlert(
         "Network Error",
         "Cannot connect to backend server. Make sure it is running and your IP is correct."
       );
@@ -79,10 +98,13 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} />
+      <StatusBar 
+        barStyle={isDarkMode ? "light-content" : "dark-content"} 
+        backgroundColor={theme?.background || baseColor} 
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={styles.flexContainer}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
@@ -103,12 +125,12 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
             {/* New Password input block */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>New Password</Text>
-              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
-                <Lock color="#7FA293" size={20} style={styles.leadingIcon} />
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Lock color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter password"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={newPassword}
                   onChangeText={setNewPassword}
                   secureTextEntry={!showNewPassword}
@@ -121,19 +143,41 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                   style={styles.toggleIconButton}
                 >
                   {showNewPassword ? (
-                    /* Text is Visible -> Show plain open Eye to represent clear vision state */
-                    <Eye color="#4EA685" size={20} />
+                    <Eye color="#10B981" size={20} />
                   ) : (
-                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
-                    <EyeOff color="#7FA293" size={20} />
+                    <EyeOff color={theme?.textSecondary || "#94A3B8"} size={20} />
                   )}
                 </TouchableOpacity>
               </View>
-              {/* Dynamic live length alert notice */}
-              {isPasswordTooShort && (
-                <View style={styles.warningContainer}>
-                  <AlertCircle color="#C53030" size={14} />
-                  <Text style={styles.warningText}>Password must be at least 8 characters</Text>
+              {/* Live password requirements checklist */}
+              {newPassword.length > 0 && (
+                <View style={{
+                  backgroundColor: 'rgba(15, 23, 42, 0.04)',
+                  borderRadius: 12,
+                  padding: 12,
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
+                  {pwRules.map((rule, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                      <View style={{
+                        width: 18, height: 18, borderRadius: 9,
+                        backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
+                        alignItems: 'center', justifyContent: 'center',
+                        marginRight: 8, borderWidth: 1,
+                        borderColor: rule.ok ? '#10B981' : '#EF4444',
+                      }}>
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
+                          {rule.ok ? '✓' : '✕'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
+                        {rule.label}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </View>
@@ -141,12 +185,12 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
             {/* Confirm Password input block */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm New Password</Text>
-              <View style={[styles.neumorphicInputInset, styles.fieldRow]}>
-                <Lock color="#7FA293" size={20} style={styles.leadingIcon} />
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Lock color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Re-enter password"
-                  placeholderTextColor="#7FA293"
+                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showConfirmPassword}
@@ -159,18 +203,16 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
                   style={styles.toggleIconButton}
                 >
                   {showConfirmPassword ? (
-                    /* Text is Visible -> Show plain open Eye to represent clear vision state */
-                    <Eye color="#4EA685" size={20} />
+                    <Eye color="#10B981" size={20} />
                   ) : (
-                    /* Text is Hidden -> Show Eye with Slash to represent current hidden state */
-                    <EyeOff color="#7FA293" size={20} />
+                    <EyeOff color={theme?.textSecondary || "#94A3B8"} size={20} />
                   )}
                 </TouchableOpacity>
               </View>
               {/* Dynamic live match parity notice */}
               {doPasswordsMismatch && (
                 <View style={styles.warningContainer}>
-                  <AlertCircle color="#C53030" size={14} />
+                  <AlertCircle color="#EF4444" size={14} />
                   <Text style={styles.warningText}>Passwords do not match</Text>
                 </View>
               )}
@@ -204,150 +246,4 @@ export default function ResetPasswordScreen({ email, onResetSuccess }) {
   );
 }
 
-// Unified High-Contrast Hybrid Neumorphic Theme Tokens
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-
-// Logo Branding Metrics
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: baseColor },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  headerSection: { 
-    marginBottom: 45, 
-    alignItems: "center",
-    width: '100%',
-    paddingHorizontal: 12,
-  },
-  brandTitle: { 
-    fontSize: 42, 
-    fontWeight: "900", 
-    color: logoGreen,
-    letterSpacing: -0.5,
-    textAlign: 'center', 
-    width: '100%',
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: '#556B60',
-    marginTop: 10,
-    textAlign: "center",
-    lineHeight: 22,
-    fontWeight: '700',
-    width: '100%',
-  },
-  formCard: {
-    backgroundColor: baseColor,
-    borderRadius: 40, 
-    padding: 24,
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 14, height: 14 }, 
-    shadowOpacity: 1,
-    shadowRadius: 16, 
-    elevation: 12,    
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopColor: clearWhiteHighlight,
-    borderLeftColor: clearWhiteHighlight,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  inputLabel: {
-    color: '#41544B',
-    fontSize: 11,
-    fontWeight: '800',
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginLeft: 6,
-  },
-  neumorphicInputInset: {
-    backgroundColor: baseColor,
-    borderRadius: 24, 
-    borderWidth: 1.5, 
-    borderColor: '#D4E2DC',
-    shadowColor: logoGreen,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 0.35, 
-    shadowRadius: 5,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  leadingIcon: {
-    marginRight: 4,
-  },
-  input: {
-    flex: 1,
-    color: '#1A2B23',
-    paddingVertical: 15,
-    paddingHorizontal: 8,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  toggleIconButton: {
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  warningContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    marginLeft: 8,
-  },
-  warningText: {
-    color: '#C53030',
-    fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 4,
-  },
-  buttonBase: {
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginTop: 8,
-  },
-  buttonUnpressed: {
-    backgroundColor: '#53B28E', 
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  buttonPressed: {
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5,
-    borderColor: logoDarkShadow,
-    transform: [{ translateY: 2 }], 
-  },
-  buttonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textShadowColor: logoDarkShadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  buttonTextPressed: { color: '#9EDEC4' },
-});
+// Flat Design Tokens

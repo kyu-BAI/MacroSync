@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  StyleSheet, 
   Text, 
   View, 
   ScrollView, 
@@ -18,28 +17,31 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Mail, Eye, EyeOff } from 'lucide-react-native';
+import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
 import API_URL from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NotificationService } from '../../services/NotificationService';
+import { useCustomAlert } from '../../context/CustomAlertContext';
+import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { clearSavedUserId } from '../../services/OfflineStorage';
+import { getStyles } from './SettingsScreen.styles';
 
-const GcashLogo = require('../../images/Gcash.png');
-const MayaLogo = require('../../images/Maya.png');
-const CardLogo = require('../../images/CreditDebitCard.png');
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const logoGreen = '#10B981';
 
-export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
-  const styles = getStyles();
+export default function SettingsScreen({ onTabChange, onLogout, userProfile, setUserProfile, userId }) {
+  const { showAlert } = useCustomAlert();
+  const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
+  const { language, setLanguage } = useLanguage();
+  const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
+
 
   // --- EDIT PROFILE MODAL STATE ---
   const [showEditModal, setShowEditModal] = useState(false);
   const [tempName, setTempName] = useState('');
   const [tempImage, setTempImage] = useState(null);
-
-  // --- CHANGE EMAIL STATE ---
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [tempAuthEmail, setTempAuthEmail] = useState('');
-  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
-  const [isChangingEmail, setIsChangingEmail] = useState(false);
 
   // --- CHANGE PASSWORD STATE ---
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -49,10 +51,19 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- PASSWORD VISIBILITY STATE ---
-  const [showEmailPassword, setShowEmailPassword] = useState(false);
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // --- LIVE PASSWORD RULES ---
+  const pwRules = [
+    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
+    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
+    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
+    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
+    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
+  ];
+  const allRulesPass = pwRules.every(r => r.ok);
 
   // --- PAYMENT FLOW STATE ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -66,11 +77,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     setShowEditModal(true);
   };
 
-  const handleOpenEmailModal = () => {
-    setTempAuthEmail('');
-    setEmailCurrentPassword('');
-    setShowEmailModal(true);
-  };
 
   const handleOpenPasswordModal = () => {
     setOldPassword('');
@@ -83,7 +89,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "You need to allow gallery access to select a profile picture."
         );
@@ -91,76 +97,74 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const base64Data = 'data:image/jpeg;base64,' + result.assets[0].base64;
-        setTempImage(base64Data);
+        const localUri = result.assets[0].uri;
+        setTempImage(localUri);
       }
     } catch (error) {
-      console.log("Error picking image:", error);
-      Alert.alert("Error", "Could not pick image from gallery.");
+      if (__DEV__) console.log("Error picking image:", error);
+      showAlert("Error", "Could not pick image from gallery.");
     }
   };
 
   const handleSaveProfile = async () => {
     if (!tempName.trim()) {
-      Alert.alert("Validation Error", "Name cannot be empty.");
+      showAlert("Validation Error", "Name cannot be empty.");
       return;
     }
 
     try {
       const currentEmail = userProfile?.email || '';
-      const response = await fetch(`${API_URL}/update-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          name: tempName.trim(),
-          email: currentEmail
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile on server');
-      }
-
-      if (tempImage && tempImage !== userProfile?.profileImage) {
-        const picResponse = await fetch(`${API_URL}/update-profile-picture`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            profile_image: tempImage
-          }),
-        });
-
-        if (!picResponse.ok) {
-          throw new Error('Failed to update profile picture on server');
-        }
-      }
-
+      // ⚡ INSTANT OPTIMISTIC UI UPDATE
       if (setUserProfile) {
         setUserProfile(prev => ({
           ...prev,
           name: tempName.trim(),
           profileImage: tempImage
         }));
-        setShowEditModal(false);
-        Alert.alert("Success", "Profile updated successfully!");
       }
+      setShowEditModal(false);
+      setTimeout(() => {
+        showAlert("Success", "Profile updated!");
+      }, 250);
+
+      // Background network sync
+      (async () => {
+        try {
+          await fetch(`${API_URL}/update-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: userId,
+              name: tempName.trim(),
+              email: userProfile?.email
+            }),
+          });
+
+          if (tempImage && tempImage !== userProfile?.profileImage) {
+            await fetch(`${API_URL}/update-profile-picture`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: userId,
+                profile_image: tempImage
+              }),
+            });
+          }
+        } catch (e) {
+          if (__DEV__) console.log("Background profile sync error:", e);
+        }
+      })();
     } catch (error) {
-      console.error("UPDATE PROFILE ERROR:", error);
-      Alert.alert("Error", "Failed to update profile. Please check your network and try again.");
+      if (__DEV__) console.error("UPDATE PROFILE ERROR:", error);
+      showAlert("Error", "Failed to update profile. Please try again.");
     }
   };
 
@@ -168,7 +172,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "You need to allow gallery access to select a profile picture."
         );
@@ -176,17 +180,28 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        const localUri = result.assets[0].uri;
         const selectedUri = 'data:image/jpeg;base64,' + result.assets[0].base64;
-        
-        const response = await fetch(`${API_URL}/update-profile-picture`, {
+
+        // ⚡ INSTANT OPTIMISTIC UI UPDATE
+        if (setUserProfile) {
+          setUserProfile(prev => ({
+            ...prev,
+            profileImage: localUri
+          }));
+          showAlert("Success", "Profile picture updated!");
+        }
+
+        // Background sync to backend server
+        fetch(`${API_URL}/update-profile-picture`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -195,23 +210,11 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             user_id: userId,
             profile_image: selectedUri
           }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update profile picture on server');
-        }
-
-        if (setUserProfile) {
-          setUserProfile(prev => ({
-            ...prev,
-            profileImage: selectedUri
-          }));
-          Alert.alert("Success", "Profile picture updated successfully!");
-        }
+        }).catch(err => __DEV__ && console.log("Background profile pic sync error:", err));
       }
     } catch (error) {
-      console.log("Error picking profile image:", error);
-      Alert.alert("Error", "Could not pick image from gallery.");
+      if (__DEV__) console.log("Error picking profile image:", error);
+      showAlert("Error", "Could not pick image from gallery.");
     }
   };
 
@@ -219,6 +222,48 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const [habitReminders, setHabitReminders] = useState(true);
   const [motivationalUpdates, setMotivationalUpdates] = useState(true);
   const [personalizedAlerts, setPersonalizedAlerts] = useState(false);
+
+  // Load saved notification switch preferences on mount
+  useEffect(() => {
+    const loadNotificationPrefs = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.habitReminders !== undefined) setHabitReminders(!!parsed.habitReminders);
+          if (parsed.motivationalUpdates !== undefined) setMotivationalUpdates(!!parsed.motivationalUpdates);
+          if (parsed.personalizedAlerts !== undefined) setPersonalizedAlerts(!!parsed.personalizedAlerts);
+        }
+      } catch (e) {
+        if (__DEV__) console.log("Failed to load notification prefs:", e);
+      }
+    };
+    loadNotificationPrefs();
+  }, []);
+
+  const saveAndUpdateNotificationPrefs = async (updatedPrefs) => {
+    try {
+      await AsyncStorage.setItem('@ms_notification_preferences', JSON.stringify(updatedPrefs));
+      await NotificationService.scheduleDailyReminders(updatedPrefs);
+    } catch (e) {
+      if (__DEV__) console.log("Failed to save notification prefs:", e);
+    }
+  };
+
+  const handleToggleHabitReminders = (val) => {
+    setHabitReminders(val);
+    saveAndUpdateNotificationPrefs({ habitReminders: val, motivationalUpdates, personalizedAlerts });
+  };
+
+  const handleToggleMotivationalUpdates = (val) => {
+    setMotivationalUpdates(val);
+    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates: val, personalizedAlerts });
+  };
+
+  const handleTogglePersonalizedAlerts = (val) => {
+    setPersonalizedAlerts(val);
+    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates, personalizedAlerts: val });
+  };
 
   // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
   const [accountTier, setAccountTier] = useState(userProfile?.isPremium ? 'Premium' : 'Free');
@@ -238,7 +283,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
   const handleSelectTierOption = async (tierType) => {
     if (tierType === 'Free') {
       if (userProfile?.isPremium) {
-        Alert.alert(
+        showAlert(
           "Cancel Subscription",
           "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
           [
@@ -255,12 +300,12 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   if (response.ok) {
                     setUserProfile(prev => ({ ...prev, isPremium: false }));
                     setAccountTier('Free');
-                    Alert.alert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
+                    showAlert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
                   } else {
-                    Alert.alert("Error", "Failed to cancel subscription on server.");
+                    showAlert("Error", "Failed to cancel subscription on server.");
                   }
                 } catch (e) {
-                  Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+                  showAlert("Error", "Network connection failed. Cannot connect to server.");
                 }
               }
             }
@@ -279,7 +324,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     // Instantly apply the selection outline indicator visually
     setSelectedBillingCycle(planName);
 
-    Alert.alert(
+    showAlert(
       "Confirm Payment Method",
       `Would you like to proceed with the ${planName} Plan (${price})?`,
       [
@@ -288,7 +333,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
           text: "Proceed to Pay",
           onPress: async () => {
             try {
-              const amount_cents = planName === 'Monthly' ? 19900 : 202980; // Multiply by 100 to get cents
+              const amount_cents = planName === 'Monthly' ? 14900 : 119900; // ₱149.00 or ₱1,199.00 (in cents)
               const response = await fetch(`${API_URL}/create-checkout-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -306,20 +351,20 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   // Open the PayMongo checkout page in an in-app browser overlay
                   await WebBrowser.openBrowserAsync(checkoutUrl);
                   
-                  Alert.alert(
+                  showAlert(
                     "Checkout Opened",
                     "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
                   );
                 } else {
-                  console.log("PayMongo response:", data);
-                  Alert.alert("Error", "Could not generate payment link.");
+                  if (__DEV__) console.log("PayMongo response:", data);
+                  showAlert("Error", "Could not generate payment link.");
                 }
               } else {
-                Alert.alert("Error", "Failed to initiate payment on the server.");
+                showAlert("Error", "Failed to initiate payment on the server.");
                 setSelectedBillingCycle(null);
               }
             } catch (e) {
-              Alert.alert("Error", "Network connection failed. Cannot connect to server.");
+              showAlert("Error", "Network connection failed. Cannot connect to server.");
               setSelectedBillingCycle(null);
             }
           }
@@ -330,7 +375,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   const handleConfirmPayment = () => {
     if (!selectedMethod) {
-      Alert.alert("Payment Method Required", "Please select a payment method to proceed.");
+      showAlert("Payment Method Required", "Please select a payment method to proceed.");
       return;
     }
 
@@ -343,78 +388,22 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
     }, 1000);
   };
 
-  const handleChangeEmail = async () => {
-    if (!tempAuthEmail.trim()) {
-      Alert.alert("Validation Error", "Please enter a new email address.");
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(tempAuthEmail.trim())) {
-      Alert.alert("Validation Error", "Please enter a valid email address.");
-      return;
-    }
-    if (tempAuthEmail.trim().toLowerCase() === (userProfile?.email || '').toLowerCase()) {
-      Alert.alert("Validation Error", "New email is the same as your current email.");
-      return;
-    }
-    if (!emailCurrentPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter your current password to authorize this email update.");
-      return;
-    }
-
-    setIsChangingEmail(true);
-    try {
-      const response = await fetch(`${API_URL}/update-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          new_email: tempAuthEmail.trim().toLowerCase(),
-          current_password: emailCurrentPassword.trim()
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update email address');
-      }
-
-      if (setUserProfile) {
-        setUserProfile(prev => ({
-          ...prev,
-          email: tempAuthEmail.trim().toLowerCase()
-        }));
-      }
-
-      Alert.alert("Success", "Email address updated successfully! Please use this new email to log in next time.");
-      setTempAuthEmail('');
-      setEmailCurrentPassword('');
-      setShowEmailModal(false);
-    } catch (error) {
-      console.error("CHANGE EMAIL ERROR:", error);
-      Alert.alert("Error", error.message || "Failed to update email. Please try again.");
-    } finally {
-      setIsChangingEmail(false);
-    }
-  };
 
   const handleChangePassword = async () => {
     if (!oldPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter your current password.");
+      showAlert("Validation Error", "Please enter your current password.");
       return;
     }
     if (!newPassword.trim()) {
-      Alert.alert("Validation Error", "Please enter a new password.");
+      showAlert("Validation Error", "Please enter a new password.");
       return;
     }
-    if (newPassword.length < 8) {
-      Alert.alert("Validation Error", "Password must be at least 8 characters long.");
+    if (!allRulesPass) {
+      showAlert("Weak Password", "Your new password does not meet all the requirements. Please check the checklist and try again.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Validation Error", "New passwords do not match.");
+      showAlert("Validation Error", "New passwords do not match.");
       return;
     }
 
@@ -437,30 +426,52 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         throw new Error(data.detail || 'Failed to update password');
       }
 
-      Alert.alert("Success", "Password updated successfully!");
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordModal(false);
+
+      // Clear saved offline user session for security
+      try {
+        await clearSavedUserId();
+      } catch (err) {
+        if (__DEV__) console.log("Clear saved session error:", err);
+      }
+
+      setTimeout(() => {
+        showAlert(
+          "Password Updated 🔒", 
+          "Your password has been changed successfully. For your security, please sign in with your new password.",
+          [
+            {
+              text: "Sign In Now",
+              onPress: () => {
+                if (onTabChange) {
+                  onTabChange('AUTH');
+                }
+              }
+            }
+          ]
+        );
+      }, 250);
     } catch (error) {
-      console.error("CHANGE PASSWORD ERROR:", error);
-      Alert.alert("Error", error.message || "Failed to change password. Please try again.");
+      if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
+      showAlert("Error", error.message || "Failed to change password. Please try again.");
     } finally {
       setIsChangingPassword(false);
     }
   };
 
   const handleSavePreferences = () => {
-    Alert.alert(
+    showAlert(
       "Preferences Saved",
-      "Your profile metrics and notification thresholds have been synced successfully.",
-      [{ text: "Done", fontWeight: '800' }]
+      "Your profile metrics and notification thresholds have been synced successfully."
     );
   };
 
   // --- FULL LOGOUT SYSTEM WITH CONFIRMATION AND LOGIN REDIRECT ---
   const handleLogOut = () => {
-    Alert.alert(
+    showAlert(
       "Log Out",
       "Are you sure you want to exit your active tracking session?",
       [
@@ -471,8 +482,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         { 
           text: "Log Out", 
           style: "destructive", 
-          onPress: () => {
-            if (onTabChange) {
+          onPress: async () => {
+            try {
+              await clearSavedUserId();
+            } catch (e) {}
+            if (onLogout) {
+              onLogout();
+            } else if (onTabChange) {
               onTabChange('AUTH');
             }
           } 
@@ -483,7 +499,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
       
       <ScrollView 
         style={styles.container} 
@@ -513,8 +529,23 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   style={styles.avatarImageLarge} 
                 />
               ) : (
-                <User color="#FFFFFF" size={48} strokeWidth={2.5} />
+                <User color="#FFFFFF" size={38} strokeWidth={2.5} />
               )}
+              <View style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                backgroundColor: logoGreen,
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: theme?.surface || '#FFFFFF'
+              }}>
+                <Camera color="#FFFFFF" size={12} strokeWidth={2.5} />
+              </View>
             </TouchableOpacity>
             <View style={styles.profileMetadataTextGroup}>
               <Text style={styles.profileUserNameText}>{userProfile?.name || 'User Account'}</Text>
@@ -533,7 +564,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         {/* INTERACTIVE SUBSCRIPTION CONFIGURATION TIER CARD */}
         <Text style={styles.sectionLabelTitle}>Account Subscription Tier</Text>
         <View style={styles.formCard}>
-          <Text style={styles.cardTitle}>Select Target Membership Level</Text>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.cardTitle}>Select Target Membership Level</Text>
+          </View>
           <View style={styles.filterButtonGroupRow}>
             <TouchableOpacity
               style={[styles.filterChipButton, accountTier === 'Free' ? styles.filterChipActive : styles.filterChipInactive]}
@@ -545,10 +578,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterChipButton, accountTier === 'Premium' ? styles.filterChipActive : styles.filterChipInactive]}
+              style={[
+                styles.filterChipButton,
+                accountTier === 'Premium'
+                  ? { backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1.5 }
+                  : styles.filterChipInactive
+              ]}
               onPress={() => handleSelectTierOption('Premium')}
             >
-              <Text style={[styles.filterChipText, accountTier === 'Premium' && styles.filterChipTextActive]}>
+              <Crown color={accountTier === 'Premium' ? '#FFFFFF' : '#10B981'} size={13} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterChipText, accountTier === 'Premium' && { color: '#FFFFFF', fontWeight: '900' }]}>
                 Premium Tier
               </Text>
             </TouchableOpacity>
@@ -558,6 +597,36 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
               
+              {/* Premium Feature List (Visible for BOTH Monthly & Annual plans) */}
+              <View style={[
+                styles.premiumFeatureDetailsBox,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }
+              ]}>
+                <View style={styles.featureDetailsHeadingFlexRow}>
+                  <Crown color="#F59E0B" size={18} style={{ marginRight: 6 }} />
+                  <Text style={[
+                    styles.premiumDetailsHeadingText,
+                    isDarkMode && { color: '#F8FAFC' }
+                  ]}>MacroSync Premium Benefits</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[
+                    styles.featureBulletBodyText,
+                    isDarkMode && { color: '#94A3B8' }
+                  ]}>Unlimited AI Food Camera & Gallery Photo Analysis</Text>
+                </View>
+                
+                <View style={styles.featureBulletRowItem}>
+                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[
+                    styles.featureBulletBodyText,
+                    isDarkMode && { color: '#94A3B8' }
+                  ]}>Unlimited Vita AI 24/7 Health, Macro & Workout Guidance</Text>
+                </View>
+              </View>
+
               <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
               
               {/* Monthly Plan */}
@@ -567,13 +636,13 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
                   { marginBottom: 12 }
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱199/mo')}
+                onPress={() => handleInitiatePaymentFlow('Monthly', '₱149/mo')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
                   <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱199/mo</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱149/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -582,44 +651,139 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                   styles.billingPlanSelectorRowItem,
                   selectedBillingCycle === 'Annual' && styles.billingPlanActive
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱2,029.80/yr')}
+                onPress={() => handleInitiatePaymentFlow('Annual', '₱1,199/yr')}
               >
                 <View style={styles.billingPlanTextGroup}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
                     <View style={styles.bestValueBadge}>
-                      <Text style={styles.bestValueBadgeText}>SAVE 15%</Text>
+                      <Text style={styles.bestValueBadgeText}>SAVE 33%</Text>
                     </View>
                   </View>
-                  <Text style={styles.billingPlanSubDescription}>Billed annually. Unlimited scans and chats forever.</Text>
+                  <Text style={styles.billingPlanSubDescription}>₱1,199/year (~₱99/mo). Best value for long-term health!</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱2,029.80/yr</Text>
+                <Text style={styles.billingPlanPriceBadgeText}>₱1,199/yr</Text>
               </TouchableOpacity>
-
-              {/* Premium Feature List */}
-              <View style={styles.premiumFeatureDetailsBox}>
-                <View style={styles.featureDetailsHeadingFlexRow}>
-                  <Sparkles color={logoGreen} size={16} style={{ marginRight: 6 }} />
-                  <Text style={styles.premiumDetailsHeadingText}>Premium Benefits</Text>
-                </View>
-                
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Unlimited smart food scanner usage (AI vision analysis)</Text>
-                </View>
-                
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Unlimited chatbot queries & nutrition planning</Text>
-                </View>
-
-                <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={14} style={styles.bulletCheckIconSpacer} />
-                  <Text style={styles.featureBulletBodyText}>Priority generation speeds and backup model availability</Text>
-                </View>
-              </View>
             </View>
           )}
+        </View>
+
+        {/* APP THEME SETTINGS CARD */}
+        <Text style={styles.sectionLabelTitle}>App Appearance</Text>
+        <View style={styles.formCard}>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.settingRowItemMainTitle}>Theme Mode</Text>
+            <Text style={styles.settingRowItemSubTitle}>
+              {themeMode === 'system'
+                ? `System Default (${isDarkMode ? 'Dark' : 'Light'})`
+                : themeMode === 'dark'
+                ? 'Dark Theme Enabled'
+                : 'Light Theme Enabled'}
+            </Text>
+          </View>
+
+          {/* 3-Option Segmented Selector */}
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: theme?.inputBg || '#F1F5F9',
+            borderRadius: 14,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: theme?.border || '#E2E8F0',
+          }}>
+            {[
+              { id: 'system', label: 'System', icon: <Smartphone size={15} color={themeMode === 'system' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+              { id: 'light',  label: 'Light',  icon: <Sun size={15} color={themeMode === 'light' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+              { id: 'dark',   label: 'Dark',   icon: <Moon size={15} color={themeMode === 'dark' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+            ].map((mode) => {
+              const isActive = themeMode === mode.id;
+              return (
+                <TouchableOpacity
+                  key={mode.id}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={() => setThemeMode(mode.id)}
+                >
+                  <View style={{ marginRight: 6 }}>{mode.icon}</View>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
+                  }}>
+                    {mode.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* APP LANGUAGE SETTINGS CARD */}
+        <Text style={styles.sectionLabelTitle}>Language & Localization</Text>
+        <View style={styles.formCard}>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.settingRowItemMainTitle}>App Meal Language</Text>
+            <Text style={styles.settingRowItemSubTitle}>
+              {language === 'English'
+                ? 'English (Default meal titles)'
+                : language === 'Tagalog'
+                ? 'Tagalog (Wikang Filipino)'
+                : 'Cebuano (Pinulongang Binisaya)'}
+            </Text>
+          </View>
+
+          {/* 3-Option Segmented Language Selector */}
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: theme?.inputBg || '#F1F5F9',
+            borderRadius: 14,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: theme?.border || '#E2E8F0',
+          }}>
+            {[
+              { id: 'English', label: 'English' },
+              { id: 'Tagalog', label: 'Tagalog' },
+              { id: 'Cebuano', label: 'Cebuano' },
+            ].map((langItem) => {
+              const isActive = language === langItem.id;
+              return (
+                <TouchableOpacity
+                  key={langItem.id}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setLanguage(langItem.id);
+                    showAlert("Language Updated", `Meal names will now display in ${langItem.label}!`);
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
+                  }}>
+                    {langItem.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* NOTIFICATIONS SETTINGS CARD */}
@@ -627,17 +791,19 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         <View style={styles.formCard}>
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Bell color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Bell color={'#10B981'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Habit & Routine Reminders</Text>
                 <Text style={styles.settingRowItemSubTitle}>Automated reminders for meals, hydration, calories, and workouts</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={habitReminders ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
-              onValueChange={setHabitReminders}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={habitReminders ? '#10B981' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
+              onValueChange={handleToggleHabitReminders}
               value={habitReminders}
             />
           </View>
@@ -646,17 +812,19 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Flame color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Flame color={'#F97316'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Motivational Updates</Text>
                 <Text style={styles.settingRowItemSubTitle}>Updates on achievements, completed workouts, and step milestones</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={motivationalUpdates ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
-              onValueChange={setMotivationalUpdates}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={motivationalUpdates ? '#10B981' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
+              onValueChange={handleToggleMotivationalUpdates}
               value={motivationalUpdates}
             />
           </View>
@@ -665,41 +833,27 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <Sparkles color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Sparkles color={'#8B5CF6'} size={16} />
+              </View>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingRowItemMainTitle}>Personalized Smart Alerts</Text>
                 <Text style={styles.settingRowItemSubTitle}>Adjusted based on your behavior, goals, and daily routines</Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#D4E2DC', true: '#4EA685' }}
-              thumbColor={personalizedAlerts ? '#4EA685' : '#556B60'}
-              ios_backgroundColor={'#D4E2DC'}
-              onValueChange={setPersonalizedAlerts}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor={personalizedAlerts ? '#10B981' : '#64748B'}
+              ios_backgroundColor={'#E2E8F0'}
+              onValueChange={handleTogglePersonalizedAlerts}
               value={personalizedAlerts}
             />
           </View>
         </View>
 
         {/* SECURITY SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Security & Account</Text>
+        <Text style={styles.sectionLabelTitle}>Account Security</Text>
         <View style={styles.formCard}>
-          <TouchableOpacity 
-            style={styles.settingActionRowItem} 
-            onPress={handleOpenEmailModal}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingIconTextGroup}>
-              <Mail color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
-              <View>
-                <Text style={styles.settingRowItemMainTitle}>Change Email Address</Text>
-                <Text style={styles.settingRowItemSubTitle}>Update your login email address securely</Text>
-              </View>
-            </View>
-            <ChevronRight color={'#7FA293'} size={16} />
-          </TouchableOpacity>
-
-          <View style={styles.glassDivider} />
 
           <TouchableOpacity 
             style={styles.settingActionRowItem} 
@@ -707,20 +861,24 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
             activeOpacity={0.7}
           >
             <View style={styles.settingIconTextGroup}>
-              <Shield color={'#4EA685'} size={18} style={styles.settingRowIconSpacer} />
+              <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
+                <Shield color={'#F59E0B'} size={16} />
+              </View>
               <View>
                 <Text style={styles.settingRowItemMainTitle}>Change Password</Text>
                 <Text style={styles.settingRowItemSubTitle}>Update your password securely</Text>
               </View>
             </View>
-            <ChevronRight color={'#7FA293'} size={16} />
+            <ChevronRight color={'#94A3B8'} size={16} />
           </TouchableOpacity>
+
+
         </View>
 
         {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={styles.logOutSecondaryNeuButton} onPress={handleLogOut}>
-          <LogOut color={'#E53E3E'} size={18} style={{ marginRight: 8 }} />
-          <Text style={styles.logOutButtonText}>Log Out</Text>
+        <TouchableOpacity style={[styles.logOutSecondaryNeuButton, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1.2 }]} onPress={handleLogOut}>
+          <LogOut color={'#EF4444'} size={18} style={{ marginRight: 8 }} />
+          <Text style={[styles.logOutButtonText, { color: '#EF4444', fontWeight: '800' }]}>Log Out</Text>
         </TouchableOpacity>
         
       </ScrollView>
@@ -761,7 +919,7 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               value={tempName}
               onChangeText={setTempName}
               placeholder="Username"
-              placeholderTextColor="#AEC2B7"
+              placeholderTextColor="#CBD5E1"
             />
 
 
@@ -778,89 +936,6 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
         </View>
       </Modal>
 
-      {/* --- CHANGE EMAIL MODAL --- */}
-      <Modal
-        visible={showEmailModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowEmailModal(false);
-          setTempAuthEmail('');
-          setEmailCurrentPassword('');
-          setShowEmailPassword(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={styles.modalContent}
-          >
-            <Text style={styles.modalTitle}>Change Email</Text>
-            <Text style={styles.modalSubtitle}>Enter details below to update your email address</Text>
-
-            <Text style={styles.inputLabel}>Current Email</Text>
-            <View style={[styles.modalInput, { backgroundColor: 'rgba(30, 60, 50, 0.6)', justifyContent: 'center' }]}>
-              <Text style={{ color: '#AEC2B7', fontSize: 14 }}>{userProfile?.email || 'No email set'}</Text>
-            </View>
-
-            <Text style={styles.inputLabel}>Current Password</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.passwordTextInput}
-                value={emailCurrentPassword}
-                onChangeText={setEmailCurrentPassword}
-                placeholder="Enter current password"
-                placeholderTextColor="#AEC2B7"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={!showEmailPassword}
-              />
-              <TouchableOpacity onPress={() => setShowEmailPassword(!showEmailPassword)} activeOpacity={0.7}>
-                {showEmailPassword ? (
-                  <Eye color="#7FA293" size={20} />
-                ) : (
-                  <EyeOff color="#7FA293" size={20} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>New Email Address</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempAuthEmail}
-              onChangeText={setTempAuthEmail}
-              placeholder="email@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholderTextColor="#AEC2B7"
-            />
-
-            <View style={styles.modalButtons}>
-               <TouchableOpacity 
-                 style={styles.modalCancel} 
-                 onPress={() => {
-                   setShowEmailModal(false);
-                   setTempAuthEmail('');
-                   setEmailCurrentPassword('');
-                   setShowEmailPassword(false);
-                 }}
-               >
-                 <Text style={styles.modalCancelText}>Cancel</Text>
-               </TouchableOpacity>
-               <TouchableOpacity 
-                 style={styles.modalSave} 
-                 onPress={handleChangeEmail}
-                 disabled={isChangingEmail}
-               >
-                 <Text style={styles.modalSaveText}>
-                   {isChangingEmail ? "Saving..." : "Change"}
-                 </Text>
-               </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       {/* --- CHANGE PASSWORD MODAL --- */}
       <Modal
@@ -892,16 +967,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={oldPassword}
                 onChangeText={setOldPassword}
                 placeholder="Enter current password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showOldPassword}
               />
               <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)} activeOpacity={0.7}>
                 {showOldPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -913,19 +988,52 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Enter new password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showNewPassword}
               />
               <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} activeOpacity={0.7}>
                 {showNewPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
+
+            {/* ── LIVE PASSWORD REQUIREMENTS ── */}
+            {newPassword.length > 0 && (
+              <View style={{
+                backgroundColor: 'rgba(15, 23, 42, 0.06)',
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
+                {pwRules.map((rule, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                    <View style={{
+                      width: 18, height: 18, borderRadius: 9,
+                      backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
+                      alignItems: 'center', justifyContent: 'center',
+                      marginRight: 8,
+                      borderWidth: 1,
+                      borderColor: rule.ok ? '#10B981' : '#EF4444',
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
+                        {rule.ok ? '✓' : '✕'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
+                      {rule.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.inputLabel}>Confirm New Password</Text>
             <View style={styles.passwordInputContainer}>
@@ -934,16 +1042,16 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Confirm new password"
-                placeholderTextColor="#AEC2B7"
+                placeholderTextColor="#CBD5E1"
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry={!showConfirmPassword}
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
                 {showConfirmPassword ? (
-                  <Eye color="#7FA293" size={20} />
+                  <Eye color="#94A3B8" size={20} />
                 ) : (
-                  <EyeOff color="#7FA293" size={20} />
+                  <EyeOff color="#94A3B8" size={20} />
                 )}
               </TouchableOpacity>
             </View>
@@ -1003,11 +1111,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('gcash')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={GcashLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(0, 85, 254, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <Smartphone color="#0055FE" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>GCash</Text>
             </TouchableOpacity>
 
@@ -1020,11 +1126,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('maya')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={MayaLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <Wallet color="#10B981" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>Maya</Text>
             </TouchableOpacity>
 
@@ -1037,11 +1141,9 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
               onPress={() => setSelectedMethod('card')}
               activeOpacity={0.8}
             >
-              <Image 
-                source={CardLogo} 
-                style={styles.paymentLogoImage} 
-                resizeMode="contain"
-              />
+              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <CreditCard color="#10B981" size={16} strokeWidth={2.5} />
+              </View>
               <Text style={styles.paymentMethodText}>Credit or Debit Card</Text>
             </TouchableOpacity>
 
@@ -1081,563 +1183,3 @@ export default function SettingsScreen({ onTabChange, userProfile, setUserProfil
    
  
 
-const baseColor = '#F0F4F2';           
-const clearWhiteHighlight = '#FFFFFF';    
-const softGreenShadow = '#AEC2B7';      
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-const logoLightHighlight = '#65D8AD'; 
-
-const getStyles = () => StyleSheet.create({
-  fullscreenOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    width: screenWidth, 
-    height: screenHeight, 
-    backgroundColor: baseColor,
-  },
-  container: { 
-    flex: 1,
-  },
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 115,
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12, 
-    paddingHorizontal: 4, 
-    width: '100%',
-  },
-  headerTextGroup: { 
-    flex: 1, 
-    paddingRight: 12,
-  },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
-    marginBottom: 2,
-  },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    letterSpacing: -0.5,
-  },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: '#556B60', 
-    marginTop: 2,
-  },
-  profileFormCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 24, 
-    padding: 16, 
-    marginBottom: 24, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  profileUserRow: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  avatarNeuOuterBox: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: logoGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 2, height: 4 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 5, 
-    elevation: 4,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderTopColor: logoLightHighlight,
-    borderLeftColor: logoLightHighlight,
-  },
-  avatarImageLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  profileMetadataTextGroup: {
-    alignItems: 'center',
-  },
-  profileUserNameText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#21332A',
-    marginBottom: 2,
-    textAlign: 'center',
-  },
-  profileUserSubText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7FA293',
-    textAlign: 'center',
-  },
-  glassDivider: { 
-    height: 1, 
-    backgroundColor: '#D4E2DC', 
-    marginVertical: 12,
-  },
-  innerGlassDivider: {
-    height: 1,
-    backgroundColor: '#D4E2DC',
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  profileMetricsMiniGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileMetricMiniBox: {
-    flex: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderLeftWidth: 1,
-    borderLeftColor: 'transparent',
-  },
-  profileMetricMiniValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#21332A',
-    marginBottom: 2,
-  },
-  profileMetricMiniLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#7FA293',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionLabelTitle: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: '#21332A', 
-    marginBottom: 12, 
-    marginLeft: 4, 
-    letterSpacing: -0.2,
-  },
-  formCard: {
-    backgroundColor: baseColor, 
-    borderRadius: 24, 
-    padding: 16, 
-    marginBottom: 24, 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-  },
-  cardTitle: { 
-    fontSize: 11, 
-    color: '#21332A', 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
-    marginBottom: 12, 
-    fontWeight: '800', 
-    marginLeft: 2,
-  },
-  filterButtonGroupRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-  },
-  filterChipButton: { 
-    paddingHorizontal: 14, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    marginRight: 8, 
-    marginBottom: 8, 
-    backgroundColor: baseColor,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 4, height: 4 }, 
-    shadowOpacity: 1, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  filterChipInactive: { 
-    backgroundColor: baseColor,
-  },
-  filterChipActive: { 
-    backgroundColor: '#FFFFFF', 
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.4, 
-    shadowRadius: 5, 
-    elevation: 3,
-    borderWidth: 0,
-  },
-  filterChipText: { 
-    fontSize: 12, 
-    fontWeight: '800',
-    color: '#7FA293',
-  },
-  filterChipTextActive: {
-    color: logoGreen,
-    fontWeight: '900',
-  },
-  premiumConfigurationWrapper: {
-    marginTop: 6,
-  },
-  premiumPanelHeading: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#7FA293',
-    marginBottom: 10,
-  },
-  billingPlanSelectorRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: baseColor,
-    padding: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
-  },
-  billingPlanActive: {
-    borderColor: logoGreen,
-    backgroundColor: '#E6EFEA',
-    borderWidth: 1.5,
-  },
-  billingPlanTextGroup: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  billingPlanMainTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#21332A',
-    marginBottom: 4,
-  },
-  billingPlanSubDescription: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#556B60',
-    lineHeight: 16,
-  },
-  billingPlanPriceBadgeText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#21332A',
-  },
-  bestValueBadge: {
-    backgroundColor: '#E53E3E',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  bestValueBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  premiumFeatureDetailsBox: {
-    marginTop: 16,
-    backgroundColor: '#E8F1EC',
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
-  },
-  featureDetailsHeadingFlexRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  premiumDetailsHeadingText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#21332A',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  featureBulletRowItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  bulletCheckIconSpacer: {
-    marginRight: 8,
-    marginTop: 2,
-  },
-  featureBulletBodyText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#556B60',
-    lineHeight: 18,
-  },
-  settingSwitchRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4E2DC',
-  },
-  settingIconTextGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingRowIconSpacer: {
-    marginRight: 14,
-  },
-  settingRowItemMainTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#21332A',
-    marginBottom: 2,
-  },
-  settingRowItemSubTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#7FA293',
-  },
-  systemActionNeuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  systemActionBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#21332A',
-    marginLeft: 8,
-  },
-  dangerActionBtnText: {
-    color: '#E53E3E',
-  },
-  dangerActionNeuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFEEEE',
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    shadowColor: '#F5A8A8', 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.5, 
-    shadowRadius: 4, 
-    elevation: 2,
-    borderWidth: 1.5, 
-    borderTopColor: '#FFFFFF', 
-    borderLeftColor: '#FFFFFF',
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  logOutSecondaryNeuButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: baseColor,
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    marginTop: 12,
-    shadowColor: softGreenShadow, 
-    shadowOffset: { width: 3, height: 3 }, 
-    shadowOpacity: 0.8, 
-    shadowRadius: 4, 
-    elevation: 3,
-    borderWidth: 1.5, 
-    borderTopColor: clearWhiteHighlight, 
-    borderLeftColor: clearWhiteHighlight,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  logOutButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#E53E3E',
-  },
-  versionInfoFooterText: {
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#AEC2B7',
-    marginBottom: 24,
-    letterSpacing: 1,
-  },
-  floatingChatbotContainer: { 
-    position: 'absolute', 
-    bottom: 104, 
-    right: 20, 
-    zIndex: 99,
-  },
-  chatbotFloatingButton: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  chatbotUnpressed: { 
-    backgroundColor: logoGreen, 
-    borderTopWidth: 1.5, 
-    borderLeftWidth: 1.5, 
-    borderTopColor: logoLightHighlight, 
-    borderLeftColor: logoLightHighlight, 
-    shadowColor: logoDarkShadow, 
-    shadowOffset: { width: 3, height: 4 }, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 6, 
-    elevation: 5,
-  },
-  chatbotPressed: { 
-    backgroundColor: '#3E836A', 
-    borderWidth: 1.5, 
-    borderColor: logoDarkShadow, 
-    transform: [{ scale: 0.95 }],
-  },
-
-  editProfileButton: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: '#D4E2DC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  editProfileButtonText: {
-    color: logoGreen,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: baseColor, borderRadius: 20, padding: 24, shadowColor: softGreenShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: logoGreen, marginBottom: 8, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, color: '#7FA293', textAlign: 'center', marginBottom: 20 },
-  modalInput: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC' },
-  passwordInputContainer: { width: '100%', backgroundColor: clearWhiteHighlight, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: '#D4E2DC', paddingRight: 14 },
-  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: '#1A2B23' },
-  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 8 },
-  modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: clearWhiteHighlight, alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#D4E2DC' },
-  modalCancelText: { color: '#7FA293', fontWeight: '700', fontSize: 14 },
-  modalSave: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
-  modalSaveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: logoGreen,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  settingActionRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  paymentMethodOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: clearWhiteHighlight,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: '#D4E2DC',
-    shadowColor: softGreenShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  paymentMethodActive: {
-    borderColor: logoGreen,
-    backgroundColor: '#E6EFEA',
-  },
-  paymentLogoImage: {
-    width: 60,
-    height: 24,
-    marginRight: 16,
-  },
-  paymentMethodText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#21332A',
-  },
-  modalSaveDisabled: {
-    backgroundColor: '#AEC2B7',
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#7FA293',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    marginLeft: 2,
-  },
-});

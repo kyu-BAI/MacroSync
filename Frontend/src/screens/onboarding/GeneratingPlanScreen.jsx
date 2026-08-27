@@ -1,26 +1,24 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
-  SafeAreaView,
   Animated,
   Easing,
   StatusBar
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import API_URL from '../config/api';
+import { useTheme } from '../../context/ThemeContext';
+import { getStyles } from './GeneratingPlanScreen.styles';
 
-// Neumorphic Theme Tokens
+// Flat Design Tokens
 const COLORS = {
-  base: '#F0F4F2',
-  logoGreen: '#4EA685',
-  logoDarkShadow: '#37745D',
-  logoLightHighlight: '#65D8AD',
-  textDark: '#1A2B23',
-  textMuted: '#556B60',
-  whiteHighlight: '#FFFFFF',
-  softGreenShadow: '#AEC2B7',
+  base: '#F8FAFC',
+  logoGreen: '#10B981',
+  textDark: '#0F172A',
+  textMuted: '#64748B',
+  white: '#FFFFFF',
 };
 
 const LOADING_MESSAGES = [
@@ -32,6 +30,9 @@ const LOADING_MESSAGES = [
 ];
 
 export default function GeneratingPlanScreen({ profileData, onComplete }) {
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   const [messageIndex, setMessageIndex] = useState(0);
   
   // Animation Values
@@ -42,20 +43,20 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
   const rotateAnim3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Pulse Animation for the Neumorphic Engine Core
+    // Pulse animation for the core icon
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.15,
+          toValue: 1.1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         })
       ])
     ).start();
@@ -89,7 +90,10 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           goal_weight: parseFloat(pData.goalWeight) || 70,
           target_date: pData.targetDate || new Date().toISOString().split('T')[0],
           weight_unit: pData.weightUnit || "kg",
-          starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70
+          starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70,
+          allergies: pData.allergies || [],
+          address: pData.address || "",
+          structured_location: pData.structuredLocation || {}
         };
 
         console.log("Saving onboarding data to backend...", payload);
@@ -163,100 +167,4 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.base,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-  loaderContainer: {
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 50,
-  },
-  ring1: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 4,
-    borderColor: 'transparent',
-    borderTopColor: COLORS.logoGreen,
-    borderRightColor: COLORS.logoGreen,
-    opacity: 0.8,
-  },
-  ring2: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 4,
-    borderColor: 'transparent',
-    borderBottomColor: COLORS.logoLightHighlight,
-    borderLeftColor: COLORS.logoLightHighlight,
-    opacity: 0.6,
-  },
-  ring3: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: 'transparent',
-    borderTopColor: COLORS.logoDarkShadow,
-    borderBottomColor: COLORS.logoDarkShadow,
-    opacity: 0.4,
-  },
-  coreIcon: {
-    position: 'absolute',
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#E4ECE8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.logoGreen,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  textContainer: {
-    alignItems: 'center',
-    height: 100, // Fixed height to prevent jumping text when lines wrap
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: COLORS.textDark,
-    marginBottom: 12,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: COLORS.textMuted,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#E1E9E5',
-    borderRadius: 4,
-    marginTop: 40,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: COLORS.logoGreen,
-    borderRadius: 4,
-  }
-});
+

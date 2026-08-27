@@ -1,13 +1,19 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Image, View, StatusBar, Dimensions, Animated, Easing } from 'react-native';
+import { Image, View, StatusBar, Dimensions, Animated, Easing } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
+import { getStyles } from './SplashScreen.styles';
 
 const { width: screenWidth } = Dimensions.get('window');
+const baseColor = '#F8FAFC';
 
 // The spinner consists of exactly 8 dots spaced out at 45-degree rotations
 const TOTAL_SPINNER_DOTS = 8;
 const BASE_SPEED_MS = 900; // Derived directly from --uib-speed: .9s
 
 export default function SplashScreen({ onAppReady }) {
+  const { theme } = useTheme();
+  const isDarkMode = false;
+  const styles = getStyles(theme, false);
   // Generates 8 independent animation reference tracking timelines
   const dotTimelines = useRef(
     Array.from({ length: TOTAL_SPINNER_DOTS }, () => new Animated.Value(0))
@@ -51,12 +57,12 @@ export default function SplashScreen({ onAppReady }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={baseColor} translucent={true} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme?.background || baseColor} translucent={true} />
       
       {/* Central Brand Canvas Viewport */}
       <View style={styles.imagePresenterFrame}>
         <Image 
-          source={require('../../images/MacroSync-Logo.png')} 
+          source={require('../../images/macrosync_logo.png')} 
           style={styles.logoImageLarge}
           resizeMode="contain"
         />
@@ -103,60 +109,4 @@ export default function SplashScreen({ onAppReady }) {
     </View>
   );
 }
-
-// Global System Accent Tokens
-const baseColor = '#F0F4F2';           
-const logoGreen = '#4EA685';        
-const logoDarkShadow = '#37745D';   
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: baseColor,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imagePresenterFrame: {
-    width: screenWidth * 0.75,
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -40, // Pulled up slightly to balance out the lower viewport spacing
-  },
-  logoImageLarge: {
-    width: '100%',
-    height: '100%',
-  },
-  
-  // --- SPINNER ENGINE SPECIFICATION LAYOUTS ---
-  spinnerContainerHub: {
-    position: 'absolute',
-    bottom: 100,
-    width: 34, // Optimized from 45 down to 34 for a subtle, professional fit
-    height: 34,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dotSpokeWrapperAnchor: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'flex-start', // Anchors the nested dot straight to the outer edge vector
-    alignItems: 'center',
-  },
-  pulsingCoreBead: {
-    width: 6.5, // Scaled proportionally from 9 down to 6.5 to look balanced
-    height: 6.5,
-    borderRadius: 3.25,
-    backgroundColor: logoGreen, 
-    
-    // Smooth Neon Glow Simulation Styles
-    shadowColor: logoDarkShadow,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-});
+

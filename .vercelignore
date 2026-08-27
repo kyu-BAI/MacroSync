@@ -1,0 +1,10 @@
+Frontend/
+Backend/venv/
+venv/
+__pycache__/
+*.pyc
+.expo/
+dist/
+.agent/
+.git/
+Backend/templates/

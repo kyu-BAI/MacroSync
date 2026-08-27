@@ -6,6 +6,10 @@ const KEYS = {
   USER_PROFILE: 'ms_user_profile',
   SYNC_QUEUE: 'ms_sync_queue',
   USER_ID: 'ms_user_id',
+  REMEMBER_ME: 'ms_remember_me',
+  REMEMBERED_EMAIL: 'ms_remembered_email',
+  REMEMBERED_PASSWORD: 'ms_remembered_password',
+  REMEMBERED_GOOGLE_EMAIL: 'ms_remembered_google_email',
 };
 
 // ─── Save dashboard data to local cache ─────────────────────────────────────
@@ -40,7 +44,8 @@ export async function getCachedDashboardData(userId) {
 // ─── Save logged-in user ID for auto-restore ─────────────────────────────────
 export async function saveUserId(userId) {
   try {
-    await AsyncStorage.setItem(KEYS.USER_ID, userId);
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') return;
+    await AsyncStorage.setItem(KEYS.USER_ID, userId.trim());
   } catch (e) {
     console.warn('OfflineStorage: Failed to save userId', e);
   }
@@ -58,6 +63,74 @@ export async function clearSavedUserId() {
   try {
     await AsyncStorage.removeItem(KEYS.USER_ID);
   } catch (e) { }
+}
+
+// ─── Remember Me & Google Email Helpers ─────────────────────────────────────
+export async function setRememberMe(enabled) {
+  try {
+    await AsyncStorage.setItem(KEYS.REMEMBER_ME, enabled ? 'true' : 'false');
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to set remember me', e);
+  }
+}
+
+export async function isRememberMeEnabled() {
+  try {
+    const val = await AsyncStorage.getItem(KEYS.REMEMBER_ME);
+    // Default to true if not explicitly set to 'false'
+    return val !== 'false';
+  } catch (e) {
+    return true;
+  }
+}
+
+export async function saveRememberedGoogleEmail(email) {
+  try {
+    if (!email) return;
+    await AsyncStorage.setItem(KEYS.REMEMBERED_GOOGLE_EMAIL, email.trim());
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to save Google email', e);
+  }
+}
+
+export async function getRememberedGoogleEmail() {
+  try {
+    return await AsyncStorage.getItem(KEYS.REMEMBERED_GOOGLE_EMAIL);
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function clearRememberedGoogleEmail() {
+  try {
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_GOOGLE_EMAIL);
+  } catch (e) {}
+}
+
+export async function saveRememberedCredentials(email, password) {
+  try {
+    if (email) await AsyncStorage.setItem(KEYS.REMEMBERED_EMAIL, email.trim());
+    // Security: Do not store raw plain-text passwords in unencrypted AsyncStorage
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_PASSWORD);
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to save remembered credentials', e);
+  }
+}
+
+export async function getRememberedCredentials() {
+  try {
+    const email = await AsyncStorage.getItem(KEYS.REMEMBERED_EMAIL);
+    return { email: email || '', password: '' };
+  } catch (e) {
+    return { email: '', password: '' };
+  }
+}
+
+export async function clearRememberedCredentials() {
+  try {
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_EMAIL);
+    await AsyncStorage.removeItem(KEYS.REMEMBERED_PASSWORD);
+  } catch (e) {}
 }
 
 // ─── Sync Queue (offline actions) ────────────────────────────────────────────

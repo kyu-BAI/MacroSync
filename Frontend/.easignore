@@ -1,0 +1,11 @@
+# EAS Build ignore patterns
+node_modules/
+.expo/
+dist/
+web-build/
+.kotlin/
+*.apk
+*.aab
+**/.cxx/
+**/build/
+**/.gradle/
