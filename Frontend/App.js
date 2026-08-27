@@ -54,6 +54,7 @@ import SettingsScreen from "./src/screens/main/SettingsScreen";
 import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
+import FadeTabView from "./src/components/FadeTabView";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import OfflineBanner from "./src/components/OfflineBanner";
 import { styles } from "./App.styles";
@@ -473,6 +474,39 @@ function MainApp() {
     saveChatHistory();
   }, [chatMessages, userId]);
 
+  // ── Load & Save Account-Based Weight Trend History ────────────────────────
+  useEffect(() => {
+    const loadWeightHistory = async () => {
+      if (userId) {
+        try {
+          const stored = await AsyncStorage.getItem(`ms_weight_history_${userId}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length === 7) {
+              setWeightHistory(parsed);
+            }
+          }
+        } catch (err) {
+          console.log("Error loading weight history:", err);
+        }
+      }
+    };
+    loadWeightHistory();
+  }, [userId]);
+
+  useEffect(() => {
+    const saveWeightHistory = async () => {
+      if (userId && Array.isArray(weightHistory) && weightHistory.length === 7) {
+        try {
+          await AsyncStorage.setItem(`ms_weight_history_${userId}`, JSON.stringify(weightHistory));
+        } catch (err) {
+          console.log("Error saving weight history:", err);
+        }
+      }
+    };
+    saveWeightHistory();
+  }, [weightHistory, userId]);
+
   // ── Premium Status Upgrade Notification Listener ───────────────────────────
   const prevIsPremiumRef = useRef(null);
   useEffect(() => {
@@ -574,6 +608,13 @@ function MainApp() {
           if (loggedInUserId) {
             setUserId(loggedInUserId);
             saveUserId(loggedInUserId);
+            // Non-blocking background cache hydration for instant 0ms screen switch
+            getCachedDashboardData(loggedInUserId)
+              .then(cached => {
+                if (cached && cached.data) applyDashboardData(cached.data);
+              })
+              .catch(() => {});
+            fetchDashboardData(loggedInUserId);
           }
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
@@ -636,6 +677,12 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
+          getCachedDashboardData(newUserId)
+            .then(cached => {
+              if (cached && cached.data) applyDashboardData(cached.data);
+            })
+            .catch(() => {});
+          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
@@ -656,6 +703,12 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
+          getCachedDashboardData(newUserId)
+            .then(cached => {
+              if (cached && cached.data) applyDashboardData(cached.data);
+            })
+            .catch(() => {});
+          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
@@ -885,49 +938,53 @@ function MainApp() {
     <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
       <OfflineBanner isOnline={isOnline} />
       {activeTab === 'DASHBOARD' && (
-        <DashboardScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userBaseline={userBaseline}
-          userGoals={userGoals}
-          dailyNutrition={dailyNutrition}
-          dailyExercise={dailyExercise}
-          setDailyExercise={setDailyExercise}
-          notifications={notifications}
-          setNotifications={setNotifications}
-          globalLoggedWeight={globalLoggedWeight}
-          setGlobalLoggedWeight={setGlobalLoggedWeight}
-          globalConsumedGlasses={globalConsumedGlasses}
-          setGlobalConsumedGlasses={setGlobalConsumedGlasses}
-          userProfile={userProfile}
-          userId={userId}
-          onRefreshDashboard={fetchDashboardData}
-          isOnline={isOnline}
-          localStartingWeight={localStartingWeight}
-          setLocalStartingWeight={setLocalStartingWeight}
-          localGoalWeight={localGoalWeight}
-          setLocalGoalWeight={setLocalGoalWeight}
-          localGoalLabel={localGoalLabel}
-          setLocalGoalLabel={setLocalGoalLabel}
-          goalReachedAlertShown={goalReachedAlertShown}
-          setGoalReachedAlertShown={setGoalReachedAlertShown}
-          weightHistory={weightHistory}
-          setWeightHistory={setWeightHistory}
-        />
+        <FadeTabView tabKey="DASHBOARD">
+          <DashboardScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userBaseline={userBaseline}
+            userGoals={userGoals}
+            dailyNutrition={dailyNutrition}
+            dailyExercise={dailyExercise}
+            setDailyExercise={setDailyExercise}
+            notifications={notifications}
+            setNotifications={setNotifications}
+            globalLoggedWeight={globalLoggedWeight}
+            setGlobalLoggedWeight={setGlobalLoggedWeight}
+            globalConsumedGlasses={globalConsumedGlasses}
+            setGlobalConsumedGlasses={setGlobalConsumedGlasses}
+            userProfile={userProfile}
+            userId={userId}
+            onRefreshDashboard={fetchDashboardData}
+            isOnline={isOnline}
+            localStartingWeight={localStartingWeight}
+            setLocalStartingWeight={setLocalStartingWeight}
+            localGoalWeight={localGoalWeight}
+            setLocalGoalWeight={setLocalGoalWeight}
+            localGoalLabel={localGoalLabel}
+            setLocalGoalLabel={setLocalGoalLabel}
+            goalReachedAlertShown={goalReachedAlertShown}
+            setGoalReachedAlertShown={setGoalReachedAlertShown}
+            weightHistory={weightHistory}
+            setWeightHistory={setWeightHistory}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'DIET' && (
-        <DietRecipesScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          dailyNutrition={dailyNutrition}
-          setDailyNutrition={setDailyNutrition}
-          guestBaseline={userBaseline}
-          guestGoals={userGoals}
-          globalLoggedMeals={globalLoggedMeals}
-          setGlobalLoggedMeals={setGlobalLoggedMeals}
-          sessionRecipes={sessionRecipes}
-          userId={userId}
-          isOnline={isOnline}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="DIET">
+          <DietRecipesScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            dailyNutrition={dailyNutrition}
+            setDailyNutrition={setDailyNutrition}
+            guestBaseline={userBaseline}
+            guestGoals={userGoals}
+            globalLoggedMeals={globalLoggedMeals}
+            setGlobalLoggedMeals={setGlobalLoggedMeals}
+            sessionRecipes={sessionRecipes}
+            userId={userId}
+            isOnline={isOnline}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'CHATBOT' && (
         <ChatbotAIScreen 
@@ -939,46 +996,54 @@ function MainApp() {
         />
       )}
       {activeTab === 'SCANNER' && (
-        <FoodScannerScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userId={userId}
-          userProfile={userProfile}
-          dailyNutrition={dailyNutrition}
-          onLogMeal={handleLogScannedMeal}
-        />
+        <FadeTabView tabKey="SCANNER">
+          <FoodScannerScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userId={userId}
+            userProfile={userProfile}
+            dailyNutrition={dailyNutrition}
+            onLogMeal={handleLogScannedMeal}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'WORKOUT' && (
-        <WorkoutScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userId={userId}
-          onRefreshDashboard={fetchDashboardData}
-          isOnline={isOnline}
-          dailyExercise={dailyExercise}
-          setDailyExercise={setDailyExercise}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="WORKOUT">
+          <WorkoutScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userId={userId}
+            onRefreshDashboard={fetchDashboardData}
+            isOnline={isOnline}
+            dailyExercise={dailyExercise}
+            setDailyExercise={setDailyExercise}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'SETTINGS' && (
-        <SettingsScreen 
-          onTabChange={(tab) => {
-            if (tab === 'AUTH') {
-              handleLogoutRoutine();
-            } else {
-              setActiveTab(tab);
-            }
-          }} 
-          onLogout={handleLogoutRoutine} 
-          userProfile={userProfile}
-          setUserProfile={setUserProfile}
-          userId={userId}
-        />
+        <FadeTabView tabKey="SETTINGS">
+          <SettingsScreen 
+            onTabChange={(tab) => {
+              if (tab === 'AUTH') {
+                handleLogoutRoutine();
+              } else {
+                setActiveTab(tab);
+              }
+            }} 
+            onLogout={handleLogoutRoutine} 
+            userProfile={userProfile}
+            setUserProfile={setUserProfile}
+            userId={userId}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'NOTIFICATIONS' && (
-        <NotificationsScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          notifications={notifications}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="NOTIFICATIONS">
+          <NotificationsScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            notifications={notifications}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
         <DraggableChatbotButton onPress={() => setActiveTab('CHATBOT')} />

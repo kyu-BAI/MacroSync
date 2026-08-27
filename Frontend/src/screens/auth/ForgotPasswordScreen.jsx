@@ -18,6 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { getStyles } from './ForgotPasswordScreen.styles';
 
 const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
 export default function ForgotPasswordScreen({ onNavigateBack, onOtpSent }) {
   const { showAlert } = useCustomAlert();

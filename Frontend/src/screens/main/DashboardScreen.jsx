@@ -25,6 +25,8 @@ import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import PressableCard from '../../components/PressableCard';
+import SkeletonCard from '../../components/SkeletonCard';
 import { getStyles } from './DashboardScreen.styles';
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
@@ -56,6 +58,8 @@ function AnimatedRing({ radius, strokeWidth, pct, color = logoGreen, trackColor 
   const animPct = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Always reset to 0 first so ring animates from zero every mount
+    animPct.setValue(0);
     Animated.timing(animPct, {
       toValue: pct,
       duration: 1000,
@@ -114,6 +118,214 @@ function AnimatedBar({ pct, color, delay = 0 }) {
         backgroundColor: color,
         width: animWidth.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
       }} />
+    </View>
+  );
+}
+
+
+
+// ─── Animated Water Glass Bar (Ultra-Smooth Liquid Wave Burst on Add Only) ────
+function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
+  const pctRatio = Math.min(consumed / target, 1);
+  const fillAnim = useRef(new Animated.Value(pctRatio)).current;
+  const waveY = useRef(new Animated.Value(0)).current;
+  const waveX = useRef(new Animated.Value(0)).current;
+  const isFirstMountRef = useRef(true);
+
+  // Trigger ultra-smooth wave slosh animation ONLY when user logs a glass
+  useEffect(() => {
+    // 1. Silk-smooth liquid level height rise
+    Animated.timing(fillAnim, {
+      toValue: pctRatio,
+      duration: 900,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: false,
+    }).start();
+
+    // Skip wave burst on initial app launch mount
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+
+    // 2. Ultra-Smooth Sinusoidal Liquid Wave Burst & Dissipation
+    waveY.setValue(0);
+    waveX.setValue(0);
+
+    Animated.parallel([
+      // Smooth vertical liquid wave dampening sequence (sinusoidal sine easing)
+      Animated.sequence([
+        Animated.timing(waveY, { toValue: 1.0, duration: 320, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: -0.6, duration: 300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: 0.3, duration: 260, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: -0.1, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: 0, duration: 180, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+      ]),
+      // Smooth horizontal wave crest sweep
+      Animated.sequence([
+        Animated.timing(waveX, { toValue: 1.0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveX, { toValue: -0.5, duration: 450, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveX, { toValue: 0, duration: 280, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, [consumed, target]);
+
+  // Keyframe Interpolation for ultra-smooth temporary wave burst
+  const waveTranslateY = waveY.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-5, 5],
+  });
+  const waveTranslateX = waveX.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-18, 18],
+  });
+  const waveScaleY = waveY.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [0.85, 1.0, 1.15],
+  });
+
+  // Top position of liquid inside 88px basin (from 88px empty down to 0px full)
+  const liquidTop = fillAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [88, 0],
+  });
+
+  return (
+    <View style={{ width: 80, alignItems: 'center' }}>
+      {/* Outer Highball Glass Container */}
+      <View
+        style={{
+          height: 110,
+          width: 64,
+          backgroundColor: 'transparent',
+          position: 'relative',
+          alignItems: 'center',
+        }}
+      >
+        {/* Outer Glass Wall Border Structure */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 4,
+            left: 2,
+            right: 2,
+            bottom: 0,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: theme?.border ? theme.border : 'rgba(148, 163, 184, 0.65)',
+            borderBottomWidth: 0,
+            overflow: 'hidden',
+          }}
+        />
+
+        {/* Top Elliptical Glass Rim Lip */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 2,
+            right: 2,
+            height: 10,
+            borderRadius: 10,
+            borderWidth: 2,
+            borderColor: 'rgba(148, 163, 184, 0.75)',
+            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+            zIndex: 30,
+          }}
+        />
+
+        {/* Inner Glass Basin Area (liquid container) */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 6,
+            right: 6,
+            bottom: 14,
+            borderBottomLeftRadius: 14,
+            borderBottomRightRadius: 14,
+            overflow: 'hidden',
+            backgroundColor: theme?.inputBg || 'rgba(241, 245, 249, 0.35)',
+            zIndex: 5,
+          }}
+        >
+          {/* Dynamic Water Body Fill (100% Solid Sky Blue — Zero Transparency / White Lines) */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: liquidTop,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: waterColor || '#0EA5E9',
+              opacity: 1.0,
+            }}
+          >
+            {/* Dual-Layer Ultra-Smooth Liquid Surface Wave */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: -3,
+                left: -18,
+                right: -18,
+                height: 10,
+                transform: [
+                  { translateY: waveTranslateY },
+                  { translateX: waveTranslateX },
+                  { scaleY: waveScaleY },
+                ],
+              }}
+            >
+              {/* Surface Crest Layer 1 (Solid Sky Blue Liquid Curve) */}
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 6,
+                  backgroundColor: '#38BDF8',
+                  borderTopLeftRadius: 8,
+                  borderTopRightRadius: 8,
+                }}
+              />
+            </Animated.View>
+          </Animated.View>
+        </View>
+
+        {/* Thick Solid Heavy Glass Base Block at Bottom */}
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 2,
+            right: 2,
+            height: 15,
+            borderBottomLeftRadius: 10,
+            borderBottomRightRadius: 10,
+            borderWidth: 2,
+            borderColor: 'rgba(148, 163, 184, 0.75)',
+            backgroundColor: 'rgba(241, 245, 249, 0.7)',
+            zIndex: 20,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Base Curved Bottom Refraction Ring */}
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 2,
+              left: 4,
+              right: 4,
+              height: 6,
+              borderRadius: 6,
+              borderWidth: 1.5,
+              borderColor: 'rgba(100, 116, 139, 0.5)',
+              backgroundColor: 'rgba(148, 163, 184, 0.3)',
+            }}
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -259,6 +471,7 @@ export default function DashboardScreen({
   ];
 
   // Water Intake State & Logic
+  const [waterRipples, setWaterRipples] = useState([]);
   const consumedGlasses    = globalConsumedGlasses !== undefined ? globalConsumedGlasses : 0;
   const weightKg           = parseFloat(userBaseline?.weight || 70);
   const heightCm           = parseFloat(userBaseline?.height || 170);
@@ -266,6 +479,9 @@ export default function DashboardScreen({
   const targetGlasses      = Math.min(15, Math.max(6, Math.round(recommendedWaterMl / 250)));
 
   const handleAddGlass = async () => {
+    // Trigger water liquid ripple animation
+    setWaterRipples((prev) => [...prev, Date.now()]);
+
     const newAmount = consumedGlasses + 1;
     if (!userId) {
       showAlert("Authentication Error", "You must be logged in to log water.");
@@ -683,7 +899,31 @@ export default function DashboardScreen({
           </View>
         </FadeCard>
 
+        {/* ── SKELETON LOADERS (shown while data hydrates) ── */}
+        {(!userProfile?.name || userProfile.name === 'User') && (
+          <>
+            <SkeletonCard rows={[
+              { width: '50%', height: 12 },
+              { width: '75%', height: 20, marginTop: 8 },
+              { width: '40%', height: 10, marginTop: 8 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '35%', height: 12 },
+              { width: '100%', height: 110, marginTop: 12 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '45%', height: 12 },
+              { width: '100%', height: 80, marginTop: 12 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '40%', height: 12 },
+              { width: '100%', height: 100, marginTop: 12 },
+            ]} />
+          </>
+        )}
+
         {/* ── 1. WEIGHT TRACKING PROGRESS CARD ── */}
+        {userProfile?.name && userProfile.name !== 'User' && (
         <FadeCard delay={80} style={styles.formCard}>
           <Text style={styles.cardTitle}>Weight Progress</Text>
           <View style={[styles.weightSplitLayout, { alignItems: 'flex-start' }]}>
@@ -724,8 +964,11 @@ export default function DashboardScreen({
             </View>
           </View>
         </FadeCard>
+        )}
 
-        {/* ── 2. DAILY NUTRITION CARD ── */}
+        {/* ── 2. DAILY NUTRITION CARD + REST OF CARDS (guarded by real data) ── */}
+        {userProfile?.name && userProfile.name !== 'User' && (
+          <>
         <FadeCard delay={160} style={styles.formCard}>
           <Text style={styles.cardTitle}>Daily Nutrition</Text>
           <View style={[styles.nutritionRow, { alignItems: 'flex-start' }]}>
@@ -819,7 +1062,9 @@ export default function DashboardScreen({
           </View>
 
           {/* ── RECENT WORKOUT SUB-CARD ── */}
-          <TouchableOpacity
+          <PressableCard
+            scaleDown={0.97}
+            onPress={() => onTabChange && onTabChange('WORKOUT')}
             style={{
               marginTop: 16,
               padding: 12,
@@ -828,8 +1073,6 @@ export default function DashboardScreen({
               borderWidth: 1,
               borderColor: theme?.border || '#E2E8F0',
             }}
-            activeOpacity={0.8}
-            onPress={() => onTabChange && onTabChange('WORKOUT')}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -875,7 +1118,7 @@ export default function DashboardScreen({
             </View>
 
             <AnimatedBar pct={Math.min((exercise.activeMinutes / (exercise.targetMinutes || 60)), 1)} color="#F97316" delay={500} />
-          </TouchableOpacity>
+          </PressableCard>
           {exercise.activeMinutes >= (exercise.targetMinutes || 60) && (
             <View style={[
               styles.warningBanner,
@@ -893,6 +1136,7 @@ export default function DashboardScreen({
 
         {/* ── 3.5 HYDRATION ── */}
         <FadeCard delay={320} style={styles.formCard}>
+
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={styles.cardTitle}>Hydration Tracking</Text>
             <View style={{ backgroundColor: theme?.inputBg || '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
@@ -914,12 +1158,13 @@ export default function DashboardScreen({
               </Text>
             </View>
 
-            {/* Vertical water bar */}
-            <View style={{ width: 80, alignItems: 'center' }}>
-              <View style={{ height: 100, width: 64, backgroundColor: theme?.inputBg || '#F1F5F9', borderRadius: 12, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0', justifyContent: 'flex-end', overflow: 'hidden' }}>
-                <View style={{ height: `${Math.min((consumedGlasses / targetGlasses) * 100, 100)}%`, width: '100%', backgroundColor: waterColor, opacity: 0.85 }} />
-              </View>
-            </View>
+            {/* Vertical water bar with animated rising height & liquid slosh */}
+            <AnimatedWaterGlassBar
+              consumed={consumedGlasses}
+              target={targetGlasses}
+              waterColor={waterColor}
+              theme={theme}
+            />
           </View>
 
           <TouchableOpacity
@@ -1005,6 +1250,7 @@ export default function DashboardScreen({
               renderDotContent={({ x, y, index, indexData }) => {
                 if (index === 0) return null;
                 const diff = indexData - weightDataPoints[index - 1];
+                if (Math.abs(diff) < 0.05) return null;
                 const diffColor = getGoalProgressColor(diff);
                 const sign      = diff > 0 ? '+' : '';
                 const displayValue = `${sign}${diff.toFixed(1)}`;
@@ -1018,6 +1264,9 @@ export default function DashboardScreen({
             />
           </View>
         </FadeCard>
+
+          </>
+        )}
 
       </ScrollView>
 

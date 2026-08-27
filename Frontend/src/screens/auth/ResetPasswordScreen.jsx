@@ -18,6 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { getStyles } from './ResetPasswordScreen.styles';
 
 const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
 export default function ResetPasswordScreen({ email, onResetSuccess }) {
   const { showAlert } = useCustomAlert();

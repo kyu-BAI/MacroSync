@@ -421,6 +421,7 @@ export const getStyles = (theme) => StyleSheet.create({
   timelineItem: {
     flexDirection: 'row',
     marginBottom: 16,
+    width: '100%',
   },
 
   timelineCard: {

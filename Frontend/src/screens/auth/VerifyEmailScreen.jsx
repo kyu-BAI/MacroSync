@@ -18,6 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { getStyles } from './VerifyEmailScreen.styles';
 
 const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';
 
 export default function VerifyEmailScreen({ email, name, password, isLogin, onVerified, onNavigateBack }) {
   const { showAlert } = useCustomAlert();
@@ -121,6 +122,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
       }
 
       if (response.ok && data && data.user_id) {
+        setIsLoading(false);
         onVerified(data.user_id, data.is_onboarded);
       } else {
         setIsLoading(false);

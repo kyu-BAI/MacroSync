@@ -108,16 +108,18 @@ export default function LoginScreen({
         if (setCurrentUserId && userId) {
           setCurrentUserId(userId);
         }
-        if (userId) {
-          await saveUserId(userId);
-        }
-        await setRememberMe(rememberMe);
-        if (rememberMe) {
-          await saveRememberedCredentials(email, password);
-        } else {
-          await clearRememberedCredentials();
-        }
+
+        // Call onLoginSuccess INSTANTLY for 0ms screen switch
         onLoginSuccess(userId, data.is_onboarded);
+
+        // Perform storage persistence non-blockingly in background
+        Promise.all([
+          userId ? saveUserId(userId) : Promise.resolve(),
+          setRememberMe(rememberMe),
+          rememberMe
+            ? saveRememberedCredentials(email, password)
+            : clearRememberedCredentials(),
+        ]).catch((err) => console.log("Storage persistence error:", err));
       } else {
         setIsLoading(false);
         showAlert(

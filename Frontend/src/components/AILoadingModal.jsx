@@ -1,3 +1,4 @@
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Text,
   View,
@@ -5,7 +6,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Sparkles, UtensilsCrossed, Cpu, SportShoe } from 'lucide-react-native';
+import { Sparkles, UtensilsCrossed, Cpu, Dumbbell } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { getStyles } from './AILoadingModal.styles';
 
@@ -147,7 +148,7 @@ export default function AILoadingModal({
   });
 
   const IconComponent = type === 'workout' 
-    ? SportShoe 
+    ? Dumbbell 
     : type === 'recipe' 
       ? UtensilsCrossed 
       : UtensilsCrossed;

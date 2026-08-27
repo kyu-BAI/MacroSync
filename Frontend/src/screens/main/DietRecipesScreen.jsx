@@ -44,6 +44,9 @@ import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
 import AILoadingModal from "../../components/AILoadingModal";
+import StaggerCard from "../../components/StaggerCard";
+import SkeletonCard from "../../components/SkeletonCard";
+import PressableCard from "../../components/PressableCard";
 import { WebView } from "react-native-webview";
 import { getStyles } from "./DietRecipesScreen.styles";
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
@@ -1986,67 +1989,18 @@ export default function DietRecipesScreen({
                     </View>
                   )}
 
-                  {isGeneratingMealPlan && planList.length === 0 ? (
+                  {(!isCacheChecked || (isGeneratingMealPlan && planList.length === 0)) ? (
                     <View style={{ gap: 12 }}>
                       {[0, 1, 2, 3].map((i) => (
-                        <View
+                        <SkeletonCard
                           key={i}
-                          style={{
-                            borderRadius: 18,
-                            backgroundColor: isDarkMode ? "#1E293B" : "#F1F5F9",
-                            padding: 18,
-                            borderWidth: 1,
-                            borderColor: isDarkMode ? "#334155" : "#E2E8F0",
-                            opacity: 0.7,
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 80,
-                              height: 22,
-                              borderRadius: 8,
-                              backgroundColor: isDarkMode
-                                ? "#334155"
-                                : "#E2E8F0",
-                              marginBottom: 10,
-                            }}
-                          />
-                          <View
-                            style={{
-                              width: "65%",
-                              height: 16,
-                              borderRadius: 6,
-                              backgroundColor: isDarkMode
-                                ? "#334155"
-                                : "#E2E8F0",
-                              marginBottom: 8,
-                            }}
-                          />
-                          <View
-                            style={{
-                              width: "45%",
-                              height: 13,
-                              borderRadius: 6,
-                              backgroundColor: isDarkMode
-                                ? "#334155"
-                                : "#E2E8F0",
-                            }}
-                          />
-                        </View>
+                          rows={[
+                            { width: '50%', height: 13 },
+                            { width: '75%', height: 18, marginTop: 8 },
+                            { width: '45%', height: 11, marginTop: 6 },
+                          ]}
+                        />
                       ))}
-                      <View style={{ alignItems: "center", paddingTop: 8 }}>
-                        <ActivityIndicator size="small" color="#10B981" />
-                        <Text
-                          style={{
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: isDarkMode ? "#94A3B8" : "#64748B",
-                            fontWeight: "600",
-                          }}
-                        >
-                          Generating personalized AI meals for your goals...
-                        </Text>
-                      </View>
                     </View>
                   ) : planList.length === 0 && isCacheChecked ? (
                     <View
@@ -2212,8 +2166,11 @@ export default function DietRecipesScreen({
                       displayTitle = translateMealTitle(displayTitle, language);
 
                       return (
-                        <View key={mealId} style={styles.timelineItem}>
-                          <View
+                        <StaggerCard key={mealId} index={index} initialDelay={60}>
+                          <View style={styles.timelineItem}>
+                          <PressableCard
+                            scaleDown={0.97}
+                            onPress={() => handleViewRecipe({ ...meal, title: displayTitle })}
                             style={[
                               styles.timelineCard,
                               isLogged && styles.timelineCardLogged,
@@ -2328,8 +2285,9 @@ export default function DietRecipesScreen({
                                 )}
                               </TouchableOpacity>
                             </View>
+                          </PressableCard>
                           </View>
-                        </View>
+                        </StaggerCard>
                       );
                     })
                   )}

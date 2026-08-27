@@ -12,6 +12,8 @@ import {
 import { ChevronLeft, Award, Droplets, Utensils, Activity, Bell, CheckCheck, Trash2 } from 'lucide-react-native';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import StaggerCard from '../../components/StaggerCard';
+import PressableCard from '../../components/PressableCard';
 import { getStyles } from './NotificationsScreen.styles';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -164,46 +166,47 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
               </View>
             </View>
 
-            {activeNotifications.map((notif) => {
+            {activeNotifications.map((notif, index) => {
               const { icon: IconComponent, color, bgColor } = getCategoryStyles(notif.category);
               return (
-                <TouchableOpacity 
-                  key={notif.id}
-                  style={[
-                    styles.notificationCard,
-                    !notif.read && styles.unreadCard
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => handleNotificationPress(notif.id)}
-                >
-                  <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-                    <IconComponent color={color} size={20} strokeWidth={2.2} />
-                  </View>
-                  
-                  <View style={styles.notifContent}>
-                    <View style={styles.notifHeaderRow}>
-                      <Text style={[styles.notifTitle, !notif.read && styles.unreadText]}>
-                        {notif.title}
-                      </Text>
-                      <Text style={styles.notifTime}>{notif.time}</Text>
+                <StaggerCard key={notif.id} index={index} staggerMs={60} initialDelay={100}>
+                  <PressableCard 
+                    scaleDown={0.97}
+                    style={[
+                      styles.notificationCard,
+                      !notif.read && styles.unreadCard
+                    ]}
+                    onPress={() => handleNotificationPress(notif.id)}
+                  >
+                    <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
+                      <IconComponent color={color} size={20} strokeWidth={2.2} />
                     </View>
-                    <Text style={styles.notifMessage} numberOfLines={3}>
-                      {notif.message}
-                    </Text>
-                  </View>
+                    
+                    <View style={styles.notifContent}>
+                      <View style={styles.notifHeaderRow}>
+                        <Text style={[styles.notifTitle, !notif.read && styles.unreadText]}>
+                          {notif.title}
+                        </Text>
+                        <Text style={styles.notifTime}>{notif.time}</Text>
+                      </View>
+                      <Text style={styles.notifMessage} numberOfLines={3}>
+                        {notif.message}
+                      </Text>
+                    </View>
 
-                  {/* Right-side: unread dot + dismiss button */}
-                  <View style={styles.rightActions}>
-                    {!notif.read && <View style={[styles.unreadDot, { backgroundColor: '#10B981' }]} />}
-                    <TouchableOpacity
-                      style={styles.dismissBtn}
-                      onPress={() => handleDismissOne(notif.id)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.dismissX}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+                    {/* Right-side: unread dot + dismiss button */}
+                    <View style={styles.rightActions}>
+                      {!notif.read && <View style={[styles.unreadDot, { backgroundColor: '#10B981' }]} />}
+                      <TouchableOpacity
+                        style={styles.dismissBtn}
+                        onPress={() => handleDismissOne(notif.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.dismissX}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </PressableCard>
+                </StaggerCard>
               );
             })}
 

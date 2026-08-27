@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState, useEffect } from "react";
+import {
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Platform,
   Dimensions,
@@ -13,41 +13,91 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Linking
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as WebBrowser from 'expo-web-browser';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Sliders, Smartphone, CheckCircle2, Sparkles, Moon, Sun, Flame, Droplets, Activity, Eye, EyeOff, Wallet, CreditCard, Crown } from 'lucide-react-native';
-import API_URL from '../config/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NotificationService } from '../../services/NotificationService';
-import { useCustomAlert } from '../../context/CustomAlertContext';
-import { useTheme } from '../../context/ThemeContext';
-import { useLanguage } from '../../context/LanguageContext';
-import { clearSavedUserId } from '../../services/OfflineStorage';
-import { getStyles } from './SettingsScreen.styles';
+  Linking,
+} from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as WebBrowser from "expo-web-browser";
+import {
+  Camera,
+  UtensilsCrossed,
+  BotMessageSquare,
+  Home,
+  SportShoe,
+  Settings,
+  User,
+  Bell,
+  Shield,
+  CircleHelp,
+  LogOut,
+  ChevronRight,
+  Sliders,
+  Smartphone,
+  CheckCircle2,
+  Sparkles,
+  Moon,
+  Sun,
+  Flame,
+  Droplets,
+  Activity,
+  Eye,
+  EyeOff,
+  Wallet,
+  CreditCard,
+  Crown,
+  X,
+  Pencil,
+  ImagePlus,
+} from "lucide-react-native";
+import API_URL from "../config/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NotificationService } from "../../services/NotificationService";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { clearSavedUserId } from "../../services/OfflineStorage";
+import PressableCard from "../../components/PressableCard";
+import { getStyles } from "./SettingsScreen.styles";
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const logoGreen = '#10B981';
+const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
+const logoGreen = "#10B981";
 
-export default function SettingsScreen({ onTabChange, onLogout, userProfile, setUserProfile, userId }) {
+export default function SettingsScreen({
+  onTabChange,
+  onLogout,
+  userProfile,
+  setUserProfile,
+  userId,
+}) {
   const { showAlert } = useCustomAlert();
-  const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
+  const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } =
+    useTheme();
   const { language, setLanguage } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
-
   // --- EDIT PROFILE MODAL STATE ---
   const [showEditModal, setShowEditModal] = useState(false);
-  const [tempName, setTempName] = useState('');
+  const [tempName, setTempName] = useState("");
   const [tempImage, setTempImage] = useState(null);
+
+  // --- PHOTO PREVIEW & AVATAR MANAGER STATES ---
+  const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   // --- CHANGE PASSWORD STATE ---
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- PASSWORD VISIBILITY STATE ---
@@ -57,47 +107,50 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
   // --- LIVE PASSWORD RULES ---
   const pwRules = [
-    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
-    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
-    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
-    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
-    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
+    { label: "At least 8 characters", ok: newPassword.length >= 8 },
+    { label: "One uppercase letter (A–Z)", ok: /[A-Z]/.test(newPassword) },
+    { label: "One lowercase letter (a–z)", ok: /[a-z]/.test(newPassword) },
+    { label: "One number (0–9)", ok: /[0-9]/.test(newPassword) },
+    {
+      label: "One special character (!@#$…)",
+      ok: /[^A-Za-z0-9]/.test(newPassword),
+    },
   ];
-  const allRulesPass = pwRules.every(r => r.ok);
+  const allRulesPass = pwRules.every((r) => r.ok);
 
   // --- PAYMENT FLOW STATE ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentPlan, setPaymentPlan] = useState({ name: '', price: '' });
+  const [paymentPlan, setPaymentPlan] = useState({ name: "", price: "" });
   const [selectedMethod, setSelectedMethod] = useState(null); // 'gcash' | 'maya' | 'card'
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const handleOpenEditModal = () => {
-    setTempName(userProfile?.name || '');
+    setTempName(userProfile?.name || "");
     setTempImage(userProfile?.profileImage || null);
     setShowEditModal(true);
   };
 
-
   const handleOpenPasswordModal = () => {
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
     setShowPasswordModal(true);
   };
 
   const handlePickTempImage = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         showAlert(
           "Permission Denied",
-          "You need to allow gallery access to select a profile picture."
+          "You need to allow gallery access to select a profile picture.",
         );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.3,
@@ -121,13 +174,13 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
     }
 
     try {
-      const currentEmail = userProfile?.email || '';
+      const currentEmail = userProfile?.email || "";
       // ⚡ INSTANT OPTIMISTIC UI UPDATE
       if (setUserProfile) {
-        setUserProfile(prev => ({
+        setUserProfile((prev) => ({
           ...prev,
           name: tempName.trim(),
-          profileImage: tempImage
+          profileImage: tempImage,
         }));
       }
       setShowEditModal(false);
@@ -139,22 +192,22 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       (async () => {
         try {
           await fetch(`${API_URL}/update-profile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               user_id: userId,
               name: tempName.trim(),
-              email: userProfile?.email
+              email: userProfile?.email,
             }),
           });
 
           if (tempImage && tempImage !== userProfile?.profileImage) {
             await fetch(`${API_URL}/update-profile-picture`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 user_id: userId,
-                profile_image: tempImage
+                profile_image: tempImage,
               }),
             });
           }
@@ -168,54 +221,105 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
     }
   };
 
-  const handlePickProfileImage = async () => {
+  const handleRemoveProfileImage = () => {
+    if (setUserProfile) {
+      setUserProfile((prev) => ({
+        ...prev,
+        profileImage: null,
+      }));
+      setImageError(false);
+      showAlert("Photo Removed", "Reverted to your default initials avatar.");
+    }
+    fetch(`${API_URL}/update-profile-picture`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, profile_image: "" }),
+    }).catch(
+      (err) =>
+        __DEV__ && console.log("Remove profile pic sync error:", err),
+    );
+  };
+
+  const handleLaunchImagePicker = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         showAlert(
           "Permission Denied",
-          "You need to allow gallery access to select a profile picture."
+          "You need to allow gallery access to select a profile picture.",
         );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.3,
+        quality: 0.4,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const localUri = result.assets[0].uri;
-        const selectedUri = 'data:image/jpeg;base64,' + result.assets[0].base64;
+        const selectedUri = "data:image/jpeg;base64," + result.assets[0].base64;
 
-        // ⚡ INSTANT OPTIMISTIC UI UPDATE
+        setImageError(false);
         if (setUserProfile) {
-          setUserProfile(prev => ({
+          setUserProfile((prev) => ({
             ...prev,
-            profileImage: localUri
+            profileImage: localUri,
           }));
           showAlert("Success", "Profile picture updated!");
         }
 
-        // Background sync to backend server
         fetch(`${API_URL}/update-profile-picture`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user_id: userId,
-            profile_image: selectedUri
+            profile_image: selectedUri,
           }),
-        }).catch(err => __DEV__ && console.log("Background profile pic sync error:", err));
+        }).catch(
+          (err) =>
+            __DEV__ && console.log("Background profile pic sync error:", err),
+        );
       }
     } catch (error) {
       if (__DEV__) console.log("Error picking profile image:", error);
       showAlert("Error", "Could not pick image from gallery.");
     }
+  };
+
+  const handlePickProfileImage = () => {
+    const hasImage = !!userProfile?.profileImage && !imageError;
+    const buttons = [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Choose from Gallery 🖼️",
+        style: "default",
+        onPress: handleLaunchImagePicker,
+      },
+    ];
+
+    if (hasImage) {
+      buttons.unshift({
+        text: "View Full Photo 🔍",
+        style: "default",
+        onPress: () => setShowPhotoPreviewModal(true),
+      });
+      buttons.push({
+        text: "Remove Photo 🗑️",
+        style: "destructive",
+        onPress: handleRemoveProfileImage,
+      });
+    }
+
+    showAlert(
+      "Profile Photo Options",
+      "Select an action for your profile picture:",
+      buttons,
+    );
   };
 
   // --- DYNAMIC INTERACTIVE SWITCH STATES ---
@@ -227,12 +331,17 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
   useEffect(() => {
     const loadNotificationPrefs = async () => {
       try {
-        const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+        const stored = await AsyncStorage.getItem(
+          "@ms_notification_preferences",
+        );
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed.habitReminders !== undefined) setHabitReminders(!!parsed.habitReminders);
-          if (parsed.motivationalUpdates !== undefined) setMotivationalUpdates(!!parsed.motivationalUpdates);
-          if (parsed.personalizedAlerts !== undefined) setPersonalizedAlerts(!!parsed.personalizedAlerts);
+          if (parsed.habitReminders !== undefined)
+            setHabitReminders(!!parsed.habitReminders);
+          if (parsed.motivationalUpdates !== undefined)
+            setMotivationalUpdates(!!parsed.motivationalUpdates);
+          if (parsed.personalizedAlerts !== undefined)
+            setPersonalizedAlerts(!!parsed.personalizedAlerts);
         }
       } catch (e) {
         if (__DEV__) console.log("Failed to load notification prefs:", e);
@@ -243,7 +352,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
   const saveAndUpdateNotificationPrefs = async (updatedPrefs) => {
     try {
-      await AsyncStorage.setItem('@ms_notification_preferences', JSON.stringify(updatedPrefs));
+      await AsyncStorage.setItem(
+        "@ms_notification_preferences",
+        JSON.stringify(updatedPrefs),
+      );
       await NotificationService.scheduleDailyReminders(updatedPrefs);
     } catch (e) {
       if (__DEV__) console.log("Failed to save notification prefs:", e);
@@ -252,28 +364,42 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
   const handleToggleHabitReminders = (val) => {
     setHabitReminders(val);
-    saveAndUpdateNotificationPrefs({ habitReminders: val, motivationalUpdates, personalizedAlerts });
+    saveAndUpdateNotificationPrefs({
+      habitReminders: val,
+      motivationalUpdates,
+      personalizedAlerts,
+    });
   };
 
   const handleToggleMotivationalUpdates = (val) => {
     setMotivationalUpdates(val);
-    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates: val, personalizedAlerts });
+    saveAndUpdateNotificationPrefs({
+      habitReminders,
+      motivationalUpdates: val,
+      personalizedAlerts,
+    });
   };
 
   const handleTogglePersonalizedAlerts = (val) => {
     setPersonalizedAlerts(val);
-    saveAndUpdateNotificationPrefs({ habitReminders, motivationalUpdates, personalizedAlerts: val });
+    saveAndUpdateNotificationPrefs({
+      habitReminders,
+      motivationalUpdates,
+      personalizedAlerts: val,
+    });
   };
 
   // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
-  const [accountTier, setAccountTier] = useState(userProfile?.isPremium ? 'Premium' : 'Free');
+  const [accountTier, setAccountTier] = useState(
+    userProfile?.isPremium ? "Premium" : "Free",
+  );
   const [showBillingOptions, setShowBillingOptions] = useState(false);
-  
+
   // Tracks exactly which option ('Monthly' or 'Annual') has the active focus/outline
   const [selectedBillingCycle, setSelectedBillingCycle] = useState(null);
 
   useEffect(() => {
-    setAccountTier(userProfile?.isPremium ? 'Premium' : 'Free');
+    setAccountTier(userProfile?.isPremium ? "Premium" : "Free");
   }, [userProfile?.isPremium]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
@@ -281,41 +407,56 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
   // --- ACCOUNT TIER MANAGER ACTIONS ---
   const handleSelectTierOption = async (tierType) => {
-    if (tierType === 'Free') {
+    if (tierType === "Free") {
       if (userProfile?.isPremium) {
         showAlert(
           "Cancel Subscription",
           "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
           [
             { text: "No", style: "cancel" },
-            { 
-              text: "Yes, Downgrade", 
+            {
+              text: "Yes, Downgrade",
               onPress: async () => {
                 try {
-                  const response = await fetch(`${API_URL}/update-subscription`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, is_premium: false })
-                  });
+                  const response = await fetch(
+                    `${API_URL}/update-subscription`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        user_id: userId,
+                        is_premium: false,
+                      }),
+                    },
+                  );
                   if (response.ok) {
-                    setUserProfile(prev => ({ ...prev, isPremium: false }));
-                    setAccountTier('Free');
-                    showAlert("Plan Updated", "Your subscription was cancelled. You are now on the Free Plan.");
+                    setUserProfile((prev) => ({ ...prev, isPremium: false }));
+                    setAccountTier("Free");
+                    showAlert(
+                      "Plan Updated",
+                      "Your subscription was cancelled. You are now on the Free Plan.",
+                    );
                   } else {
-                    showAlert("Error", "Failed to cancel subscription on server.");
+                    showAlert(
+                      "Error",
+                      "Failed to cancel subscription on server.",
+                    );
                   }
                 } catch (e) {
-                  showAlert("Error", "Network connection failed. Cannot connect to server.");
+                  showAlert(
+                    "Error",
+                    "Network connection failed. Cannot connect to server.",
+                  );
                 }
-              }
-            }
-          ]
+              },
+            },
+          ],
         );
       } else {
-        setAccountTier('Free');
+        setAccountTier("Free");
       }
     } else {
-      setAccountTier('Premium');
+      setAccountTier("Premium");
     }
   };
 
@@ -328,32 +469,39 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       "Confirm Payment Method",
       `Would you like to proceed with the ${planName} Plan (${price})?`,
       [
-        { text: "Cancel", style: "cancel", onPress: () => setSelectedBillingCycle(null) },
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => setSelectedBillingCycle(null),
+        },
         {
           text: "Proceed to Pay",
           onPress: async () => {
             try {
-              const amount_cents = planName === 'Monthly' ? 14900 : 119900; // ₱149.00 or ₱1,199.00 (in cents)
-              const response = await fetch(`${API_URL}/create-checkout-session`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  user_id: userId, 
-                  amount: amount_cents,
-                  description: `MacroSync Premium - ${planName} Plan`
-                })
-              });
-              
+              const amount_cents = planName === "Monthly" ? 14900 : 119900; // ₱149.00 or ₱1,199.00 (in cents)
+              const response = await fetch(
+                `${API_URL}/create-checkout-session`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    user_id: userId,
+                    amount: amount_cents,
+                    description: `MacroSync Premium - ${planName} Plan`,
+                  }),
+                },
+              );
+
               if (response.ok) {
                 const data = await response.json();
                 const checkoutUrl = data?.data?.attributes?.checkout_url;
                 if (checkoutUrl) {
                   // Open the PayMongo checkout page in an in-app browser overlay
                   await WebBrowser.openBrowserAsync(checkoutUrl);
-                  
+
                   showAlert(
                     "Checkout Opened",
-                    "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!"
+                    "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!",
                   );
                 } else {
                   if (__DEV__) console.log("PayMongo response:", data);
@@ -364,30 +512,35 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                 setSelectedBillingCycle(null);
               }
             } catch (e) {
-              showAlert("Error", "Network connection failed. Cannot connect to server.");
+              showAlert(
+                "Error",
+                "Network connection failed. Cannot connect to server.",
+              );
               setSelectedBillingCycle(null);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const handleConfirmPayment = () => {
     if (!selectedMethod) {
-      showAlert("Payment Method Required", "Please select a payment method to proceed.");
+      showAlert(
+        "Payment Method Required",
+        "Please select a payment method to proceed.",
+      );
       return;
     }
 
     setIsProcessingPayment(true);
     setTimeout(() => {
-      setUserProfile(prev => ({ ...prev, isPremium: true }));
-      setAccountTier('Premium');
+      setUserProfile((prev) => ({ ...prev, isPremium: true }));
+      setAccountTier("Premium");
       setShowPaymentModal(false);
       setIsProcessingPayment(false);
     }, 1000);
   };
-
 
   const handleChangePassword = async () => {
     if (!oldPassword.trim()) {
@@ -399,7 +552,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       return;
     }
     if (!allRulesPass) {
-      showAlert("Weak Password", "Your new password does not meet all the requirements. Please check the checklist and try again.");
+      showAlert(
+        "Weak Password",
+        "Your new password does not meet all the requirements. Please check the checklist and try again.",
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -410,53 +566,55 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
     setIsChangingPassword(true);
     try {
       const response = await fetch(`${API_URL}/update-password`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           user_id: userId,
+          email: userProfile?.email,
           password: newPassword.trim(),
-          current_password: oldPassword.trim()
+          current_password: oldPassword.trim(),
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update password');
+        throw new Error(data.detail || "Failed to update password");
       }
 
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
       setShowPasswordModal(false);
-
-      // Clear saved offline user session for security
-      try {
-        await clearSavedUserId();
-      } catch (err) {
-        if (__DEV__) console.log("Clear saved session error:", err);
-      }
 
       setTimeout(() => {
         showAlert(
-          "Password Updated 🔒", 
+          "Password Updated 🔒",
           "Your password has been changed successfully. For your security, please sign in with your new password.",
           [
             {
               text: "Sign In Now",
-              onPress: () => {
-                if (onTabChange) {
-                  onTabChange('AUTH');
+              onPress: async () => {
+                try {
+                  await clearSavedUserId();
+                } catch (e) {}
+                if (onLogout) {
+                  onLogout();
+                } else if (onTabChange) {
+                  onTabChange("AUTH");
                 }
-              }
-            }
-          ]
+              },
+            },
+          ],
         );
       }, 250);
     } catch (error) {
       if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
-      showAlert("Error", error.message || "Failed to change password. Please try again.");
+      showAlert(
+        "Error",
+        error.message || "Failed to change password. Please try again.",
+      );
     } finally {
       setIsChangingPassword(false);
     }
@@ -465,7 +623,7 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
   const handleSavePreferences = () => {
     showAlert(
       "Preferences Saved",
-      "Your profile metrics and notification thresholds have been synced successfully."
+      "Your profile metrics and notification thresholds have been synced successfully.",
     );
   };
 
@@ -475,13 +633,13 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       "Log Out",
       "Are you sure you want to exit your active tracking session?",
       [
-        { 
-          text: "Cancel", 
-          style: "cancel" 
+        {
+          text: "Cancel",
+          style: "cancel",
         },
-        { 
-          text: "Log Out", 
-          style: "destructive", 
+        {
+          text: "Log Out",
+          style: "destructive",
           onPress: async () => {
             try {
               await clearSavedUserId();
@@ -489,21 +647,25 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
             if (onLogout) {
               onLogout();
             } else if (onTabChange) {
-              onTabChange('AUTH');
+              onTabChange("AUTH");
             }
-          } 
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-      
-      <ScrollView 
-        style={styles.container} 
-        showsVerticalScrollIndicator={false} 
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent={true}
+      />
+
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* HEADER BRANDING SECTION */}
@@ -511,47 +673,88 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Settings Hub</Text>
-            <Text style={styles.subGreeting}>Manage your profile parameters, configurations, and alerts</Text>
+            <Text style={styles.subGreeting}>
+              Manage your profile parameters, configurations, and alerts
+            </Text>
           </View>
         </View>
 
         {/* PROFILE IDENTIFICATION CARD */}
         <View style={styles.profileFormCard}>
           <View style={styles.profileUserRow}>
-            <TouchableOpacity 
-              onPress={handlePickProfileImage} 
-              activeOpacity={0.85} 
+            <TouchableOpacity
+              onPress={() => setShowPhotoPreviewModal(true)}
+              activeOpacity={0.85}
               style={styles.avatarNeuOuterBox}
             >
-              {userProfile?.profileImage ? (
-                <Image 
-                  source={{ uri: userProfile.profileImage }} 
-                  style={styles.avatarImageLarge} 
+              {userProfile?.profileImage && !imageError ? (
+                <Image
+                  source={{ uri: userProfile.profileImage }}
+                  style={styles.avatarImageLarge}
+                  onError={() => setImageError(true)}
                 />
               ) : (
-                <User color="#FFFFFF" size={38} strokeWidth={2.5} />
+                <View
+                  style={[
+                    styles.avatarImageLarge,
+                    {
+                      backgroundColor: "#10B981",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 26,
+                      fontWeight: "900",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {getInitials(userProfile?.name)}
+                  </Text>
+                </View>
               )}
-              <View style={{
-                position: 'absolute',
-                bottom: 0,
-                right: 0,
-                backgroundColor: logoGreen,
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 2,
-                borderColor: theme?.surface || '#FFFFFF'
-              }}>
-                <Camera color="#FFFFFF" size={12} strokeWidth={2.5} />
-              </View>
+              {/* Small Edit Pen Icon Badge on Lower Right */}
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleLaunchImagePicker();
+                }}
+                activeOpacity={0.8}
+                style={{
+                  position: "absolute",
+                  bottom: -2,
+                  right: -2,
+                  backgroundColor: logoGreen,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 2.5,
+                  borderColor: isDarkMode ? "#1E293B" : (theme?.surface || "#FFFFFF"),
+                  shadowColor: "#000000",
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 5,
+                  elevation: 6,
+                  zIndex: 10,
+                }}
+              >
+                <Pencil color="#FFFFFF" size={14} strokeWidth={2.5} />
+              </TouchableOpacity>
             </TouchableOpacity>
             <View style={styles.profileMetadataTextGroup}>
-              <Text style={styles.profileUserNameText}>{userProfile?.name || 'User Account'}</Text>
-              <Text style={styles.profileUserSubText}>{userProfile?.email || 'MacroSync Active Member'}</Text>
-              <TouchableOpacity 
-                style={styles.editProfileButton} 
+              <Text style={styles.profileUserNameText}>
+                {userProfile?.name || "User Account"}
+              </Text>
+              <Text style={styles.profileUserSubText}>
+                {userProfile?.email || "MacroSync Active Member"}
+              </Text>
+              <TouchableOpacity
+                style={styles.editProfileButton}
                 onPress={handleOpenEditModal}
                 activeOpacity={0.75}
               >
@@ -569,10 +772,20 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
           </View>
           <View style={styles.filterButtonGroupRow}>
             <TouchableOpacity
-              style={[styles.filterChipButton, accountTier === 'Free' ? styles.filterChipActive : styles.filterChipInactive]}
-              onPress={() => handleSelectTierOption('Free')}
+              style={[
+                styles.filterChipButton,
+                accountTier === "Free"
+                  ? styles.filterChipActive
+                  : styles.filterChipInactive,
+              ]}
+              onPress={() => handleSelectTierOption("Free")}
             >
-              <Text style={[styles.filterChipText, accountTier === 'Free' && styles.filterChipTextActive]}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  accountTier === "Free" && styles.filterChipTextActive,
+                ]}
+              >
                 Free Plan
               </Text>
             </TouchableOpacity>
@@ -580,87 +793,139 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
             <TouchableOpacity
               style={[
                 styles.filterChipButton,
-                accountTier === 'Premium'
-                  ? { backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1.5 }
-                  : styles.filterChipInactive
+                accountTier === "Premium"
+                  ? {
+                      backgroundColor: "#10B981",
+                      borderColor: "#10B981",
+                      borderWidth: 1.5,
+                    }
+                  : styles.filterChipInactive,
               ]}
-              onPress={() => handleSelectTierOption('Premium')}
+              onPress={() => handleSelectTierOption("Premium")}
             >
-              <Crown color={accountTier === 'Premium' ? '#FFFFFF' : '#10B981'} size={13} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterChipText, accountTier === 'Premium' && { color: '#FFFFFF', fontWeight: '900' }]}>
+              <Crown
+                color={accountTier === "Premium" ? "#FFFFFF" : "#10B981"}
+                size={13}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  accountTier === "Premium" && {
+                    color: "#FFFFFF",
+                    fontWeight: "900",
+                  },
+                ]}
+              >
                 Premium Tier
               </Text>
             </TouchableOpacity>
           </View>
 
-          {accountTier === 'Premium' && (
+          {accountTier === "Premium" && (
             <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
-              
+
               {/* Premium Feature List (Visible for BOTH Monthly & Annual plans) */}
-              <View style={[
-                styles.premiumFeatureDetailsBox,
-                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }
-              ]}>
+              <View
+                style={[
+                  styles.premiumFeatureDetailsBox,
+                  isDarkMode && {
+                    backgroundColor: "#1E293B",
+                    borderColor: "#334155",
+                  },
+                ]}
+              >
                 <View style={styles.featureDetailsHeadingFlexRow}>
                   <Crown color="#F59E0B" size={18} style={{ marginRight: 6 }} />
-                  <Text style={[
-                    styles.premiumDetailsHeadingText,
-                    isDarkMode && { color: '#F8FAFC' }
-                  ]}>MacroSync Premium Benefits</Text>
+                  <Text
+                    style={[
+                      styles.premiumDetailsHeadingText,
+                      isDarkMode && { color: "#F8FAFC" },
+                    ]}
+                  >
+                    MacroSync Premium Benefits
+                  </Text>
                 </View>
-                
+
                 <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
-                  <Text style={[
-                    styles.featureBulletBodyText,
-                    isDarkMode && { color: '#94A3B8' }
-                  ]}>Unlimited AI Food Camera & Gallery Photo Analysis</Text>
+                  <CheckCircle2
+                    color={logoGreen}
+                    size={15}
+                    style={styles.bulletCheckIconSpacer}
+                  />
+                  <Text
+                    style={[
+                      styles.featureBulletBodyText,
+                      isDarkMode && { color: "#94A3B8" },
+                    ]}
+                  >
+                    Unlimited AI Food Camera & Gallery Photo Analysis
+                  </Text>
                 </View>
-                
+
                 <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2 color={logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
-                  <Text style={[
-                    styles.featureBulletBodyText,
-                    isDarkMode && { color: '#94A3B8' }
-                  ]}>Unlimited Vita AI 24/7 Health, Macro & Workout Guidance</Text>
+                  <CheckCircle2
+                    color={logoGreen}
+                    size={15}
+                    style={styles.bulletCheckIconSpacer}
+                  />
+                  <Text
+                    style={[
+                      styles.featureBulletBodyText,
+                      isDarkMode && { color: "#94A3B8" },
+                    ]}
+                  >
+                    Unlimited Vita AI 24/7 Health, Macro & Workout Guidance
+                  </Text>
                 </View>
               </View>
 
-              <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
-              
+              <Text style={styles.premiumPanelHeading}>
+                Select Billing Frequency
+              </Text>
+
               {/* Monthly Plan */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.billingPlanSelectorRowItem,
-                  selectedBillingCycle === 'Monthly' && styles.billingPlanActive,
-                  { marginBottom: 12 }
+                  selectedBillingCycle === "Monthly" &&
+                    styles.billingPlanActive,
+                  { marginBottom: 12 },
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Monthly', '₱149/mo')}
+                onPress={() => handleInitiatePaymentFlow("Monthly", "₱149/mo")}
               >
                 <View style={styles.billingPlanTextGroup}>
-                  <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
-                  <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
+                  <Text style={styles.billingPlanMainTitle}>
+                    Monthly Membership
+                  </Text>
+                  <Text style={styles.billingPlanSubDescription}>
+                    Billed monthly. Cancel anytime with one tap.
+                  </Text>
                 </View>
                 <Text style={styles.billingPlanPriceBadgeText}>₱149/mo</Text>
               </TouchableOpacity>
 
               {/* Annual Plan */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.billingPlanSelectorRowItem,
-                  selectedBillingCycle === 'Annual' && styles.billingPlanActive
+                  selectedBillingCycle === "Annual" && styles.billingPlanActive,
                 ]}
-                onPress={() => handleInitiatePaymentFlow('Annual', '₱1,199/yr')}
+                onPress={() => handleInitiatePaymentFlow("Annual", "₱1,199/yr")}
               >
                 <View style={styles.billingPlanTextGroup}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={styles.billingPlanMainTitle}>
+                      Annual Membership
+                    </Text>
                     <View style={styles.bestValueBadge}>
                       <Text style={styles.bestValueBadgeText}>SAVE 33%</Text>
                     </View>
                   </View>
-                  <Text style={styles.billingPlanSubDescription}>₱1,199/year (~₱99/mo). Best value for long-term health!</Text>
+                  <Text style={styles.billingPlanSubDescription}>
+                    ₱1,199/year (~₱99/mo). Best value for long-term health!
+                  </Text>
                 </View>
                 <Text style={styles.billingPlanPriceBadgeText}>₱1,199/yr</Text>
               </TouchableOpacity>
@@ -674,27 +939,68 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.settingRowItemMainTitle}>Theme Mode</Text>
             <Text style={styles.settingRowItemSubTitle}>
-              {themeMode === 'system'
-                ? `System Default (${isDarkMode ? 'Dark' : 'Light'})`
-                : themeMode === 'dark'
-                ? 'Dark Theme Enabled'
-                : 'Light Theme Enabled'}
+              {themeMode === "system"
+                ? `System Default (${isDarkMode ? "Dark" : "Light"})`
+                : themeMode === "dark"
+                  ? "Dark Theme Enabled"
+                  : "Light Theme Enabled"}
             </Text>
           </View>
 
           {/* 3-Option Segmented Selector */}
-          <View style={{
-            flexDirection: 'row',
-            backgroundColor: theme?.inputBg || '#F1F5F9',
-            borderRadius: 14,
-            padding: 4,
-            borderWidth: 1,
-            borderColor: theme?.border || '#E2E8F0',
-          }}>
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: theme?.inputBg || "#F1F5F9",
+              borderRadius: 14,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: theme?.border || "#E2E8F0",
+            }}
+          >
             {[
-              { id: 'system', label: 'System', icon: <Smartphone size={15} color={themeMode === 'system' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
-              { id: 'light',  label: 'Light',  icon: <Sun size={15} color={themeMode === 'light' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
-              { id: 'dark',   label: 'Dark',   icon: <Moon size={15} color={themeMode === 'dark' ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8')} /> },
+              {
+                id: "system",
+                label: "System",
+                icon: (
+                  <Smartphone
+                    size={15}
+                    color={
+                      themeMode === "system"
+                        ? "#FFFFFF"
+                        : theme?.textSecondary || "#94A3B8"
+                    }
+                  />
+                ),
+              },
+              {
+                id: "light",
+                label: "Light",
+                icon: (
+                  <Sun
+                    size={15}
+                    color={
+                      themeMode === "light"
+                        ? "#FFFFFF"
+                        : theme?.textSecondary || "#94A3B8"
+                    }
+                  />
+                ),
+              },
+              {
+                id: "dark",
+                label: "Dark",
+                icon: (
+                  <Moon
+                    size={15}
+                    color={
+                      themeMode === "dark"
+                        ? "#FFFFFF"
+                        : theme?.textSecondary || "#94A3B8"
+                    }
+                  />
+                ),
+              },
             ].map((mode) => {
               const isActive = themeMode === mode.id;
               return (
@@ -702,22 +1008,28 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                   key={mode.id}
                   style={{
                     flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
                     paddingVertical: 10,
                     borderRadius: 10,
-                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
+                    backgroundColor: isActive
+                      ? theme?.primary || "#10B981"
+                      : "transparent",
                   }}
                   activeOpacity={0.8}
                   onPress={() => setThemeMode(mode.id)}
                 >
                   <View style={{ marginRight: 6 }}>{mode.icon}</View>
-                  <Text style={{
-                    fontSize: 13,
-                    fontWeight: '800',
-                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
-                  }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: isActive
+                        ? "#FFFFFF"
+                        : theme?.textSecondary || "#94A3B8",
+                    }}
+                  >
                     {mode.label}
                   </Text>
                 </TouchableOpacity>
@@ -730,29 +1042,33 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         <Text style={styles.sectionLabelTitle}>Language & Localization</Text>
         <View style={styles.formCard}>
           <View style={{ marginBottom: 12 }}>
-            <Text style={styles.settingRowItemMainTitle}>App Meal Language</Text>
+            <Text style={styles.settingRowItemMainTitle}>
+              App Meal Language
+            </Text>
             <Text style={styles.settingRowItemSubTitle}>
-              {language === 'English'
-                ? 'English (Default meal titles)'
-                : language === 'Tagalog'
-                ? 'Tagalog (Wikang Filipino)'
-                : 'Cebuano (Pinulongang Binisaya)'}
+              {language === "English"
+                ? "English (Default meal titles)"
+                : language === "Tagalog"
+                  ? "Tagalog (Wikang Filipino)"
+                  : "Cebuano (Pinulongang Binisaya)"}
             </Text>
           </View>
 
           {/* 3-Option Segmented Language Selector */}
-          <View style={{
-            flexDirection: 'row',
-            backgroundColor: theme?.inputBg || '#F1F5F9',
-            borderRadius: 14,
-            padding: 4,
-            borderWidth: 1,
-            borderColor: theme?.border || '#E2E8F0',
-          }}>
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: theme?.inputBg || "#F1F5F9",
+              borderRadius: 14,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: theme?.border || "#E2E8F0",
+            }}
+          >
             {[
-              { id: 'English', label: 'English' },
-              { id: 'Tagalog', label: 'Tagalog' },
-              { id: 'Cebuano', label: 'Cebuano' },
+              { id: "English", label: "English" },
+              { id: "Tagalog", label: "Tagalog" },
+              { id: "Cebuano", label: "Cebuano" },
             ].map((langItem) => {
               const isActive = language === langItem.id;
               return (
@@ -760,24 +1076,56 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                   key={langItem.id}
                   style={{
                     flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
                     paddingVertical: 10,
                     borderRadius: 10,
-                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
+                    backgroundColor: isActive
+                      ? theme?.primary || "#10B981"
+                      : "transparent",
                   }}
                   activeOpacity={0.8}
                   onPress={() => {
+                    if (langItem.id === language) return;
+                    const previousLang = language;
+                    // Preview selection in UI
                     setLanguage(langItem.id);
-                    showAlert("Language Updated", `Meal names will now display in ${langItem.label}!`);
+                    showAlert(
+                      "Language Updated",
+                      `Meal names will now display in ${langItem.label}!`,
+                      [
+                        {
+                          text: "Cancel",
+                          style: "cancel",
+                          onPress: () => {
+                            // Revert language back to original if canceled or X'd out
+                            setLanguage(previousLang);
+                          },
+                        },
+                        {
+                          text: "Apply",
+                          style: "default",
+                          onPress: () => {
+                            // Confirm new language selection
+                            setLanguage(langItem.id);
+                          },
+                        },
+                      ],
+                      "info",
+                      { preventBackdropDismiss: true },
+                    );
                   }}
                 >
-                  <Text style={{
-                    fontSize: 13,
-                    fontWeight: '800',
-                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
-                  }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: isActive
+                        ? "#FFFFFF"
+                        : theme?.textSecondary || "#94A3B8",
+                    }}
+                  >
                     {langItem.label}
                   </Text>
                 </TouchableOpacity>
@@ -791,18 +1139,30 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         <View style={styles.formCard}>
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <Bell color={'#10B981'} size={16} />
+              <View
+                style={{
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  borderRadius: 10,
+                  padding: 7,
+                  marginRight: 12,
+                }}
+              >
+                <Bell color={"#10B981"} size={16} />
               </View>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>Habit & Routine Reminders</Text>
-                <Text style={styles.settingRowItemSubTitle}>Automated reminders for meals, hydration, calories, and workouts</Text>
+                <Text style={styles.settingRowItemMainTitle}>
+                  Habit & Routine Reminders
+                </Text>
+                <Text style={styles.settingRowItemSubTitle}>
+                  Automated reminders for meals, hydration, calories, and
+                  workouts
+                </Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
-              thumbColor={habitReminders ? '#10B981' : '#64748B'}
-              ios_backgroundColor={'#E2E8F0'}
+              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
+              thumbColor={habitReminders ? "#10B981" : "#64748B"}
+              ios_backgroundColor={"#E2E8F0"}
               onValueChange={handleToggleHabitReminders}
               value={habitReminders}
             />
@@ -812,18 +1172,30 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <Flame color={'#F97316'} size={16} />
+              <View
+                style={{
+                  backgroundColor: "rgba(249, 115, 22, 0.12)",
+                  borderRadius: 10,
+                  padding: 7,
+                  marginRight: 12,
+                }}
+              >
+                <Flame color={"#F97316"} size={16} />
               </View>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>Motivational Updates</Text>
-                <Text style={styles.settingRowItemSubTitle}>Updates on achievements, completed workouts, and step milestones</Text>
+                <Text style={styles.settingRowItemMainTitle}>
+                  Motivational Updates
+                </Text>
+                <Text style={styles.settingRowItemSubTitle}>
+                  Updates on achievements, completed workouts, and step
+                  milestones
+                </Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
-              thumbColor={motivationalUpdates ? '#10B981' : '#64748B'}
-              ios_backgroundColor={'#E2E8F0'}
+              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
+              thumbColor={motivationalUpdates ? "#10B981" : "#64748B"}
+              ios_backgroundColor={"#E2E8F0"}
               onValueChange={handleToggleMotivationalUpdates}
               value={motivationalUpdates}
             />
@@ -833,18 +1205,29 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
           <View style={styles.settingActionRowItem}>
             <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <Sparkles color={'#8B5CF6'} size={16} />
+              <View
+                style={{
+                  backgroundColor: "rgba(139, 92, 246, 0.12)",
+                  borderRadius: 10,
+                  padding: 7,
+                  marginRight: 12,
+                }}
+              >
+                <Sparkles color={"#8B5CF6"} size={16} />
               </View>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>Personalized Smart Alerts</Text>
-                <Text style={styles.settingRowItemSubTitle}>Adjusted based on your behavior, goals, and daily routines</Text>
+                <Text style={styles.settingRowItemMainTitle}>
+                  Personalized Smart Alerts
+                </Text>
+                <Text style={styles.settingRowItemSubTitle}>
+                  Adjusted based on your behavior, goals, and daily routines
+                </Text>
               </View>
             </View>
             <Switch
-              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
-              thumbColor={personalizedAlerts ? '#10B981' : '#64748B'}
-              ios_backgroundColor={'#E2E8F0'}
+              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
+              thumbColor={personalizedAlerts ? "#10B981" : "#64748B"}
+              ios_backgroundColor={"#E2E8F0"}
               onValueChange={handleTogglePersonalizedAlerts}
               value={personalizedAlerts}
             />
@@ -854,33 +1237,58 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         {/* SECURITY SETTINGS CARD */}
         <Text style={styles.sectionLabelTitle}>Account Security</Text>
         <View style={styles.formCard}>
-
-          <TouchableOpacity 
-            style={styles.settingActionRowItem} 
+          <PressableCard
+            scaleDown={0.97}
+            style={styles.settingActionRowItem}
             onPress={handleOpenPasswordModal}
-            activeOpacity={0.7}
           >
             <View style={styles.settingIconTextGroup}>
-              <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 10, padding: 7, marginRight: 12 }}>
-                <Shield color={'#F59E0B'} size={16} />
+              <View
+                style={{
+                  backgroundColor: "rgba(245, 158, 11, 0.12)",
+                  borderRadius: 10,
+                  padding: 7,
+                  marginRight: 12,
+                }}
+              >
+                <Shield color={"#F59E0B"} size={16} />
               </View>
               <View>
-                <Text style={styles.settingRowItemMainTitle}>Change Password</Text>
-                <Text style={styles.settingRowItemSubTitle}>Update your password securely</Text>
+                <Text style={styles.settingRowItemMainTitle}>
+                  Change Password
+                </Text>
+                <Text style={styles.settingRowItemSubTitle}>
+                  Update your password securely
+                </Text>
               </View>
             </View>
-            <ChevronRight color={'#94A3B8'} size={16} />
-          </TouchableOpacity>
-
-
+            <ChevronRight color={"#94A3B8"} size={16} />
+          </PressableCard>
         </View>
 
         {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={[styles.logOutSecondaryNeuButton, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1.2 }]} onPress={handleLogOut}>
-          <LogOut color={'#EF4444'} size={18} style={{ marginRight: 8 }} />
-          <Text style={[styles.logOutButtonText, { color: '#EF4444', fontWeight: '800' }]}>Log Out</Text>
-        </TouchableOpacity>
-        
+        <PressableCard
+          scaleDown={0.96}
+          style={[
+            styles.logOutSecondaryNeuButton,
+            {
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              borderColor: "rgba(239, 68, 68, 0.25)",
+              borderWidth: 1.2,
+            },
+          ]}
+          onPress={handleLogOut}
+        >
+          <LogOut color={"#EF4444"} size={18} style={{ marginRight: 8 }} />
+          <Text
+            style={[
+              styles.logOutButtonText,
+              { color: "#EF4444", fontWeight: "800" },
+            ]}
+          >
+            Log Out
+          </Text>
+        </PressableCard>
       </ScrollView>
 
       {/* --- EDIT PROFILE MODAL --- */}
@@ -891,25 +1299,53 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         onRequestClose={() => setShowEditModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.modalContent}
           >
             <Text style={styles.modalTitle}>Edit Profile</Text>
-            <Text style={styles.modalSubtitle}>Update your personal details</Text>
+            <Text style={styles.modalSubtitle}>
+              Update your personal details
+            </Text>
 
-            <TouchableOpacity 
-              onPress={handlePickTempImage} 
+            <TouchableOpacity
+              onPress={handlePickTempImage}
               activeOpacity={0.8}
-              style={[styles.avatarNeuOuterBox, { alignSelf: 'center', marginBottom: 20 }]}
+              style={[
+                styles.avatarNeuOuterBox,
+                { alignSelf: "center", marginBottom: 20 },
+              ]}
             >
               {tempImage ? (
-                <Image source={{ uri: tempImage }} style={styles.avatarImageLarge} />
+                <Image
+                  source={{ uri: tempImage }}
+                  style={styles.avatarImageLarge}
+                />
               ) : (
-                <User color="#FFFFFF" size={48} strokeWidth={2.5} />
+                <View
+                  style={[
+                    styles.avatarImageLarge,
+                    {
+                      backgroundColor: "#10B981",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 26,
+                      fontWeight: "900",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {getInitials(tempName || userProfile?.name)}
+                  </Text>
+                </View>
               )}
               <View style={styles.cameraIconBadge}>
-                <Camera color="#FFFFFF" size={12} strokeWidth={2.5} />
+                <Pencil color="#FFFFFF" size={12} strokeWidth={2.5} />
               </View>
             </TouchableOpacity>
 
@@ -922,20 +1358,23 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
               placeholderTextColor="#CBD5E1"
             />
 
-
-
             <View style={styles.modalButtons}>
-               <TouchableOpacity style={styles.modalCancel} onPress={() => setShowEditModal(false)}>
-                 <Text style={styles.modalCancelText}>Cancel</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={styles.modalSave} onPress={handleSaveProfile}>
-                 <Text style={styles.modalSaveText}>Save</Text>
-               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setShowEditModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSave}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
-
 
       {/* --- CHANGE PASSWORD MODAL --- */}
       <Modal
@@ -944,21 +1383,23 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         animationType="fade"
         onRequestClose={() => {
           setShowPasswordModal(false);
-          setOldPassword('');
-          setNewPassword('');
-          setConfirmPassword('');
+          setOldPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
           setShowOldPassword(false);
           setShowNewPassword(false);
           setShowConfirmPassword(false);
         }}
       >
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.modalContent}
           >
             <Text style={styles.modalTitle}>Change Password</Text>
-            <Text style={styles.modalSubtitle}>Enter password details below</Text>
+            <Text style={styles.modalSubtitle}>
+              Enter password details below
+            </Text>
 
             <Text style={styles.inputLabel}>Current Password</Text>
             <View style={styles.passwordInputContainer}>
@@ -972,7 +1413,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                 autoCorrect={false}
                 secureTextEntry={!showOldPassword}
               />
-              <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setShowOldPassword(!showOldPassword)}
+                activeOpacity={0.7}
+              >
                 {showOldPassword ? (
                   <Eye color="#94A3B8" size={20} />
                 ) : (
@@ -993,7 +1437,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                 autoCorrect={false}
                 secureTextEntry={!showNewPassword}
               />
-              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setShowNewPassword(!showNewPassword)}
+                activeOpacity={0.7}
+              >
                 {showNewPassword ? (
                   <Eye color="#94A3B8" size={20} />
                 ) : (
@@ -1004,30 +1451,71 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
 
             {/* ── LIVE PASSWORD REQUIREMENTS ── */}
             {newPassword.length > 0 && (
-              <View style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.06)',
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                borderWidth: 1,
-                borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
-              }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
+              <View
+                style={{
+                  backgroundColor: "rgba(15, 23, 42, 0.06)",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 14,
+                  borderWidth: 1,
+                  borderColor: allRulesPass
+                    ? "rgba(16,185,129,0.35)"
+                    : "rgba(239,68,68,0.20)",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "800",
+                    color: "#64748B",
+                    marginBottom: 8,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
+                  Password must contain
+                </Text>
                 {pwRules.map((rule, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                    <View style={{
-                      width: 18, height: 18, borderRadius: 9,
-                      backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
-                      alignItems: 'center', justifyContent: 'center',
-                      marginRight: 8,
-                      borderWidth: 1,
-                      borderColor: rule.ok ? '#10B981' : '#EF4444',
-                    }}>
-                      <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
-                        {rule.ok ? '✓' : '✕'}
+                  <View
+                    key={i}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 5,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: rule.ok
+                          ? "rgba(16,185,129,0.15)"
+                          : "rgba(239,68,68,0.10)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: 8,
+                        borderWidth: 1,
+                        borderColor: rule.ok ? "#10B981" : "#EF4444",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "900",
+                          color: rule.ok ? "#10B981" : "#EF4444",
+                        }}
+                      >
+                        {rule.ok ? "✓" : "✕"}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: rule.ok ? "#10B981" : "#94A3B8",
+                      }}
+                    >
                       {rule.label}
                     </Text>
                   </View>
@@ -1047,7 +1535,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                 autoCorrect={false}
                 secureTextEntry={!showConfirmPassword}
               />
-              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                activeOpacity={0.7}
+              >
                 {showConfirmPassword ? (
                   <Eye color="#94A3B8" size={20} />
                 ) : (
@@ -1057,29 +1548,29 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
             </View>
 
             <View style={styles.modalButtons}>
-               <TouchableOpacity 
-                 style={styles.modalCancel} 
-                 onPress={() => {
-                   setShowPasswordModal(false);
-                   setOldPassword('');
-                   setNewPassword('');
-                   setConfirmPassword('');
-                   setShowOldPassword(false);
-                   setShowNewPassword(false);
-                   setShowConfirmPassword(false);
-                 }}
-               >
-                 <Text style={styles.modalCancelText}>Cancel</Text>
-               </TouchableOpacity>
-               <TouchableOpacity 
-                 style={styles.modalSave} 
-                 onPress={handleChangePassword}
-                 disabled={isChangingPassword}
-               >
-                 <Text style={styles.modalSaveText}>
-                   {isChangingPassword ? "Saving..." : "Change"}
-                 </Text>
-               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setOldPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setShowOldPassword(false);
+                  setShowNewPassword(false);
+                  setShowConfirmPassword(false);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSave}
+                onPress={handleChangePassword}
+                disabled={isChangingPassword}
+              >
+                <Text style={styles.modalSaveText}>
+                  {isChangingPassword ? "Saving..." : "Change"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -1103,70 +1594,257 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
             </Text>
 
             {/* GCash Option */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.paymentMethodOption,
-                selectedMethod === 'gcash' && styles.paymentMethodActive
+                selectedMethod === "gcash" && styles.paymentMethodActive,
               ]}
-              onPress={() => setSelectedMethod('gcash')}
+              onPress={() => setSelectedMethod("gcash")}
               activeOpacity={0.8}
             >
-              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(0, 85, 254, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 24,
+                  borderRadius: 6,
+                  backgroundColor: "rgba(0, 85, 254, 0.15)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 12,
+                }}
+              >
                 <Smartphone color="#0055FE" size={16} strokeWidth={2.5} />
               </View>
               <Text style={styles.paymentMethodText}>GCash</Text>
             </TouchableOpacity>
 
             {/* Maya Option */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.paymentMethodOption,
-                selectedMethod === 'maya' && styles.paymentMethodActive
+                selectedMethod === "maya" && styles.paymentMethodActive,
               ]}
-              onPress={() => setSelectedMethod('maya')}
+              onPress={() => setSelectedMethod("maya")}
               activeOpacity={0.8}
             >
-              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 24,
+                  borderRadius: 6,
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 12,
+                }}
+              >
                 <Wallet color="#10B981" size={16} strokeWidth={2.5} />
               </View>
               <Text style={styles.paymentMethodText}>Maya</Text>
             </TouchableOpacity>
 
             {/* Card Option */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.paymentMethodOption,
-                selectedMethod === 'card' && styles.paymentMethodActive
+                selectedMethod === "card" && styles.paymentMethodActive,
               ]}
-              onPress={() => setSelectedMethod('card')}
+              onPress={() => setSelectedMethod("card")}
               activeOpacity={0.8}
             >
-              <View style={{ width: 32, height: 24, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 24,
+                  borderRadius: 6,
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 12,
+                }}
+              >
                 <CreditCard color="#10B981" size={16} strokeWidth={2.5} />
               </View>
               <Text style={styles.paymentMethodText}>Credit or Debit Card</Text>
             </TouchableOpacity>
 
             <View style={styles.modalButtons}>
-               <TouchableOpacity 
-                 style={styles.modalCancel} 
-                 onPress={() => {
-                   setShowPaymentModal(false);
-                   setSelectedBillingCycle(null);
-                 }}
-               >
-                 <Text style={styles.modalCancelText}>Cancel</Text>
-               </TouchableOpacity>
-               <TouchableOpacity 
-                 style={[styles.modalSave, !selectedMethod && styles.modalSaveDisabled]} 
-                 onPress={handleConfirmPayment}
-                 disabled={!selectedMethod || isProcessingPayment}
-               >
-                 <Text style={styles.modalSaveText}>
-                   {isProcessingPayment ? "Processing..." : "Pay Now"}
-                 </Text>
-               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowPaymentModal(false);
+                  setSelectedBillingCycle(null);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalSave,
+                  !selectedMethod && styles.modalSaveDisabled,
+                ]}
+                onPress={handleConfirmPayment}
+                disabled={!selectedMethod || isProcessingPayment}
+              >
+                <Text style={styles.modalSaveText}>
+                  {isProcessingPayment ? "Processing..." : "Pay Now"}
+                </Text>
+              </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- FULL-SCREEN PHOTO PREVIEW EXPANSION MODAL --- */}
+      <Modal
+        visible={showPhotoPreviewModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPhotoPreviewModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.92)",
+            justifyContent: "center",
+            alignItems: "center",
+            position: "relative",
+          }}
+        >
+          {/* Top Header Bar */}
+          <View
+            style={{
+              position: "absolute",
+              top: Platform.OS === "ios" ? 54 : 36,
+              left: 20,
+              right: 20,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              zIndex: 10,
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "900" }}>
+              Profile Photo
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowPhotoPreviewModal(false)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              activeOpacity={0.7}
+            >
+              <X color="#FFFFFF" size={20} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Expanded Circular Photo Container */}
+          <View
+            style={{
+              width: screenWidth - 48,
+              height: screenWidth - 48,
+              borderRadius: (screenWidth - 48) / 2,
+              overflow: "hidden",
+              borderWidth: 3,
+              borderColor: "#10B981",
+              backgroundColor: "#1E293B",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {userProfile?.profileImage && !imageError ? (
+              <Image
+                source={{ uri: userProfile.profileImage }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <View
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "#10B981",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 64,
+                    fontWeight: "900",
+                    letterSpacing: 2,
+                  }}
+                >
+                  {getInitials(userProfile?.name)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Bottom Quick Action Buttons inside Preview */}
+          <View
+            style={{
+              position: "absolute",
+              bottom: Platform.OS === "ios" ? 48 : 32,
+              flexDirection: "row",
+              gap: 16,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => {
+                setShowPhotoPreviewModal(false);
+                setTimeout(() => handleLaunchImagePicker(), 200);
+              }}
+              style={{
+                backgroundColor: "#10B981",
+                paddingHorizontal: 22,
+                paddingVertical: 12,
+                borderRadius: 24,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+              activeOpacity={0.8}
+            >
+              <Camera color="#FFFFFF" size={16} style={{ marginRight: 8 }} />
+              <Text
+                style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}
+              >
+                Change Photo
+              </Text>
+            </TouchableOpacity>
+
+            {userProfile?.profileImage && !imageError && (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowPhotoPreviewModal(false);
+                  handleRemoveProfileImage();
+                }}
+                style={{
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  borderWidth: 1,
+                  borderColor: "#EF4444",
+                  paddingHorizontal: 22,
+                  paddingVertical: 12,
+                  borderRadius: 24,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={{ color: "#EF4444", fontWeight: "800", fontSize: 14 }}
+                >
+                  Remove
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -1175,11 +1853,3 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
     </View>
   );
 }
-
-           
-    
-      
-        
-   
- 
-

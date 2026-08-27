@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Text,
   View,
@@ -10,7 +10,6 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import {
   Flame,
@@ -20,10 +19,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   RotateCcw,
-  HelpCircle,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react-native";
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
@@ -38,6 +33,8 @@ import {
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import AILoadingModal from "../../components/AILoadingModal";
+import StaggerCard from "../../components/StaggerCard";
+import PressableCard from "../../components/PressableCard";
 import { getStyles } from "./WorkoutScreen.styles";
 const logoGreen = "#10B981";
 
@@ -132,6 +129,96 @@ const getExerciseSource = (exerciseName) => {
   return DEFAULT_PUSHUP;
 };
 
+const DEFAULT_WORKOUT_ROUTINES = [
+  {
+    id: "w-light-default",
+    title: "Full Body Bodyweight Burn",
+    intensity: "Light",
+    duration: 20,
+    caloriesBurn: 150,
+    description: "Gentle low-impact full body routine to activate muscles and burn calories.",
+    badgeText: "BEGINNER FRIENDLY",
+    tutorials: [
+      {
+        name: "Bodyweight Squat",
+        target: "3 Sets x 12 Reps",
+        setup: "Stand with feet shoulder-width apart, chest upright, core engaged.",
+        form: "Lower hips back as if sitting in a chair, knees behind toes. Push through heels to stand.",
+      },
+      {
+        name: "Incline Pushup",
+        target: "3 Sets x 10 Reps",
+        setup: "Place hands on wall, bench, or floor with knees resting on mat.",
+        form: "Lower chest towards hands in a 45-degree angle, press back up steadily.",
+      },
+      {
+        name: "Standing High Knees",
+        target: "3 Sets x 30 Secs",
+        setup: "Stand tall, drive one knee towards your chest at a steady pace.",
+        form: "Pump arms synchronously, keeping posture upright and landing softly.",
+      },
+    ],
+  },
+  {
+    id: "w-mod-default",
+    title: "HIIT Power Circuit",
+    intensity: "Moderate",
+    duration: 30,
+    caloriesBurn: 280,
+    description: "High-energy cardiovascular and metabolic conditioning workout.",
+    badgeText: "MOST POPULAR",
+    tutorials: [
+      {
+        name: "Jumping Jacks",
+        target: "4 Sets x 45 Secs",
+        setup: "Stand straight with arms at your side, feet together.",
+        form: "Jump feet out laterally while raising arms above head, return with rhythm.",
+      },
+      {
+        name: "Mountain Climbers",
+        target: "4 Sets x 40 Secs",
+        setup: "Start in high plank position with shoulders stacked over wrists.",
+        form: "Drive knees alternate towards chest dynamically while keeping hips low.",
+      },
+      {
+        name: "Walking Lunges",
+        target: "3 Sets x 14 Reps",
+        setup: "Step forward with right foot, lowering hips until both knees bend 90 degrees.",
+        form: "Push off back foot to step forward into next lunge, maintaining balance.",
+      },
+    ],
+  },
+  {
+    id: "w-int-default",
+    title: "Core & Strength Sculpt",
+    intensity: "Intense",
+    duration: 40,
+    caloriesBurn: 420,
+    description: "Challenging core strengthening and muscle endurance sculpting routine.",
+    badgeText: "HIGH CALORIE BURN",
+    tutorials: [
+      {
+        name: "Plank Hold",
+        target: "4 Sets x 60 Secs",
+        setup: "Place forearms on floor with elbows beneath shoulders.",
+        form: "Keep body in rigid straight line from head to heels, engaging abdominals tightly.",
+      },
+      {
+        name: "Standard Pushups",
+        target: "4 Sets x 15 Reps",
+        setup: "High plank position, hands slightly wider than shoulder width.",
+        form: "Lower body until chest nearly touches floor, push back up with full extension.",
+      },
+      {
+        name: "Russian Twists",
+        target: "4 Sets x 20 Reps",
+        setup: "Sit on floor, lean torso back 45 degrees with feet elevated.",
+        form: "Twist torso side to side, touching hands to floor on each side.",
+      },
+    ],
+  },
+];
+
 export default function WorkoutScreen({
   onTabChange,
   userId,
@@ -148,6 +235,8 @@ export default function WorkoutScreen({
   const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState("All");
+  // Tracks if entrance stagger has already played — prevents re-animating on filter changes
+  const hasPlayedEntrance = useRef(false);
 
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
@@ -189,39 +278,8 @@ export default function WorkoutScreen({
   const intensityTiers = ["All", "Light", "Moderate", "Intense"];
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
-  const [workoutRoutines, setWorkoutRoutines] = useState([
-    {
-      id: "w1",
-      title: "Full Body Home Blitz",
-      description:
-        "Full-body bodyweight circuit to boost endurance and strength.",
-      duration: "25 min",
-      caloriesBurned: 220,
-      intensity: "Moderate",
-      level: "Beginner",
-      exercisesCount: 5,
-    },
-    {
-      id: "w2",
-      title: "Core Strength & Stability",
-      description: "Quick core routine targeting abs and lower back stability.",
-      duration: "15 min",
-      caloriesBurned: 140,
-      intensity: "Light",
-      level: "Beginner",
-      exercisesCount: 4,
-    },
-    {
-      id: "w3",
-      title: "High Intensity Cardio Burn",
-      description: "Fast-paced cardio movements for maximum calorie burn.",
-      duration: "30 min",
-      caloriesBurned: 310,
-      intensity: "Intense",
-      level: "Intermediate",
-      exercisesCount: 6,
-    },
-  ]);
+  const [workoutRoutines, setWorkoutRoutines] = useState(DEFAULT_WORKOUT_ROUTINES);
+  const [isLoadingWorkouts, setIsLoadingWorkouts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
 
@@ -237,7 +295,9 @@ export default function WorkoutScreen({
       );
       if (res.ok) {
         const data = await res.json();
-        setWorkoutRoutines(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setWorkoutRoutines(data);
+        }
         const todayStr = new Date().toISOString().split("T")[0];
         await AsyncStorage.setItem(
           "ms_workouts_cache",
@@ -269,7 +329,7 @@ export default function WorkoutScreen({
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-        // 1. Check local cache
+        // 1. Check local cache first — shows real data instantly
         const cachedRaw = await AsyncStorage.getItem("ms_workouts_cache");
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
@@ -279,17 +339,20 @@ export default function WorkoutScreen({
             parsed.workouts.length > 0
           ) {
             setWorkoutRoutines(parsed.workouts);
-            if (parsed.date === todayStr) return; // Fresh cache hit!
+            setIsLoadingWorkouts(false);
+            if (parsed.date === todayStr) return; // Fresh cache — no network needed
           }
         }
 
-        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
+        // 2. Fetch fresh data silently in background
         const res = await fetch(
           `${API_URL}/workouts/recommend/${userId || "default"}`,
         );
         if (res.ok) {
           const data = await res.json();
-          setWorkoutRoutines(data);
+          if (Array.isArray(data) && data.length > 0) {
+            setWorkoutRoutines(data);
+          }
           await AsyncStorage.setItem(
             "ms_workouts_cache",
             JSON.stringify({
@@ -301,16 +364,15 @@ export default function WorkoutScreen({
         }
       } catch (err) {
         if (__DEV__) console.log("WORKOUT SILENT BG FETCH ERROR:", err);
+      } finally {
+        setIsLoadingWorkouts(false);
       }
     };
 
     if (userId) {
-      // Defer heavy fetch until after tab animation completes
-      const timer = setTimeout(() => {
-        loadCachedOrFetchWorkouts();
-      }, 150);
-      return () => clearTimeout(timer);
+      loadCachedOrFetchWorkouts();
     } else {
+      setIsLoadingWorkouts(false);
       setLoading(false);
     }
   }, [userId]);
@@ -858,10 +920,38 @@ export default function WorkoutScreen({
           Your Tailored Home Routines
         </Text>
 
-        {filteredWorkouts.map((workout) => {
+        {/* Skeleton placeholders while loading */}
+        {isLoadingWorkouts && workoutRoutines.length === 0 && (
+          [0, 1, 2].map((i) => (
+            <View
+              key={`skel-${i}`}
+              style={[
+                styles.workoutFormCard,
+                {
+                  opacity: 0.45,
+                  backgroundColor: theme?.inputBg || '#F1F5F9',
+                  height: 160,
+                  borderRadius: 16,
+                  marginBottom: 16,
+                },
+              ]}
+            />
+          ))
+        )}
+
+        {filteredWorkouts.map((workout, staggerIndex) => {
           if (!workout) return null;
           return (
-            <View key={workout.id} style={styles.workoutFormCard}>
+            <StaggerCard
+              key={workout.id}
+              index={staggerIndex}
+              shouldAnimate={!hasPlayedEntrance.current}
+            >
+            <PressableCard
+              style={styles.workoutFormCard}
+              onPress={() => handleStartTutorialEngine(workout)}
+              scaleDown={0.97}
+            >
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
@@ -887,88 +977,53 @@ export default function WorkoutScreen({
               {/* QUICK METRICS TILES */}
               <View style={styles.workoutMetricsSummaryGrid}>
                 <View style={styles.metricItemBox}>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(14, 165, 233, 0.12)",
-                      borderRadius: 8,
-                      padding: 5,
-                      marginRight: 8,
-                    }}
-                  >
+                  <View style={{ backgroundColor: "rgba(14, 165, 233, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
                     <Clock color={"#0EA5E9"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Duration</Text>
-                    <Text
-                      style={[styles.metricTileValue, { color: "#0EA5E9" }]}
-                    >
+                    <Text style={[styles.metricTileValue, { color: "#0EA5E9" }]}>
                       {workout.duration}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.metricItemBox}>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(249, 115, 22, 0.12)",
-                      borderRadius: 8,
-                      padding: 5,
-                      marginRight: 8,
-                    }}
-                  >
+                  <View style={{ backgroundColor: "rgba(249, 115, 22, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
                     <Flame color={"#F97316"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                    <Text
-                      style={[styles.metricTileValue, { color: "#F97316" }]}
-                    >
-                      {workout?.caloriesBurn} kcal
+                    <Text style={[styles.metricTileValue, { color: "#F97316" }]}>
+                      {workout?.caloriesBurn ?? workout?.caloriesBurned} kcal
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.metricItemBox}>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(245, 158, 11, 0.12)",
-                      borderRadius: 8,
-                      padding: 5,
-                      marginRight: 8,
-                    }}
-                  >
+                  <View style={{ backgroundColor: "rgba(245, 158, 11, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
                     <Trophy color={"#F59E0B"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Intensity</Text>
-                    <Text
-                      style={[styles.metricTileValue, { color: "#F59E0B" }]}
-                    >
+                    <Text style={[styles.metricTileValue, { color: "#F59E0B" }]}>
                       {workout?.intensity}
                     </Text>
                   </View>
                 </View>
               </View>
 
-              {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
-              <TouchableOpacity
-                style={styles.startWorkoutActionButton}
-                activeOpacity={0.8}
-                onPress={() => handleStartTutorialEngine(workout)}
-              >
-                <Play
-                  color="#FFFFFF"
-                  size={14}
-                  fill="#FFFFFF"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.startWorkoutButtonText}>
-                  Begin Active Routine
-                </Text>
-              </TouchableOpacity>
-            </View>
+              {/* LAUNCH BUTTON */}
+              <View style={[styles.startWorkoutActionButton, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
+              </View>
+            </PressableCard>
+            </StaggerCard>
           );
         })}
+        {/* Mark entrance as played after first render \u2014 filter taps won't re-animate */}
+        {filteredWorkouts.length > 0 && (() => { hasPlayedEntrance.current = true; return null; })()}
       </ScrollView>
 
       {/* UIverse Inspired AI Customization Loading Modal */}
