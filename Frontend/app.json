@@ -23,6 +23,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-font",
+      "expo-asset",
       [
         "expo-splash-screen",
         {
@@ -33,6 +35,7 @@
           }
         }
       ],
+      "expo-image",
       "expo-status-bar",
       [
         "expo-build-properties",

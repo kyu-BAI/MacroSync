@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
+  StyleSheet, 
   Text, 
   View, 
   TouchableOpacity, 
@@ -15,14 +16,13 @@ import {
   TextInput
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle, Minus, Plus, Clock, Trash2, RotateCcw } from 'lucide-react-native';
+import { X, Zap, ZapOff, CheckCircle2, Scan, ChevronRight, Utensils, Upload, Sparkles, Lightbulb, AlertTriangle, Minus, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
-import { getStyles } from './FoodScannerScreen.styles';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -43,26 +43,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
   const [portionScale, setPortionScale] = useState(1.0);
   const [customGramsInput, setCustomGramsInput] = useState('');
   
-  // Scan limits & history tracking state
+  // Scan limits tracking state
   const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
   const [showTipsCard, setShowTipsCard] = useState(false);
-  const [scanHistory, setScanHistory] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-
-  // Load persistent scan history on mount
-  useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const cacheKey = `@ms_scanned_history_${userId || 'default'}`;
-        const stored = await AsyncStorage.getItem(cacheKey);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) setScanHistory(parsed);
-        }
-      } catch (err) {}
-    };
-    loadHistory();
-  }, [userId]);
 
   // Check persistent scan tips dismissal preference on mount
   useEffect(() => {
@@ -454,7 +437,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     const newTotal = currentConsumed + scaledCalories;
     const excess = newTotal - targetCalories;
 
-    const performLog = async () => {
+    const performLog = () => {
       if (onLogMeal && analysisResult) {
         const displayWeight = scaledWeight ? ` (${scaledWeight}g)` : '';
         const mealItem = {
@@ -466,19 +449,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           carbs: scaledCarbs,
           fats: scaledFats,
           mealType: selectedMealType,
-          imageUri: capturedImage,
-          timestamp: new Date().toISOString(),
-          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         onLogMeal(mealItem);
-
-        // Update local scan history state and persist
-        const updatedHistory = [mealItem, ...scanHistory].slice(0, 50);
-        setScanHistory(updatedHistory);
-        try {
-          const cacheKey = `@ms_scanned_history_${userId || 'default'}`;
-          await AsyncStorage.setItem(cacheKey, JSON.stringify(updatedHistory));
-        } catch (err) {}
       }
       onTabChange('DASHBOARD');
     };
@@ -703,23 +676,13 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <TouchableOpacity 
-            style={styles.headerIconBtn} 
-            onPress={() => setShowHistoryModal(true)}
-            activeOpacity={0.7}
-          >
-            <Clock color="#10B981" size={22} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.headerIconBtn} 
-            onPress={() => setFlashMode(flashMode === 'off' ? 'on' : 'off')}
-            activeOpacity={0.7}
-          >
-            {flashMode === 'on' ? <Zap color="#10B981" size={24} /> : <ZapOff color="#64748B" size={24} />}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={styles.headerIconBtn} 
+          onPress={() => setFlashMode(flashMode === 'off' ? 'on' : 'off')}
+          activeOpacity={0.7}
+        >
+          {flashMode === 'on' ? <Zap color="#10B981" size={24} /> : <ZapOff color="#64748B" size={24} />}
+        </TouchableOpacity>
       </View>
 
       {/* Bounded Camera Area */}
@@ -825,222 +788,513 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* SCAN HISTORY MODAL */}
-      <Modal
-        visible={showHistoryModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowHistoryModal(false)}
-      >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(15, 23, 42, 0.65)',
-          justifyContent: 'flex-end'
-        }}>
-          <View style={{
-            backgroundColor: theme?.surface || '#FFFFFF',
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            maxHeight: '82%',
-            padding: 20,
-            borderWidth: 1,
-            borderColor: theme?.border || '#E2E8F0',
-          }}>
-            {/* Modal Header */}
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 16,
-              paddingBottom: 14,
-              borderBottomWidth: 1,
-              borderBottomColor: theme?.border || '#E2E8F0'
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                  borderRadius: 10,
-                  padding: 8,
-                  marginRight: 10
-                }}>
-                  <Clock color="#10B981" size={18} />
-                </View>
-                <View>
-                  <Text style={{ fontSize: 17, fontWeight: '800', color: theme?.textPrimary || '#0F172A' }}>
-                    Recent Scan History
-                  </Text>
-                  <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B' }}>
-                    {scanHistory.length} logged food scans
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowHistoryModal(false)}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <X color={theme?.textSecondary || '#64748B'} size={18} />
-              </TouchableOpacity>
-            </View>
-
-            {/* History Items Scroll List */}
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 20 }}>
-              {scanHistory.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                  <Utensils color="#94A3B8" size={40} style={{ marginBottom: 12 }} />
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme?.textPrimary || '#0F172A', marginBottom: 4 }}>
-                    No Scans Recorded Yet
-                  </Text>
-                  <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B', textAlign: 'center' }}>
-                    Scan your meal using the camera to start tracking your food history here!
-                  </Text>
-                </View>
-              ) : (
-                scanHistory.map((item, idx) => (
-                  <View
-                    key={item.id || idx}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-                      borderRadius: 16,
-                      padding: 12,
-                      borderWidth: 1,
-                      borderColor: theme?.border || '#E2E8F0',
-                    }}
-                  >
-                    {/* Thumbnail Image */}
-                    {item.imageUri ? (
-                      <Image
-                        source={{ uri: item.imageUri }}
-                        style={{ width: 52, height: 52, borderRadius: 12, marginRight: 12 }}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12
-                      }}>
-                        <Utensils color="#10B981" size={22} />
-                      </View>
-                    )}
-
-                    {/* Meal Details */}
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                        <Text style={{
-                          fontSize: 14,
-                          fontWeight: '800',
-                          color: theme?.textPrimary || '#0F172A',
-                          flex: 1
-                        }} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700', marginBottom: 4 }}>
-                        {item.calories} kcal • P: {item.protein}g • C: {item.carbs}g • F: {item.fats}g
-                      </Text>
-                      <Text style={{ fontSize: 10, color: theme?.textSecondary || '#94A3B8' }}>
-                        {item.mealType || 'Meal'} • {item.time || 'Today'}
-                      </Text>
-                    </View>
-
-                    {/* Quick Re-Log Button */}
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: '#10B981',
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginRight: 6
-                      }}
-                      onPress={() => {
-                        if (onLogMeal) {
-                          onLogMeal({
-                            ...item,
-                            id: `relog-${Date.now()}`,
-                            time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-                          });
-                          showAlert("Meal Re-Logged 🍽️", `Re-logged ${item.name} (${item.calories} kcal) to your daily nutrition!`);
-                          setShowHistoryModal(false);
-                          onTabChange('DASHBOARD');
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <RotateCcw color="#FFFFFF" size={12} style={{ marginRight: 4 }} />
-                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
-                        Re-Log
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* Delete Item Button */}
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const filtered = scanHistory.filter((_, i) => i !== idx);
-                        setScanHistory(filtered);
-                        try {
-                          const cacheKey = `@ms_scanned_history_${userId || 'default'}`;
-                          await AsyncStorage.setItem(cacheKey, JSON.stringify(filtered));
-                        } catch (err) {}
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Trash2 color="#94A3B8" size={16} />
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            {scanHistory.length > 0 && (
-              <TouchableOpacity
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: 10,
-                  marginTop: 6
-                }}
-                onPress={async () => {
-                  showAlert("Clear History", "Are you sure you want to clear all scan history?", [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Clear All",
-                      style: "destructive",
-                      onPress: async () => {
-                        setScanHistory([]);
-                        try {
-                          const cacheKey = `@ms_scanned_history_${userId || 'default'}`;
-                          await AsyncStorage.removeItem(cacheKey);
-                        } catch (err) {}
-                      }
-                    }
-                  ]);
-                }}
-              >
-                <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '700' }}>
-                  Clear History
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
-
+const getStyles = (theme, isDarkMode) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme?.background || '#F8FAFC' },
+  headerArea: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 24,
+    marginBottom: 14,
+  },
+  headerTitleCenter: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#64748B'
+  },
+  scanBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  normalBadgePill: {
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+  },
+  warningBadgePill: {
+    backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.16)' : 'rgba(254, 242, 242, 1)',
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.35)' : 'rgba(252, 165, 165, 0.8)',
+  },
+  premiumBadgePill: {
+    backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.16)' : 'rgba(245, 243, 255, 1)',
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.35)' : 'rgba(221, 214, 254, 0.8)',
+  },
+  scanBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  normalBadgeText: {
+    color: '#10B981',
+  },
+  warningBadgeText: {
+    color: '#EF4444',
+  },
+  premiumBadgeText: {
+    color: '#8B5CF6',
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme?.surface || '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  cameraContainer: {
+    flex: 1,
+    marginHorizontal: 24,
+    borderRadius: 32,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+    shadowOpacity: 0,
+    elevation: 0,
+    marginBottom: 14,
+  },
+  camera: {
+    width: '100%',
+    height: '100%',
+    zIndex: 1,
+  },
+  capturedOverlayImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    zIndex: 10,
+  },
+  viewfinderContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  viewfinderBox: {
+    width: 280,
+    height: 280,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  corner: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderColor: '#FFFFFF',
+  },
+  topLeft: { top: 0, left: 0, borderTopWidth: 3.5, borderLeftWidth: 3.5, borderTopLeftRadius: 14 },
+  topRight: { top: 0, right: 0, borderTopWidth: 3.5, borderRightWidth: 3.5, borderTopRightRadius: 14 },
+  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 3.5, borderLeftWidth: 3.5, borderBottomLeftRadius: 14 },
+  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3.5, borderRightWidth: 3.5, borderBottomRightRadius: 14 },
+  scanningLine: {
+    position: 'absolute',
+    top: 0,
+    left: 4,
+    right: 4,
+    height: 2.5,
+    backgroundColor: '#10B981',
+    borderRadius: 2,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  visualTipsCard: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+    backgroundColor: theme?.surface || '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  tipsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tipsIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.18)' : 'rgba(245, 158, 11, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  tipsCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    flex: 1,
+  },
+  closeTipsBtn: {
+    padding: 4,
+  },
+  tipsBulletPoint: {
+    fontSize: 12,
+    color: theme?.textSecondary || '#64748B',
+    lineHeight: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  warningAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : 'rgba(254, 243, 199, 0.4)',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.25)' : 'rgba(253, 230, 138, 0.7)',
+  },
+  warningAlertText: {
+    flex: 1,
+    fontSize: 11,
+    color: theme?.textSecondary || '#475569',
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  reopenTipsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: theme?.surface || '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  reopenTipsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  bottomControlsArea: {
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  instructionText: {
+    color: theme?.textPrimary || '#64748B',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  shutterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    position: 'relative',
+    height: 76,
+  },
+  galleryButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: theme?.surface || '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+    position: 'absolute',
+    left: '20%',
+  },
+  shutterOuter: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 4,
+    borderColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9'
+  },
+  shutterInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+  },
+  aiBadgeText: {
+    color: logoGreen,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  confidenceText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  floatingCloseBtn: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  subTitleLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  gramInputCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme?.cardBg || (isDarkMode ? '#1E293B' : '#F1F5F9'),
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    borderWidth: 1.2,
+    borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0'),
+  },
+  stepperButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme?.surface || (isDarkMode ? '#334155' : '#FFFFFF'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  gramInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gramTextInput: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: logoGreen,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    minWidth: 60,
+  },
+  gramSuffixText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+    marginLeft: 4,
+  },
+  portionScaleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  scaleChip: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 3,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  scaleChipActive: {
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)',
+    borderColor: logoGreen,
+    borderWidth: 1.5,
+  },
+  scaleChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+  },
+  scaleChipTextActive: {
+    color: logoGreen,
+    fontWeight: '900',
+  },
+  mealTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  mealTypeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 3,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  mealTypeChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  foodName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 12,
+  },
+  portionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme?.textSecondary || '#94A3B8',
+    marginTop: -14,
+    marginBottom: 20,
+  },
+  macroCardGrid: {
+    flexDirection: 'row',
+    backgroundColor: theme?.cardBg || '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme?.border || '#F1F5F9',
+    paddingVertical: 16,
+    marginBottom: 24,
+  },
+  macroCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  macroValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 4,
+  },
+  macroLabel: {
+    fontSize: 12,
+    color: theme?.textSecondary || '#94A3B8',
+    fontWeight: '600',
+  },
+  logButton: {
+    flexDirection: 'row',
+    backgroundColor: logoGreen,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  logButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  retakeButton: {
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retakeButtonText: {
+    color: theme?.textSecondary || '#94A3B8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  permissionContainer: {
+    flex: 1,
+    backgroundColor: theme?.background || baseColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 12,
+  },
+  permissionText: {
+    fontSize: 15,
+    color: theme?.textSecondary || '#64748B',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 30,
+  },
+  permissionButton: {
+    backgroundColor: logoGreen,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  permissionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  closeButtonAbsolute: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme?.surface || '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+});

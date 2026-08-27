@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
+  StyleSheet, 
   Text, 
   View, 
   ScrollView, 
@@ -23,17 +24,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from '../../services/NotificationService';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { clearSavedUserId } from '../../services/OfflineStorage';
-import { getStyles } from './SettingsScreen.styles';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const logoGreen = '#10B981';
 
-export default function SettingsScreen({ onTabChange, onLogout, userProfile, setUserProfile, userId }) {
+export default function SettingsScreen({ onTabChange, userProfile, setUserProfile, userId }) {
   const { showAlert } = useCustomAlert();
   const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } = useTheme();
-  const { language, setLanguage } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
 
@@ -54,16 +51,6 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // --- LIVE PASSWORD RULES ---
-  const pwRules = [
-    { label: 'At least 8 characters',          ok: newPassword.length >= 8 },
-    { label: 'One uppercase letter (A–Z)',       ok: /[A-Z]/.test(newPassword) },
-    { label: 'One lowercase letter (a–z)',       ok: /[a-z]/.test(newPassword) },
-    { label: 'One number (0–9)',                 ok: /[0-9]/.test(newPassword) },
-    { label: 'One special character (!@#$…)',    ok: /[^A-Za-z0-9]/.test(newPassword) },
-  ];
-  const allRulesPass = pwRules.every(r => r.ok);
 
   // --- PAYMENT FLOW STATE ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -398,8 +385,8 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       showAlert("Validation Error", "Please enter a new password.");
       return;
     }
-    if (!allRulesPass) {
-      showAlert("Weak Password", "Your new password does not meet all the requirements. Please check the checklist and try again.");
+    if (newPassword.length < 8) {
+      showAlert("Validation Error", "Password must be at least 8 characters long.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -564,7 +551,10 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
         {/* INTERACTIVE SUBSCRIPTION CONFIGURATION TIER CARD */}
         <Text style={styles.sectionLabelTitle}>Account Subscription Tier</Text>
         <View style={styles.formCard}>
-          <View style={{ marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 6, marginRight: 10 }}>
+              <Sparkles color="#8B5CF6" size={18} />
+            </View>
             <Text style={styles.cardTitle}>Select Target Membership Level</Text>
           </View>
           <View style={styles.filterButtonGroupRow}>
@@ -719,66 +709,6 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
                     color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
                   }}>
                     {mode.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* APP LANGUAGE SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Language & Localization</Text>
-        <View style={styles.formCard}>
-          <View style={{ marginBottom: 12 }}>
-            <Text style={styles.settingRowItemMainTitle}>App Meal Language</Text>
-            <Text style={styles.settingRowItemSubTitle}>
-              {language === 'English'
-                ? 'English (Default meal titles)'
-                : language === 'Tagalog'
-                ? 'Tagalog (Wikang Filipino)'
-                : 'Cebuano (Pinulongang Binisaya)'}
-            </Text>
-          </View>
-
-          {/* 3-Option Segmented Language Selector */}
-          <View style={{
-            flexDirection: 'row',
-            backgroundColor: theme?.inputBg || '#F1F5F9',
-            borderRadius: 14,
-            padding: 4,
-            borderWidth: 1,
-            borderColor: theme?.border || '#E2E8F0',
-          }}>
-            {[
-              { id: 'English', label: 'English' },
-              { id: 'Tagalog', label: 'Tagalog' },
-              { id: 'Cebuano', label: 'Cebuano' },
-            ].map((langItem) => {
-              const isActive = language === langItem.id;
-              return (
-                <TouchableOpacity
-                  key={langItem.id}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    backgroundColor: isActive ? (theme?.primary || '#10B981') : 'transparent',
-                  }}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setLanguage(langItem.id);
-                    showAlert("Language Updated", `Meal names will now display in ${langItem.label}!`);
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 13,
-                    fontWeight: '800',
-                    color: isActive ? '#FFFFFF' : (theme?.textSecondary || '#94A3B8'),
-                  }}>
-                    {langItem.label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1002,39 +932,6 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
               </TouchableOpacity>
             </View>
 
-            {/* ── LIVE PASSWORD REQUIREMENTS ── */}
-            {newPassword.length > 0 && (
-              <View style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.06)',
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                borderWidth: 1,
-                borderColor: allRulesPass ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.20)',
-              }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.7 }}>Password must contain</Text>
-                {pwRules.map((rule, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                    <View style={{
-                      width: 18, height: 18, borderRadius: 9,
-                      backgroundColor: rule.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.10)',
-                      alignItems: 'center', justifyContent: 'center',
-                      marginRight: 8,
-                      borderWidth: 1,
-                      borderColor: rule.ok ? '#10B981' : '#EF4444',
-                    }}>
-                      <Text style={{ fontSize: 10, fontWeight: '900', color: rule.ok ? '#10B981' : '#EF4444' }}>
-                        {rule.ok ? '✓' : '✕'}
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: rule.ok ? '#10B981' : '#94A3B8' }}>
-                      {rule.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
             <Text style={styles.inputLabel}>Confirm New Password</Text>
             <View style={styles.passwordInputContainer}>
               <TextInput
@@ -1183,3 +1080,501 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
    
  
 
+const baseColor = '#F8FAFC';
+const logoGreen = '#10B981';        
+
+const getStyles = (theme, isDarkModePassed) => {
+  const isDarkMode = isDarkModePassed ?? (theme?.isDarkMode || theme?.mode === 'dark');
+  return StyleSheet.create({
+  fullscreenOverlay: { 
+    position: 'absolute', 
+    top: 0, 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    width: screenWidth, 
+    height: screenHeight, 
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.background || baseColor),
+  },
+  container: { 
+    flex: 1,
+  },
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
+    paddingBottom: 85,
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 12, 
+    paddingHorizontal: 4, 
+    width: '100%',
+  },
+  headerTextGroup: { 
+    flex: 1, 
+    paddingRight: 12,
+  },
+  appName: { 
+    fontSize: 12, 
+    fontWeight: '900', 
+    color: logoGreen, 
+    textTransform: 'uppercase', 
+    letterSpacing: 2, 
+    marginBottom: 2,
+  },
+  greeting: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
+    letterSpacing: -0.5,
+  },
+  subGreeting: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#64748B'), 
+    marginTop: 2,
+  },
+  profileFormCard: {
+    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
+    borderRadius: 20, 
+    padding: 16, 
+    marginBottom: 24, 
+    borderWidth: 1.2, 
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  profileUserRow: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  avatarNeuOuterBox: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: logoGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
+    position: 'relative',
+  },
+  avatarImageLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  profileMetadataTextGroup: {
+    alignItems: 'center',
+  },
+  profileUserNameText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  profileUserSubText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
+    textAlign: 'center',
+  },
+  glassDivider: { 
+    height: 1, 
+    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'), 
+    marginVertical: 12,
+  },
+  innerGlassDivider: {
+    height: 1,
+    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  profileMetricsMiniGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileMetricMiniBox: {
+    flex: 1,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: 'transparent',
+  },
+  profileMetricMiniValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
+    marginBottom: 2,
+  },
+  profileMetricMiniLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionLabelTitle: { 
+    fontSize: 14, 
+    fontWeight: '900', 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
+    marginBottom: 12, 
+    marginLeft: 4, 
+    letterSpacing: -0.2,
+  },
+  formCard: {
+    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
+    borderRadius: 20, 
+    padding: 16, 
+    marginBottom: 24, 
+    borderWidth: 1.2, 
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  cardTitle: { 
+    fontSize: 11, 
+    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
+    textTransform: 'uppercase', 
+    letterSpacing: 1.2, 
+    marginBottom: 12, 
+    fontWeight: '800', 
+    marginLeft: 2,
+  },
+  filterButtonGroupRow: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap',
+  },
+  filterChipButton: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
+    borderRadius: 16, 
+    marginRight: 8, 
+    marginBottom: 8, 
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
+    borderWidth: 1.2, 
+    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
+    shadowOpacity: 0,
+    elevation: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChipInactive: { 
+    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
+  },
+  filterChipActive: { 
+    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', 
+    borderWidth: 1.5,
+    borderColor: logoGreen,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  filterChipText: { 
+    fontSize: 12, 
+    fontWeight: '800',
+    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
+  },
+  filterChipTextActive: {
+    color: logoGreen,
+    fontWeight: '900',
+  },
+  premiumConfigurationWrapper: {
+    marginTop: 6,
+  },
+  premiumPanelHeading: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#94A3B8',
+    marginBottom: 10,
+  },
+  billingPlanSelectorRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme?.surface || baseColor,
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  billingPlanActive: {
+    borderColor: logoGreen,
+    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.06)',
+    borderWidth: 1.5,
+  },
+  billingPlanTextGroup: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  billingPlanMainTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 4,
+  },
+  billingPlanSubDescription: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme?.textSecondary || '#64748B',
+    lineHeight: 16,
+  },
+  billingPlanPriceBadgeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: logoGreen,
+  },
+  bestValueBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  bestValueBadgeText: {
+    color: '#F59E0B',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  premiumFeatureDetailsBox: {
+    marginTop: 16,
+    backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+  },
+  featureDetailsHeadingFlexRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  premiumDetailsHeadingText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: isDarkMode ? '#F8FAFC' : '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  featureBulletRowItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  bulletCheckIconSpacer: {
+    marginRight: 8,
+    marginTop: 2,
+  },
+  featureBulletBodyText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: isDarkMode ? '#94A3B8' : '#475569',
+    lineHeight: 18,
+  },
+  settingSwitchRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme?.border || '#E2E8F0',
+  },
+  settingIconTextGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingRowIconSpacer: {
+    marginRight: 14,
+  },
+  settingRowItemMainTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 2,
+  },
+  settingRowItemSubTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme?.textSecondary || '#94A3B8',
+  },
+  systemActionNeuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme?.surface || baseColor,
+    paddingVertical: 16,
+    borderRadius: 20,
+    marginBottom: 14,
+    borderWidth: 1.5, 
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  systemActionBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginLeft: 8,
+  },
+  dangerActionBtnText: {
+    color: '#64748B',
+  },
+  dangerActionNeuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme?.cardBg || '#F8FAFC',
+    paddingVertical: 16,
+    borderRadius: 20,
+    marginBottom: 14,
+    borderWidth: 1.5, 
+    borderColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  logOutSecondaryNeuButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme?.surface || baseColor,
+    paddingVertical: 16,
+    borderRadius: 20,
+    marginBottom: 14,
+    marginTop: 12,
+    borderWidth: 1.5, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  logOutButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.error || '#64748B',
+  },
+  versionInfoFooterText: {
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme?.textSecondary || '#CBD5E1',
+    marginBottom: 24,
+    letterSpacing: 1,
+  },
+  floatingChatbotContainer: { 
+    position: 'absolute', 
+    bottom: 104, 
+    right: 20, 
+    zIndex: 99,
+  },
+  chatbotFloatingButton: {
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
+  chatbotUnpressed: { 
+    backgroundColor: logoGreen,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  chatbotPressed: { 
+    backgroundColor: '#059669',
+    transform: [{ scale: 0.95 }],
+  },
+
+  editProfileButton: {
+    marginTop: 10,
+    backgroundColor: theme?.surface || '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editProfileButtonText: {
+    color: logoGreen,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '85%', backgroundColor: theme?.surface || baseColor, borderRadius: 20, padding: 24, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: logoGreen, marginBottom: 8, textAlign: 'center' },
+  modalSubtitle: { fontSize: 14, color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginBottom: 20 },
+  modalInput: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0' },
+  passwordInputContainer: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0', paddingRight: 14 },
+  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A' },
+  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 8 },
+  modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: theme?.cardBg || '#FFFFFF', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: theme?.border || '#E2E8F0' },
+  modalCancelText: { color: theme?.textSecondary || '#94A3B8', fontWeight: '700', fontSize: 14 },
+  modalSave: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
+  modalSaveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: logoGreen,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme?.surface || '#FFFFFF',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  settingActionRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  paymentMethodOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme?.inputBg || '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  paymentMethodActive: {
+    borderColor: logoGreen,
+    backgroundColor: theme?.cardBg || '#EBEBEB',
+  },
+  paymentLogoImage: {
+    width: 60,
+    height: 24,
+    marginRight: 16,
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+  },
+  modalSaveDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+});
+};

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
+  StyleSheet,
   Text,
   View,
   TouchableOpacity,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
   Switch,
 } from "react-native";
 import { X, HelpCircle, Mail, ShieldCheck } from "lucide-react-native";
@@ -19,7 +21,6 @@ import {
   isRememberMeEnabled,
 } from "../services/OfflineStorage";
 import { useTheme } from "../context/ThemeContext";
-import { getStyles } from "./GoogleAccountModal.styles";
 
 export default function GoogleAccountModal({
   visible = false,
@@ -238,3 +239,198 @@ export default function GoogleAccountModal({
     </Modal>
   );
 }
+
+const getStyles = (isDarkMode, theme) => StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: isDarkMode ? "rgba(0, 0, 0, 0.82)" : "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  topHeaderBar: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 54 : 32,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  headerIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.18)" : "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: "rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDarkMode ? 0 : 0.12,
+    shadowRadius: 4,
+    elevation: isDarkMode ? 0 : 3,
+  },
+  modalCardContainer: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: isDarkMode ? "#262626" : "#FFFFFF",
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 28,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: isDarkMode ? 0.5 : 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
+  },
+  scrollContent: {
+    alignItems: "center",
+  },
+  logoBadgeOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: isDarkMode ? "#18181A" : "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
+  },
+  logoBadgeInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  appLogoImage: {
+    width: 54,
+    height: 54,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: isDarkMode ? "#FFFFFF" : "#111827",
+    textAlign: "center",
+    letterSpacing: -0.3,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  loadingContainer: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 14,
+    fontSize: 14,
+    color: isDarkMode ? "#CBD5E1" : "#4B5563",
+    fontWeight: "500",
+  },
+  accountFormContainer: {
+    width: "100%",
+  },
+  inputGroup: {
+    marginBottom: 14,
+    width: "100%",
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: isDarkMode ? "#D4D4D8" : "#374151",
+    marginBottom: 6,
+  },
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: isDarkMode ? "#18181B" : "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#3F3F46" : "#D1D5DB",
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  fieldIcon: {
+    marginRight: 10,
+  },
+  textInput: {
+    flex: 1,
+    color: isDarkMode ? "#FFFFFF" : "#111827",
+    fontSize: 14,
+  },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: isDarkMode ? "#18181B" : "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#3F3F46" : "#D1D5DB",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+    width: "100%",
+  },
+  rememberTextGroup: {
+    flex: 1,
+    marginRight: 10,
+  },
+  rememberTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rememberTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: isDarkMode ? "#FFFFFF" : "#111827",
+  },
+  rememberSubtitle: {
+    fontSize: 11,
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  submitButton: {
+    backgroundColor: "#10B981",
+    borderRadius: 14,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    width: "100%",
+  },
+  submitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  dividerLine: {
+    height: 1,
+    backgroundColor: isDarkMode ? "#3F3F46" : "#E5E7EB",
+    marginVertical: 18,
+    width: "100%",
+  },
+  legalDisclaimerText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: isDarkMode ? "#A1A1AA" : "#6B7280",
+    textAlign: "left",
+  },
+  legalLinkText: {
+    color: "#60A5FA",
+    fontWeight: "600",
+  },
+});
