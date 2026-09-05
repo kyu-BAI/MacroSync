@@ -39,7 +39,7 @@ export default function StaggerCard({
       duration: 380,
       delay,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }, []);
 

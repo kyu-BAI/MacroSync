@@ -30,13 +30,13 @@ export default function SplashScreen({ onAppReady }) {
             toValue: 1, // Progressing to 50% marker (Scale: 1, Opacity: 1)
             duration: (BASE_SPEED_MS * 1.111) / 2,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(timelineNode, {
             toValue: 0, // Returning to 100% marker (Scale: 0, Opacity: 0.3)
             duration: (BASE_SPEED_MS * 1.111) / 2,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ])
       ).start();

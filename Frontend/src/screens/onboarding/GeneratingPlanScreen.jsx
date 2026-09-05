@@ -51,27 +51,27 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           toValue: 1.1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         })
       ])
     ).start();
 
     // Infinite Rotate Animation for the Rings
-    Animated.loop(Animated.timing(rotateAnim1, { toValue: 1, duration: 2500, easing: Easing.linear, useNativeDriver: true })).start();
-    Animated.loop(Animated.timing(rotateAnim2, { toValue: 1, duration: 3200, easing: Easing.linear, useNativeDriver: true })).start();
-    Animated.loop(Animated.timing(rotateAnim3, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })).start();
+    Animated.loop(Animated.timing(rotateAnim1, { toValue: 1, duration: 2500, easing: Easing.linear, useNativeDriver: false })).start();
+    Animated.loop(Animated.timing(rotateAnim2, { toValue: 1, duration: 3200, easing: Easing.linear, useNativeDriver: false })).start();
+    Animated.loop(Animated.timing(rotateAnim3, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: false })).start();
 
     // Message Cycling logic (Fade Out -> Change Text -> Fade In)
     const messageInterval = setInterval(() => {
       Animated.sequence([
-        Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true })
+        Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false })
       ]).start();
       
       setTimeout(() => {

@@ -155,17 +155,17 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
     Animated.parallel([
       // Smooth vertical liquid wave dampening sequence (sinusoidal sine easing)
       Animated.sequence([
-        Animated.timing(waveY, { toValue: 1.0, duration: 320, easing: Easing.out(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveY, { toValue: -0.6, duration: 300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveY, { toValue: 0.3, duration: 260, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveY, { toValue: -0.1, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveY, { toValue: 0, duration: 180, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: 1.0, duration: 320, easing: Easing.out(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveY, { toValue: -0.6, duration: 300, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveY, { toValue: 0.3, duration: 260, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveY, { toValue: -0.1, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveY, { toValue: 0, duration: 180, easing: Easing.out(Easing.sin), useNativeDriver: false }),
       ]),
       // Smooth horizontal wave crest sweep
       Animated.sequence([
-        Animated.timing(waveX, { toValue: 1.0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveX, { toValue: -0.5, duration: 450, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(waveX, { toValue: 0, duration: 280, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveX, { toValue: 1.0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveX, { toValue: -0.5, duration: 450, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(waveX, { toValue: 0, duration: 280, easing: Easing.out(Easing.sin), useNativeDriver: false }),
       ]),
     ]).start();
   }, [consumed, target]);
@@ -336,8 +336,8 @@ function FadeCard({ delay = 0, style, children }) {
   const slideAnim = useRef(new Animated.Value(24)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 500, delay, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 500, delay, useNativeDriver: false }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start();
   }, []);
   return (

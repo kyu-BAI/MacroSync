@@ -27,13 +27,13 @@ function AnimatedMessageRow({ children, isAI }) {
       Animated.timing(opacity, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 220,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);
@@ -57,13 +57,13 @@ function SmoothCircularReveal({ isDarkMode, onFinish }) {
         toValue: 40,
         duration: 800, // Smooth, slow expansion
         easing: Easing.bezier(0.12, 1, 0.22, 1),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(circleShift, {
         toValue: -1090, // Pins bottom-right edge to FAB icon so circle inflates 100% out of icon
         duration: 800,
         easing: Easing.bezier(0.12, 1, 0.22, 1),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
 
@@ -72,7 +72,7 @@ function SmoothCircularReveal({ isDarkMode, onFinish }) {
       Animated.timing(overlayOpacity, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => {
         if (onFinish) onFinish();
       });
@@ -459,19 +459,19 @@ export default function ChatbotAIScreen({
         toValue: 1,
         duration: 350,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.spring(containerScale, {
         toValue: 1,
         friction: 7,
         tension: 50,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(containerTranslateY, {
         toValue: 0,
         duration: 400,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);

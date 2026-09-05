@@ -80,7 +80,7 @@ export default function AILoadingModal({
         toValue: 1,
         duration: 3000,
         easing: Easing.linear,
-        useNativeDriver: true
+        useNativeDriver: false
       })
     );
 
@@ -91,13 +91,13 @@ export default function AILoadingModal({
           toValue: 1.15,
           duration: 1000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true
+          useNativeDriver: false
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true
+          useNativeDriver: false
         })
       ])
     );
@@ -119,12 +119,12 @@ export default function AILoadingModal({
         Animated.timing(fadeTextAnim, {
           toValue: 0.2,
           duration: 200,
-          useNativeDriver: true
+          useNativeDriver: false
         }),
         Animated.timing(fadeTextAnim, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: true
+          useNativeDriver: false
         })
       ]).start();
 

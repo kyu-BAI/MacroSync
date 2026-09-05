@@ -132,12 +132,12 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         Animated.timing(pulseAnim, {
           toValue: 1.2,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     ).start();
@@ -147,12 +147,12 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         Animated.timing(scanLineAnim, {
           toValue: 278, // Height of the box minus the line thickness
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(scanLineAnim, {
           toValue: 0,
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     ).start();
