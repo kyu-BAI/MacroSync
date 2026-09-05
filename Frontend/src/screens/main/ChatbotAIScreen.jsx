@@ -139,6 +139,7 @@ import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import { getStyles } from "./ChatbotAIScreen.styles";
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
+const logoGreen = "#10B981";
 
 export default function ChatbotAIScreen({
   onTabChange,
