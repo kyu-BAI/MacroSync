@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { CustomAlertProvider } from './src/context/CustomAlertContext';
+import { LanguageProvider } from './src/context/LanguageContext';
 import { 
   StyleSheet, 
   View,
@@ -1112,9 +1113,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <CustomAlertProvider>
-          <MainApp />
-        </CustomAlertProvider>
+        <LanguageProvider>
+          <CustomAlertProvider>
+            <MainApp />
+          </CustomAlertProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

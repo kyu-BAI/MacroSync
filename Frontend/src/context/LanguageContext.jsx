@@ -360,4 +360,16 @@ export const LanguageProvider = ({ children }) => {
   );
 };
 
-export const useLanguage = () => useContext(LanguageContext);
+export const useLanguage = () => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    return {
+      language: 'English',
+      setLanguage: () => {},
+      t: (key) => key,
+      translateMealTitle: (title) => title,
+      translateMealCategory: (cat) => cat,
+    };
+  }
+  return context;
+};
