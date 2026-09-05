@@ -80,12 +80,14 @@ export default function CustomAlertModal({
 
   const handleCancelClose = () => {
     const cancelBtn = alertButtons.find(b => b.style === 'cancel');
-    onClose();
     if (cancelBtn && cancelBtn.onPress) {
-      setTimeout(() => {
+      try {
         cancelBtn.onPress();
-      }, 100);
+      } catch (e) {
+        console.error('CustomAlertModal cancel onPress error:', e);
+      }
     }
+    onClose();
   };
 
   const handleBackdropPress = () => {
@@ -171,12 +173,14 @@ export default function CustomAlertModal({
                       key={index}
                       activeOpacity={0.8}
                       onPress={() => {
-                        onClose();
                         if (btn.onPress) {
-                          setTimeout(() => {
+                          try {
                             btn.onPress();
-                          }, 100);
+                          } catch (e) {
+                            console.error('CustomAlertModal button onPress error:', e);
+                          }
                         }
+                        onClose();
                       }}
                       style={[
                         styles.buttonBase,

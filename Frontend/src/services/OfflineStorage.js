@@ -61,9 +61,18 @@ export async function getSavedUserId() {
 
 export async function clearSavedUserId() {
   try {
-    await AsyncStorage.removeItem(KEYS.USER_ID);
-  } catch (e) { }
+    await AsyncStorage.multiRemove([
+      KEYS.USER_ID,
+      KEYS.USER_PROFILE,
+      KEYS.DASHBOARD_CACHE,
+      KEYS.SYNC_QUEUE,
+      KEYS.REMEMBERED_GOOGLE_EMAIL,
+    ]);
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to clear saved user session', e);
+  }
 }
+
 
 // ─── Remember Me & Google Email Helpers ─────────────────────────────────────
 export async function setRememberMe(enabled) {

@@ -644,11 +644,17 @@ export default function SettingsScreen({
           onPress: async () => {
             try {
               await clearSavedUserId();
-            } catch (e) {}
-            if (onLogout) {
-              onLogout();
-            } else if (onTabChange) {
-              onTabChange("AUTH");
+            } catch (e) {
+              console.warn("Logout clearSavedUserId warning:", e);
+            }
+            try {
+              if (onLogout) {
+                onLogout();
+              } else if (onTabChange) {
+                onTabChange("AUTH");
+              }
+            } catch (err) {
+              console.error("Logout navigation callback error:", err);
             }
           },
         },

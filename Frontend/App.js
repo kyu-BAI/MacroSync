@@ -827,7 +827,11 @@ function MainApp() {
   // SECTION 3: APP CORE VIEWPORTS (FULLY INTEGRATED SCREEN ROUTING)
   // ----------------------------------------------------
   const handleLogoutRoutine = async () => {
-    await clearSavedUserId();
+    try {
+      await clearSavedUserId();
+    } catch (e) {
+      console.warn("Logout error clearing storage:", e);
+    }
     setUserId(null);
     setUserProfile({ name: 'User', email: '', profileImage: null });
     setGlobalLoggedWeight(null);
