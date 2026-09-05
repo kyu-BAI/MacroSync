@@ -247,31 +247,37 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 
     # 1. Primary Email Engine: Gmail SMTP (Delivers OTP to ANY user-provided Gmail address globally)
     smtp_sent = False
-    if GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD:
+    sender_email = (GMAIL_SENDER_EMAIL or "").strip()
+    app_password = (GMAIL_APP_PASSWORD or "").replace(" ", "").strip()
+
+    if sender_email and app_password:
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
-            msg["From"] = f"MacroSync <{GMAIL_SENDER_EMAIL}>"
+            msg["From"] = f"MacroSync <{sender_email}>"
             msg["To"] = clean_to
             msg.attach(MIMEText(html_content, "html"))
 
             # Try SSL (port 465) first, then fallback to TLS (port 587)
             try:
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=2.5) as server:
-                    server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
-                    server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10.0) as server:
+                    server.login(sender_email, app_password)
+                    server.sendmail(sender_email, clean_to, msg.as_string())
                 smtp_sent = True
-                print(f"✅ OTP Email successfully sent via Gmail SMTP SSL to recipient: {clean_to}")
+                print(f"[SUCCESS] OTP Email successfully sent via Gmail SMTP SSL to recipient: {clean_to}")
             except Exception as ssl_err:
                 print("Gmail SMTP SSL port 465 error, trying TLS port 587:", ssl_err)
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=2.5) as server:
-                    server.starttls()
-                    server.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
-                    server.sendmail(GMAIL_SENDER_EMAIL, clean_to, msg.as_string())
-                smtp_sent = True
-                print(f"✅ OTP Email successfully sent via Gmail SMTP TLS to recipient: {clean_to}")
+                try:
+                    with smtplib.SMTP("smtp.gmail.com", 587, timeout=10.0) as server:
+                        server.starttls()
+                        server.login(sender_email, app_password)
+                        server.sendmail(sender_email, clean_to, msg.as_string())
+                    smtp_sent = True
+                    print(f"[SUCCESS] OTP Email successfully sent via Gmail SMTP TLS to recipient: {clean_to}")
+                except Exception as tls_err:
+                    print("Gmail SMTP TLS port 587 error:", tls_err)
         except Exception as smtp_err:
-            print(f"❌ Gmail SMTP dispatch error for {clean_to}:", smtp_err)
+            print(f"[ERROR] Gmail SMTP dispatch error for {clean_to}:", smtp_err)
 
     if smtp_sent:
         return True
@@ -909,7 +915,7 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
                     triggered_categories.append(category)
 
         if is_unsafe:
-            print(f"⚠️ UNSAFE MEAL DETECTED: '{title}' contains allergens ({triggered_categories}). Sanitizing...")
+            print(f"[WARNING] UNSAFE MEAL DETECTED: '{title}' contains allergens ({triggered_categories}). Sanitizing...")
 
             new_title = title
             import re
