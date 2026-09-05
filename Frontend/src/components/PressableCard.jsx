@@ -28,7 +28,7 @@ export default function PressableCard({
   const handlePressIn = useCallback(() => {
     Animated.spring(scale, {
       toValue: scaleDown,
-      useNativeDriver: true,
+      useNativeDriver: false,
       speed: 50,        // fast response
       bounciness: 0,    // no overshoot on press-in
     }).start();
@@ -37,7 +37,7 @@ export default function PressableCard({
   const handlePressOut = useCallback(() => {
     Animated.spring(scale, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: false,
       speed: 30,
       bounciness: 6,    // slight spring-back bounce on release
     }).start();

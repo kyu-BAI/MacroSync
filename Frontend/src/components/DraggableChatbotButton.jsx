@@ -42,11 +42,7 @@ export default function DraggableChatbotButton({ onPress }) {
         return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value,
-        });
-        pan.setValue({ x: 0, y: 0 });
+        pan.extractOffset();
       },
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
         useNativeDriver: false,
@@ -55,8 +51,12 @@ export default function DraggableChatbotButton({ onPress }) {
         pan.flattenOffset();
 
         // Determine nearest edge (Left vs Right)
-        const currentX = pan.x._value;
-        const currentY = pan.y._value;
+        const currentX = (pan.x && typeof pan.x.__getValue === 'function')
+          ? pan.x.__getValue()
+          : (pan.x?._value ?? RIGHT_BOUND);
+        const currentY = (pan.y && typeof pan.y.__getValue === 'function')
+          ? pan.y.__getValue()
+          : (pan.y?._value ?? BOTTOM_BOUND);
 
         const finalX =
           currentX > (screenWidth - 56) / 2 ? RIGHT_BOUND : LEFT_BOUND;

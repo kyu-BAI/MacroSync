@@ -17,11 +17,13 @@ export default function FadeTabView({ tabKey, style, children }) {
   useEffect(() => {
     // Reset instantly, then fade in
     opacity.setValue(0);
-    Animated.timing(opacity, {
+    const anim = Animated.timing(opacity, {
       toValue: 1,
-      duration: 180,           // snappy — not sluggish
-      useNativeDriver: true,
-    }).start();
+      duration: 150,
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => anim.stop();
   }, [tabKey]);
 
   return (

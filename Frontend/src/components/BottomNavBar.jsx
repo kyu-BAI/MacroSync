@@ -35,19 +35,24 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
   const fabScale = useRef(new Animated.Value(1)).current;
 
   const springBounce = useCallback((anim) => {
-    anim.setValue(0.72);
-    Animated.spring(anim, {
-      toValue: 1,
-      friction: 5,       // lower = bouncier
-      tension: 160,      // higher = snappier
-      useNativeDriver: true,
-    }).start();
+    if (!anim) return;
+    try {
+      anim.setValue(0.72);
+      Animated.spring(anim, {
+        toValue: 1,
+        friction: 5,       // lower = bouncier
+        tension: 160,      // higher = snappier
+        useNativeDriver: false,
+      }).start();
+    } catch (e) {
+      console.warn('springBounce error:', e);
+    }
   }, []);
 
   const handlePress = useCallback((tabId) => {
-    const anim = tabId === 'SCANNER' ? fabScale : scaleRefs[tabId];
-    springBounce(anim);
-    onTabChange && onTabChange(tabId);
+    const anim = tabId === 'SCANNER' ? fabScale : (scaleRefs && scaleRefs[tabId]);
+    if (anim) springBounce(anim);
+    if (onTabChange) onTabChange(tabId);
   }, [onTabChange, springBounce, scaleRefs, fabScale]);
 
   const renderTab = (tab) => {
