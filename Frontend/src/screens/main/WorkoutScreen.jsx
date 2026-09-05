@@ -1,29 +1,42 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Platform,
   Dimensions,
   Alert,
   Modal,
   ActivityIndicator,
-  Image
-} from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Flame, Clock, Trophy, Play, ArrowLeft, CheckCircle2, RotateCcw, HelpCircle, Sparkles } from 'lucide-react-native';
+} from "react-native";
+import {
+  Flame,
+  Clock,
+  Trophy,
+  Play,
+  ArrowLeft,
+  CheckCircle2,
+  RotateCcw,
+} from "lucide-react-native";
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import API_URL from '../config/api';
-import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
-import { useCustomAlert } from '../../context/CustomAlertContext';
-import { useTheme } from '../../context/ThemeContext';
-import AILoadingModal from '../../components/AILoadingModal';
+import API_URL from "../config/api";
+import {
+  addToSyncQueue,
+  updateCachedDashboardField,
+} from "../../services/OfflineStorage";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
+import AILoadingModal from "../../components/AILoadingModal";
+import StaggerCard from "../../components/StaggerCard";
+import PressableCard from "../../components/PressableCard";
+import { getStyles } from "./WorkoutScreen.styles";
+const logoGreen = "#10B981";
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   if (!setNotifications) return;
@@ -65,12 +78,102 @@ const getExerciseSource = (exerciseName) => {
   return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
 };
 
-export default function WorkoutScreen({ 
-  onTabChange, 
-  userId, 
-  onRefreshDashboard, 
-  isOnline = true, 
-  dailyExercise, 
+const DEFAULT_WORKOUT_ROUTINES = [
+  {
+    id: "w-light-default",
+    title: "Full Body Bodyweight Burn",
+    intensity: "Light",
+    duration: 20,
+    caloriesBurn: 150,
+    description: "Gentle low-impact full body routine to activate muscles and burn calories.",
+    badgeText: "BEGINNER FRIENDLY",
+    tutorials: [
+      {
+        name: "Bodyweight Squat",
+        target: "3 Sets x 12 Reps",
+        setup: "Stand with feet shoulder-width apart, chest upright, core engaged.",
+        form: "Lower hips back as if sitting in a chair, knees behind toes. Push through heels to stand.",
+      },
+      {
+        name: "Incline Pushup",
+        target: "3 Sets x 10 Reps",
+        setup: "Place hands on wall, bench, or floor with knees resting on mat.",
+        form: "Lower chest towards hands in a 45-degree angle, press back up steadily.",
+      },
+      {
+        name: "Standing High Knees",
+        target: "3 Sets x 30 Secs",
+        setup: "Stand tall, drive one knee towards your chest at a steady pace.",
+        form: "Pump arms synchronously, keeping posture upright and landing softly.",
+      },
+    ],
+  },
+  {
+    id: "w-mod-default",
+    title: "HIIT Power Circuit",
+    intensity: "Moderate",
+    duration: 30,
+    caloriesBurn: 280,
+    description: "High-energy cardiovascular and metabolic conditioning workout.",
+    badgeText: "MOST POPULAR",
+    tutorials: [
+      {
+        name: "Jumping Jacks",
+        target: "4 Sets x 45 Secs",
+        setup: "Stand straight with arms at your side, feet together.",
+        form: "Jump feet out laterally while raising arms above head, return with rhythm.",
+      },
+      {
+        name: "Mountain Climbers",
+        target: "4 Sets x 40 Secs",
+        setup: "Start in high plank position with shoulders stacked over wrists.",
+        form: "Drive knees alternate towards chest dynamically while keeping hips low.",
+      },
+      {
+        name: "Walking Lunges",
+        target: "3 Sets x 14 Reps",
+        setup: "Step forward with right foot, lowering hips until both knees bend 90 degrees.",
+        form: "Push off back foot to step forward into next lunge, maintaining balance.",
+      },
+    ],
+  },
+  {
+    id: "w-int-default",
+    title: "Core & Strength Sculpt",
+    intensity: "Intense",
+    duration: 40,
+    caloriesBurn: 420,
+    description: "Challenging core strengthening and muscle endurance sculpting routine.",
+    badgeText: "HIGH CALORIE BURN",
+    tutorials: [
+      {
+        name: "Plank Hold",
+        target: "4 Sets x 60 Secs",
+        setup: "Place forearms on floor with elbows beneath shoulders.",
+        form: "Keep body in rigid straight line from head to heels, engaging abdominals tightly.",
+      },
+      {
+        name: "Standard Pushups",
+        target: "4 Sets x 15 Reps",
+        setup: "High plank position, hands slightly wider than shoulder width.",
+        form: "Lower body until chest nearly touches floor, push back up with full extension.",
+      },
+      {
+        name: "Russian Twists",
+        target: "4 Sets x 20 Reps",
+        setup: "Sit on floor, lean torso back 45 degrees with feet elevated.",
+        form: "Twist torso side to side, touching hands to floor on each side.",
+      },
+    ],
+  },
+];
+
+export default function WorkoutScreen({
+  onTabChange,
+  userId,
+  onRefreshDashboard,
+  isOnline = true,
+  dailyExercise,
   setDailyExercise,
   setNotifications,
   userGoals,
@@ -80,8 +183,9 @@ export default function WorkoutScreen({
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
-  const [selectedIntensity, setSelectedIntensity] = useState('All');
-  
+  const [selectedIntensity, setSelectedIntensity] = useState("All");
+  // Tracks if entrance stagger has already played — prevents re-animating on filter changes
+  const hasPlayedEntrance = useRef(false);
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -111,11 +215,8 @@ export default function WorkoutScreen({
   const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
-  const [workoutRoutines, setWorkoutRoutines] = useState([
-    { id: 'w1', title: 'Full Body Home Blitz', duration: '25 min', caloriesBurned: 220, intensity: 'Moderate', level: 'Beginner', exercisesCount: 5 },
-    { id: 'w2', title: 'Core Strength & Stability', duration: '15 min', caloriesBurned: 140, intensity: 'Light', level: 'Beginner', exercisesCount: 4 },
-    { id: 'w3', title: 'High Intensity Cardio Burn', duration: '30 min', caloriesBurned: 310, intensity: 'Intense', level: 'Intermediate', exercisesCount: 6 }
-  ]);
+  const [workoutRoutines, setWorkoutRoutines] = useState(DEFAULT_WORKOUT_ROUTINES);
+  const [isLoadingWorkouts, setIsLoadingWorkouts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
 
@@ -128,14 +229,22 @@ export default function WorkoutScreen({
       });
       if (res.ok) {
         const data = await res.json();
-        setWorkoutRoutines(data);
-        const todayStr = new Date().toISOString().split('T')[0];
-        await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
-          userId,
-          date: todayStr,
-          workouts: data
-        }));
-        showAlert('AI Workouts Customized', 'Your personalized home routines have been regenerated with AI!');
+        if (Array.isArray(data) && data.length > 0) {
+          setWorkoutRoutines(data);
+        }
+        const todayStr = new Date().toISOString().split("T")[0];
+        await AsyncStorage.setItem(
+          "ms_workouts_cache",
+          JSON.stringify({
+            userId,
+            date: todayStr,
+            workouts: data,
+          }),
+        );
+        showAlert(
+          "AI Workouts Customized",
+          "Your personalized home routines have been regenerated with AI!",
+        );
       }
     } catch (err) {
       if (__DEV__) console.warn("REGENERATE WORKOUT ERROR:", err);
@@ -149,37 +258,47 @@ export default function WorkoutScreen({
     const loadCachedOrFetchWorkouts = async () => {
       try {
         const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        
-        // 1. Check local cache
-        const cachedRaw = await AsyncStorage.getItem('ms_workouts_cache');
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+        // 1. Check local cache first — shows real data instantly
+        const cachedRaw = await AsyncStorage.getItem("ms_workouts_cache");
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
           if (String(parsed.userId) === String(userId) && Array.isArray(parsed.workouts) && parsed.workouts.length > 0) {
             setWorkoutRoutines(parsed.workouts);
-            if (parsed.date === todayStr) return; // Fresh cache hit!
+            setIsLoadingWorkouts(false);
+            if (parsed.date === todayStr) return; // Fresh cache — no network needed
           }
         }
-        
-        // 2. Fetch fresh data in background silently (NO loading modal on tab switch)
-        const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`);
+        // 2. Fetch fresh data silently in background
+        const res = await fetch(
+          `${API_URL}/workouts/recommend/${userId || "default"}`,
+        );
         if (res.ok) {
           const data = await res.json();
-          setWorkoutRoutines(data);
-          await AsyncStorage.setItem('ms_workouts_cache', JSON.stringify({
-            userId, date: todayStr, workouts: data
-          }));
+          if (Array.isArray(data) && data.length > 0) {
+            setWorkoutRoutines(data);
+          }
+          await AsyncStorage.setItem(
+            "ms_workouts_cache",
+            JSON.stringify({
+              userId,
+              date: todayStr,
+              workouts: data,
+            }),
+          );
         }
       } catch (err) {
         if (__DEV__) console.log("WORKOUT SILENT BG FETCH ERROR:", err);
+      } finally {
+        setIsLoadingWorkouts(false);
       }
     };
 
     if (userId) {
-      // Defer heavy fetch until after tab animation completes
-      const timer = setTimeout(() => { loadCachedOrFetchWorkouts(); }, 150);
-      return () => clearTimeout(timer);
+      loadCachedOrFetchWorkouts();
     } else {
+      setIsLoadingWorkouts(false);
       setLoading(false);
     }
   }, [userId]);
@@ -547,10 +666,38 @@ export default function WorkoutScreen({
         {/* WORKOUT PLAN CARD LISTINGS */}
         <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
 
-        {filteredWorkouts.map((workout) => {
+        {/* Skeleton placeholders while loading */}
+        {isLoadingWorkouts && workoutRoutines.length === 0 && (
+          [0, 1, 2].map((i) => (
+            <View
+              key={`skel-${i}`}
+              style={[
+                styles.workoutFormCard,
+                {
+                  opacity: 0.45,
+                  backgroundColor: theme?.inputBg || '#F1F5F9',
+                  height: 160,
+                  borderRadius: 16,
+                  marginBottom: 16,
+                },
+              ]}
+            />
+          ))
+        )}
+
+        {filteredWorkouts.map((workout, staggerIndex) => {
           if (!workout) return null;
           return (
-            <View key={workout.id} style={styles.workoutFormCard}>
+            <StaggerCard
+              key={workout.id}
+              index={staggerIndex}
+              shouldAnimate={!hasPlayedEntrance.current}
+            >
+            <PressableCard
+              style={styles.workoutFormCard}
+              onPress={() => handleStartTutorialEngine(workout)}
+              scaleDown={0.97}
+            >
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
@@ -563,39 +710,43 @@ export default function WorkoutScreen({
               {/* QUICK METRICS TILES */}
               <View style={styles.workoutMetricsSummaryGrid}>
                 <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: 'rgba(14, 165, 233, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Clock color={'#0EA5E9'} size={13} />
+                  <View style={{ backgroundColor: "rgba(14, 165, 233, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Clock color={"#0EA5E9"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Duration</Text>
-                    <Text style={[styles.metricTileValue, { color: '#0EA5E9' }]}>{workout.duration}</Text>
+                    <Text style={[styles.metricTileValue, { color: "#0EA5E9" }]}>
+                      {workout.duration}
+                    </Text>
                   </View>
                 </View>
                 
                 <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Flame color={'#F97316'} size={13} />
+                  <View style={{ backgroundColor: "rgba(249, 115, 22, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Flame color={"#F97316"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                    <Text style={[styles.metricTileValue, { color: '#F97316' }]}>{workout?.caloriesBurn} kcal</Text>
+                    <Text style={[styles.metricTileValue, { color: "#F97316" }]}>
+                      {workout?.caloriesBurn ?? workout?.caloriesBurned} kcal
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Trophy color={'#F59E0B'} size={13} />
+                  <View style={{ backgroundColor: "rgba(245, 158, 11, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
+                    <Trophy color={"#F59E0B"} size={13} />
                   </View>
                   <View>
                     <Text style={styles.metricTileLabel}>Intensity</Text>
-                    <Text style={[styles.metricTileValue, { color: '#F59E0B' }]}>{workout?.intensity}</Text>
+                    <Text style={[styles.metricTileValue, { color: "#F59E0B" }]}>
+                      {workout?.intensity}
+                    </Text>
                   </View>
                 </View>
               </View>
 
-              <View style={styles.glassDivider} />
-
-              {/* LAUNCH ENGINE HOOK TRIGGER SWITCH */}
+              {/* LAUNCH BUTTON */}
               <TouchableOpacity 
                 style={styles.startWorkoutActionButton} 
                 activeOpacity={0.8}
@@ -604,10 +755,12 @@ export default function WorkoutScreen({
                 <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
                 <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
               </TouchableOpacity>
-            </View>
+            </PressableCard>
+            </StaggerCard>
           );
         })}
-
+        {/* Mark entrance as played after first render — filter taps won't re-animate */}
+        {filteredWorkouts.length > 0 && (() => { hasPlayedEntrance.current = true; return null; })()}
       </ScrollView>
 
       {/* UIverse Inspired AI Customization Loading Modal */}
@@ -620,451 +773,3 @@ export default function WorkoutScreen({
     </View>
   );
 }
-
-           
-    
-      
-        
-   
- 
-
-const baseColor = '#F8FAFC';           
-const logoGreen = '#10B981';        
-
-const getStyles = (theme) => StyleSheet.create({
-  fullscreenOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    width: screenWidth, 
-    height: screenHeight, 
-    backgroundColor: theme?.background || baseColor,
-  },
-  container: { 
-    flex: 1,
-  },
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 85,
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12, 
-    paddingHorizontal: 4, 
-    width: '100%',
-  },
-  headerTextGroup: { 
-    flex: 1, 
-    paddingRight: 12,
-  },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
-    marginBottom: 2,
-  },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    letterSpacing: -0.5,
-  },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: theme?.textSecondary || '#64748B', 
-    marginTop: 2,
-  },
-  formCard: {
-    backgroundColor: theme?.surface || baseColor, 
-    borderRadius: 24, 
-    padding: 18, 
-    marginBottom: 16, 
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  cardTitle: { 
-    fontSize: 11, 
-    color: theme?.textPrimary || '#0F172A', 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
-    marginBottom: 12, 
-    fontWeight: '800', 
-    marginLeft: 2,
-  },
-  filterButtonGroupRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-  },
-  filterChipButton: { 
-    paddingHorizontal: 14, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    marginRight: 8, 
-    marginBottom: 8, 
-    backgroundColor: theme?.surface || baseColor,
-    borderWidth: 1.2, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  filterChipInactive: { 
-    backgroundColor: theme?.surface || baseColor,
-  },
-  filterChipActive: { 
-    backgroundColor: logoGreen, 
-    borderWidth: 1.5,
-    borderColor: logoGreen,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  filterChipText: { 
-    fontSize: 12, 
-    fontWeight: '800',
-  },
-  sectionLabelTitle: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    marginBottom: 12, 
-    marginLeft: 4, 
-    letterSpacing: -0.2,
-  },
-  workoutFormCard: {
-    backgroundColor: theme?.surface || baseColor, 
-    borderRadius: 20, 
-    padding: 16, 
-    marginBottom: 14,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  workoutHeaderRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start',
-  },
-  workoutTitleContainer: { 
-    flex: 1,
-  },
-  workoutMainTitle: { 
-    fontSize: 16, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    marginBottom: 6, 
-    lineHeight: 20,
-  },
-  workoutDescriptionText: {
-    fontSize: 13,
-    color: theme?.textSecondary || '#64748B',
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  glassDivider: { 
-    height: 1, 
-    backgroundColor: theme?.border || '#E2E8F0', 
-    marginVertical: 12,
-  },
-  workoutMetricsSummaryGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  metricItemBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricIconSpacer: {
-    marginRight: 6,
-  },
-  metricTileLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
-  },
-  metricTileValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    marginTop: 1,
-  },
-  startWorkoutActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 12,
-    borderRadius: 16,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  startWorkoutButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  floatingChatbotContainer: { 
-    position: 'absolute', 
-    bottom: 104, 
-    right: 20, 
-    zIndex: 99,
-  },
-  chatbotFloatingButton: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  chatbotUnpressed: { 
-    backgroundColor: '#10B981',
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  chatbotPressed: { 
-    backgroundColor: '#059669',
-    transform: [{ scale: 0.95 }],
-  },
-
-
-  // --- RE-ENGINEERED HOME ENGINE PLAYER COMPONENT STYLES ---
-  playerWrapper: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 54 : 48,
-    paddingBottom: 24,
-    backgroundColor: theme?.background || baseColor,
-  },
-  playerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    width: '100%',
-  },
-  playerBackNeuButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: theme?.surface || baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  playerHeaderCenterText: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  playerRoutineSubTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme?.textSecondary || '#94A3B8',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  playerStepIndicator: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginTop: 1,
-  },
-  playerMainCard: {
-    flex: 1,
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1.5, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  animationPlaceholderFrame: {
-    height: '42%',
-    backgroundColor: theme?.cardBg || '#F1F5F9',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  placeholderAnimateIcon: {
-    transform: [{ scale: 1.1 }],
-  },
-  liveActivityBadge: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme?.surface || 'rgba(255, 255, 255, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  liveBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#10B981',
-    letterSpacing: 0.5,
-  },
-  playerExerciseTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  targetMetricChipBox: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: logoGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginTop: 8,
-  },
-  targetMetricChipText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  playerGlassDivider: {
-    height: 1,
-    backgroundColor: theme?.border || '#E2E8F0',
-    marginVertical: 14,
-  },
-  instructionsTextScroll: {
-    flex: 1,
-    paddingHorizontal: 2,
-  },
-  instructionSectionTitleLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  instructionParagraphText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#64748B',
-    lineHeight: 19,
-  },
-  playerControlActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  playerSecondaryNeuActionBtn: {
-    flex: 0.7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme?.surface || baseColor,
-    paddingVertical: 14,
-    borderRadius: 16,
-    marginRight: 10,
-    borderWidth: 1, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  playerSecondaryActionBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: theme?.textSecondary || '#64748B',
-  },
-  playerPrimaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 14,
-    borderRadius: 16,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  playerPrimaryActionBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  loaderOuterNeu: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme?.surface || baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  loaderTextTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 8,
-  },
-  loaderTextDesc: {
-    fontSize: 14,
-    color: theme?.textSecondary || '#94A3B8',
-    fontWeight: '600',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 20,
-  },
-  aiBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    alignSelf: 'flex-start',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  aiBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: theme?.textSecondary || '#64748B',
-    letterSpacing: 0.5,
-  },
-});

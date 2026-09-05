@@ -59,6 +59,7 @@ export default function CustomAlertModal({
   message,
   type = 'info',
   buttons = [],
+  preventBackdropDismiss = false,
   onClose
 }) {
   const { theme, isDarkMode } = useTheme();
@@ -77,14 +78,29 @@ export default function CustomAlertModal({
     displayButtons.sort((a, b) => (a.style === 'cancel' ? 1 : 0) - (b.style === 'cancel' ? 1 : 0));
   }
 
+  const handleCancelClose = () => {
+    const cancelBtn = alertButtons.find(b => b.style === 'cancel');
+    onClose();
+    if (cancelBtn && cancelBtn.onPress) {
+      setTimeout(() => {
+        cancelBtn.onPress();
+      }, 100);
+    }
+  };
+
+  const handleBackdropPress = () => {
+    if (preventBackdropDismiss) return; // Prevent clicking outside from closing modal
+    handleCancelClose();
+  };
+
   return (
     <Modal
       transparent
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={handleCancelClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback onPress={handleBackdropPress}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={[
@@ -98,7 +114,7 @@ export default function CustomAlertModal({
               {/* ── Close button ── */}
               <TouchableOpacity
                 style={[styles.closeBtn, { backgroundColor: theme?.inputBg || '#F1F5F9' }]}
-                onPress={onClose}
+                onPress={handleCancelClose}
                 activeOpacity={0.7}
               >
                 <X color={theme?.textSecondary || '#94A3B8'} size={16} />
@@ -129,23 +145,25 @@ export default function CustomAlertModal({
                 stackVertically ? styles.buttonsColumn : styles.buttonsRow
               ]}>
                 {displayButtons.map((btn, index) => {
-                  const isCancel = btn.style === 'cancel';
+                  const isOnlyButton = displayButtons.length === 1;
+                  const isCancel = !isOnlyButton && btn.style === 'cancel';
                   const isDestructive = btn.style === 'destructive';
 
                   let btnStyle, btnTextStyle;
                   if (isCancel) {
                     btnStyle = [styles.cancelButton, {
-                      backgroundColor: theme?.inputBg || '#F1F5F9',
-                      borderColor: theme?.border || '#E2E8F0',
+                      backgroundColor: isDarkMode ? '#334155' : (theme?.inputBg || '#F1F5F9'),
+                      borderColor: isDarkMode ? '#475569' : (theme?.border || '#E2E8F0'),
+                      borderWidth: 1,
                     }];
-                    btnTextStyle = [styles.cancelButtonText, { color: theme?.textSecondary || '#64748B' }];
+                    btnTextStyle = [styles.cancelButtonText, { color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A') }];
                   } else if (isDestructive) {
                     btnStyle = [styles.destructiveButton];
                     btnTextStyle = styles.destructiveButtonText;
                   } else {
-                    // Primary — use standard clean green
+                    // Primary — clean, consistent Emerald Green button matching app UI
                     btnStyle = [styles.primaryButton, { backgroundColor: '#10B981' }];
-                    btnTextStyle = styles.primaryButtonText;
+                    btnTextStyle = [styles.primaryButtonText, { color: '#FFFFFF', fontWeight: '800' }];
                   }
 
                   return (

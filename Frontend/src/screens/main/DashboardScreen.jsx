@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { 
-  StyleSheet, 
   Text, 
   View, 
   ScrollView, 
@@ -17,14 +16,18 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Camera, UtensilsCrossed, BotMessageSquare, Home, SportShoe, Settings, Droplets, Footprints, Activity, Bell, User, Flame, Clock, Trophy, ChevronRight, ChevronLeft, Sparkles, Target } from 'lucide-react-native';
+import { Droplets, Footprints, Activity, Bell, User, Flame, Clock, Trophy, ChevronRight, ChevronLeft, Sparkles, Target } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import { Pedometer } from 'expo-sensors';
 
 import API_URL from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
+import PressableCard from '../../components/PressableCard';
+import SkeletonCard from '../../components/SkeletonCard';
+import { getStyles } from './DashboardScreen.styles';
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   if (!setNotifications) return;
@@ -55,6 +58,8 @@ function AnimatedRing({ radius, strokeWidth, pct, color = logoGreen, trackColor 
   const animPct = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Always reset to 0 first so ring animates from zero every mount
+    animPct.setValue(0);
     Animated.timing(animPct, {
       toValue: pct,
       duration: 1000,
@@ -117,6 +122,214 @@ function AnimatedBar({ pct, color, delay = 0 }) {
   );
 }
 
+
+
+// ─── Animated Water Glass Bar (Ultra-Smooth Liquid Wave Burst on Add Only) ────
+function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
+  const pctRatio = Math.min(consumed / target, 1);
+  const fillAnim = useRef(new Animated.Value(pctRatio)).current;
+  const waveY = useRef(new Animated.Value(0)).current;
+  const waveX = useRef(new Animated.Value(0)).current;
+  const isFirstMountRef = useRef(true);
+
+  // Trigger ultra-smooth wave slosh animation ONLY when user logs a glass
+  useEffect(() => {
+    // 1. Silk-smooth liquid level height rise
+    Animated.timing(fillAnim, {
+      toValue: pctRatio,
+      duration: 900,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: false,
+    }).start();
+
+    // Skip wave burst on initial app launch mount
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+
+    // 2. Ultra-Smooth Sinusoidal Liquid Wave Burst & Dissipation
+    waveY.setValue(0);
+    waveX.setValue(0);
+
+    Animated.parallel([
+      // Smooth vertical liquid wave dampening sequence (sinusoidal sine easing)
+      Animated.sequence([
+        Animated.timing(waveY, { toValue: 1.0, duration: 320, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: -0.6, duration: 300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: 0.3, duration: 260, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: -0.1, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveY, { toValue: 0, duration: 180, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+      ]),
+      // Smooth horizontal wave crest sweep
+      Animated.sequence([
+        Animated.timing(waveX, { toValue: 1.0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveX, { toValue: -0.5, duration: 450, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(waveX, { toValue: 0, duration: 280, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, [consumed, target]);
+
+  // Keyframe Interpolation for ultra-smooth temporary wave burst
+  const waveTranslateY = waveY.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-5, 5],
+  });
+  const waveTranslateX = waveX.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-18, 18],
+  });
+  const waveScaleY = waveY.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [0.85, 1.0, 1.15],
+  });
+
+  // Top position of liquid inside 88px basin (from 88px empty down to 0px full)
+  const liquidTop = fillAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [88, 0],
+  });
+
+  return (
+    <View style={{ width: 80, alignItems: 'center' }}>
+      {/* Outer Highball Glass Container */}
+      <View
+        style={{
+          height: 110,
+          width: 64,
+          backgroundColor: 'transparent',
+          position: 'relative',
+          alignItems: 'center',
+        }}
+      >
+        {/* Outer Glass Wall Border Structure */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 4,
+            left: 2,
+            right: 2,
+            bottom: 0,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: theme?.border ? theme.border : 'rgba(148, 163, 184, 0.65)',
+            borderBottomWidth: 0,
+            overflow: 'hidden',
+          }}
+        />
+
+        {/* Top Elliptical Glass Rim Lip */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 2,
+            right: 2,
+            height: 10,
+            borderRadius: 10,
+            borderWidth: 2,
+            borderColor: 'rgba(148, 163, 184, 0.75)',
+            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+            zIndex: 30,
+          }}
+        />
+
+        {/* Inner Glass Basin Area (liquid container) */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 6,
+            right: 6,
+            bottom: 14,
+            borderBottomLeftRadius: 14,
+            borderBottomRightRadius: 14,
+            overflow: 'hidden',
+            backgroundColor: theme?.inputBg || 'rgba(241, 245, 249, 0.35)',
+            zIndex: 5,
+          }}
+        >
+          {/* Dynamic Water Body Fill (100% Solid Sky Blue — Zero Transparency / White Lines) */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: liquidTop,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: waterColor || '#0EA5E9',
+              opacity: 1.0,
+            }}
+          >
+            {/* Dual-Layer Ultra-Smooth Liquid Surface Wave */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: -3,
+                left: -18,
+                right: -18,
+                height: 10,
+                transform: [
+                  { translateY: waveTranslateY },
+                  { translateX: waveTranslateX },
+                  { scaleY: waveScaleY },
+                ],
+              }}
+            >
+              {/* Surface Crest Layer 1 (Solid Sky Blue Liquid Curve) */}
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 6,
+                  backgroundColor: '#38BDF8',
+                  borderTopLeftRadius: 8,
+                  borderTopRightRadius: 8,
+                }}
+              />
+            </Animated.View>
+          </Animated.View>
+        </View>
+
+        {/* Thick Solid Heavy Glass Base Block at Bottom */}
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 2,
+            right: 2,
+            height: 15,
+            borderBottomLeftRadius: 10,
+            borderBottomRightRadius: 10,
+            borderWidth: 2,
+            borderColor: 'rgba(148, 163, 184, 0.75)',
+            backgroundColor: 'rgba(241, 245, 249, 0.7)',
+            zIndex: 20,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Base Curved Bottom Refraction Ring */}
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 2,
+              left: 4,
+              right: 4,
+              height: 6,
+              borderRadius: 6,
+              borderWidth: 1.5,
+              borderColor: 'rgba(100, 116, 139, 0.5)',
+              backgroundColor: 'rgba(148, 163, 184, 0.3)',
+            }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Fade+Slide Card Wrapper ────────────────────────────────────────────────
 function FadeCard({ delay = 0, style, children }) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -162,9 +375,65 @@ export default function DashboardScreen({
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState('');
 
-  // ── Steps Tracker Modal State ──
-  const [showStepsModal, setShowStepsModal] = useState(false);
-  const [stepsInput, setStepsInput] = useState('');
+
+  // ── Live Pedometer (expo-sensors) ──
+  const pedometerBaseRef = useRef(null); // steps at session start
+  const pedometerSubRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const startPedometer = async () => {
+      try {
+        const { status } = await Pedometer.requestPermissionsAsync();
+        if (status !== 'granted') return;
+
+        const isAvailable = await Pedometer.isAvailableAsync();
+        if (!isAvailable) return;
+
+        // Record the base step count at session start
+        pedometerBaseRef.current = null;
+
+        pedometerSubRef.current = Pedometer.watchStepCount(result => {
+          if (!active) return;
+          if (pedometerBaseRef.current === null) {
+            pedometerBaseRef.current = result.steps;
+          }
+          const sessionSteps = result.steps - pedometerBaseRef.current;
+          if (sessionSteps > 0 && setDailyExercise) {
+            setDailyExercise(prev => {
+              const prevBase = prev?._pedometerBase ?? 0;
+              const alreadyAdded = prev?._pedometerAdded ?? 0;
+              const newAdded = sessionSteps;
+              const delta = newAdded - alreadyAdded;
+              if (delta <= 0) return prev;
+              return {
+                ...prev,
+                steps: (prev?.steps || 0) + delta,
+                caloriesBurned: (prev?.caloriesBurned || 0) + Math.round(delta * 0.04),
+                activeMinutes: (prev?.activeMinutes || 0) + Math.round(delta / 100),
+                _pedometerBase: prevBase,
+                _pedometerAdded: newAdded,
+              };
+            });
+          }
+        });
+      } catch (err) {
+        if (__DEV__) console.log('Pedometer error:', err);
+      }
+    };
+
+    startPedometer();
+
+    return () => {
+      active = false;
+      if (pedometerSubRef.current) {
+        pedometerSubRef.current.remove();
+        pedometerSubRef.current = null;
+      }
+    };
+  }, []);
+
 
   // ── New Goal Modal (shown when user hits 100% progress) ──
   const [showNewGoalModal, setShowNewGoalModal] = useState(false);
@@ -202,6 +471,7 @@ export default function DashboardScreen({
   ];
 
   // Water Intake State & Logic
+  const [waterRipples, setWaterRipples] = useState([]);
   const consumedGlasses    = globalConsumedGlasses !== undefined ? globalConsumedGlasses : 0;
   const weightKg           = parseFloat(userBaseline?.weight || 70);
   const heightCm           = parseFloat(userBaseline?.height || 170);
@@ -209,6 +479,9 @@ export default function DashboardScreen({
   const targetGlasses      = Math.min(15, Math.max(6, Math.round(recommendedWaterMl / 250)));
 
   const handleAddGlass = async () => {
+    // Trigger water liquid ripple animation
+    setWaterRipples((prev) => [...prev, Date.now()]);
+
     const newAmount = consumedGlasses + 1;
     if (!userId) {
       showAlert("Authentication Error", "You must be logged in to log water.");
@@ -271,43 +544,6 @@ export default function DashboardScreen({
   const targetSteps = dailyExercise?.targetSteps || 10000;
   const stepsPct = Math.min(currentSteps / targetSteps, 1);
 
-  const handleAddSteps = async (additionalAmount) => {
-    const parsedAdd = parseInt(additionalAmount) || 0;
-    if (parsedAdd <= 0) {
-      showAlert("Invalid Steps Amount", "Please enter a valid step number greater than zero.");
-      return;
-    }
-
-    const newSteps = currentSteps + parsedAdd;
-    const addedCalories = Math.round(parsedAdd * 0.04);
-    const addedMins = Math.round(parsedAdd / 100);
-
-    if (setDailyExercise) {
-      setDailyExercise(prev => ({
-        ...prev,
-        steps: newSteps,
-        caloriesBurned: (prev?.caloriesBurned || 0) + addedCalories,
-        activeMinutes: (prev?.activeMinutes || 0) + addedMins,
-        targetSteps,
-      }));
-    }
-
-    await pushNotificationIfAllowed({
-      id: `n-${Date.now()}`,
-      title: 'Steps Tracked! 👟',
-      category: 'workout',
-      time: 'Just Now',
-      read: false,
-      message: `Logged +${parsedAdd.toLocaleString()} steps! You burned ~${addedCalories} kcal.`
-    }, setNotifications);
-
-    showAlert(
-      "Steps Updated! 👟",
-      `Logged +${parsedAdd.toLocaleString()} steps!\n\nTotal Today: ${newSteps.toLocaleString()} / ${targetSteps.toLocaleString()} steps (${Math.round((newSteps / targetSteps) * 100)}% of daily goal)`
-    );
-    setShowStepsModal(false);
-    setStepsInput('');
-  };
 
   // Real streak from backend — no more fake fallback
   const currentStreak = userProfile?.streakDays || 0;
@@ -663,7 +899,31 @@ export default function DashboardScreen({
           </View>
         </FadeCard>
 
+        {/* ── SKELETON LOADERS (shown while data hydrates) ── */}
+        {(!userProfile?.name || userProfile.name === 'User') && (
+          <>
+            <SkeletonCard rows={[
+              { width: '50%', height: 12 },
+              { width: '75%', height: 20, marginTop: 8 },
+              { width: '40%', height: 10, marginTop: 8 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '35%', height: 12 },
+              { width: '100%', height: 110, marginTop: 12 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '45%', height: 12 },
+              { width: '100%', height: 80, marginTop: 12 },
+            ]} />
+            <SkeletonCard rows={[
+              { width: '40%', height: 12 },
+              { width: '100%', height: 100, marginTop: 12 },
+            ]} />
+          </>
+        )}
+
         {/* ── 1. WEIGHT TRACKING PROGRESS CARD ── */}
+        {userProfile?.name && userProfile.name !== 'User' && (
         <FadeCard delay={80} style={styles.formCard}>
           <Text style={styles.cardTitle}>Weight Progress</Text>
           <View style={[styles.weightSplitLayout, { alignItems: 'flex-start' }]}>
@@ -704,8 +964,11 @@ export default function DashboardScreen({
             </View>
           </View>
         </FadeCard>
+        )}
 
-        {/* ── 2. DAILY NUTRITION CARD ── */}
+        {/* ── 2. DAILY NUTRITION CARD + REST OF CARDS (guarded by real data) ── */}
+        {userProfile?.name && userProfile.name !== 'User' && (
+          <>
         <FadeCard delay={160} style={styles.formCard}>
           <Text style={styles.cardTitle}>Daily Nutrition</Text>
           <View style={[styles.nutritionRow, { alignItems: 'flex-start' }]}>
@@ -772,7 +1035,6 @@ export default function DashboardScreen({
                 icon: <Footprints color="#3B82F6" size={22} strokeWidth={2.5} />, 
                 val: currentSteps >= 1000 ? `${(currentSteps / 1000).toFixed(1)}k` : `${currentSteps}`, 
                 label: 'Steps Today',
-                onPress: () => setShowStepsModal(true)
               },
             ].map((item, i) => (
               <TouchableOpacity 
@@ -800,7 +1062,9 @@ export default function DashboardScreen({
           </View>
 
           {/* ── RECENT WORKOUT SUB-CARD ── */}
-          <TouchableOpacity
+          <PressableCard
+            scaleDown={0.97}
+            onPress={() => onTabChange && onTabChange('WORKOUT')}
             style={{
               marginTop: 16,
               padding: 12,
@@ -809,8 +1073,6 @@ export default function DashboardScreen({
               borderWidth: 1,
               borderColor: theme?.border || '#E2E8F0',
             }}
-            activeOpacity={0.8}
-            onPress={() => onTabChange && onTabChange('WORKOUT')}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -856,7 +1118,7 @@ export default function DashboardScreen({
             </View>
 
             <AnimatedBar pct={Math.min((exercise.activeMinutes / (exercise.targetMinutes || 60)), 1)} color="#F97316" delay={500} />
-          </TouchableOpacity>
+          </PressableCard>
           {exercise.activeMinutes >= (exercise.targetMinutes || 60) && (
             <View style={[
               styles.warningBanner,
@@ -874,6 +1136,7 @@ export default function DashboardScreen({
 
         {/* ── 3.5 HYDRATION ── */}
         <FadeCard delay={320} style={styles.formCard}>
+
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={styles.cardTitle}>Hydration Tracking</Text>
             <View style={{ backgroundColor: theme?.inputBg || '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
@@ -895,12 +1158,13 @@ export default function DashboardScreen({
               </Text>
             </View>
 
-            {/* Vertical water bar */}
-            <View style={{ width: 80, alignItems: 'center' }}>
-              <View style={{ height: 100, width: 64, backgroundColor: theme?.inputBg || '#F1F5F9', borderRadius: 12, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0', justifyContent: 'flex-end', overflow: 'hidden' }}>
-                <View style={{ height: `${Math.min((consumedGlasses / targetGlasses) * 100, 100)}%`, width: '100%', backgroundColor: waterColor, opacity: 0.85 }} />
-              </View>
-            </View>
+            {/* Vertical water bar with animated rising height & liquid slosh */}
+            <AnimatedWaterGlassBar
+              consumed={consumedGlasses}
+              target={targetGlasses}
+              waterColor={waterColor}
+              theme={theme}
+            />
           </View>
 
           <TouchableOpacity
@@ -986,6 +1250,7 @@ export default function DashboardScreen({
               renderDotContent={({ x, y, index, indexData }) => {
                 if (index === 0) return null;
                 const diff = indexData - weightDataPoints[index - 1];
+                if (Math.abs(diff) < 0.05) return null;
                 const diffColor = getGoalProgressColor(diff);
                 const sign      = diff > 0 ? '+' : '';
                 const displayValue = `${sign}${diff.toFixed(1)}`;
@@ -999,6 +1264,9 @@ export default function DashboardScreen({
             />
           </View>
         </FadeCard>
+
+          </>
+        )}
 
       </ScrollView>
 
@@ -1028,77 +1296,6 @@ export default function DashboardScreen({
         </View>
       </Modal>
 
-      {/* ── STEPS TRACKER MODAL ── */}
-      <Modal visible={showStepsModal} transparent animationType="fade" onRequestClose={() => setShowStepsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '85%' }}>
-            <View style={[styles.modalContent, { padding: 24, borderRadius: 24 }]}>
-              {/* Header */}
-              <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                <View style={{
-                  width: 56, height: 56, borderRadius: 28,
-                  backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                  alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 1.5, borderColor: 'rgba(59, 130, 246, 0.3)', marginBottom: 10,
-                }}>
-                  <Footprints color="#3B82F6" size={28} strokeWidth={2.5} />
-                </View>
-                <Text style={[styles.modalTitle, { fontSize: 20 }]}>Log Steps Today</Text>
-                <Text style={[styles.modalSubtitle, { marginBottom: 0 }]}>
-                  Current: <Text style={{ color: '#3B82F6', fontWeight: '900' }}>{currentSteps.toLocaleString()}</Text> / {targetSteps.toLocaleString()} steps
-                </Text>
-              </View>
-
-              {/* Progress Bar */}
-              <View style={{ height: 8, backgroundColor: 'rgba(59, 130, 246, 0.12)', borderRadius: 4, marginBottom: 18, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${Math.min(stepsPct * 100, 100)}%`, backgroundColor: '#3B82F6', borderRadius: 4 }} />
-              </View>
-
-              {/* Quick-Add Chips */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#94A3B8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Quick Add</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
-                {[500, 1000, 2000, 5000].map((amt) => (
-                  <TouchableOpacity
-                    key={amt}
-                    onPress={() => handleAddSteps(amt)}
-                    activeOpacity={0.75}
-                    style={{
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, marginRight: 8, marginBottom: 8,
-                      backgroundColor: 'rgba(59, 130, 246, 0.10)',
-                      borderWidth: 1.2, borderColor: 'rgba(59, 130, 246, 0.30)',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#3B82F6' }}>+{amt >= 1000 ? `${amt / 1000}k` : amt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Manual Input */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: theme?.textSecondary || '#94A3B8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>Or Enter Custom Amount</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={stepsInput}
-                onChangeText={setStepsInput}
-                keyboardType="numeric"
-                placeholder="e.g. 3500"
-                placeholderTextColor={theme?.textSecondary || '#94A3B8'}
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowStepsModal(false); setStepsInput(''); }}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalSave, { backgroundColor: '#3B82F6' }]}
-                  onPress={() => handleAddSteps(parseInt(stepsInput))}
-                >
-                  <Text style={styles.modalSaveText}>Add Steps</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
       {/* ── NEW GOAL MODAL (shown on goal completion) ── */}
       <Modal visible={showNewGoalModal} transparent animationType="fade">
@@ -1188,7 +1385,7 @@ export default function DashboardScreen({
                 </TouchableOpacity>
               </>
             ) : (
-              /* --- SUB-VIEW: SELECT WEIGHT AMOUNT TO LOSE / GAIN --- */
+                            /* --- SUB-VIEW: SELECT WEIGHT AMOUNT TO LOSE / GAIN --- */
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
                   <TouchableOpacity 
@@ -1329,128 +1526,3 @@ export default function DashboardScreen({
     </View>
   );
 }
-
-// ─── Styles ─────────────────────────────────────────────────────────────────
-const getStyles = (theme) => StyleSheet.create({
-  fullscreenOverlay: {
-    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
-    width: screenWidth, height: screenHeight, backgroundColor: theme?.background || baseColor,
-  },
-  container:    { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 54 : 48, paddingBottom: 85 },
-
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 12, paddingHorizontal: 4, width: '100%',
-  },
-  headerTextGroup: { flex: 1, paddingRight: 12 },
-  appName:     { fontSize: 12, fontWeight: '900', color: logoGreen, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 },
-  greeting:    { fontSize: 22, fontWeight: '900', color: theme?.textPrimary || '#0F172A', letterSpacing: -0.5 },
-  subGreeting: { fontSize: 13, fontWeight: '700', color: theme?.textSecondary || '#94A3B8', marginTop: 2 },
-
-  avatarContainer: { borderRadius: 24, borderWidth: 1, borderColor: theme?.border || '#E2E8F0' },
-  avatarGlass:     { width: 44, height: 44, borderRadius: 22, backgroundColor: logoGreen, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarText:      { fontWeight: '900', color: logoGreen, fontSize: 16 },
-  avatarImage:     { width: 44, height: 44, borderRadius: 22 },
-
-  // Card
-  formCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  cardTitle: { fontSize: 11, color: theme?.textPrimary || '#0F172A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12, fontWeight: '800', marginLeft: 2 },
-
-  // Weight card
-  weightSplitLayout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statsGrid:     { flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginLeft: 20 },
-  statGridItem:  { width: '50%', marginBottom: 10 },
-  statLabel:     { fontSize: 10, color: theme?.textSecondary || '#94A3B8', textTransform: 'uppercase', fontWeight: '800', marginBottom: 2 },
-  statValue:     { fontSize: 15, fontWeight: '900', color: theme?.textPrimary || '#0F172A' },
-
-  // Nutrition card
-  nutritionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
-  calorieColumn:      { marginRight: 18, alignItems: 'center' },
-  calorieBigText:     { fontSize: 18, fontWeight: '900', color: theme?.textPrimary || '#0F172A', letterSpacing: -0.5 },
-  calorieSubText:     { fontSize: 9, color: theme?.textSecondary || '#94A3B8', fontWeight: '800' },
-  macroColumn:        { flex: 1, justifyContent: 'center' },
-  macroRow:           { marginBottom: 10 },
-  macroInfo:          { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  macroLabel:         { fontSize: 12, fontWeight: '800', color: theme?.textPrimary || '#0F172A' },
-  macroValue:         { fontSize: 11, color: theme?.textSecondary || '#94A3B8', fontWeight: '700' },
-
-  // Analytics
-  analyticsHubHeader: { marginBottom: 12 },
-  glassDivider:       { height: 1, backgroundColor: theme?.border || '#E2E8F0', marginVertical: 14 },
-  chartContainer:     { alignItems: 'center', justifyContent: 'center', marginLeft: -15 },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: theme?.surface || theme?.background || baseColor, borderRadius: 24, padding: 24, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0' },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: theme?.textPrimary || '#0F172A', marginBottom: 6, textAlign: 'center' },
-  modalSubtitle: { fontSize: 13, color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginBottom: 20, fontWeight: '600' },
-  modalInput: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 14, padding: 14, fontSize: 16, fontWeight: '700', color: theme?.textPrimary || '#0F172A', marginBottom: 18, borderWidth: 1.2, borderColor: theme?.inputBorder || theme?.border || '#E2E8F0' },
-  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 4 },
-  modalCancel: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: theme?.inputBg || '#F1F5F9', alignItems: 'center', marginRight: 8, borderWidth: 1.2, borderColor: theme?.border || '#E2E8F0' },
-  modalCancelText: { color: theme?.textSecondary || '#94A3B8', fontWeight: '800', fontSize: 14 },
-  modalSave: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
-  modalSaveText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
-
-  // New Goal Options (shown on goal completion)
-  newGoalOptionBtn: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme?.inputBg || '#F1F5F9',
-    borderRadius: 16,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  newGoalOptionLabel: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 2,
-  },
-  newGoalOptionDesc: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#94A3B8',
-  },
-
-  // Chatbot FAB
-  chatbotFab: {
-    position: 'absolute', bottom: 104, right: 24,
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: logoGreen,
-    alignItems: 'center', justifyContent: 'center',
-    zIndex: 100,
-  },
-
-
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  warningBannerText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '700',
-    marginLeft: 6,
-    flex: 1,
-    lineHeight: 15,
-  },
-});

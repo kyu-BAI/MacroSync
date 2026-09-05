@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,7 @@ import {
   Easing,
   Dimensions
 } from 'react-native';
-import { Sparkles, ChefHat, Flame, Utensils, UtensilsCrossed, Cpu, SportShoe } from 'lucide-react-native';
+import { Sparkles, UtensilsCrossed, Cpu, Dumbbell } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -151,7 +151,7 @@ export default function AILoadingModal({
   });
 
   const IconComponent = type === 'workout' 
-    ? SportShoe 
+    ? Dumbbell 
     : type === 'recipe' 
       ? UtensilsCrossed 
       : UtensilsCrossed;

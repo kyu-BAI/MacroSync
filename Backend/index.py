@@ -142,6 +142,7 @@ class UpdatePasswordRequest(BaseModel):
     email: str = None
     user_id: str = None
     password: str
+    current_password: str = None
 
 
 class GoogleSignInRequest(BaseModel):
@@ -628,15 +629,11 @@ async def verify_signup(data: VerifySignupRequest):
                             })
                             user_id = new_user.user.id
                         except Exception as create_err:
-                            err_str = str(create_err).lower()
+                            # Fast lookup in user_profiles table instead of slow list_users() pagination scan
                             try:
-                                users_list = supabase_admin.auth.admin.list_users()
-                                users_iter = users_list.users if hasattr(users_list, 'users') else users_list
-                                for u in users_iter:
-                                    u_email = getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None)
-                                    if u_email and u_email.lower() == clean_email:
-                                        user_id = getattr(u, 'id', None) or (u.get('id') if isinstance(u, dict) else None)
-                                        break
+                                p_check = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
+                                if p_check.data:
+                                    user_id = p_check.data[0]["id"]
                             except Exception:
                                 pass
 
@@ -699,28 +696,43 @@ async def verify_login(data: VerifySignupRequest):
 async def update_password(data: UpdatePasswordRequest):
 
     try:
-        target_user_id = None
-        if data.user_id:
-            target_user_id = data.user_id
-            print(f"UPDATE PASSWORD: Using user_id '{target_user_id}'")
-        elif data.email:
-            email_clean = data.email.strip()
-            print(f"UPDATE PASSWORD: Cleaned email is '{email_clean}'")
-            # Fast query via user_profiles first
-            profile_response = supabase.table("user_profiles").select("id").eq("email", email_clean.lower()).execute()
+        target_user_id = data.user_id
+        user_email = data.email.strip().lower() if data.email else None
+
+        if not target_user_id and not user_email:
+            raise HTTPException(400, "Either email or user_id must be provided")
+
+        # Fast path: fetch email only if missing
+        if target_user_id and not user_email and data.current_password:
+            profile_response = supabase.table("user_profiles").select("email").eq("id", target_user_id).execute()
+            if profile_response.data:
+                user_email = profile_response.data[0].get("email")
+
+        # If email provided without target_user_id, lookup user_id
+        if not target_user_id and user_email:
+            profile_response = supabase.table("user_profiles").select("id").eq("email", user_email).execute()
             if not profile_response.data:
-                # Fallback to list_users if not in user_profiles
-                print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in user_profiles. Falling back to list_users...")
                 users = supabase_admin.auth.admin.list_users()
-                user = next((u for u in users if u.email and u.email.lower() == email_clean.lower()), None)
+                user = next((u for u in users if u.email and u.email.lower() == user_email), None)
                 if not user:
-                    print(f"UPDATE PASSWORD: User '{email_clean}' NOT found in Supabase Auth list.")
                     raise HTTPException(404, "User not found")
                 target_user_id = user.id
             else:
                 target_user_id = profile_response.data[0]["id"]
-        else:
-            raise HTTPException(400, "Either email or user_id must be provided")
+
+        # Fast Verification of current_password if provided
+        if data.current_password and user_email:
+            try:
+                auth_check = supabase.auth.sign_in_with_password({
+                    "email": user_email,
+                    "password": data.current_password
+                })
+                if not auth_check or not auth_check.user:
+                    raise HTTPException(400, "Current password is incorrect.")
+            except Exception as auth_err:
+                err_str = str(auth_err).lower()
+                if "invalid" in err_str or "credentials" in err_str or "password" in err_str:
+                    raise HTTPException(400, "Current password is incorrect.")
 
         supabase_admin.auth.admin.update_user_by_id(
             target_user_id,
@@ -729,10 +741,13 @@ async def update_password(data: UpdatePasswordRequest):
 
         # Clean up reset OTP if lookup was email-based
         if data.email:
-            supabase.table("password_reset_otps") \
-                .delete() \
-                .eq("email", data.email) \
-                .execute()
+            try:
+                supabase.table("password_reset_otps") \
+                    .delete() \
+                    .eq("email", data.email) \
+                    .execute()
+            except Exception:
+                pass
 
         return {"success": True, "message": "Password updated"}
 
@@ -1387,10 +1402,6 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                 if clean_k and clean_k not in keys:
                     keys.append(clean_k)
                     
-    # Fallback to default key if env is empty
-    if not keys and _DEFAULT_GEMINI:
-        keys.append(_DEFAULT_GEMINI)
-
     if not keys:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 

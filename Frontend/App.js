@@ -54,6 +54,7 @@ import SettingsScreen from "./src/screens/main/SettingsScreen";
 import NotificationsScreen from "./src/screens/main/NotificationsScreen";
 import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
 import BottomNavBar from "./src/components/BottomNavBar";
+import FadeTabView from "./src/components/FadeTabView";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import API_URL from "./src/screens/config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -471,6 +472,39 @@ function MainApp() {
     saveChatHistory();
   }, [chatMessages, userId]);
 
+  // ── Load & Save Account-Based Weight Trend History ────────────────────────
+  useEffect(() => {
+    const loadWeightHistory = async () => {
+      if (userId) {
+        try {
+          const stored = await AsyncStorage.getItem(`ms_weight_history_${userId}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length === 7) {
+              setWeightHistory(parsed);
+            }
+          }
+        } catch (err) {
+          console.log("Error loading weight history:", err);
+        }
+      }
+    };
+    loadWeightHistory();
+  }, [userId]);
+
+  useEffect(() => {
+    const saveWeightHistory = async () => {
+      if (userId && Array.isArray(weightHistory) && weightHistory.length === 7) {
+        try {
+          await AsyncStorage.setItem(`ms_weight_history_${userId}`, JSON.stringify(weightHistory));
+        } catch (err) {
+          console.log("Error saving weight history:", err);
+        }
+      }
+    };
+    saveWeightHistory();
+  }, [weightHistory, userId]);
+
   // ── Premium Status Upgrade Notification Listener ───────────────────────────
   const prevIsPremiumRef = useRef(null);
   useEffect(() => {
@@ -572,6 +606,13 @@ function MainApp() {
           if (loggedInUserId) {
             setUserId(loggedInUserId);
             saveUserId(loggedInUserId);
+            // Non-blocking background cache hydration for instant 0ms screen switch
+            getCachedDashboardData(loggedInUserId)
+              .then(cached => {
+                if (cached && cached.data) applyDashboardData(cached.data);
+              })
+              .catch(() => {});
+            fetchDashboardData(loggedInUserId);
           }
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
@@ -634,6 +675,12 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
+          getCachedDashboardData(newUserId)
+            .then(cached => {
+              if (cached && cached.data) applyDashboardData(cached.data);
+            })
+            .catch(() => {});
+          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
@@ -654,6 +701,12 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
+          getCachedDashboardData(newUserId)
+            .then(cached => {
+              if (cached && cached.data) applyDashboardData(cached.data);
+            })
+            .catch(() => {});
+          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
@@ -817,49 +870,53 @@ function MainApp() {
     <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
       <OfflineBanner />
       {activeTab === 'DASHBOARD' && (
-        <DashboardScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userBaseline={userBaseline}
-          userGoals={userGoals}
-          dailyNutrition={dailyNutrition}
-          dailyExercise={dailyExercise}
-          setDailyExercise={setDailyExercise}
-          notifications={notifications}
-          setNotifications={setNotifications}
-          globalLoggedWeight={globalLoggedWeight}
-          setGlobalLoggedWeight={setGlobalLoggedWeight}
-          globalConsumedGlasses={globalConsumedGlasses}
-          setGlobalConsumedGlasses={setGlobalConsumedGlasses}
-          userProfile={userProfile}
-          userId={userId}
-          onRefreshDashboard={fetchDashboardData}
-          isOnline={isOnline}
-          localStartingWeight={localStartingWeight}
-          setLocalStartingWeight={setLocalStartingWeight}
-          localGoalWeight={localGoalWeight}
-          setLocalGoalWeight={setLocalGoalWeight}
-          localGoalLabel={localGoalLabel}
-          setLocalGoalLabel={setLocalGoalLabel}
-          goalReachedAlertShown={goalReachedAlertShown}
-          setGoalReachedAlertShown={setGoalReachedAlertShown}
-          weightHistory={weightHistory}
-          setWeightHistory={setWeightHistory}
-        />
+        <FadeTabView tabKey="DASHBOARD">
+          <DashboardScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userBaseline={userBaseline}
+            userGoals={userGoals}
+            dailyNutrition={dailyNutrition}
+            dailyExercise={dailyExercise}
+            setDailyExercise={setDailyExercise}
+            notifications={notifications}
+            setNotifications={setNotifications}
+            globalLoggedWeight={globalLoggedWeight}
+            setGlobalLoggedWeight={setGlobalLoggedWeight}
+            globalConsumedGlasses={globalConsumedGlasses}
+            setGlobalConsumedGlasses={setGlobalConsumedGlasses}
+            userProfile={userProfile}
+            userId={userId}
+            onRefreshDashboard={fetchDashboardData}
+            isOnline={isOnline}
+            localStartingWeight={localStartingWeight}
+            setLocalStartingWeight={setLocalStartingWeight}
+            localGoalWeight={localGoalWeight}
+            setLocalGoalWeight={setLocalGoalWeight}
+            localGoalLabel={localGoalLabel}
+            setLocalGoalLabel={setLocalGoalLabel}
+            goalReachedAlertShown={goalReachedAlertShown}
+            setGoalReachedAlertShown={setGoalReachedAlertShown}
+            weightHistory={weightHistory}
+            setWeightHistory={setWeightHistory}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'DIET' && (
-        <DietRecipesScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          dailyNutrition={dailyNutrition}
-          setDailyNutrition={setDailyNutrition}
-          guestBaseline={userBaseline}
-          guestGoals={userGoals}
-          globalLoggedMeals={globalLoggedMeals}
-          setGlobalLoggedMeals={setGlobalLoggedMeals}
-          sessionRecipes={sessionRecipes}
-          userId={userId}
-          isOnline={isOnline}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="DIET">
+          <DietRecipesScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            dailyNutrition={dailyNutrition}
+            setDailyNutrition={setDailyNutrition}
+            guestBaseline={userBaseline}
+            guestGoals={userGoals}
+            globalLoggedMeals={globalLoggedMeals}
+            setGlobalLoggedMeals={setGlobalLoggedMeals}
+            sessionRecipes={sessionRecipes}
+            userId={userId}
+            isOnline={isOnline}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'CHATBOT' && (
         <ChatbotAIScreen 
@@ -871,118 +928,126 @@ function MainApp() {
         />
       )}
       {activeTab === 'SCANNER' && (
-        <FoodScannerScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userId={userId}
-          userProfile={userProfile}
-          dailyNutrition={dailyNutrition}
-          onLogMeal={async (macros) => {
-            if (!userId) {
-              Alert.alert('Authentication Error', 'You must be logged in to log meals.');
-              return;
-            }
-            const mealId = `meal-${Date.now()}`;
-            const mealPayload = {
-              id: mealId,
-              user_id: userId,
-              name: macros.name || 'Scanned Food',
-              calories: macros.calories || 0,
-              protein: macros.protein || 0,
-              carbs: macros.carbs || 0,
-              fats: macros.fats || 0
-            };
-
-            if (!isOnline) {
-              // Offline: queue it and update UI optimistically
-              await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealId]);
-              
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
-              }, ...prev]);
-
-              Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
-              return;
-            }
-
-            try {
-              const response = await fetch(`${API_URL}/meals`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(mealPayload),
-              });
-              if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.detail || 'Failed to log meal');
+        <FadeTabView tabKey="SCANNER">
+          <FoodScannerScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userId={userId}
+            userProfile={userProfile}
+            dailyNutrition={dailyNutrition}
+            onLogMeal={async (macros) => {
+              if (!userId) {
+                Alert.alert('Authentication Error', 'You must be logged in to log meals.');
+                return;
               }
-              setDailyNutrition(prev => ({
-                ...prev,
-                consumedCalories: prev.consumedCalories + mealPayload.calories,
-                protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
-              }));
-              setGlobalLoggedMeals(prev => [...prev, mealId]);
+              const mealId = `meal-${Date.now()}`;
+              const mealPayload = {
+                id: mealId,
+                user_id: userId,
+                name: macros.name || 'Scanned Food',
+                calories: macros.calories || 0,
+                protein: macros.protein || 0,
+                carbs: macros.carbs || 0,
+                fats: macros.fats || 0
+              };
 
-              setNotifications(prev => [{
-                id: `n-${Date.now()}`,
-                title: 'Food Scanned & Logged! 🔍',
-                category: 'meal',
-                time: 'Just Now',
-                read: false,
-                message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
-              }, ...prev]);
-            } catch (error) {
-              console.error('Error logging scanned food:', error);
-              Alert.alert('Error', error.message || 'Failed to log meal to server.');
-            }
-          }}
-        />
+              if (!isOnline) {
+                // Offline: queue it and update UI optimistically
+                await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
+                setDailyNutrition(prev => ({
+                  ...prev,
+                  consumedCalories: prev.consumedCalories + mealPayload.calories,
+                  protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+                  carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+                  fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+                }));
+                setGlobalLoggedMeals(prev => [...prev, mealId]);
+                
+                setNotifications(prev => [{
+                  id: `n-${Date.now()}`,
+                  title: 'Food Scanned & Logged! 🔍',
+                  category: 'meal',
+                  time: 'Just Now',
+                  read: false,
+                  message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
+                }, ...prev]);
+
+                Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
+                return;
+              }
+
+              try {
+                const response = await fetch(`${API_URL}/meals`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(mealPayload),
+                });
+                if (!response.ok) {
+                  const errData = await response.json().catch(() => ({}));
+                  throw new Error(errData.detail || 'Failed to log meal');
+                }
+                setDailyNutrition(prev => ({
+                  ...prev,
+                  consumedCalories: prev.consumedCalories + mealPayload.calories,
+                  protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
+                  carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
+                  fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+                }));
+                setGlobalLoggedMeals(prev => [...prev, mealId]);
+
+                setNotifications(prev => [{
+                  id: `n-${Date.now()}`,
+                  title: 'Food Scanned & Logged! 🔍',
+                  category: 'meal',
+                  time: 'Just Now',
+                  read: false,
+                  message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
+                }, ...prev]);
+              } catch (error) {
+                console.error('Error logging scanned food:', error);
+                Alert.alert('Error', error.message || 'Failed to log meal to server.');
+              }
+            }}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'WORKOUT' && (
-        <WorkoutScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          userId={userId}
-          onRefreshDashboard={fetchDashboardData}
-          isOnline={isOnline}
-          dailyExercise={dailyExercise}
-          setDailyExercise={setDailyExercise}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="WORKOUT">
+          <WorkoutScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            userId={userId}
+            onRefreshDashboard={fetchDashboardData}
+            isOnline={isOnline}
+            dailyExercise={dailyExercise}
+            setDailyExercise={setDailyExercise}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'SETTINGS' && (
-        <SettingsScreen 
-          onTabChange={(tab) => {
-            if (tab === 'AUTH') {
-              handleLogoutRoutine();
-            } else {
-              setActiveTab(tab);
-            }
-          }} 
-          onLogout={handleLogoutRoutine} 
-          userProfile={userProfile}
-          setUserProfile={setUserProfile}
-          userId={userId}
-        />
+        <FadeTabView tabKey="SETTINGS">
+          <SettingsScreen 
+            onTabChange={(tab) => {
+              if (tab === 'AUTH') {
+                handleLogoutRoutine();
+              } else {
+                setActiveTab(tab);
+              }
+            }} 
+            onLogout={handleLogoutRoutine} 
+            userProfile={userProfile}
+            setUserProfile={setUserProfile}
+            userId={userId}
+          />
+        </FadeTabView>
       )}
       {activeTab === 'NOTIFICATIONS' && (
-        <NotificationsScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
-          notifications={notifications}
-          setNotifications={setNotifications}
-        />
+        <FadeTabView tabKey="NOTIFICATIONS">
+          <NotificationsScreen 
+            onTabChange={(tab) => setActiveTab(tab)} 
+            notifications={notifications}
+            setNotifications={setNotifications}
+          />
+        </FadeTabView>
       )}
       {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
         <DraggableChatbotButton onPress={() => setActiveTab('CHATBOT')} />

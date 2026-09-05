@@ -9,10 +9,11 @@ export function CustomAlertProvider({ children }) {
     title: '',
     message: '',
     type: 'info',
-    buttons: []
+    buttons: [],
+    preventBackdropDismiss: false,
   });
 
-  const showAlert = useCallback((title, message, buttons = [], type = 'info') => {
+  const showAlert = useCallback((title, message, buttons = [], type = 'info', options = {}) => {
     let alertType = type;
     const lowerTitle = (title || '').toLowerCase();
     const lowerMsg   = (message || '').toLowerCase();
@@ -45,7 +46,8 @@ export function CustomAlertProvider({ children }) {
       title,
       message,
       type: alertType,
-      buttons
+      buttons,
+      preventBackdropDismiss: !!options?.preventBackdropDismiss
     });
   }, []);
 
@@ -62,6 +64,7 @@ export function CustomAlertProvider({ children }) {
         message={alertConfig.message}
         type={alertConfig.type}
         buttons={alertConfig.buttons}
+        preventBackdropDismiss={alertConfig.preventBackdropDismiss}
         onClose={hideAlert}
       />
     </CustomAlertContext.Provider>

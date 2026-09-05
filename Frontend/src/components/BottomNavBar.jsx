@@ -1,61 +1,60 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Platform, Dimensions, Animated,
 } from 'react-native';
-import { Home, UtensilsCrossed, Camera, SportShoe, Settings } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { Home, UtensilsCrossed, Camera, Dumbbell, Settings } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// ── Flat Design Tokens ──
+// ── Design Tokens ──
 const logoGreen = '#10B981';
 
 const TABS = [
-  { id: 'DASHBOARD', label: 'Home',     Icon: Home            },
-  { id: 'DIET',      label: 'Diet',     Icon: UtensilsCrossed },
-  { id: 'SCANNER',   label: null,       Icon: Camera          }, // center FAB
-  { id: 'WORKOUT',   label: 'Workout',  Icon: SportShoe       },
-  { id: 'SETTINGS',  label: 'Settings', Icon: Settings        },
+  { id: 'DASHBOARD', label: 'Home',    Icon: Home            },
+  { id: 'DIET',      label: 'Diet',    Icon: UtensilsCrossed },
+  { id: 'SCANNER',   label: null,      Icon: Camera          }, // center FAB
+  { id: 'WORKOUT',   label: 'Workout', Icon: Dumbbell        },
+  { id: 'SETTINGS',  label: 'Settings',Icon: Settings        },
 ];
 
 export default function BottomNavBar({ activeTab, onTabChange }) {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme, isDarkMode);
 
-  // Animated scale for active icon entry bounce
-  const activeScale = useRef(new Animated.Value(1)).current;
-  // Animated scale for active indicator dot
-  const indicatorScale = useRef(new Animated.Value(1)).current;
+  // ── Each tab gets its own independent Animated.Value ──
+  const scaleRefs = useRef(
+    TABS.reduce((acc, tab) => {
+      acc[tab.id] = new Animated.Value(1);
+      return acc;
+    }, {})
+  ).current;
 
-  useEffect(() => {
-    activeScale.setValue(0.75);
-    Animated.spring(activeScale, {
-      toValue: 1.1,
-      friction: 6,
-      tension: 120,
-      useNativeDriver: true,
-    }).start();
+  // FAB scale ref
+  const fabScale = useRef(new Animated.Value(1)).current;
 
-    indicatorScale.setValue(0.2);
-    Animated.spring(indicatorScale, {
+  const springBounce = useCallback((anim) => {
+    anim.setValue(0.72);
+    Animated.spring(anim, {
       toValue: 1,
-      friction: 6,
-      tension: 100,
+      friction: 5,       // lower = bouncier
+      tension: 160,      // higher = snappier
       useNativeDriver: true,
     }).start();
-  }, [activeTab]);
+  }, []);
 
-  const handlePress = (tabId) => {
+  const handlePress = useCallback((tabId) => {
+    const anim = tabId === 'SCANNER' ? fabScale : scaleRefs[tabId];
+    springBounce(anim);
     onTabChange && onTabChange(tabId);
-  };
+  }, [onTabChange, springBounce, scaleRefs, fabScale]);
 
   const renderTab = (tab) => {
     const isActive = activeTab === tab.id;
     const inactiveColor = isDarkMode ? '#64748B' : '#94A3B8';
 
-    // Center FAB slot — render plain placeholder, FAB is rendered separately
+    // Center FAB slot — placeholder only, FAB rendered separately
     if (tab.id === 'SCANNER') {
       return <View key={tab.id} style={styles.centerSlot} />;
     }
@@ -65,22 +64,27 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
         key={tab.id}
         style={styles.tabItem}
         onPress={() => handlePress(tab.id)}
-        activeOpacity={0.7}
+        activeOpacity={1}          // disable built-in fade; we handle feedback
       >
+        {/* Active indicator bar — slides in from top */}
         {isActive && <View style={styles.topAccentBar} />}
-        <View style={styles.pillContainer}>
-          {/* Icon */}
+
+        {/* ✅ Icon + label wrapped in Animated.View — bounce now renders */}
+        <Animated.View
+          style={[
+            styles.pillContainer,
+            { transform: [{ scale: scaleRefs[tab.id] }] },
+          ]}
+        >
           <tab.Icon
             color={isActive ? logoGreen : inactiveColor}
             size={22}
             strokeWidth={isActive ? 2.5 : 2}
           />
-
-          {/* Label */}
           <Text style={[styles.label, isActive && styles.labelActive]}>
             {tab.label}
           </Text>
-        </View>
+        </Animated.View>
       </TouchableOpacity>
     );
   };
@@ -100,24 +104,27 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
         {renderTab(TABS[4])}
       </View>
 
-      {/* Center Camera FAB — with outer ring accent */}
+      {/* Center Camera FAB — with its own bounce */}
       <View style={[styles.fabWrapper, { bottom: fabBottom }]}>
         <TouchableOpacity
-          style={[
-            styles.fab,
-            { borderColor: theme?.surface || '#FFFFFF' },
-            activeTab === 'SCANNER' && styles.fabActive
-          ]}
           onPress={() => handlePress('SCANNER')}
-          activeOpacity={0.8}
+          activeOpacity={1}
         >
-          <Camera color="#FFFFFF" size={26} strokeWidth={2.5} />
+          <Animated.View
+            style={[
+              styles.fab,
+              { borderColor: theme?.surface || '#FFFFFF' },
+              activeTab === 'SCANNER' && styles.fabActive,
+              { transform: [{ scale: fabScale }] },
+            ]}
+          >
+            <Camera color="#FFFFFF" size={26} strokeWidth={2.5} />
+          </Animated.View>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
 const getStyles = (theme, isDarkMode) => StyleSheet.create({
   outerWrapper: {
     position: 'absolute',

@@ -12,17 +12,46 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Linking
-} from 'react-native';
-import { Search, MapPin, Clock, BotMessageSquare, Home, UtensilsCrossed, SportShoe, Settings, Camera, ChevronDown, ChevronUp, ChefHat, CheckCircle2, PlusCircle, Coffee, Sun, Moon, Flame, Sparkles, Compass, Navigation, LocateFixed, ShoppingBag, Maximize2, X } from 'lucide-react-native';
-import API_URL from '../config/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { addToSyncQueue, updateCachedDashboardField } from '../../services/OfflineStorage';
-import { useCustomAlert } from '../../context/CustomAlertContext';
-import { useTheme } from '../../context/ThemeContext';
-import AILoadingModal from '../../components/AILoadingModal';
-import { WebView } from 'react-native-webview';
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+  Linking,
+} from "react-native";
+import {
+  Search,
+  MapPin,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  ChefHat,
+  CheckCircle2,
+  PlusCircle,
+  Coffee,
+  Sun,
+  Moon,
+  Flame,
+  Sparkles,
+  Compass,
+  Navigation,
+  LocateFixed,
+  ShoppingBag,
+  Maximize2,
+  X,
+} from "lucide-react-native";
+import API_URL from "../config/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  addToSyncQueue,
+  updateCachedDashboardField,
+} from "../../services/OfflineStorage";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useLanguage } from "../../context/LanguageContext";
+import AILoadingModal from "../../components/AILoadingModal";
+import StaggerCard from "../../components/StaggerCard";
+import SkeletonCard from "../../components/SkeletonCard";
+import PressableCard from "../../components/PressableCard";
+import { WebView } from "react-native-webview";
+import { getStyles } from "./DietRecipesScreen.styles";
+const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
+const logoGreen = "#10B981";
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   if (!setNotifications) return;
@@ -1031,161 +1060,210 @@ export default function DietRecipesScreen({
 
             <Text style={styles.sectionLabelTitle}>Your AI Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
-              {loadingMeals && dailyPlan.length === 0 ? (
-                // First-load skeleton — only shown when there's truly no data yet
-                <View style={{ gap: 12 }}>
-                  {[0,1,2,3].map(i => (
-                    <View key={i} style={{
-                      borderRadius: 18,
-                      backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
-                      padding: 18,
-                      borderWidth: 1,
-                      borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                      opacity: 0.7
-                    }}>
-                      <View style={{ width: 80, height: 22, borderRadius: 8, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', marginBottom: 10 }} />
-                      <View style={{ width: '65%', height: 16, borderRadius: 6, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', marginBottom: 8 }} />
-                      <View style={{ width: '45%', height: 13, borderRadius: 6, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }} />
+              {(!isCacheChecked || (isGeneratingMealPlan && planList.length === 0)) ? (
+                    <View style={{ gap: 12 }}>
+                      {[0, 1, 2, 3].map((i) => (
+                        <SkeletonCard
+                          key={i}
+                          height={110}
+                          borderRadius={20}
+                        />
+                      ))}
                     </View>
-                  ))}
-                  <View style={{ alignItems: 'center', paddingTop: 8 }}>
-                    <ActivityIndicator size="small" color="#10B981" />
-                    <Text style={{ marginTop: 8, fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
-                      Generating personalized AI meals for your goals...
-                    </Text>
-                  </View>
-                </View>
-              ) : dailyPlan.length === 0 ? (
-                <View style={{
-                  padding: 24,
-                  borderRadius: 18,
-                  backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                  alignItems: 'center',
-                  borderWidth: 1.5,
-                  borderColor: isDarkMode ? '#334155' : '#E2E8F0'
-                }}>
-                  <UtensilsCrossed color="#10B981" size={36} style={{ marginBottom: 10 }} />
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A', textAlign: 'center', marginBottom: 4 }}>
-                    No AI Meals Generated Yet
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', textAlign: 'center', marginBottom: 16 }}>
-                    Tap below to generate custom meal recommendations calculated for your exact daily macros.
-                  </Text>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#10B981',
-                      paddingHorizontal: 20,
-                      paddingVertical: 12,
-                      borderRadius: 14,
-                      flexDirection: 'row',
-                      alignItems: 'center'
-                    }}
-                    onPress={async () => {
-                      try {
-                        setLoadingMeals(true);
-                        const res = await fetch(`${API_URL}/meals/recommend/${userId || 'default'}`);
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (Array.isArray(data) && data.length > 0) {
-                            setDailyPlan(data);
-                            // Persist to cache so user sees it instantly on return
-                            const todayStr = new Date().toISOString().split('T')[0];
-                            const CACHE_KEY = `ms_meals_cache_${userId}`;
-                            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
-                          }
-                        }
-                      } catch (e) {
-                        showAlert("Error", "Could not fetch AI recommendations. Please check connection.");
-                      } finally {
-                        setLoadingMeals(false);
-                      }
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                      Generate AI Meals
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                (Array.isArray(dailyPlan) ? dailyPlan : []).map((meal, index) => {
-                  const mealCat = meal?.mealType || meal?.time || '';
-                  const IconComponent = getMealIconComponent(mealCat);
-                  const accentColor = getMealAccentColor(mealCat);
-                  const mealId = String(meal?.id || `meal-plan-${index}`);
-                  const isLogged = loggedMeals.some(mId => String(mId) === mealId);
-                  return (
-                    <View key={mealId} style={styles.timelineItem}>
-                      <View 
-                        style={[
-                          styles.timelineCard, 
-                          isLogged && styles.timelineCardLogged
-                        ]}
+                  ) : planList.length === 0 ? (
+                    <View
+                      style={{
+                        padding: 24,
+                        borderRadius: 18,
+                        backgroundColor: theme?.surface || "#FFFFFF",
+                        alignItems: "center",
+                        borderWidth: 1.5,
+                        borderColor: theme?.border || "#E2E8F0",
+                      }}
+                    >
+                      <ChefHat
+                        color="#10B981"
+                        size={36}
+                        style={{ marginBottom: 10 }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: "800",
+                          color: theme?.textPrimary || "#0F172A",
+                          textAlign: "center",
+                          marginBottom: 4,
+                        }}
                       >
-                        <View style={styles.timelineHeader}>
-                          <View style={[
-                            styles.mealTypeBadge, 
-                            isLogged 
-                              ? { backgroundColor: '#64748B' } 
-                              : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
-                          ]}>
-                            <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
-                            <Text style={[
-                              styles.mealTypeBadgeText, 
-                              isLogged ? { color: '#FFFFFF' } : { color: accentColor }
-                            ]}>
-                              {meal?.mealType || 'Meal'}
-                            </Text>
-                          </View>
-                          <Text style={styles.timelineTime}>{meal?.time || 'Today'}</Text>
-                        </View>
-                        <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>{meal?.title || 'Healthy Meal'}</Text>
-                        <View style={styles.timelineFooter}>
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <Text style={styles.timelineMacroText}>{meal?.calories || 0} kcal • {meal?.protein || '0g'} protein</Text>
-                            <TouchableOpacity 
-                              style={styles.viewRecipeTextBtn} 
-                              onPress={() => handleViewRecipe(meal)}
-                              activeOpacity={0.6}
-                            >
-                              <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
-                              <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
-                            </TouchableOpacity>
-                          </View>
-                          <TouchableOpacity 
-                            style={[
-                              styles.logMealMiniBtn, 
-                              isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
-                            ]}
-                            onPress={() => handleLogMeal(mealId, { 
-                              name: meal?.title || 'Meal',
-                              calories: meal?.calories || 0, 
-                              protein: parseInt(meal?.protein) || 0,
-                              carbs: parseInt(meal?.carbs) || 0,
-                              fats: parseInt(meal?.fats) || 0
-                            })}
-                            activeOpacity={0.7}
-                          >
-                            {isLogged ? (
-                              <>
-                                <CheckCircle2 color="#FFFFFF" size={12} />
-                                <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
-                              </>
-                            ) : (
-                              <>
-                                <PlusCircle color="#FFFFFF" size={12} />
-                                <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
+                        No AI Meals Generated Yet
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: theme?.textSecondary || "#64748B",
+                          textAlign: "center",
+                          marginBottom: 16,
+                        }}
+                      >
+                        Tap below to generate custom meal recommendations calculated for your exact daily macros.
+                      </Text>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: "#10B981",
+                          paddingHorizontal: 20,
+                          paddingVertical: 12,
+                          borderRadius: 14,
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                        onPress={() => generateAIMealPlan(false)}
+                        activeOpacity={0.8}
+                      >
+                        <Sparkles
+                          color="#FFFFFF"
+                          size={16}
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontWeight: "800",
+                            fontSize: 13,
+                          }}
+                        >
+                          Generate AI Meals
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                  );
-                })
-              )}
-            </View>
+                  ) : (
+                    planList.map((meal, index) => {
+                      const mealCat = meal?.mealType || meal?.time || "";
+                      const IconComponent = getMealIconComponent(mealCat);
+                      const accentColor = getMealAccentColor(mealCat);
+                      const mealId = String(meal?.id || `meal-plan-${index}`);
+                      const isLogged = loggedMeals.some(
+                        (mId) => String(mId) === mealId,
+                      );
+                      return (
+                        <StaggerCard key={mealId} index={index}>
+                          <View style={styles.timelineItem}>
+                          <PressableCard
+                            style={[
+                              styles.timelineCard,
+                              isLogged && styles.timelineCardLogged,
+                            ]}
+                          >
+                            <View style={styles.timelineHeader}>
+                              <View
+                                style={[
+                                  styles.mealTypeBadge,
+                                  isLogged
+                                    ? { backgroundColor: "#64748B" }
+                                    : {
+                                        backgroundColor: `${accentColor}1A`,
+                                        borderColor: `${accentColor}40`,
+                                        borderWidth: 1,
+                                      },
+                                ]}
+                              >
+                                <IconComponent
+                                  color={isLogged ? "#FFFFFF" : accentColor}
+                                  size={12}
+                                  strokeWidth={2.5}
+                                />
+                                <Text
+                                  style={[
+                                    styles.mealTypeBadgeText,
+                                    isLogged
+                                      ? { color: "#FFFFFF" }
+                                      : { color: accentColor },
+                                  ]}
+                                >
+                                  {meal?.mealType || "Meal"}
+                                </Text>
+                              </View>
+                              <Text style={styles.timelineTime}>
+                                {meal?.time || "Today"}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.timelineTitle,
+                                isLogged && { color: "#64748B" },
+                              ]}
+                            >
+                              {meal?.title || "Healthy Meal"}
+                            </Text>
+                            <View style={styles.timelineFooter}>
+                              <View style={{ flex: 1, paddingRight: 8 }}>
+                                <Text style={styles.timelineMacroText}>
+                                  {meal?.calories || 0} kcal •{" "}
+                                  {meal?.protein || "0g"} protein
+                                </Text>
+                                <TouchableOpacity
+                                  style={styles.viewRecipeTextBtn}
+                                  onPress={() => handleViewRecipe(meal)}
+                                  activeOpacity={0.6}
+                                >
+                                  <ChefHat
+                                    color={isLogged ? "#64748B" : accentColor}
+                                    size={14}
+                                    style={{ marginRight: 4 }}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.viewRecipeTextBtnLabel,
+                                      !isLogged && { color: accentColor },
+                                    ]}
+                                  >
+                                    View Recipe
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                              <TouchableOpacity
+                                style={[
+                                  styles.logMealMiniBtn,
+                                  isLogged
+                                    ? styles.logMealMiniBtnLogged
+                                    : { backgroundColor: accentColor },
+                                ]}
+                                onPress={() =>
+                                  handleLogMeal(mealId, {
+                                    name: meal?.title || "Meal",
+                                    calories: meal?.calories || 0,
+                                    protein: parseInt(meal?.protein) || 0,
+                                    carbs: parseInt(meal?.carbs) || 0,
+                                    fats: parseInt(meal?.fats) || 0,
+                                  })
+                                }
+                                activeOpacity={0.7}
+                              >
+                                {isLogged ? (
+                                  <>
+                                    <CheckCircle2 color="#FFFFFF" size={12} />
+                                    <Text
+                                      style={styles.logMealMiniBtnTextLogged}
+                                    >
+                                      Logged
+                                    </Text>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PlusCircle color="#FFFFFF" size={12} />
+                                    <Text style={styles.logMealMiniBtnText}>
+                                      Log Meal
+                                    </Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </PressableCard>
+                          </View>
+                        </StaggerCard>
+                      );
+                    })
+                  )}
+                </View>
           </View>
         ) : (
           /* --- TAB B: EXPLORE RECIPES --- */
@@ -1810,851 +1888,3 @@ export default function DietRecipesScreen({
     </View>
   );
 }
-
-const baseColor = '#F8FAFC';
-const logoGreen = '#10B981';        
-
-const getStyles = (theme) => StyleSheet.create({
-  fullscreenOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    width: screenWidth, 
-    height: screenHeight, 
-    backgroundColor: theme?.background || baseColor,
-  },
-  container: { 
-    flex: 1,
-  },
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 85,
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 16, 
-    paddingHorizontal: 4, 
-    width: '100%',
-  },
-  headerTextGroup: { 
-    flex: 1,
-  },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
-    marginBottom: 2,
-  },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    letterSpacing: -0.5,
-  },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: theme?.textSecondary || '#64748B', 
-    marginTop: 2,
-  },
-  searchFormCard: {
-    backgroundColor: theme?.surface || baseColor, 
-    borderRadius: 20, 
-    paddingHorizontal: 16, 
-    paddingVertical: 4, 
-    marginBottom: 14,
-    borderWidth: 1.2, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  searchBarInnerContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    height: 46,
-  },
-  searchIcon: { 
-    marginRight: 10,
-  },
-  searchTextInput: { 
-    flex: 1, 
-    fontSize: 14, 
-    fontWeight: '700', 
-    color: theme?.textPrimary || '#0F172A',
-  },
-  formCard: {
-    backgroundColor: theme?.surface || baseColor, 
-    borderRadius: 20, 
-    padding: 18, 
-    marginBottom: 16,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  cardTitle: { 
-    fontSize: 11, 
-    color: theme?.textPrimary || '#64748B', 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
-    marginBottom: 10, 
-    fontWeight: '800', 
-    marginLeft: 2,
-  },
-  sectionLabelTitle: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    marginBottom: 12, 
-    marginLeft: 4, 
-    letterSpacing: -0.2,
-  },
-  filterButtonGroupRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-  },
-  filterChipButton: { 
-    paddingHorizontal: 14, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    marginRight: 8, 
-    marginBottom: 8, 
-    borderWidth: 1, 
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  filterChipInactive: { 
-    backgroundColor: theme?.surface || baseColor,
-  },
-  filterChipActive: { 
-    backgroundColor: logoGreen, 
-    borderColor: logoGreen,
-  },
-  filterChipText: { 
-    fontSize: 12, 
-    fontWeight: '800',
-  },
-  glassDivider: { 
-    height: 1, 
-    backgroundColor: theme?.border || '#E2E8F0', 
-    marginVertical: 12,
-  },
-  recipeFormCard: {
-    backgroundColor: theme?.surface || baseColor, 
-    borderRadius: 20, 
-    padding: 16, 
-    marginBottom: 14,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  recipeHeaderRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start',
-  },
-  recipeTitleContainer: { 
-    flex: 1,
-  },
-  recipeMainTitle: { 
-    fontSize: 16, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A', 
-    marginBottom: 6, 
-    lineHeight: 20,
-  },
-  metaBadgeRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    marginTop: 2,
-  },
-  metaBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: theme?.cardBg || '#EBEBEB', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 10, 
-    marginRight: 6, 
-    marginBottom: 4,
-  },
-  metaBadgeText: { 
-    fontSize: 11, 
-    fontWeight: '700', 
-    color: theme?.primary || '#64748B', 
-    marginLeft: 4,
-  },
-  macroMetricsSummaryGrid: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingVertical: 4,
-  },
-  macroTileBox: { 
-    flex: 1, 
-    alignItems: 'center',
-  },
-  macroTileValue: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: theme?.textPrimary || '#0F172A',
-  },
-  macroTileLabel: { 
-    fontSize: 10, 
-    fontWeight: '700', 
-    color: theme?.textSecondary || '#94A3B8', 
-    marginTop: 2,
-  },
-  expandedRecipeContentAnimation: { 
-    marginTop: 4,
-  },
-  ingredientsBox: { 
-    backgroundColor: theme?.cardBg || '#F1F5F9', 
-    padding: 14, 
-    borderRadius: 18, 
-    marginBottom: 12,
-  },
-  extendedSectionHeaderLabel: { 
-    fontSize: 12, 
-    fontWeight: '800', 
-    color: theme?.primary || '#64748B', 
-    textTransform: 'uppercase', 
-    letterSpacing: 0.5, 
-    marginBottom: 8,
-  },
-  recipeListItemRowText: { 
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: theme?.textPrimary || '#0F172A', 
-    marginBottom: 4,
-  },
-  instructionsBox: { 
-    backgroundColor: theme?.cardBg || '#F8FAFC', 
-    padding: 14, 
-    borderRadius: 18, 
-    borderWidth: 1, 
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  instructionHeaderFlexTitle: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 8,
-  },
-  stepParagraphBlockItemRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start', 
-    marginBottom: 10,
-  },
-  stepIndexMarkerBadgeText: { 
-    backgroundColor: '#10B981', 
-    color: '#FFFFFF', 
-    fontSize: 10, 
-    fontWeight: '900', 
-    width: 18, 
-    height: 18, 
-    borderRadius: 9, 
-    textAlign: 'center', 
-    lineHeight: 18, 
-    marginRight: 8, 
-    marginTop: 2,
-  },
-  stepBodyInstructionParagraphText: { 
-    flex: 1, 
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: theme?.textPrimary || '#10B981', 
-    lineHeight: 18,
-  },
-  fullRecipeViewToggleButton: { 
-    flex: 1,
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: theme?.surface || baseColor, 
-    paddingVertical: 12, 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    borderColor: theme?.border || '#E2E8F0',
-    marginRight: 8,
-  },
-  fullRecipeViewToggleActiveButton: { 
-    backgroundColor: '#10B981', 
-    borderColor: '#10B981',
-  },
-  fullRecipeToggleButtonText: { 
-    fontSize: 12, 
-    fontWeight: '800', 
-    color: '#10B981', 
-    marginRight: 6,
-  },
-  recipeFooterActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logRecipeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  logRecipeBtnLogged: {
-    backgroundColor: '#64748B',
-  },
-  logRecipeBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  logRecipeBtnTextLogged: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  aiGenerateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#8B5CF6',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  aiGenerateBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  warningBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.25)',
-  },
-  warningBadgeText: {
-    color: '#EF4444',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  // --- TAB SWITCHER UI ---
-  tabSwitcherContainer: {
-    flexDirection: 'row',
-    backgroundColor: theme?.cardBg || '#EBEBEB',
-    borderRadius: 20,
-    padding: 4,
-    marginBottom: 20,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 16,
-  },
-  tabButtonActive: {
-    backgroundColor: theme?.surface || baseColor,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  tabButtonInactive: {
-    backgroundColor: 'transparent',
-  },
-  tabTextActive: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: logoGreen,
-  },
-  tabTextInactive: {
-    fontSize: 13,
-    color: theme?.textSecondary || '#94A3B8',
-  },
-  // --- DAILY PLAN UI ---
-  dailyProgressCard: {
-    backgroundColor: 'transparent', 
-    borderRadius: 24, 
-    padding: 0, 
-    marginBottom: 24,
-  },
-  macroRowInline: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  macroMiniBox: {
-    width: '23.5%',
-    maxWidth: '24%',
-    height: 54,
-    minHeight: 54,
-    maxHeight: 54,
-    backgroundColor: theme?.surface || baseColor,
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-    overflow: 'hidden',
-  },
-  macroMiniVal: {
-    width: '100%',
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    textAlign: 'center',
-  },
-  macroMiniLabel: {
-    width: '100%',
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  timelineContainer: {
-    marginTop: 6,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-
-  timelineCard: {
-    flex: 1,
-    backgroundColor: theme?.surface || '#FFFFFF',
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  timelineCardLogged: {
-    backgroundColor: theme?.cardBg || '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#CBD5E1',
-    opacity: 0.85,
-  },
-  timelineHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  mealTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme?.cardBg || '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  mealTypeBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: logoGreen,
-    marginLeft: 4,
-  },
-  timelineTime: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#94A3B8',
-  },
-  timelineTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 10,
-  },
-  timelineFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: theme?.border || '#F8FAFC',
-    paddingTop: 10,
-  },
-  timelineMacroText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#64748B',
-  },
-  logMealMiniBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: logoGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  logMealMiniBtnLogged: {
-    backgroundColor: '#94A3B8',
-  },
-  logMealMiniBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    marginLeft: 4,
-  },
-  logMealMiniBtnTextLogged: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    marginLeft: 4,
-  },
-  emptyFormCard: { 
-    padding: 32, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  emptyStateText: { 
-    fontSize: 14, 
-    fontWeight: '700', 
-    color: theme?.textSecondary || '#64748B',
-  },
-  floatingChatbotContainer: { 
-    position: 'absolute', 
-    bottom: 104, 
-    right: 20, 
-    zIndex: 99,
-  },
-  chatbotFloatingButton: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  chatbotUnpressed: { 
-    backgroundColor: '#10B981',
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  chatbotPressed: { 
-    backgroundColor: '#059669',
-    transform: [{ scale: 0.95 }],
-  },
-
-  staticMapContainer: {
-    height: 235,
-    width: '100%',
-    backgroundColor: theme?.inputBg || '#F1F5F9', 
-    borderRadius: 20,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    marginBottom: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  mapGridPattern: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
-    borderWidth: 1,
-    borderColor: '#94A3B8',
-    borderStyle: 'dashed',
-  },
-  mapCoastline: {
-    position: 'absolute',
-    top: -50,
-    left: -20,
-    width: 210,
-    height: 300,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderRadius: 100,
-  },
-  mapRouteLine: {
-    position: 'absolute',
-    top: '15%',
-    left: '42%',
-    width: 2,
-    height: '70%',
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
-    transform: [{ rotate: '15deg' }],
-  },
-  mapPinContainer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapPulseRing: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(16, 185, 129, 0.22)',
-    top: -6,
-  },
-  mapPinLabel: {
-    fontSize: 10,
-    color: theme?.textSecondary || '#94A3B8',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  mapPinLabelActive: {
-    color: logoGreen,
-    fontWeight: '900',
-    fontSize: 11,
-  },
-  cityDetailCard: {
-    backgroundColor: theme?.inputBg || '#F1F5F9',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-    marginBottom: 16,
-  },
-  cityDetailTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-  },
-  cityCostBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  cityCostBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: logoGreen,
-  },
-  citySpecialtyText: {
-    fontSize: 12,
-    color: theme?.textPrimary || '#0F172A',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  cityPalengkeText: {
-    fontSize: 11,
-    color: theme?.textSecondary || '#64748B',
-    flex: 1,
-  },
-  staticMapContainer: {
-    height: 320,
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-    backgroundColor: theme?.cardBackground || '#FFFFFF',
-  },
-  aiGenerateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: logoGreen,
-    paddingVertical: 10,
-    borderRadius: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  aiGenerateBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  // --- View Recipe Button Styles ---
-  viewRecipeTextBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  viewRecipeTextBtnLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: logoGreen,
-  },
-  // --- View Recipe Modal Styles ---
-  recipeModalContent: {
-    flex: 1,
-    backgroundColor: baseColor,
-    padding: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-  },
-  recipeModalTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  recipeModalMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  recipeModalMetaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EBEBEB',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginHorizontal: 6,
-  },
-  recipeModalMetaText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    marginLeft: 4,
-  },
-  recipeModalMacrosGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#EBEBEB',
-    marginBottom: 16,
-  },
-  recipeModalMacroBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  recipeModalMacroVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  recipeModalMacroLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  recipeModalScroll: {
-    flex: 1,
-    marginBottom: 16,
-  },
-  recipeModalIngredientsBox: {
-    backgroundColor: '#F1F5F9',
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 12,
-  },
-  recipeModalInstructionsBox: {
-    backgroundColor: '#F8FAFC',
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  recipeModalSecTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  recipeModalListItem: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  recipeModalStepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  recipeModalStepNum: {
-    backgroundColor: '#10B981',
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginRight: 8,
-    marginTop: 2,
-  },
-  recipeModalStepText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#10B981',
-    lineHeight: 18,
-  },
-  recipeModalCloseBtn: {
-    backgroundColor: logoGreen,
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recipeModalCloseBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  loadingModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(26, 43, 35, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingModalContent: {
-    backgroundColor: baseColor,
-    padding: 24,
-    borderRadius: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  loadingModalText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#64748B',
-    marginTop: 12,
-  },
-  loaderOuterNeu: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: baseColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  loaderTextTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  loaderTextDesc: {
-    fontSize: 14,
-    color: '#94A3B8',
-    fontWeight: '600',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 20,
-  },
-});
