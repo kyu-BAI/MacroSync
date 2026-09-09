@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../config/api';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ const baseColor = '#F8FAFC';
 export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, userProfile, dailyNutrition }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
+  const { language, translateMealTitle } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState('off');
@@ -509,7 +511,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             <Text style={styles.confidenceText}>{analysisResult.confidence}% match</Text>
           </View>
           
-          <Text style={styles.foodName}>{analysisResult.name}</Text>
+          <Text style={styles.foodName}>{translateMealTitle(analysisResult.name, language)}</Text>
           {scaledWeight ? (
             <Text style={styles.portionText}>Estimated Portion: {scaledWeight}g (AI Base ~{baseWeightGrams}g)</Text>
           ) : null}
@@ -695,7 +697,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             ref={cameraRef}
           />
         )}
-        {capturedImage && (
+        {Boolean(capturedImage) && (
           <Image 
             source={{ uri: capturedImage }} 
             style={styles.capturedOverlayImage} 

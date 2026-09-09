@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Home, UtensilsCrossed, Camera, Dumbbell, Settings } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -21,6 +22,7 @@ const TABS = [
 
 export default function BottomNavBar({ activeTab, onTabChange }) {
   const { theme, isDarkMode } = useTheme();
+  const { t } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
 
   // ── Each tab gets its own independent Animated.Value ──

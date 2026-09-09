@@ -1145,7 +1145,6 @@ export default function SettingsScreen({
           </View>
         </View>
 
->>>>>>> c5998a5302c2ed4e2540d30d09124ccc3a54132b
         {/* NOTIFICATIONS SETTINGS CARD */}
         <Text style={styles.sectionLabelTitle}>Notification Settings</Text>
         <View style={styles.formCard}>
@@ -1831,7 +1830,7 @@ export default function SettingsScreen({
               </Text>
             </TouchableOpacity>
 
-            {userProfile?.profileImage && !imageError && (
+            {Boolean(userProfile?.profileImage) && !imageError && (
               <TouchableOpacity
                 onPress={() => {
                   setShowPhotoPreviewModal(false);

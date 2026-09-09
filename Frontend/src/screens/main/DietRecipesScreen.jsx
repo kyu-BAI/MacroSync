@@ -83,6 +83,7 @@ export default function DietRecipesScreen({
 }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
+  const { language, t, translateMealTitle, translateMealCategory } = useLanguage();
   const styles = getStyles(theme);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
@@ -155,7 +156,7 @@ export default function DietRecipesScreen({
               setRecipes(data);
             }
           })
-          .catch(err => __DEV__ && console.warn("Error loading AI meals in DietRecipesScreen:", err));
+          .catch(err => __DEV__ && console.log("AI meals fetch notice in DietRecipesScreen:", err?.message || err));
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -386,6 +387,8 @@ export default function DietRecipesScreen({
       marketTitle: 'Dalaguete Vegetable Trading Post (Mantalongon)',
       palengkeItems: 'Highland Sayote, Broccoli, Carrots, Cabbage, Pork Chops',
       lat: 9.7619, lng: 123.5350,
+
+    
       famousDishes: [
         { name: 'Gisadong Utan sa Mantalongon', emoji: '🥦', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
         { name: 'Linat-ang Baboy ug Sayote', emoji: '🍲', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' }
@@ -401,6 +404,7 @@ export default function DietRecipesScreen({
       ]
     }
   };
+
 
   const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -980,6 +984,9 @@ export default function DietRecipesScreen({
 
   const consumedCalories = dailyNutrition?.consumedCalories || 0;
   const isOverCalories = consumedCalories > targetCalories;
+  const planList = recipes || [];
+  const isGeneratingMealPlan = isGenerating;
+  const isCacheChecked = true;
 
 
 
@@ -1179,11 +1186,11 @@ export default function DietRecipesScreen({
                                       : { color: accentColor },
                                   ]}
                                 >
-                                  {meal?.mealType || "Meal"}
+                                  {translateMealCategory(meal?.mealType) || t("Meal")}
                                 </Text>
                               </View>
                               <Text style={styles.timelineTime}>
-                                {meal?.time || "Today"}
+                                {t(meal?.time) || meal?.time || t("Today")}
                               </Text>
                             </View>
                             <Text
@@ -1192,13 +1199,13 @@ export default function DietRecipesScreen({
                                 isLogged && { color: "#64748B" },
                               ]}
                             >
-                              {meal?.title || "Healthy Meal"}
+                              {translateMealTitle(meal?.title, language) || t("Healthy Meal")}
                             </Text>
                             <View style={styles.timelineFooter}>
                               <View style={{ flex: 1, paddingRight: 8 }}>
                                 <Text style={styles.timelineMacroText}>
                                   {meal?.calories || 0} kcal •{" "}
-                                  {meal?.protein || "0g"} protein
+                                  {meal?.protein || "0g"} {t("Protein")}
                                 </Text>
                                 <TouchableOpacity
                                   style={styles.viewRecipeTextBtn}
@@ -1241,10 +1248,8 @@ export default function DietRecipesScreen({
                                 {isLogged ? (
                                   <>
                                     <CheckCircle2 color="#FFFFFF" size={12} />
-                                    <Text
-                                      style={styles.logMealMiniBtnTextLogged}
-                                    >
-                                      Logged
+                                    <Text style={styles.logMealMiniBtnTextLogged}>
+                                      Logged ✓
                                     </Text>
                                   </>
                                 ) : (
@@ -1439,7 +1444,7 @@ export default function DietRecipesScreen({
               </View>
 
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
-              {CITY_PROFILES[selectedLocation] && (
+              {Boolean(CITY_PROFILES[selectedLocation]) && (
                 <View style={{ marginTop: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
@@ -1461,7 +1466,7 @@ export default function DietRecipesScreen({
             </View>
 
             {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD & FAMOUS DELICACIES CARD */}
-            {CITY_PROFILES[selectedLocation] && (
+            {Boolean(CITY_PROFILES[selectedLocation]) && (
               <>
                 <View style={{ marginBottom: 16 }}>
                   {(() => {
@@ -1529,7 +1534,7 @@ export default function DietRecipesScreen({
                                   </View>
 
                                   <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>
-                                    {mealItem.title}
+                                    {translateMealTitle(mealItem.title, language)}
                                   </Text>
 
                                   <View style={styles.timelineFooter}>
@@ -1553,18 +1558,18 @@ export default function DietRecipesScreen({
                                         isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
                                       ]}
                                       onPress={() => handleLogMeal(mealId, { 
-                                        name: mealItem.title,
-                                        calories: mealItem.kcal, 
-                                        protein: mealItem.proteinNum,
-                                        carbs: mealItem.carbsNum,
-                                        fats: mealItem.fatsNum
+                                        name: mealItem?.title || "Meal",
+                                        calories: mealItem?.kcal || 0,
+                                        protein: mealItem?.proteinNum || 0,
+                                        carbs: mealItem?.carbsNum || 0,
+                                        fats: mealItem?.fatsNum || 0,
                                       })}
                                       activeOpacity={0.7}
                                     >
                                       {isLogged ? (
                                         <>
                                           <CheckCircle2 color="#FFFFFF" size={12} />
-                                          <Text style={styles.logMealMiniBtnTextLogged}>Logged</Text>
+                                          <Text style={styles.logMealMiniBtnTextLogged}>Logged ✓</Text>
                                         </>
                                       ) : (
                                         <>
@@ -1585,7 +1590,7 @@ export default function DietRecipesScreen({
                 </View>
 
                 {/* FAMOUS NATIVE DISHES & CULINARY HERITAGE CARD */}
-                {CITY_PROFILES[selectedLocation].famousDishes && (
+                {Boolean(CITY_PROFILES[selectedLocation]?.famousDishes) && (
                   <View style={[styles.formCard, { marginBottom: 24 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                       <Sparkles size={18} color="#F59E0B" style={{ marginRight: 6 }} />
@@ -1619,7 +1624,7 @@ export default function DietRecipesScreen({
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
-                              {dish.name}
+                              {translateMealTitle(dish.name, language)}
                             </Text>
                             <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 2, lineHeight: 16 }}>
                               {dish.desc}
@@ -1641,9 +1646,9 @@ export default function DietRecipesScreen({
       {/* ── RECIPE MODAL ── */}
       <Modal visible={showRecipeModal} transparent={false} animationType="slide" onRequestClose={() => setShowRecipeModal(false)}>
         <View style={styles.recipeModalContent}>
-          {selectedRecipe && (
+          {Boolean(selectedRecipe) && (
             <>
-              <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
+              <Text style={styles.recipeModalTitle}>{translateMealTitle(selectedRecipe.title, language)}</Text>
               
               {/* Meta Row */}
               <View style={styles.recipeModalMetaRow}>

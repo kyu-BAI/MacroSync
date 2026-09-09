@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { CustomAlertProvider } from './src/context/CustomAlertContext';
+import { LanguageProvider } from './src/context/LanguageContext';
 import { 
   StyleSheet, 
   View,
@@ -240,22 +241,40 @@ function MainApp() {
   const fetchDashboardData = async (currentUserId) => {
     const uid = currentUserId || userId;
     if (!uid) return;
+
+    // 1. Instantly apply cached dashboard data if available so UI doesn't hang on slow WiFi
     try {
-      const response = await fetch(`${API_URL}/dashboard/${uid}`);
+      const cached = await getCachedDashboardData(uid);
+      if (cached && cached.data) {
+        applyDashboardData(cached.data);
+        setIsLoadedFromCache(true);
+      }
+    } catch (e) {
+      /* ignore cache read error */
+    }
+
+    // 2. Fetch fresh data from network with a 5-second timeout signal
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(`${API_URL}/dashboard/${uid}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       const data = await response.json();
       if (response.ok) {
         applyDashboardData(data);
-        // Save to local cache for offline use
         await cacheDashboardData(uid, data);
         setIsLoadedFromCache(false);
       } else {
         console.log('Failed to fetch dashboard data:', data.detail);
       }
     } catch (error) {
-      console.log('Error fetching dashboard (trying cache):', error);
-      // Try loading from local cache
+      clearTimeout(timeoutId);
+      console.log('Error fetching dashboard (trying cache fallback):', error);
       const cached = await getCachedDashboardData(uid);
-      if (cached) {
+      if (cached && cached.data) {
         applyDashboardData(cached.data);
         setIsLoadedFromCache(true);
       }
@@ -528,10 +547,10 @@ function MainApp() {
   }, [userProfile]);
 
   useEffect(() => {
-    if (userId && currentScreen === 'DASHBOARD') {
+    if (userId && currentScreen === 'DASHBOARD' && activeTab === 'DASHBOARD') {
       fetchDashboardData();
     }
-  }, [userId, currentScreen]);
+  }, [userId, currentScreen, activeTab]);
 
   useEffect(() => {
     const fetchRecommendedMeals = async () => {
@@ -562,7 +581,7 @@ function MainApp() {
           }
         }
       } catch (err) {
-        console.warn("Error fetching AI recommended meals:", err);
+        if (__DEV__) console.log("AI recommended meals fetch notice (offline/network):", err?.message || err);
       }
     };
 
@@ -929,6 +948,7 @@ function MainApp() {
           userProfile={userProfile}
           messages={chatMessages}
           setMessages={setChatMessages}
+          onRefreshDashboard={fetchDashboardData}
         />
       )}
       {activeTab === 'SCANNER' && (
@@ -1112,9 +1132,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <CustomAlertProvider>
-          <MainApp />
-        </CustomAlertProvider>
+        <LanguageProvider>
+          <CustomAlertProvider>
+            <MainApp />
+          </CustomAlertProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

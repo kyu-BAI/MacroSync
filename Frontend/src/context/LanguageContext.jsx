@@ -152,8 +152,183 @@ export const LanguageProvider = ({ children }) => {
   const translateMealTitle = (title, targetLang = language) => {
     if (!title || typeof title !== 'string') return title || '';
 
-    // Direct Exact Phrase Dictionary
+    // Comprehensive Food Name Dictionary (English, Tagalog, Cebuano)
     const EXACT_TRANSLATIONS = {
+      // ── LOCAL DELICACIES & REGIONAL DISHES ──
+      'Pasil Tuslob Buwa': {
+        English: 'Pasil Tuslob Buwa (Pig Brain Stew)',
+        Tagalog: 'Tuslob Buwa ng Pasil (Sabaw ng Utak ng Baboy)',
+        Cebuano: 'Pasil Tuslob Buwa (Sabaw sa Utok sa Baboy)'
+      },
+      'Cebuano Ngohiong': {
+        English: 'Cebuano Ngohiong (Crispy Five-Spice Lumpia)',
+        Tagalog: 'Ngohiong ng Cebu (Lumpia sa Ubod)',
+        Cebuano: 'Cebuano Ngohiong (Crispy nga Lumpia sa Ubod)'
+      },
+      'Lechon sa Sugbo': {
+        English: 'Cebu Roasted Lechon',
+        Tagalog: 'Inihaw na Lechon sa Sugbo',
+        Cebuano: 'Lechon sa Sugbo (Inasal nga Baboy)'
+      },
+      'Ginabot (Chicharon Bulaklak)': {
+        English: 'Ginabot (Deep-Fried Chicharon Bulaklak)',
+        Tagalog: 'Ginabot (Pritong Chicharon Bulaklak)',
+        Cebuano: 'Ginabot (Pritong Chicharon Bulaklak)'
+      },
+      'Sutukil Seafood Trilogy': {
+        English: 'Sutukil Seafood Trilogy (Grilled, Soup, Ceviche)',
+        Tagalog: 'Sutukil (Inihaw, Tinola, Kilawin na Pagkaing-Dagat)',
+        Cebuano: 'Sutukil Seafood Trilogy (Sugba, Tula, Kinilaw)'
+      },
+      'Linarang na Bakasi sa Cordova': {
+        English: 'Cordova Moray Eel Stew (Linarang na Bakasi)',
+        Tagalog: 'Linarang na Bakasi sa Cordova',
+        Cebuano: 'Linarang nga Bakasi sa Cordova'
+      },
+      'Presko nga Saang sa Mactan': {
+        English: 'Steamed Mactan Sea Snails (Saang)',
+        Tagalog: 'Sariwang Saang sa Mactan',
+        Cebuano: 'Presko nga Saang sa Mactan'
+      },
+      'Bibingka sa Mandaue': {
+        English: 'Mandaue Heritage Rice Cake (Bibingka)',
+        Tagalog: 'Bibingka sa Mandaue',
+        Cebuano: 'Bibingka sa Mandaue'
+      },
+      'Tagaktak sa Mandaue': {
+        English: 'Mandaue Crispy Sweet Rice Treat (Tagaktak)',
+        Tagalog: 'Tagaktak sa Mandaue',
+        Cebuano: 'Tagaktak sa Mandaue'
+      },
+      'Utan Bisaya sa Mandaue': {
+        English: 'Mandaue Native Vegetable Soup (Utan Bisaya)',
+        Tagalog: 'Utan Bisaya (Sabaw ng Gulay sa Mandaue)',
+        Cebuano: 'Utan Bisaya sa Mandaue'
+      },
+      'Inasal nga Lechon sa Talisay': {
+        English: 'Talisay Roasted Lechon',
+        Tagalog: 'Inihaw na Lechon sa Talisay',
+        Cebuano: 'Inasal nga Lechon sa Talisay'
+      },
+      'Inun-unan nga Bisaya': {
+        English: 'Vinegar-Braised Native Fish (Inun-unan)',
+        Tagalog: 'Paksiw na Isda sa Sukang Tuba',
+        Cebuano: 'Inun-unan nga Bisaya'
+      },
+      'Chicharon sa Carcar': {
+        English: 'Carcar Crispy Pork Cracklings',
+        Tagalog: 'Chicharon sa Carcar',
+        Cebuano: 'Chicharon sa Carcar'
+      },
+      'Ampaw sa Carcar': {
+        English: 'Carcar Sweet Puffed Rice Squares',
+        Tagalog: 'Ampaw sa Carcar',
+        Cebuano: 'Ampaw sa Carcar'
+      },
+      'Humba sa Carcar': {
+        English: 'Braised Pork Belly (Carcar Humba)',
+        Tagalog: 'Humba ng Baboy sa Carcar',
+        Cebuano: 'Humba sa Carcar'
+      },
+      'Torta sa Argao': {
+        English: 'Argao Heritage Torta Cake',
+        Tagalog: 'Torta sa Argao',
+        Cebuano: 'Torta sa Argao'
+      },
+      'Batirol nga Sikwate sa Argao': {
+        English: 'Argao Native Hot Chocolate (Sikwate)',
+        Tagalog: 'Sikwate sa Batirol ng Argao',
+        Cebuano: 'Batirol nga Sikwate sa Argao'
+      },
+      'Pintos sa Bogo': {
+        English: 'Bogo Sweet Corn Tamales (Pintos)',
+        Tagalog: 'Pintos sa Bogo (Matamis na Mais)',
+        Cebuano: 'Pintos sa Bogo'
+      },
+      'Kinilaw nga Tangigue sa Amihanan': {
+        English: 'Northern Cured Mackerel Ceviche',
+        Tagalog: 'Kilawin na Tanigue sa Amihanan',
+        Cebuano: 'Kinilaw nga Tangigue sa Amihanan'
+      },
+      'Presko nga Salada nga Lato': {
+        English: 'Fresh Sea Grape Salad (Lato)',
+        Tagalog: 'Sariwang Salad na Lato',
+        Cebuano: 'Presko nga Salada nga Lato'
+      },
+      'Sinugbang Bangus sa Dahon sa Saging': {
+        English: 'Grilled Milkfish Wrapped in Banana Leaf',
+        Tagalog: 'Inihaw na Bangus sa Dahon ng Saging',
+        Cebuano: 'Sinugbang Bangus sa Dahon sa Saging'
+      },
+      'Buwad nga Danggit sa Bantayan': {
+        English: 'Bantayan Sun-Dried Crispy Rabbitfish',
+        Tagalog: 'Tuyo at Pritong Danggit sa Bantayan',
+        Cebuano: 'Buwad nga Danggit sa Bantayan'
+      },
+      'Nilung-ag nga Kasag sa Bantayan': {
+        English: 'Steamed Blue Swimmer Crabs',
+        Tagalog: 'Nilagang Alimango sa Bantayan',
+        Cebuano: 'Nilung-ag nga Kasag sa Bantayan'
+      },
+      'Cassava Cake sa Camotes': {
+        English: 'Camotes Baked Cassava Cake',
+        Tagalog: 'Cassava Cake sa Camotes',
+        Cebuano: 'Cassava Cake sa Camotes'
+      },
+      'Halang-Halang nga Manok sa Gata': {
+        English: 'Spicy Coconut Chicken Soup',
+        Tagalog: 'Halang-Halang na Manok sa Gata',
+        Cebuano: 'Halang-Halang nga Manok sa Gata'
+      },
+
+      // ── COMMON PINOY DISHES & SCANNED FOODS ──
+      'Chicken Adobo': {
+        English: 'Chicken Adobo',
+        Tagalog: 'Adobong Manok',
+        Cebuano: 'Adobong Manok'
+      },
+      'Pork Adobo': {
+        English: 'Pork Adobo',
+        Tagalog: 'Adobong Baboy',
+        Cebuano: 'Adobong Baboy'
+      },
+      'Pork Sinigang': {
+        English: 'Pork Sinigang (Sour Pork Soup)',
+        Tagalog: 'Sinigang na Baboy',
+        Cebuano: 'Sinigang nga Baboy'
+      },
+      'Chicken Sinigang': {
+        English: 'Chicken Sinigang',
+        Tagalog: 'Sinigang na Manok',
+        Cebuano: 'Sinigang nga Manok'
+      },
+      'Tortang Talong': {
+        English: 'Eggplant Omelette (Tortang Talong)',
+        Tagalog: 'Tortang Talong',
+        Cebuano: 'Tortang Talong'
+      },
+      'Ginisang Monggo': {
+        English: 'Sautéed Mung Bean Soup (Ginisang Monggo)',
+        Tagalog: 'Ginisang Monggo',
+        Cebuano: 'Gisadong Monggos'
+      },
+      'Beef Bulalo': {
+        English: 'Beef Bone Marrow Soup (Bulalo)',
+        Tagalog: 'Bulalo ng Baka',
+        Cebuano: 'Bulalo nga Baka'
+      },
+      'Pork Sisig': {
+        English: 'Sizzling Pork Sisig',
+        Tagalog: 'Sisig na Baboy',
+        Cebuano: 'Sisig nga Baboy'
+      },
+      'Chicken Inasal': {
+        English: 'Grilled Chicken Inasal',
+        Tagalog: 'Inihaw na Manok (Inasal)',
+        Cebuano: 'Inasal nga Manok'
+      },
+
+      // ── AI RECOMMENDED DAILY MEALS ──
       'Luto nga Itlog sa Subak nga Kangkong ug Calamansi Tea': {
         English: 'Boiled Eggs with Water Spinach & Calamansi Tea',
         Tagalog: 'Lutong Itlog sa Kangkong at Calamansi Tea',
@@ -170,7 +345,7 @@ export const LanguageProvider = ({ children }) => {
         Cebuano: 'Sinugbang Tyan sa Bangus ug Binisaya nga Humay'
       },
       'Kinilaw nga Tangigue ug Sabaw sa Pasil Isda ug Bugas': {
-        English: 'Cured Mackerel Ceviche & Pasil Fish Soup with Rice',
+        English: 'Cured Mackerel Ceviche & Fish Soup with Rice',
         Tagalog: 'Kilawin na Tanigue at Sabaw ng Isda sa Kanin',
         Cebuano: 'Kinilaw nga Tangigue ug Sabaw sa Pasil Isda ug Bugas'
       },
@@ -184,11 +359,6 @@ export const LanguageProvider = ({ children }) => {
         Tagalog: 'Tinolang Manok na may Sayote at Malunggay',
         Cebuano: 'Tinolang Manok Bisaya nga adunay Sayote ug Malunggay'
       },
-      'Sinigang-Spiced Bangus Flakes with Sinangag & Fried Itlog': {
-        English: 'Sinigang-Spiced Bangus Flakes with Sinangag & Fried Egg',
-        Tagalog: 'Sinigang na Bangus sa Sinangag at Pritong Itlog',
-        Cebuano: 'Sinigang nga Bangus sa Sinangag ug Pritong Itlog'
-      },
       'Calama-Garlic Chicken Breast Adobo with Steamed Kamote': {
         English: 'Calamansi-Garlic Chicken Breast Adobo with Steamed Sweet Potato',
         Tagalog: 'Adobong Manok sa Bawang at Nilagang Kamote',
@@ -198,13 +368,20 @@ export const LanguageProvider = ({ children }) => {
         English: 'Boiled Saba Banana with Muscovado Drizzle',
         Tagalog: 'Nilagang Saging na Saba',
         Cebuano: 'Luto nga Saging Saba sa Muscovado'
-      },
-      'Pan-Seared Tilapia Fillet in Ginger Tinola Broth with Malunggay': {
-        English: 'Pan-Seared Tilapia Fillet in Ginger Tinola Broth with Malunggay',
-        Tagalog: 'Inihaw na Tilapia sa Sabaw ng Tinola at Malunggay',
-        Cebuano: 'Sinugbang Tilapia sa Sabaw sa Tinola ug Malunggay'
       }
     };
+
+    // Look for exact key match or case-insensitive match
+    if (EXACT_TRANSLATIONS[title] && EXACT_TRANSLATIONS[title][targetLang]) {
+      return EXACT_TRANSLATIONS[title][targetLang];
+    }
+
+    const lowerTitle = title.toLowerCase();
+    for (const key in EXACT_TRANSLATIONS) {
+      if (key.toLowerCase() === lowerTitle) {
+        return EXACT_TRANSLATIONS[key][targetLang];
+      }
+    }
 
     if (EXACT_TRANSLATIONS[title] && EXACT_TRANSLATIONS[title][targetLang]) {
       return EXACT_TRANSLATIONS[title][targetLang];
@@ -240,6 +417,12 @@ export const LanguageProvider = ({ children }) => {
         .replace(/Sautéed/gi, 'Ginisang')
         .replace(/Chicken Breast/gi, 'Dibdib ng Manok')
         .replace(/Chicken/gi, 'Manok')
+        .replace(/Pork Belly/gi, 'Liempo ng Baboy')
+        .replace(/Pork/gi, 'Baboy')
+        .replace(/Fish/gi, 'Isda')
+        .replace(/Beef/gi, 'Baka')
+        .replace(/Eggs|Egg/gi, 'Itlog')
+        .replace(/Rice/gi, 'Kanin')
         .replace(/Broth with/gi, 'Sabaw na may')
         .replace(/Broth/gi, 'Sabaw')
         .replace(/Soup/gi, 'Sabaw')
@@ -261,6 +444,12 @@ export const LanguageProvider = ({ children }) => {
         .replace(/Sautéed/gi, 'Gisadong')
         .replace(/Chicken Breast/gi, 'Dughan sa Manok')
         .replace(/Chicken/gi, 'Manok Bisaya')
+        .replace(/Pork Belly/gi, 'Liempo sa Baboy')
+        .replace(/Pork/gi, 'Baboy')
+        .replace(/Fish/gi, 'Isda')
+        .replace(/Beef/gi, 'Baka')
+        .replace(/Eggs|Egg/gi, 'Itlog')
+        .replace(/Rice/gi, 'Humay')
         .replace(/Broth with/gi, 'Sabaw ug')
         .replace(/Broth/gi, 'Sabaw')
         .replace(/Soup/gi, 'Sabaw')
@@ -360,4 +549,16 @@ export const LanguageProvider = ({ children }) => {
   );
 };
 
-export const useLanguage = () => useContext(LanguageContext);
+export const useLanguage = () => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    return {
+      language: 'English',
+      setLanguage: () => {},
+      t: (key) => key || '',
+      translateMealTitle: (title) => title || '',
+      translateMealCategory: (cat) => cat || '',
+    };
+  }
+  return context;
+};

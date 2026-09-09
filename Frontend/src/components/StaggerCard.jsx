@@ -3,7 +3,7 @@ import { Animated, Easing } from 'react-native';
 
 /**
  * StaggerCard
- * Wraps a list item and slides it up on mount.
+ * Wraps a list item and fades + slides it up on mount.
  *
  * Props:
  *   index         {number}  — position in the list (0-based)
@@ -23,7 +23,8 @@ export default function StaggerCard({
   style,
   children,
 }) {
-  const translateY = useRef(new Animated.Value(shouldAnimate ? 22 : 0)).current;
+  const translateY = useRef(new Animated.Value(shouldAnimate ? 28 : 0)).current;
+  const opacity    = useRef(new Animated.Value(shouldAnimate ? 0  : 1)).current;
 
   // Guard: prevents React Strict Mode / Fast Refresh from double-firing.
   const hasRun = useRef(false);
@@ -34,17 +35,33 @@ export default function StaggerCard({
     hasRun.current = true;
 
     const delay = initialDelay + index * staggerMs;
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: 380,
-      delay,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 400,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 380,
+        delay,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   return (
-    <Animated.View style={[{ width: '100%' }, style, { transform: [{ translateY }] }]}>
+    <Animated.View
+      style={[
+        { width: '100%' },
+        style,
+        { opacity, transform: [{ translateY }] },
+      ]}
+    >
       {children}
     </Animated.View>
   );

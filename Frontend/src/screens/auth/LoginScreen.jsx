@@ -293,7 +293,7 @@ export default function LoginScreen({
                 disabled={isLoading}
               >
                 <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                  {rememberMe && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
+                  {Boolean(rememberMe) && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
                 </View>
                 <Text style={styles.rememberMeText}>Remember me</Text>
               </TouchableOpacity>

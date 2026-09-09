@@ -491,14 +491,14 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                   />
                 </View>
 
-                {healthyRangeText && (
+                {Boolean(healthyRangeText) && (
                   <View style={styles.helperRow}>
                     <Ionicons name="information-circle-outline" size={14} color={CONFIG.logoGreen} />
                     <Text style={styles.helperText}>{healthyRangeText}</Text>
                   </View>
                 )}
 
-                {weightWarningText && (
+                {Boolean(weightWarningText) && (
                   <View style={styles.warningBox}>
                     <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
                     <Text style={styles.warningBoxText}>{weightWarningText}</Text>
@@ -529,7 +529,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                   </TouchableOpacity>
                 </View>
 
-                {suggestedDateInfo && (
+                {Boolean(suggestedDateInfo) && (
                   <TouchableOpacity
                     style={styles.suggestedChip}
                     activeOpacity={0.7}
@@ -542,7 +542,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                   </TouchableOpacity>
                 )}
 
-                {dateWarningText && (
+                {Boolean(dateWarningText) && (
                   <View style={styles.warningBox}>
                     <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
                     <Text style={styles.warningBoxText}>{dateWarningText}</Text>
