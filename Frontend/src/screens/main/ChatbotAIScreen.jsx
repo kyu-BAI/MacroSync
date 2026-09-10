@@ -137,8 +137,11 @@ import {
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { getStyles } from "./ChatbotAIScreen.styles";
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
+const logoGreen = "#10B981";
+
 const logoGreen = "#10B981";
 
 export default function ChatbotAIScreen({
@@ -147,9 +150,11 @@ export default function ChatbotAIScreen({
   userProfile,
   messages = [],
   setMessages,
+  onRefreshDashboard,
 }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
+  const { language = "English" } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [inputText, setInputText] = useState("");
@@ -250,11 +255,18 @@ export default function ChatbotAIScreen({
   useEffect(() => {
     if (messages.length === 0) {
       const userName = userProfile?.name || userProfile?.full_name || "there";
+      let greetingText = `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`;
+      if (language === "Tagalog") {
+        greetingText = `Kamusta ${userName}! Ako si Vita AI, ang iyong personal na Health, Diet & Fitness Assistant. Paano kita matutulungan na maabot ang iyong mga layunin ngayon?`;
+      } else if (language === "Cebuano") {
+        greetingText = `Kumusta ${userName}! Ako si Vita AI, ang imong personal nga Health, Diet & Fitness Assistant. Unsaon man tika pagtabang sa pagkab-ot sa imong mga tumong karong adlawa?`;
+      }
+
       setMessages([
         {
           id: 1,
           sender: "ai",
-          text: `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`,
+          text: greetingText,
           time: new Date().toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
@@ -263,7 +275,7 @@ export default function ChatbotAIScreen({
         },
       ]);
     }
-  }, [messages.length, userProfile?.name, userProfile?.full_name]);
+  }, [messages.length, userProfile?.name, userProfile?.full_name, language]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -307,6 +319,7 @@ export default function ChatbotAIScreen({
           user_id: userId,
           message: messageToSend,
           user_profile: userProfile || {},
+          language: language || "English",
         }),
       });
 
@@ -361,6 +374,16 @@ export default function ChatbotAIScreen({
             }),
           },
         ]);
+
+        // If an auto-log occurred, trigger immediate dashboard refresh
+        if (
+          data.action_logged ||
+          (data.response && (data.response.includes("Auto-Logged") || data.response.includes("Na-log")))
+        ) {
+          if (onRefreshDashboard) {
+            onRefreshDashboard();
+          }
+        }
       } else {
         setMessages((prev) => [
           ...prev,

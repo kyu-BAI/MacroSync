@@ -1829,7 +1829,7 @@ export default function SettingsScreen({
               </Text>
             </TouchableOpacity>
 
-            {!!userProfile?.profileImage && !imageError && (
+            {Boolean(userProfile?.profileImage) && !imageError && (
               <TouchableOpacity
                 onPress={() => {
                   setShowPhotoPreviewModal(false);

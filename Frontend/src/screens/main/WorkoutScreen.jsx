@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Text,
   View,
@@ -35,6 +35,7 @@ import { useTheme } from "../../context/ThemeContext";
 import AILoadingModal from "../../components/AILoadingModal";
 import StaggerCard from "../../components/StaggerCard";
 import PressableCard from "../../components/PressableCard";
+import SkeletonCard from "../../components/SkeletonCard";
 import { getStyles } from "./WorkoutScreen.styles";
 const logoGreen = "#10B981";
 
@@ -85,26 +86,26 @@ const DEFAULT_WORKOUT_ROUTINES = [
     intensity: "Light",
     duration: 20,
     caloriesBurn: 150,
-    description: "Gentle low-impact full body routine to activate muscles and burn calories.",
+    description: "Light full-body burn.",
     badgeText: "BEGINNER FRIENDLY",
     tutorials: [
       {
         name: "Bodyweight Squat",
         target: "3 Sets x 12 Reps",
-        setup: "Stand with feet shoulder-width apart, chest upright, core engaged.",
-        form: "Lower hips back as if sitting in a chair, knees behind toes. Push through heels to stand.",
+        setup: "Feet shoulder-width apart.",
+        form: "Sit back into heels; stand up.",
       },
       {
         name: "Incline Pushup",
         target: "3 Sets x 10 Reps",
-        setup: "Place hands on wall, bench, or floor with knees resting on mat.",
-        form: "Lower chest towards hands in a 45-degree angle, press back up steadily.",
+        setup: "Hands on wall or bench.",
+        form: "Lower chest to 45°; press up.",
       },
       {
         name: "Standing High Knees",
         target: "3 Sets x 30 Secs",
-        setup: "Stand tall, drive one knee towards your chest at a steady pace.",
-        form: "Pump arms synchronously, keeping posture upright and landing softly.",
+        setup: "Stand tall, drive knee up.",
+        form: "Pump arms and land softly.",
       },
     ],
   },
@@ -114,26 +115,26 @@ const DEFAULT_WORKOUT_ROUTINES = [
     intensity: "Moderate",
     duration: 30,
     caloriesBurn: 280,
-    description: "High-energy cardiovascular and metabolic conditioning workout.",
+    description: "HIIT cardio & calorie burn.",
     badgeText: "MOST POPULAR",
     tutorials: [
       {
         name: "Jumping Jacks",
         target: "4 Sets x 45 Secs",
-        setup: "Stand straight with arms at your side, feet together.",
-        form: "Jump feet out laterally while raising arms above head, return with rhythm.",
+        setup: "Feet together, arms down.",
+        form: "Jump out and raise arms overhead.",
       },
       {
         name: "Mountain Climbers",
         target: "4 Sets x 40 Secs",
-        setup: "Start in high plank position with shoulders stacked over wrists.",
-        form: "Drive knees alternate towards chest dynamically while keeping hips low.",
+        setup: "High plank, wrists under shoulders.",
+        form: "Drive knees forward quickly.",
       },
       {
         name: "Walking Lunges",
         target: "3 Sets x 14 Reps",
-        setup: "Step forward with right foot, lowering hips until both knees bend 90 degrees.",
-        form: "Push off back foot to step forward into next lunge, maintaining balance.",
+        setup: "Step forward, bend knees 90°.",
+        form: "Push forward into next step.",
       },
     ],
   },
@@ -143,26 +144,26 @@ const DEFAULT_WORKOUT_ROUTINES = [
     intensity: "Intense",
     duration: 40,
     caloriesBurn: 420,
-    description: "Challenging core strengthening and muscle endurance sculpting routine.",
+    description: "Intense core & muscle sculpt.",
     badgeText: "HIGH CALORIE BURN",
     tutorials: [
       {
         name: "Plank Hold",
         target: "4 Sets x 60 Secs",
-        setup: "Place forearms on floor with elbows beneath shoulders.",
-        form: "Keep body in rigid straight line from head to heels, engaging abdominals tightly.",
+        setup: "Elbows on floor under shoulders.",
+        form: "Hold straight line; brace core.",
       },
       {
         name: "Standard Pushups",
         target: "4 Sets x 15 Reps",
-        setup: "High plank position, hands slightly wider than shoulder width.",
-        form: "Lower body until chest nearly touches floor, push back up with full extension.",
+        setup: "High plank, hands shoulder-width.",
+        form: "Lower chest to floor; push up.",
       },
       {
         name: "Russian Twists",
         target: "4 Sets x 20 Reps",
-        setup: "Sit on floor, lean torso back 45 degrees with feet elevated.",
-        form: "Twist torso side to side, touching hands to floor on each side.",
+        setup: "Sit back 45° with feet up.",
+        form: "Twist torso side to side.",
       },
     ],
   },
@@ -184,8 +185,7 @@ export default function WorkoutScreen({
   const styles = getStyles(theme);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState("All");
-  // Tracks if entrance stagger has already played — prevents re-animating on filter changes
-  const hasPlayedEntrance = useRef(false);
+
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -473,7 +473,7 @@ export default function WorkoutScreen({
         animationType="slide" 
         onRequestClose={handleExitWorkout}
       >
-        {activeRoutine && (
+        {Boolean(activeRoutine) && (
           <View style={styles.playerWrapper}>
             {/* PLAYER HEADER AREA */}
             <View style={styles.playerHeaderRow}>
@@ -668,21 +668,11 @@ export default function WorkoutScreen({
 
         {/* Skeleton placeholders while loading */}
         {isLoadingWorkouts && workoutRoutines.length === 0 && (
-          [0, 1, 2].map((i) => (
-            <View
-              key={`skel-${i}`}
-              style={[
-                styles.workoutFormCard,
-                {
-                  opacity: 0.45,
-                  backgroundColor: theme?.inputBg || '#F1F5F9',
-                  height: 160,
-                  borderRadius: 16,
-                  marginBottom: 16,
-                },
-              ]}
-            />
-          ))
+          <View style={{ gap: 14, marginBottom: 16 }}>
+            {[0, 1, 2].map((i) => (
+              <SkeletonCard key={`skel-${i}`} height={140} borderRadius={20} />
+            ))}
+          </View>
         )}
 
         {filteredWorkouts.map((workout, staggerIndex) => {
@@ -691,7 +681,6 @@ export default function WorkoutScreen({
             <StaggerCard
               key={workout.id}
               index={staggerIndex}
-              shouldAnimate={!hasPlayedEntrance.current}
             >
             <PressableCard
               style={styles.workoutFormCard}
@@ -701,7 +690,7 @@ export default function WorkoutScreen({
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
+                  <Text style={styles.workoutDescriptionText} numberOfLines={2}>{workout.description}</Text>
                 </View>
               </View>
 
@@ -759,8 +748,7 @@ export default function WorkoutScreen({
             </StaggerCard>
           );
         })}
-        {/* Mark entrance as played after first render — filter taps won't re-animate */}
-        {filteredWorkouts.length > 0 && (() => { hasPlayedEntrance.current = true; return null; })()}
+
       </ScrollView>
 
       {/* UIverse Inspired AI Customization Loading Modal */}

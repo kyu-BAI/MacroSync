@@ -374,6 +374,20 @@ export default function DashboardScreen({
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState('');
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [userProfile?.profileImage]);
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
 
   // ── Live Pedometer (expo-sensors) ──
@@ -889,10 +903,16 @@ export default function DashboardScreen({
             </TouchableOpacity>
             <TouchableOpacity onPress={() => onTabChange && onTabChange('SETTINGS')} activeOpacity={0.8} style={styles.avatarContainer}>
               <View style={styles.avatarGlass}>
-                {userProfile?.profileImage ? (
-                  <Image source={{ uri: userProfile.profileImage }} style={styles.avatarImage} />
+                {userProfile?.profileImage && !imageError ? (
+                  <Image 
+                    source={{ uri: userProfile.profileImage }} 
+                    style={styles.avatarImage} 
+                    onError={() => setImageError(true)}
+                  />
                 ) : (
-                  <User color="#FFFFFF" size={22} strokeWidth={2.5} />
+                  <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "900", letterSpacing: 0.5 }}>
+                    {getInitials(userProfile?.name || displayName)}
+                  </Text>
                 )}
               </View>
             </TouchableOpacity>
@@ -900,30 +920,8 @@ export default function DashboardScreen({
         </FadeCard>
 
         {/* ── SKELETON LOADERS (shown while data hydrates) ── */}
-        {(!userProfile?.name || userProfile.name === 'User') && (
-          <>
-            <SkeletonCard rows={[
-              { width: '50%', height: 12 },
-              { width: '75%', height: 20, marginTop: 8 },
-              { width: '40%', height: 10, marginTop: 8 },
-            ]} />
-            <SkeletonCard rows={[
-              { width: '35%', height: 12 },
-              { width: '100%', height: 110, marginTop: 12 },
-            ]} />
-            <SkeletonCard rows={[
-              { width: '45%', height: 12 },
-              { width: '100%', height: 80, marginTop: 12 },
-            ]} />
-            <SkeletonCard rows={[
-              { width: '40%', height: 12 },
-              { width: '100%', height: 100, marginTop: 12 },
-            ]} />
-          </>
-        )}
 
         {/* ── 1. WEIGHT TRACKING PROGRESS CARD ── */}
-        {userProfile?.name && userProfile.name !== 'User' && (
         <FadeCard delay={80} style={styles.formCard}>
           <Text style={styles.cardTitle}>Weight Progress</Text>
           <View style={[styles.weightSplitLayout, { alignItems: 'flex-start' }]}>
@@ -964,11 +962,8 @@ export default function DashboardScreen({
             </View>
           </View>
         </FadeCard>
-        )}
 
         {/* ── 2. DAILY NUTRITION CARD + REST OF CARDS (guarded by real data) ── */}
-        {userProfile?.name && userProfile.name !== 'User' && (
-          <>
         <FadeCard delay={160} style={styles.formCard}>
           <Text style={styles.cardTitle}>Daily Nutrition</Text>
           <View style={[styles.nutritionRow, { alignItems: 'flex-start' }]}>
@@ -1264,9 +1259,6 @@ export default function DashboardScreen({
             />
           </View>
         </FadeCard>
-
-          </>
-        )}
 
       </ScrollView>
 

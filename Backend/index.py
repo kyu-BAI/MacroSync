@@ -176,6 +176,7 @@ class ChatMessageRequest(BaseModel):
     user_id: str
     message: str
     user_profile: Optional[dict] = None
+    language: Optional[str] = "English"
 
 
 class RecipeRequest(BaseModel):
@@ -1489,10 +1490,13 @@ def chat_with_ai(data: ChatMessageRequest):
         is_premium = False
         day_usage = {"scans": 0, "chats": 0}
         
+        user_lang = data.language or "English"
+
         # Base System Instructions enforcing strict chatbot routes and auto-logging features
         system_instructions = (
             "=== MACROSYNC VITA AI ASSISTANT SYSTEM INSTRUCTIONS ===\n"
             "You are Vita AI, MacroSync's official AI Health, Nutrition, Diet, Fitness, and Personal Profile Assistant.\n\n"
+            f"LANGUAGE RULE: You MUST reply in the user's selected language: {user_lang}. If Tagalog or Cebuano, speak fluently and naturally in that language while keeping health, fitness, food, and meal logging clear.\n\n"
             "RULE 1: USER PROFILE & IDENTITY QUESTIONS (HIGHEST PRIORITY)\n"
             "- Whenever the user asks 'Who am I?', 'who am i', 'what is my name', 'where do I live', 'what are my stats', or asks about their profile:\n"
             "  - Greet them warmly using their exact Name / Username!\n"
@@ -1785,6 +1789,7 @@ def chat_with_ai(data: ChatMessageRequest):
             full_prompt = system_instructions + user_context_str + f"User message: {data.message}"
 
         reply_text = ""
+        action_logged = False
         try:
             response = generate_gemini_content(full_prompt)
             reply_text = response.text or ""
@@ -1818,11 +1823,21 @@ def chat_with_ai(data: ChatMessageRequest):
                     new_consumed = consumed_calories + cals
                     excess_cals = new_consumed - target_calories
 
-                    badge_text = f"\n\n✅ **Auto-Logged to Meal Diary:** {meal_name} ({cals} kcal | {prot}g P | {carb}g C | {fat}g F)"
-                    if excess_cals > 0:
-                        badge_text += f"\n\n⚠️ **Calorie Target Notice:** Logging this meal puts you **{excess_cals} kcal over** your daily target of {target_calories} kcal. Consider balancing with light exercise or adjusting your next meal!"
+                    if user_lang == "Tagalog":
+                        badge_text = f"\n\n✅ **Awtomatikong Na-log sa Meal Diary:** {meal_name} ({cals} kcal | {prot}g P | {carb}g C | {fat}g F)"
+                        if excess_cals > 0:
+                            badge_text += f"\n\n⚠️ **Paalala sa Kalorina:** Ang pag-log ng pagkaing ito ay lumagpas ng **{excess_cals} kcal** sa iyong araw-araw na layunin na {target_calories} kcal."
+                    elif user_lang == "Cebuano":
+                        badge_text = f"\n\n✅ **Awtomatikong Na-log sa Meal Diary:** {meal_name} ({cals} kcal | {prot}g P | {carb}g C | {fat}g F)"
+                        if excess_cals > 0:
+                            badge_text += f"\n\n⚠️ **Pahibalo sa Kalorina:** Ang pag-log niining pagkaon kay nakalapas og **{excess_cals} kcal** sa imong adlaw-adlaw nga tumong nga {target_calories} kcal."
+                    else:
+                        badge_text = f"\n\n✅ **Auto-Logged to Meal Diary:** {meal_name} ({cals} kcal | {prot}g P | {carb}g C | {fat}g F)"
+                        if excess_cals > 0:
+                            badge_text += f"\n\n⚠️ **Calorie Target Notice:** Logging this meal puts you **{excess_cals} kcal over** your daily target of {target_calories} kcal. Consider balancing with light exercise or adjusting your next meal!"
 
                     reply_text = main_reply + badge_text
+                    action_logged = "MEAL"
                 except Exception as log_err:
                     print("AUTO LOG MEAL CHAT ERROR:", log_err)
                     if "LOG_MEAL:" in reply_text:
@@ -1849,7 +1864,15 @@ def chat_with_ai(data: ChatMessageRequest):
                         "logged_at": datetime.now(timezone.utc).isoformat()
                     }).execute()
 
-                    reply_text = main_reply + f"\n\n🔥 **Auto-Logged Workout:** {workout_name} ({cals_burned} kcal burned | {mins} mins)"
+                    if user_lang == "Tagalog":
+                        w_badge = f"\n\n🔥 **Awtomatikong Na-log na Ehersisyo:** {workout_name} ({cals_burned} kcal na-burn | {mins} mins)"
+                    elif user_lang == "Cebuano":
+                        w_badge = f"\n\n🔥 **Awtomatikong Na-log nga Ehersisyo:** {workout_name} ({cals_burned} kcal na-burn | {mins} mins)"
+                    else:
+                        w_badge = f"\n\n🔥 **Auto-Logged Workout:** {workout_name} ({cals_burned} kcal burned | {mins} mins)"
+
+                    reply_text = main_reply + w_badge
+                    action_logged = "WORKOUT"
                 except Exception as wlog_err:
                     print("AUTO LOG WORKOUT CHAT ERROR:", wlog_err)
                     if "LOG_WORKOUT:" in reply_text:
@@ -1870,7 +1893,15 @@ def chat_with_ai(data: ChatMessageRequest):
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }).execute()
 
-                    reply_text = main_reply + f"\n\n💧 **Auto-Logged Water Intake:** +{added_glasses} glasses (Total today: {new_total_glasses}/8 glasses)"
+                    if user_lang == "Tagalog":
+                        wat_badge = f"\n\n💧 **Awtomatikong Na-log na Tubig:** +{added_glasses} baso (Kabuuan ngayon: {new_total_glasses}/8 baso)"
+                    elif user_lang == "Cebuano":
+                        wat_badge = f"\n\n💧 **Awtomatikong Na-log nga Tubig:** +{added_glasses} baso (Kabuuan karon: {new_total_glasses}/8 baso)"
+                    else:
+                        wat_badge = f"\n\n💧 **Auto-Logged Water Intake:** +{added_glasses} glasses (Total today: {new_total_glasses}/8 glasses)"
+
+                    reply_text = main_reply + wat_badge
+                    action_logged = "WATER"
                 except Exception as water_err:
                     print("AUTO LOG WATER CHAT ERROR:", water_err)
                     if "LOG_WATER:" in reply_text:
@@ -1888,7 +1919,8 @@ def chat_with_ai(data: ChatMessageRequest):
         return {
             "response": reply_text,
             "is_premium": is_premium,
-            "remaining_chats": remaining_count
+            "remaining_chats": remaining_count,
+            "action_logged": action_logged
         }
     except HTTPException as he:
         raise he
