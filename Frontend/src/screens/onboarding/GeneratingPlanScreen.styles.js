@@ -1,13 +1,15 @@
 import { StyleSheet } from 'react-native';
 
-const COLORS = {
+// Flat Design Tokens
+export const COLORS = {
   base: '#F8FAFC',
   logoGreen: '#10B981',
   textDark: '#0F172A',
   textMuted: '#64748B',
+  white: '#FFFFFF',
 };
 
-export const getStyles = (theme) => StyleSheet.create({
+export const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme?.background || COLORS.base,
@@ -71,7 +73,7 @@ export const getStyles = (theme) => StyleSheet.create({
   },
   textContainer: {
     alignItems: 'center',
-    height: 100,
+    height: 100, // Fixed height to prevent jumping text when lines wrap
   },
   title: {
     fontSize: 28,

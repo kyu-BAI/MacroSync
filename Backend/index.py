@@ -990,7 +990,13 @@ async def save_onboarding(data: OnboardingData):
             prefs = {}
 
     prefs["unit"] = data.weight_unit
-    prefs["starting_weight"] = data.starting_weight if data.starting_weight is not None else data.weight_kg
+    st_weight = data.starting_weight if data.starting_weight is not None else data.weight_kg
+    if data.weight_unit == "lbs" and st_weight and float(st_weight) > 0:
+        if abs(float(st_weight) - float(data.weight_kg)) > 1.0:
+            st_weight = round(float(st_weight) / 2.20462, 2)
+        else:
+            st_weight = float(data.weight_kg)
+    prefs["starting_weight"] = float(st_weight) if st_weight is not None else float(data.weight_kg)
     if data.allergies is not None:
         prefs["allergies"] = data.allergies
     if data.address:
@@ -1019,25 +1025,6 @@ async def save_onboarding(data: OnboardingData):
         supabase.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
 
     return {"success": True}
-
-
-@app.post("/update-weight")
-async def update_weight(data: UpdateWeightData):
-    try:
-        # Convert to kg if user operates in lbs
-        weight_kg = data.new_weight
-        if data.unit == "lbs":
-            weight_kg = data.new_weight / 2.20462
-
-        # Update the specific user's weight_kg column
-        supabase.table("user_profiles").update({
-            "weight_kg": weight_kg
-        }).eq("id", data.user_id).execute()
-        
-        return {"success": True, "message": "Weight logged successfully"}
-    except Exception as e:
-        print("UPDATE WEIGHT ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to log weight")
 
 
 @app.post("/update-profile")
@@ -1181,7 +1168,18 @@ async def get_dashboard_data(user_id: str):
         
         # Raw kg values
         current_weight_kg = float(user.get("weight_kg") or 70.0)
-        starting_weight_kg = float(prefs.get("starting_weight") or current_weight_kg or 70.0)
+        raw_sw = prefs.get("starting_weight")
+        if raw_sw is not None:
+            try:
+                raw_sw_val = float(raw_sw)
+                if unit == "lbs" and abs(raw_sw_val - current_weight_kg * 2.20462) < 2.5:
+                    starting_weight_kg = current_weight_kg
+                else:
+                    starting_weight_kg = raw_sw_val
+            except Exception:
+                starting_weight_kg = current_weight_kg
+        else:
+            starting_weight_kg = current_weight_kg
         target_weight_kg = float(user.get("goalWeight") or 70.0)
         
         # Calculate dynamic macros based on goals using kg
@@ -1352,6 +1350,17 @@ async def get_dashboard_data(user_id: str):
             streak_count += 1
             check_date -= timedelta(days=1)
 
+        # Compute 7-day rolling weight history (in user unit)
+        raw_history = prefs.get("weight_history")
+        if not raw_history or not isinstance(raw_history, list) or len(raw_history) != 7:
+            step = (current_weight_kg - starting_weight_kg) / 6.0 if starting_weight_kg else 0.0
+            raw_history = [round(starting_weight_kg + step * i, 1) for i in range(7)]
+
+        if unit == "lbs":
+            weight_history = [round(float(w) * 2.20462, 1) for w in raw_history]
+        else:
+            weight_history = [round(float(w), 1) for w in raw_history]
+
         return {
             "profile": {
                 "name": user.get("name", "User"),
@@ -1361,6 +1370,7 @@ async def get_dashboard_data(user_id: str):
                 "currentWeight": current_weight,
                 "targetWeight": target_weight,
                 "startingWeight": starting_weight,
+                "weightHistory": weight_history,
                 "unit": unit,
                 "age": user.get("age"),
                 "height": user.get("height_cm")
@@ -1381,12 +1391,76 @@ async def get_dashboard_data(user_id: str):
                 "activeMinutes": active_minutes,
                 "recentExercise": recent_exercise
             },
-            "loggedMealIds": logged_meal_ids,
-            "weeklyActivity": weekly_activity
+            "weeklyActivity": weekly_activity,
+            "streakDays": streak_count,
+            "loggedMealIds": logged_meal_ids
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("DASHBOARD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------- UPDATE WEIGHT ENDPOINT ----------------
+class UpdateWeightRequest(BaseModel):
+    user_id: str
+    new_weight: float
+    unit: Optional[str] = "kg"
+
+@app.post("/update-weight")
+async def update_weight(data: UpdateWeightRequest):
+    try:
+        user_id = data.user_id.strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID is required")
+
+        weight_kg = float(data.new_weight)
+        if data.unit and data.unit.lower() == "lbs":
+            weight_kg = round(weight_kg / 2.20462, 2)
+
+        update_payload = {"weight_kg": weight_kg}
+
+        user_res = supabase.table("user_profiles").select("location").eq("id", user_id).execute()
+        if user_res.data:
+            user = user_res.data[0]
+            prefs = {}
+            if user.get("location"):
+                try:
+                    prefs = json.loads(user["location"]) if isinstance(user["location"], str) else user["location"]
+                except Exception:
+                    pass
+            if not prefs.get("starting_weight"):
+                prefs["starting_weight"] = weight_kg
+            prefs["unit"] = data.unit or "kg"
+
+            # Maintain 7-day rolling weight history array
+            today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+            raw_history = prefs.get("weight_history")
+            if not raw_history or not isinstance(raw_history, list) or len(raw_history) != 7:
+                sw_kg = float(prefs.get("starting_weight") or weight_kg)
+                step = (weight_kg - sw_kg) / 6.0
+                raw_history = [round(sw_kg + step * i, 1) for i in range(7)]
+
+            last_log_date = prefs.get("last_weight_log_date")
+            if last_log_date and last_log_date != today_str:
+                raw_history = [float(x) for x in raw_history[1:]] + [round(weight_kg, 1)]
+            else:
+                raw_history[6] = round(weight_kg, 1)
+
+            prefs["last_weight_log_date"] = today_str
+            prefs["weight_history"] = raw_history
+            update_payload["location"] = json.dumps(prefs)
+
+        supabase.table("user_profiles").update(update_payload).eq("id", user_id).execute()
+        return {"success": True, "message": "Weight updated successfully", "weight_kg": weight_kg}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("UPDATE WEIGHT ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 
 # ---------------- AI HELPER FOR RETRIES & FALLBACKS ----------------
@@ -1417,12 +1491,31 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     gemini_key_counter += 1
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
+    # Optimize image payload with Pillow if provided to ensure ultra-fast network transfer
+    if image_bytes and len(image_bytes) > 80000:
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(image_bytes))
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            max_dim = 1024
+            if max(img.size) > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            out_buf = io.BytesIO()
+            img.save(out_buf, format="JPEG", quality=75, optimize=True)
+            compressed = out_buf.getvalue()
+            if len(compressed) < len(image_bytes):
+                image_bytes = compressed
+                mime_type = "image/jpeg"
+        except Exception as img_err:
+            pass
+
+    # Pre-encode image base64 once outside the nested loop
+    b64_img = base64.b64encode(image_bytes).decode("utf-8") if (image_bytes and len(image_bytes) > 0) else None
+
     # Models prioritized by capacity, speed, and fallback availability
     models_to_try = [
-        'gemini-flash-latest',
-        'gemini-3.6-flash',
-        'gemini-flash-lite-latest',
-        'gemini-3.1-flash-lite',
         'gemini-2.0-flash',
         'gemini-2.0-flash-lite',
         'gemini-1.5-flash',
@@ -1436,8 +1529,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
                 parts = []
-                if image_bytes and len(image_bytes) > 0:
-                    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+                if b64_img:
                     parts.append({"inline_data": {"mime_type": mime_type, "data": b64_img}})
                 parts.append({"text": prompt})
 
@@ -2426,7 +2518,7 @@ def recommend_workouts(user_id: str):
         - "duration" (string, e.g. "15 mins", "20 mins", "25 mins")
         - "targetGains" (string, the main benefit, e.g. "Fat Loss & Conditioning", "Hypertrophy")
         - "caloriesBurn" (integer, estimated calorie burn)
-        - "description" (string, brief summary of the routine)
+        - "description" (string, a brief, simple 2-line summary of the routine under 80 characters total. Keep it short, direct, and easy to read without complex words or ellipses)
         - "tutorials" (a list of exactly 3 exercise objects, each containing:
             - "name" (string, exercise name)
             - "target" (string, reps/sets or duration, e.g. "3 Sets x 12 Reps")
@@ -2457,7 +2549,7 @@ def recommend_workouts(user_id: str):
                 "duration": "15 mins",
                 "targetGains": "Active Recovery & Flexibility",
                 "caloriesBurn": 130,
-                "description": f"A low-impact home mobility session designed for a {weight_kg}kg individual targeting {goal}.",
+                "description": f"Gentle low-impact mobility flow to activate your muscles and flexibility.",
                 "tutorials": [
                     {
                         "name": "Arm Circles & Torso Twists",
@@ -2486,7 +2578,7 @@ def recommend_workouts(user_id: str):
                 "duration": "25 mins",
                 "targetGains": "Lean Muscle & Stamina",
                 "caloriesBurn": 240,
-                "description": f"Balanced multi-joint circuit built to maximize results for your {goal} target.",
+                "description": f"Balanced bodyweight circuit to build strength and daily endurance.",
                 "tutorials": [
                     {
                         "name": "Pinoy Bodyweight Squats",
@@ -2515,7 +2607,7 @@ def recommend_workouts(user_id: str):
                 "duration": "30 mins",
                 "targetGains": "Max Calorie Burn & Athletic Power",
                 "caloriesBurn": 340,
-                "description": f"High-energy bodyweight HIIT session designed to accelerate your {goal} progress.",
+                "description": f"High-energy bodyweight circuit to maximize calorie burn and tone.",
                 "tutorials": [
                     {
                         "name": "Jumping Jacks & High Knees",
@@ -2847,94 +2939,6 @@ def recommend_meals(user_id: str):
         print("MEAL RECOMMENDATION ROUTE ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/debug-key")
-def debug_key():
-    try:
-        if not SUPABASE_KEY:
-            return {"error": "SUPABASE_KEY is missing"}
-        parts = SUPABASE_KEY.split(".")
-        if len(parts) != 3:
-            return {"error": "Invalid JWT format"}
-        payload_b64 = parts[1]
-        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
-        payload_json = json.loads(base64.b64decode(payload_b64).decode())
-        return {
-            "role": payload_json.get("role"),
-            "ref": payload_json.get("ref"),
-            "iss": payload_json.get("iss"),
-            "key_length": len(SUPABASE_KEY)
-        }
-    except Exception as e:
-        return {"error": f"Failed to parse key: {str(e)}"}
-
-# ---------------- MEALS LOGGING & RECIPE GENERATION ----------------
-class MealLogPayload(BaseModel):
-    id: str = None
-    user_id: str
-    name: str
-    calories: int = 0
-    protein: int = 0
-    carbs: int = 0
-    fats: int = 0
-
-@app.post("/meals")
-async def log_meal(data: MealLogPayload):
-    try:
-        supabase.table("logged_meals").upsert({
-            "id": data.id or str(uuid.uuid4()),
-            "user_id": data.user_id,
-            "name": data.name,
-            "calories": data.calories,
-            "protein": data.protein,
-            "carbs": data.carbs,
-            "fats": data.fats,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
-        return {"success": True, "message": "Meal logged"}
-    except Exception as e:
-        print("MEAL LOG ERROR:", repr(e))
-        return {"success": True, "message": "Meal logged locally"}
-
-class GenerateRecipePayload(BaseModel):
-    ingredients: str
-    budget: str = "All"
-    location: str = "San Remigio"
-    allergy: str = "None"
-
-@app.post("/generate-recipe")
-async def generate_recipe(data: GenerateRecipePayload):
-    try:
-        clean_name = data.ingredients.strip()
-        loc = data.location or "San Remigio"
-        bud = data.budget or "Under ₱100"
-        return {
-            "id": f"rec_{int(datetime.utcnow().timestamp()*1000)}",
-            "title": f"Healthy {clean_name.title()} ({loc} Palengke)",
-            "calories": 420,
-            "protein": "34g",
-            "carbs": "38g",
-            "fats": "12g",
-            "time": "20 mins",
-            "budget": bud,
-            "location": loc,
-            "ingredients": [
-                f"200g Fresh Sourced {clean_name} (from {loc} Public Market)",
-                "1 cup Steamed Vegetables / Sweet Corn",
-                "1 tbsp Fresh Calamansi Juice & Native Tomatoes",
-                "1 tsp Coconut Oil",
-                "Pinch of Sea Salt & Black Pepper"
-            ],
-            "instructions": [
-                f"Clean and rinse the fresh {clean_name.lower()}.",
-                "Marinate with fresh calamansi juice and sea salt.",
-                "Grill or steam gently until tender and cooked through.",
-                "Serve hot with steamed vegetables and corn!"
-            ]
-        }
-    except Exception as e:
-        print("GENERATE RECIPE ERROR:", repr(e))
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------- GOOGLE OAUTH SECURITY AUTHENTICATION ----------------
 class GoogleSignInPayload(BaseModel):

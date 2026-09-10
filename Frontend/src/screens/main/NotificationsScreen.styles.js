@@ -115,12 +115,12 @@ export const getStyles = (theme, isDarkMode) => StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     marginBottom: 12,
-    borderWidth: 1, 
+    borderWidth: 1.5, 
     borderColor: theme?.border || '#E2E8F0',
   },
   unreadCard: {
     backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-    borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.6)',
+    borderColor: '#10B981',
     borderWidth: 1.5,
   },
   iconBox: {

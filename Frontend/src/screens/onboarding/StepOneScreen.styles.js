@@ -1,17 +1,28 @@
 import { StyleSheet } from 'react-native';
 
-const COLORS = {
+// ==========================================
+// THEME CONFIGURATION & BRANDING TOKENS
+// ==========================================
+export const COLORS = {
   base: '#F8FAFC',
+  whiteHighlight: '#FFFFFF',
   logoGreen: '#10B981',
   textDark: '#0F172A',
   textMuted: '#64748B',
-  borderLight: '#E2E8F0',
-  whiteHighlight: '#FFFFFF',
   textPlaceholder: '#94A3B8',
-  bgPill: '#F1F5F9'
+  borderLight: '#E2E8F0',
+  borderItem: '#E2E8F0',
+  bgPill: '#F1F5F9',
+  
+  // BMI Status Colors
+  underweight: '#10B981',
+  normal: '#10B981',
+  overweight: '#64748B',
+  obese: '#64748B'
 };
 
-export const getStyles = (theme) => StyleSheet.create({
+export const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
+  // --- Architectural Core Blocks ---
   container: { 
     flex: 1, 
     backgroundColor: theme?.background || COLORS.base 
@@ -23,6 +34,7 @@ export const getStyles = (theme) => StyleSheet.create({
     paddingVertical: 16 
   },
   
+  // --- Typography Header Formatting ---
   headerSection: { 
     marginBottom: 35, 
     alignItems: 'center', 
@@ -51,6 +63,7 @@ export const getStyles = (theme) => StyleSheet.create({
     fontWeight: '700' 
   },
   
+  // --- Surface Panel Structures ---
   formCard: {
     backgroundColor: theme?.surface || COLORS.base,
     borderRadius: 28, 
@@ -83,6 +96,7 @@ export const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center' 
   },
   
+  // --- Unit Selector Controls ---
   togglePillContainer: {
     flexDirection: 'row',
     backgroundColor: theme?.cardBg || COLORS.bgPill,
@@ -108,6 +122,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: COLORS.whiteHighlight 
   },
 
+  // --- Core Form Elements ---
   flatInputField: {
     backgroundColor: theme?.inputBg || COLORS.base,
     borderRadius: 12,
@@ -123,6 +138,7 @@ export const getStyles = (theme) => StyleSheet.create({
     fontWeight: '700' 
   },
   
+  // --- Metrics Display Panel Layouts ---
   bmiPanelRecess: {
     backgroundColor: theme?.inputBg || COLORS.base,
     borderRadius: 16,
@@ -164,6 +180,7 @@ export const getStyles = (theme) => StyleSheet.create({
     lineHeight: 20 
   },
   
+  // --- Dispatch Button States ---
   buttonBase: { 
     paddingVertical: 16, 
     borderRadius: 24, 

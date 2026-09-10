@@ -87,6 +87,7 @@ function MainApp() {
     weight: '',
     height: '',
     startingWeight: '',
+    unit: 'kg',
   });
   const [userGoals, setUserGoals] = useState({
     activityLevel: 'moderate',
@@ -190,7 +191,8 @@ function MainApp() {
       weight: data.profile.currentWeight ? data.profile.currentWeight.toString() : '70',
       height: data.profile.height ? data.profile.height.toString() : '170',
       age: data.profile.age ? data.profile.age.toString() : '25',
-      startingWeight: data.profile.startingWeight ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : '70')
+      startingWeight: data.profile.startingWeight ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : '70'),
+      unit: data.profile.unit || 'kg'
     });
     setUserGoals({
       goal: data.profile.goal === 'Build Muscle' ? 'muscle' : data.profile.goal === 'Lose Weight' ? 'fatloss' : 'maintain',
@@ -216,16 +218,18 @@ function MainApp() {
     if (data.profile.currentWeight !== undefined && data.profile.currentWeight !== null) {
       const w = data.profile.currentWeight;
       setGlobalLoggedWeight(w);
-      // Seed the chart history only once (when it is still null)
-      setWeightHistory(prev => {
-        if (prev !== null) return prev; // already seeded — don't overwrite user's logged history
-        const sw = data.profile.startingWeight || w;
-        // Build a realistic-looking 6-day ramp from startingWeight toward current
-        const step = (w - sw) / 6;
-        return Array.from({ length: 7 }, (_, i) =>
-          parseFloat((sw + step * i).toFixed(1))
-        );
-      });
+      if (data.profile.weightHistory && Array.isArray(data.profile.weightHistory) && data.profile.weightHistory.length === 7) {
+        setWeightHistory(data.profile.weightHistory);
+      } else {
+        setWeightHistory(prev => {
+          if (prev !== null) return prev;
+          const sw = data.profile.startingWeight || w;
+          const step = (w - sw) / 6;
+          return Array.from({ length: 7 }, (_, i) =>
+            parseFloat((sw + step * i).toFixed(1))
+          );
+        });
+      }
     }
     if (data.loggedMealIds) setGlobalLoggedMeals(data.loggedMealIds);
     setUserProfile(prev => ({
@@ -788,6 +792,7 @@ function MainApp() {
       <StepTwoScreen 
         currentWeight={userBaseline.weight}
         height={userBaseline.height}
+        weightUnit={userBaseline.unit || userBaseline.weightUnit || 'kg'}
         onNext={(goalMetrics) => {
           if (goalMetrics) {
             setUserGoals(goalMetrics);
@@ -827,6 +832,7 @@ function MainApp() {
               weight: finalData.weight || userBaseline.weight,
               height: finalData.height || userBaseline.height,
               startingWeight: finalData.startingWeight || finalData.weight || userBaseline.startingWeight || userBaseline.weight || '70',
+              unit: finalData.weightUnit || userBaseline.unit || 'kg',
             });
             setUserGoals({
               activityLevel: finalData.activityLevel || userGoals.activityLevel,

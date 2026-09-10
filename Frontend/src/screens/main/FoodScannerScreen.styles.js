@@ -1,7 +1,10 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Dimensions, Platform } from 'react-native';
 
-const logoGreen = '#10B981';
-const baseColor = '#F8FAFC';
+export const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+
+// High-Contrast System Theme Setup Tokens
+export const logoGreen = '#10B981';
+export const baseColor = '#F8FAFC';
 
 export const getStyles = (theme, isDarkMode) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme?.background || '#F8FAFC' },

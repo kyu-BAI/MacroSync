@@ -1,7 +1,8 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet } from "react-native";
 
-const baseColor = "#F8FAFC";
-const logoGreen = "#10B981";
+// --- Flat Design Tokens ---
+export const baseColor = "#F8FAFC";
+export const logoGreen = "#10B981";
 
 export const getStyles = (theme) => StyleSheet.create({
   container: {

@@ -690,7 +690,7 @@ export default function WorkoutScreen({
               <View style={styles.workoutHeaderRow}>
                 <View style={styles.workoutTitleContainer}>
                   <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text style={styles.workoutDescriptionText} numberOfLines={2}>{workout.description}</Text>
+                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
                 </View>
               </View>
 

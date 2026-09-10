@@ -1,17 +1,21 @@
 import { StyleSheet, Platform } from 'react-native';
 
-const CONFIG = {
+// ==========================================
+// SYSTEM COLOR SCHEME ENVIRONMENT DESIGN SYSTEM
+// ==========================================
+export const CONFIG = {
   baseColor: '#F8FAFC',
   logoGreen: '#10B981',
   textDark: '#0F172A',
   textGrey: '#64748B',
-  borderItem: '#E2E8F0',
   textMuted: '#94A3B8',
-  bgPill: '#F1F5F9',
-  borderLight: '#E2E8F0'
+  borderLight: '#E2E8F0',
+  borderItem: '#E2E8F0',
+  bgPill: '#F1F5F9'
 };
 
-export const getStyles = (theme) => StyleSheet.create({
+export const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
+  // --- Structural Architecture Framework Bases ---
   container: { 
     flex: 1, 
     backgroundColor: theme?.background || CONFIG.baseColor 
@@ -52,6 +56,7 @@ export const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 10 
   },
   
+  // --- Main Panel Surfacings Cards UI Architecture Layers ---
   formCard: {
     backgroundColor: theme?.surface || CONFIG.baseColor,
     borderRadius: 28, 
@@ -71,6 +76,7 @@ export const getStyles = (theme) => StyleSheet.create({
     marginLeft: 4 
   },
   
+  // --- Grids Matrix Layout Systems & Badging Parameters Nodes ---
   segmentedGrid: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
@@ -150,6 +156,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: '#FFFFFF' 
   },
   
+  // --- Form Controls Inputs & Segmented Buttons Switch Panels Row Items ---
   targetSection: { 
     marginTop: 12, 
     borderTopWidth: 1.5, 
@@ -232,6 +239,7 @@ export const getStyles = (theme) => StyleSheet.create({
     paddingRight: 16 
   },
   
+  // --- Overlay Overrides Custom Modal Sheets Systems ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalFormCard: {
     width: '100%',
@@ -313,6 +321,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: '#CBD5E1',
   },
   
+  // --- Operational Lower Buttons Triggers Elements Base Setup ---
   buttonBase: { 
     paddingVertical: 14, 
     borderRadius: 22, 
@@ -340,6 +349,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: '#E2E8F0' 
   },
 
+  // --- Dynamic Suggestions & Validation Styles ---
   helperRow: {
     flexDirection: 'row',
     alignItems: 'center',

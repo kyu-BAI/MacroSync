@@ -1,10 +1,15 @@
 import { StyleSheet, Platform } from 'react-native';
 
-const ITEM_HEIGHT = 44;
-const baseColor = '#F8FAFC';
-const logoGreen = '#10B981';
+export const ITEM_HEIGHT = 54;
 
-export const getStyles = (theme) => StyleSheet.create({
+// Global Core Flat Design Tokens
+export const baseColor = '#F8FAFC';
+
+// Logo Corporate Branding Elements
+export const logoGreen = '#10B981';
+
+export const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
+  // --- BASE CONTAINER ARCHITECTURE ---
   container: {
     flex: 1,
     backgroundColor: theme?.background || baseColor,
@@ -16,6 +21,7 @@ export const getStyles = (theme) => StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 35 : 25,
   },
 
+  // --- TYPOGRAPHY HEADER SYSTEM ---
   headerSection: {
     alignItems: 'center',
     width: '100%',
@@ -46,6 +52,7 @@ export const getStyles = (theme) => StyleSheet.create({
     paddingHorizontal: 10,
   },
 
+  // --- SURFACE PANEL MATRIX ---
   formCard: {
     backgroundColor: theme?.surface || baseColor,
     borderRadius: 24,
@@ -66,6 +73,7 @@ export const getStyles = (theme) => StyleSheet.create({
     marginLeft: 4,
   },
 
+  // --- FORMS & SELECTION MATRIX ---
   inputGroup: {
     marginBottom: 14,
   },
@@ -115,6 +123,7 @@ export const getStyles = (theme) => StyleSheet.create({
     fontWeight: '700',
   },
 
+  // --- ALLERGENS SELECTION CHIPS ---
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -149,6 +158,7 @@ export const getStyles = (theme) => StyleSheet.create({
     fontWeight: '800',
   },
 
+  // --- FIXED NAVIGATION BOTTOM HOOD ---
   fixedFooter: {
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 24 : 16,
@@ -183,6 +193,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: '#E2E8F0',
   },
 
+  // --- POPUP SELECTOR INTERFACES ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   pickerModalCard: {
     backgroundColor: theme?.surface || baseColor,
@@ -250,6 +261,7 @@ export const getStyles = (theme) => StyleSheet.create({
     color: theme?.textPrimary || '#0F172A',
   },
 
+  // --- PREMIUM OVERLAY DIALOGUE (CONFIRMATION SHEET STYLE) ---
   confirmOverlay: {
     flex: 1,
     backgroundColor: 'rgba(26, 32, 44, 0.5)',

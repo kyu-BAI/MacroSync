@@ -174,7 +174,7 @@ export default function NotificationsScreen({ onTabChange, notifications: propNo
                   <PressableCard 
                     style={[
                       styles.notificationCard,
-                      !notif.read && [styles.unreadCard, { borderLeftWidth: 4, borderLeftColor: color }]
+                      !notif.read && styles.unreadCard
                     ]}
                     onPress={() => handleNotificationPress(notif.id)}
                   >
