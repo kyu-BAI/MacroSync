@@ -673,6 +673,30 @@ export default function DietRecipesScreen({
   const [dailyPlan, setDailyPlan] = useState([]);
   const [loadingMeals, setLoadingMeals] = useState(false);
 
+  const handleFetchFreshMeals = useCallback(async () => {
+    if (!userId) return;
+    setLoadingMeals(true);
+    try {
+      const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setDailyPlan(data);
+          const todayStr = new Date().toISOString().split('T')[0];
+          await AsyncStorage.setItem(`ms_meals_cache_${userId}`, JSON.stringify({
+            userId,
+            date: todayStr,
+            meals: data
+          }));
+        }
+      }
+    } catch (e) {
+      if (__DEV__) console.warn("Error fetching fresh AI meals:", e);
+    } finally {
+      setLoadingMeals(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1067,7 +1091,7 @@ export default function DietRecipesScreen({
 
             <Text style={styles.sectionLabelTitle}>Your AI Scheduled Meals</Text>
             <View style={styles.timelineContainer}>
-              {(!isCacheChecked || (isGeneratingMealPlan && planList.length === 0)) ? (
+              {(loadingMeals && (!dailyPlan || dailyPlan.length === 0)) ? (
                     <View style={{ gap: 12 }}>
                       {[0, 1, 2, 3].map((i) => (
                         <SkeletonCard
@@ -1077,7 +1101,7 @@ export default function DietRecipesScreen({
                         />
                       ))}
                     </View>
-                  ) : planList.length === 0 ? (
+                  ) : (!dailyPlan || dailyPlan.length === 0) ? (
                     <View
                       style={{
                         padding: 24,
@@ -1123,7 +1147,7 @@ export default function DietRecipesScreen({
                           flexDirection: "row",
                           alignItems: "center",
                         }}
-                        onPress={() => generateAIMealPlan(false)}
+                        onPress={handleFetchFreshMeals}
                         activeOpacity={0.8}
                       >
                         <Sparkles
@@ -1143,7 +1167,7 @@ export default function DietRecipesScreen({
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    planList.map((meal, index) => {
+                    dailyPlan.map((meal, index) => {
                       const mealCat = meal?.mealType || meal?.time || "";
                       const IconComponent = getMealIconComponent(mealCat);
                       const accentColor = getMealAccentColor(mealCat);

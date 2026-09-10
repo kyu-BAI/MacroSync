@@ -103,4 +103,16 @@ export const ThemeProvider = ({ children }) => {
   );
 };
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    return {
+      isDarkMode: false,
+      themeMode: 'light',
+      setThemeMode: () => {},
+      toggleTheme: () => {},
+      theme: lightPalette,
+    };
+  }
+  return context;
+};

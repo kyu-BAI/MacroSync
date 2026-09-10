@@ -22,7 +22,6 @@ import {
   UtensilsCrossed,
   BotMessageSquare,
   Home,
-  SportShoe,
   Settings,
   User,
   Bell,

@@ -80,7 +80,7 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
         <Animated.View
           style={[
             styles.pillContainer,
-            { transform: [{ scale: scaleRefs[tab.id] }] },
+            { transform: [{ scale: (scaleRefs && scaleRefs[tab.id]) ? scaleRefs[tab.id] : 1 }] },
           ]}
         >
           <tab.Icon
