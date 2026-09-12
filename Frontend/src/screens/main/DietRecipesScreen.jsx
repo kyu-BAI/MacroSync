@@ -13,6 +13,7 @@ import {
   Alert,
   Modal,
   Linking,
+  RefreshControl,
 } from "react-native";
 import {
   Search,
@@ -34,6 +35,7 @@ import {
   ShoppingBag,
   Maximize2,
   X,
+  RotateCcw,
 } from "lucide-react-native";
 import API_URL from "../config/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -48,6 +50,7 @@ import AILoadingModal from "../../components/AILoadingModal";
 import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
+import MapcnMap from "../../components/MapcnMap";
 import { WebView } from "react-native-webview";
 import { getStyles } from "./DietRecipesScreen.styles";
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
@@ -405,6 +408,27 @@ export default function DietRecipesScreen({
     }
   };
 
+  const mapMarkers = React.useMemo(() => {
+    return Object.keys(CITY_PROFILES).map((cityName) => {
+      const topDish = CITY_PROFILES[cityName]?.famousDishes?.[0];
+      return {
+        id: cityName,
+        name: cityName,
+        title: cityName,
+        lat: CITY_PROFILES[cityName].lat,
+        lng: CITY_PROFILES[cityName].lng,
+        subtitle: topDish ? `${topDish.emoji || '🍽️'} ${topDish.name}` : '',
+        active: cityName === selectedLocation,
+      };
+    });
+  }, [selectedLocation]);
+
+  const currentMapCenter = React.useMemo(() => {
+    return CITY_PROFILES[selectedLocation]
+      ? [CITY_PROFILES[selectedLocation].lng, CITY_PROFILES[selectedLocation].lat]
+      : [123.8854, 10.3157];
+  }, [selectedLocation]);
+
 
   const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -607,10 +631,10 @@ export default function DietRecipesScreen({
     const dFat = Math.round(targetFats * 0.25);
 
     return [
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, mealType: 'Breakfast', time: '7:30 AM', title: bTitle, calories: bKcal, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt} protein`, carbs: `${bCarb}g`, fats: `${bFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, mealType: 'Lunch', time: '12:30 PM', title: lTitle, calories: lKcal, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt} protein`, carbs: `${lCarb}g`, fats: `${lFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, mealType: 'Snack', time: '4:00 PM', title: sTitle, calories: sKcal, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt} protein`, carbs: `${sCarb}g`, fats: `${sFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, mealType: 'Dinner', time: '7:00 PM', title: dTitle, calories: dKcal, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt} protein`, carbs: `${dCarb}g`, fats: `${dFat}g` }
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, mealType: 'Breakfast', time: '8:00 AM', title: bTitle, calories: bKcal, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt}g`, carbs: `${bCarb}g`, fats: `${bFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, mealType: 'Lunch', time: '12:30 PM', title: lTitle, calories: lKcal, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt}g`, carbs: `${lCarb}g`, fats: `${lFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, mealType: 'Snack', time: '4:00 PM', title: sTitle, calories: sKcal, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt}g`, carbs: `${sCarb}g`, fats: `${sFat}g` },
+      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, mealType: 'Dinner', time: '7:30 PM', title: dTitle, calories: dKcal, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt}g`, carbs: `${dCarb}g`, fats: `${dFat}g` }
     ];
   };
 
@@ -673,91 +697,149 @@ export default function DietRecipesScreen({
   const [dailyPlan, setDailyPlan] = useState([]);
   const [loadingMeals, setLoadingMeals] = useState(false);
 
-  const handleFetchFreshMeals = useCallback(async () => {
-    if (!userId) return;
+  const goalWeight = guestGoals?.goalWeight || guestBaseline?.targetWeight || '';
+  const currentWeight = guestBaseline?.weight || '';
+  const userGoal = guestGoals?.goal || '';
+
+  const handleFetchFreshMeals = useCallback(async (force = false) => {
     setLoadingMeals(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const targetId = userId || 'guest';
+    const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
+
+    if (force) {
+      try { await AsyncStorage.removeItem(CACHE_KEY); } catch (_) {}
+    }
+
     try {
-      const res = await fetch(`${API_URL}/meals/recommend/${userId}`);
+      const params = new URLSearchParams();
+      if (goalWeight) params.append('goal_weight', String(goalWeight));
+      if (userGoal) params.append('goal', String(userGoal));
+      if (currentWeight) params.append('current_weight', String(currentWeight));
+      params.append('date', todayStr);
+      params.append('_t', String(Date.now()));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(`${API_URL}/meals/recommend/${targetId}?${params.toString()}`, { 
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          setDailyPlan(data);
-          const todayStr = new Date().toISOString().split('T')[0];
-          await AsyncStorage.setItem(`ms_meals_cache_${userId}`, JSON.stringify({
-            userId,
-            date: todayStr,
-            meals: data
-          }));
+          const hasOldBuggyTitles = data.some(m =>
+            String(m.title || '').includes('Pinoy Garlic Chicken Breast & Kamote Hash') ||
+            String(m.title || '').includes('Pinoy Ahos Dughan sa Manok') ||
+            String(m.title || '').includes('Grilled Skinless Chicken Inasal & Kangkong') ||
+            String(m.title || '').includes('Sinugbang Skinless Manok Bisaya Inasal') ||
+            String(m.title || '').includes('Roasted Garlic Kamote & Toasted Sesame Dip') ||
+            String(m.title || '').includes('Roasted Ahos Kamote & Toasted Sesame Dip') ||
+            String(m.title || '').includes('Pan-Seared Lean Pork Tenderloin with Steamed Squash') ||
+            String(m.title || '').includes('Sinugbang Lean Baboy Tenderloin ug Luto nga Squash')
+          );
+
+          if (!hasOldBuggyTitles) {
+            setDailyPlan(data);
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+              userId: targetId,
+              date: todayStr,
+              goalWeight: String(goalWeight || ''),
+              goal: String(userGoal || ''),
+              meals: data
+            }));
+            // 🧹 Clean up yesterday's cache to prevent storage bloat
+            try {
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayStr = yesterday.toISOString().split('T')[0];
+              await AsyncStorage.removeItem(`ms_meals_cache_${targetId}_${yesterdayStr}`);
+            } catch (_) {}
+            return;
+          }
         }
       }
+
+      // If network returns empty or non-200, fallback to dynamic daily plan
+      const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
+      if (localPlan && localPlan.length > 0) {
+        setDailyPlan(localPlan);
+        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+          userId: targetId,
+          date: todayStr,
+          goalWeight: String(goalWeight || ''),
+          goal: String(userGoal || ''),
+          meals: localPlan
+        }));
+      }
     } catch (e) {
-      if (__DEV__) console.warn("Error fetching fresh AI meals:", e);
+      if (__DEV__) console.warn("Notice: Using local rotating dynamic plan:", e?.message || e);
+      const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
+      if (localPlan && localPlan.length > 0) {
+        setDailyPlan(localPlan);
+      }
     } finally {
       setLoadingMeals(false);
     }
-  }, [userId]);
+  }, [userId, goalWeight, userGoal, currentWeight, selectedLocation, targetCalories]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadCachedOrFetchMeals = async () => {
-      if (!userId) return;
-
       const todayStr = new Date().toISOString().split('T')[0];
-      const CACHE_KEY = `ms_meals_cache_${userId}`;
+      const targetId = userId || 'guest';
+      const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
 
       try {
-        // 1. Check cache first — show instantly if not stale/generic
+        // 🧹 One-time migration: remove old undated cache keys
+        try { await AsyncStorage.removeItem(`ms_meals_cache_${targetId}`); } catch (_) {}
+
+        // 1. Check today's date-specific cache
         const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
+          const isSameGoalWeight = String(parsed.goalWeight || '') === String(goalWeight || '');
+          const isSameGoal = String(parsed.goal || '') === String(userGoal || '');
+
+          if (isSameGoalWeight && isSameGoal && Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             const hasGenericTitle = parsed.meals.some(m => String(m.title || '').includes('Allergen-Free Pinoy High-Protein'));
-            if (!hasGenericTitle && isMounted) {
+            const hasOldBuggyTitles = parsed.meals.some(m =>
+              String(m.title || '').includes('Pinoy Garlic Chicken Breast & Kamote Hash') ||
+              String(m.title || '').includes('Pinoy Ahos Dughan sa Manok') ||
+              String(m.title || '').includes('Grilled Skinless Chicken Inasal & Kangkong') ||
+              String(m.title || '').includes('Sinugbang Skinless Manok Bisaya Inasal') ||
+              String(m.title || '').includes('Roasted Garlic Kamote & Toasted Sesame Dip') ||
+              String(m.title || '').includes('Roasted Ahos Kamote & Toasted Sesame Dip') ||
+              String(m.title || '').includes('Pan-Seared Lean Pork Tenderloin with Steamed Squash') ||
+              String(m.title || '').includes('Sinugbang Lean Baboy Tenderloin ug Luto nga Squash')
+            );
+
+            // If it's a valid fresh meal plan without the old buggy repetitive titles, use it!
+            if (!hasGenericTitle && !hasOldBuggyTitles && isMounted) {
               setDailyPlan(parsed.meals);
-              setLoadingMeals(false); // Instant load
+              setLoadingMeals(false);
+              return;
             }
-            // If cache is from today and valid, skip network fetch
-            if (parsed.date === todayStr && !hasGenericTitle) return;
           }
         }
 
-        // If no cached plan exists for today, show loading modal only for initial generation
-        if (isMounted && (!dailyPlan || dailyPlan.length === 0)) {
-          setLoadingMeals(true);
-        }
-
-        // 2. Fetch fresh from server to ensure up-to-date allergy safety & analytics
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(`${API_URL}/meals/recommend/${userId}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            if (isMounted) {
-              setDailyPlan(data);
-            }
-            // Save fresh data to user-specific cache
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-              userId,
-              date: todayStr,
-              meals: data
-            }));
-          }
+        // 2. Old bug detected, or no cache for today — immediately generate a fresh plan!
+        if (isMounted) {
+          handleFetchFreshMeals(true);
         }
       } catch (err) {
-        if (__DEV__) console.log("MEAL RECOMMENDATION FETCH ERROR:", err);
-      } finally {
-        if (isMounted) setLoadingMeals(false);
+        if (__DEV__) console.log("MEAL CACHE VERIFICATION NOTICE:", err);
+        if (isMounted) handleFetchFreshMeals(true);
       }
     };
 
     loadCachedOrFetchMeals();
 
     return () => { isMounted = false; };
-  }, [userId]);
+  }, [userId, goalWeight, userGoal, currentWeight]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -1022,6 +1104,14 @@ export default function DietRecipesScreen({
         style={styles.container} 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loadingMeals}
+            onRefresh={() => handleFetchFreshMeals(true)}
+            tintColor={logoGreen}
+            colors={[logoGreen]}
+          />
+        }
       >
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
@@ -1089,7 +1179,9 @@ export default function DietRecipesScreen({
               </View>
             </View>
 
-            <Text style={styles.sectionLabelTitle}>Your AI Scheduled Meals</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 4 }}>
+              <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>Your AI Scheduled Meals</Text>
+            </View>
             <View style={styles.timelineContainer}>
               {(loadingMeals && (!dailyPlan || dailyPlan.length === 0)) ? (
                     <View style={{ gap: 12 }}>
@@ -1366,104 +1458,20 @@ export default function DietRecipesScreen({
                 </ScrollView>
               </View>
 
-              {/* REAL INTERACTIVE OPENSTREETMAP WEBVIEW */}
+              {/* mapcn MODERN MAP (MapLibre GL + CARTO Dark Matter / Positron) */}
               <View style={styles.staticMapContainer}>
-                <WebView
-                  originWhitelist={['*']}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  mixedContentMode="always"
-                  source={{
-                    html: `
-                      <!DOCTYPE html>
-                      <html>
-                      <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                        <style>
-                          * { -webkit-tap-highlight-color: transparent; }
-                          body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
-                          #map { height: 100%; width: 100%; }
-                          .leaflet-control-attribution { display: none !important; }
-                          ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
-                          .custom-div-icon {
-                            background: transparent !important;
-                            border: none !important;
-                          }
-                          .city-marker {
-                            background: #10B981;
-                            color: #FFFFFF;
-                            padding: 6px 12px;
-                            border-radius: 16px;
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                            font-size: 11px;
-                            font-weight: 800;
-                            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
-                            border: 2px solid #FFFFFF;
-                            white-space: nowrap;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            transition: all 0.2s ease;
-                          }
-                          .city-marker.active {
-                            background: #059669;
-                            border-color: #A7F3D0;
-                            box-shadow: 0 0 18px rgba(16, 185, 129, 0.9);
-                          }
-                        </style>
-                      </head>
-                      <body>
-                        <div id="map"></div>
-                        <script>
-                          var selectedLoc = "${selectedLocation}";
-                          var cityProfiles = ${JSON.stringify(CITY_PROFILES)};
-                          var activeCoords = cityProfiles[selectedLoc] ? [cityProfiles[selectedLoc].lat, cityProfiles[selectedLoc].lng] : [10.3157, 123.8854];
-
-                          var map = L.map('map', { 
-                            zoomControl: true, 
-                            attributionControl: false,
-                            dragging: true, 
-                            touchZoom: true, 
-                            scrollWheelZoom: true, 
-                            doubleClickZoom: true 
-                          }).setView(activeCoords, 9);
-                          
-                          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 18
-                          }).addTo(map);
-
-                          Object.keys(cityProfiles).forEach(function(cityName) {
-                            var prof = cityProfiles[cityName];
-                            var isSelected = cityName === selectedLoc;
-                            var customIcon = L.divIcon({
-                              className: 'custom-div-icon',
-                              html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + cityName + "</div>",
-                              iconSize: [110, 32],
-                              iconAnchor: [55, 16]
-                            });
-
-                            var marker = L.marker([prof.lat, prof.lng], { icon: customIcon }).addTo(map);
-                            marker.on('click', function() {
-                              if (window.ReactNativeWebView) {
-                                window.ReactNativeWebView.postMessage(cityName);
-                              }
-                            });
-                          });
-                        </script>
-                      </body>
-                      </html>
-                    `
-                  }}
-                  onMessage={(event) => {
-                    const cityName = event.nativeEvent.data;
+                <MapcnMap
+                  center={currentMapCenter}
+                  zoom={9}
+                  markers={mapMarkers}
+                  onMarkerPress={(cityName) => {
                     if (cityName && locations.includes(cityName)) {
                       setSelectedLocation(cityName);
                     }
                   }}
-                  style={{ flex: 1, backgroundColor: 'transparent' }}
+                  cardContainer={false}
+                  height="100%"
+                  style={{ width: '100%', height: '100%' }}
                 />
               </View>
 
@@ -1775,93 +1783,21 @@ export default function DietRecipesScreen({
             </TouchableOpacity>
           </View>
 
-          {/* FULLSCREEN INTERACTIVE OPENSTREETMAP WEBVIEW */}
+          {/* FULLSCREEN mapcn MODERN MAP (MapLibre GL + CARTO Dark Matter / Positron) */}
           <View style={{ flex: 1 }}>
-            <WebView
-              originWhitelist={['*']}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              mixedContentMode="always"
-              source={{
-                html: `
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                    <style>
-                      * { -webkit-tap-highlight-color: transparent; }
-                      body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: ${isDarkMode ? '#0F172A' : '#F1F5F9'}; }
-                      #map { height: 100%; width: 100%; }
-                      .leaflet-control-attribution { display: none !important; }
-                      ${isDarkMode ? '.leaflet-tile { filter: brightness(0.65) invert(1) contrast(1.3) hue-rotate(200deg); }' : ''}
-                      .city-marker {
-                        background: #10B981;
-                        color: white;
-                        padding: 7px 14px;
-                        border-radius: 18px;
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        font-size: 13px;
-                        font-weight: 800;
-                        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.5);
-                        border: 2.5px solid white;
-                        white-space: nowrap;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                      }
-                      .city-marker.active {
-                        background: #059669;
-                        border-color: #A7F3D0;
-                        box-shadow: 0 0 20px rgba(16, 185, 129, 0.9);
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div id="map"></div>
-                    <script>
-                      var selectedLoc = "${selectedLocation}";
-                      var cityProfiles = ${JSON.stringify(CITY_PROFILES)};
-                      var activeCoords = cityProfiles[selectedLoc] ? [cityProfiles[selectedLoc].lat, cityProfiles[selectedLoc].lng] : [10.3157, 123.8854];
-
-                      var map = L.map('map', { zoomControl: true, attributionControl: false }).setView(activeCoords, 9);
-                      
-                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 18
-                      }).addTo(map);
-
-                      Object.keys(cityProfiles).forEach(function(cityName) {
-                        var prof = cityProfiles[cityName];
-                        var isSelected = cityName === selectedLoc;
-                        var customIcon = L.divIcon({
-                          className: 'custom-div-icon',
-                          html: "<div class='city-marker " + (isSelected ? "active" : "") + "'>📍 " + cityName + "</div>",
-                          iconSize: [110, 36],
-                          iconAnchor: [55, 18]
-                        });
-
-                        var marker = L.marker([prof.lat, prof.lng], { icon: customIcon }).addTo(map);
-                        marker.on('click', function() {
-                          if (window.ReactNativeWebView) {
-                            window.ReactNativeWebView.postMessage(cityName);
-                          }
-                        });
-                      });
-                    </script>
-                  </body>
-                  </html>
-                `
-              }}
-              onMessage={(event) => {
-                const cityName = event.nativeEvent.data;
+            <MapcnMap
+              center={currentMapCenter}
+              zoom={9}
+              markers={mapMarkers}
+              onMarkerPress={(cityName) => {
                 if (cityName && locations.includes(cityName)) {
                   setSelectedLocation(cityName);
                   setShowFullMapModal(false);
                 }
               }}
-              style={{ flex: 1, backgroundColor: 'transparent' }}
+              cardContainer={false}
+              height="100%"
+              style={{ flex: 1, width: '100%' }}
             />
           </View>
 

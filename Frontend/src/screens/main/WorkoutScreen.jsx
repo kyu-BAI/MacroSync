@@ -10,7 +10,9 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import {
   Flame,
   Clock,
@@ -26,6 +28,7 @@ const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import API_URL from "../config/api";
+import { getExerciseMedia } from "../../data/exercises_index";
 import {
   addToSyncQueue,
   updateCachedDashboardField,
@@ -54,29 +57,20 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   }
 };
 
-const getExerciseSource = (exerciseName) => {
-  if (!exerciseName) return null;
-  const name = exerciseName.toLowerCase();
-  
-  // Custom local GIF / image assets can be added to Frontend/assets/workouts/ and required here:
-  // if (name.includes('wall')) return require('../../assets/workouts/wall_pushups.gif');
-
-  if (name.includes('push') || name.includes('wall')) {
-    return 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=600&q=80';
-  }
-  if (name.includes('squat')) {
-    return 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?auto=format&fit=crop&w=600&q=80';
-  }
-  if (name.includes('plank') || name.includes('core') || name.includes('hold')) {
-    return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
-  }
-  if (name.includes('jack') || name.includes('jump') || name.includes('cardio') || name.includes('burpee')) {
-    return 'https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?auto=format&fit=crop&w=600&q=80';
-  }
-  if (name.includes('lunge')) {
-    return 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=600&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80';
+// Resolves exercise media (GIF + instructions + image) from the exercises dataset
+const enrichTutorialWithDataset = (tutorial, index = 0, intensity = 'Moderate') => {
+  const media = getExerciseMedia(tutorial?.name, index, intensity);
+  return {
+    ...tutorial,
+    gif_url: tutorial?.gif_url || media?.gif_url,
+    image_url: tutorial?.image_url || media?.image_url,
+    // Use dataset step-by-step instructions if not already set
+    instruction_steps: (Array.isArray(tutorial?.instruction_steps) && tutorial.instruction_steps.length > 0)
+      ? tutorial.instruction_steps
+      : (media?.instruction_steps || []),
+    body_part: tutorial?.body_part || media?.body_part,
+    target: tutorial?.target || media?.target,
+  };
 };
 
 const DEFAULT_WORKOUT_ROUTINES = [
@@ -189,6 +183,9 @@ export default function WorkoutScreen({
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [mediaType, setMediaType] = useState('gif'); // 'gif' | 'image'
+  const [isMediaLoading, setIsMediaLoading] = useState(true);
+  const [mediaLoadError, setMediaLoadError] = useState(false);
 
   // --- REST TIMER STATE ---
   const [restTimer, setRestTimer] = useState(null);
@@ -311,35 +308,40 @@ export default function WorkoutScreen({
 
     let tutorials = routine.tutorials;
     if (!Array.isArray(tutorials) || tutorials.length === 0) {
-      const rTitle = routine.title || 'Home Workout';
       tutorials = [
         {
-          name: `${rTitle} - Warm-up & Prep`,
+          name: "Jumping Jacks",
           target: "3 Sets x 45 Seconds",
           setup: "Stand tall in an open area with knees slightly bent and core engaged.",
-          form: "Maintain steady breathing. Keep movements smooth, controlled, and engage your core throughout."
+          form: "Maintain steady breathing. Jump feet out while raising arms overhead."
         },
         {
-          name: `${rTitle} - Main Power Set`,
+          name: "Bodyweight Squat",
           target: "4 Sets x 12 Reps",
           setup: "Position your feet shoulder-width apart, spine aligned and chest open.",
-          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles at the top."
+          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles."
         },
         {
-          name: `${rTitle} - Burnout & Cool-down`,
+          name: "Plank Hold",
           target: "2 Sets x 60 Seconds",
           setup: "Lower down onto your yoga mat or clean floor, keeping hands aligned with shoulders.",
-          form: "Hold steady isometric tension, breathing slowly into your diaphragm to regulate heart rate."
+          form: "Hold steady isometric tension, breathing slowly into your diaphragm."
         }
       ];
     }
 
+    // ✅ Enrich every tutorial step with GIF animation + static image + step-by-step instructions from exercises dataset
+    const enrichedTutorials = tutorials.map((tut, idx) => enrichTutorialWithDataset(tut, idx, routine.intensity));
+
     setActiveRoutine({
       ...routine,
-      tutorials,
+      tutorials: enrichedTutorials,
       caloriesBurn: routine.caloriesBurn || routine.caloriesBurned || 200
     });
     setCurrentStepIndex(0);
+    setMediaType('gif');
+    setIsMediaLoading(true);
+    setMediaLoadError(false);
   };
 
   const handleExitWorkout = () => {
@@ -363,6 +365,8 @@ export default function WorkoutScreen({
   const handleNextStep = async () => {
     if (currentStepIndex < activeRoutine?.tutorials?.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
+      setIsMediaLoading(true);
+      setMediaLoadError(false);
     } else {
       if (!userId) {
         showAlert("Authentication Error", "You must be logged in to log workouts.");
@@ -511,7 +515,7 @@ export default function WorkoutScreen({
             <View style={styles.playerMainCard}>
               
               {/* TUTORIAL STATUS PILL */}
-              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ alignItems: 'center', marginBottom: 8 }}>
                 <View style={[styles.liveActivityBadge, { position: 'relative', top: 0, left: 0 }]}>
                   <View style={styles.pulseDot} />
                   <Text style={styles.liveBadgeText}>
@@ -520,15 +524,35 @@ export default function WorkoutScreen({
                 </View>
               </View>
 
-              {/* EXERCISE TITLE & METRIC SCORES */}
-              <Text style={[styles.playerExerciseTitle, { textAlign: 'center', fontSize: 22, fontWeight: '900', marginBottom: 10 }]}>
+              {/* EXERCISE TITLE */}
+              <Text style={[styles.playerExerciseTitle, { textAlign: 'center', fontSize: 20, fontWeight: '900', marginBottom: 8 }]}>
                 {activeRoutine.tutorials[currentStepIndex].name}
               </Text>
+
+              {/* MUSCLE TARGET CHIPS */}
+              {(activeRoutine.tutorials[currentStepIndex].body_part || activeRoutine.tutorials[currentStepIndex].target) && (
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                  {activeRoutine.tutorials[currentStepIndex].body_part && (
+                    <View style={{ backgroundColor: 'rgba(139,92,246,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6', textTransform: 'capitalize' }}>
+                        💪 {activeRoutine.tutorials[currentStepIndex].body_part}
+                      </Text>
+                    </View>
+                  )}
+                  {activeRoutine.tutorials[currentStepIndex].target && (
+                    <View style={{ backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', textTransform: 'capitalize' }}>
+                        🎯 {activeRoutine.tutorials[currentStepIndex].target}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
               
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 <View style={styles.targetMetricChipBox}>
                   <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target}</Text>
+                  <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target || activeRoutine.tutorials[currentStepIndex].sets || ''}</Text>
                 </View>
 
                 <TouchableOpacity 
@@ -545,31 +569,157 @@ export default function WorkoutScreen({
 
               <View style={styles.playerGlassDivider} />
 
-              {/* EXPANDED INSTRUCTION MANUAL TEXTS */}
+              {/* 🎥 EXERCISE ANIMATED GIF & HD IMAGE from exercises-dataset */}
               <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
-                <View style={{
-                  backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
-                  borderWidth: 1.2,
-                  borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
-                }}>
-                  <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>How to Set Up:</Text>
-                  <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
-                </View>
-                
-                <View style={{
-                  backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
-                  borderWidth: 1.2,
-                  borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
-                }}>
-                  <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>Proper Execution Form:</Text>
-                  <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
-                </View>
+                {(() => {
+                  const currentTut = activeRoutine.tutorials[currentStepIndex];
+                  const hasMedia = currentTut?.gif_url || currentTut?.image_url;
+                  if (!hasMedia) return null;
+
+                  const displayUri = (mediaType === 'image' || mediaLoadError) 
+                    ? (currentTut.image_url || currentTut.gif_url)
+                    : (currentTut.gif_url || currentTut.image_url);
+
+                  return (
+                    <View style={{ alignItems: 'center', marginBottom: 14 }}>
+                      <View style={{
+                        width: '100%',
+                        height: 220,
+                        borderRadius: 18,
+                        overflow: 'hidden',
+                        backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 1.5,
+                        borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                        position: 'relative'
+                      }}>
+                        {/* Loading Spinner overlay while media buffers */}
+                        {isMediaLoading && (
+                          <View style={{
+                            position: 'absolute',
+                            zIndex: 2,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isDarkMode ? 'rgba(15,23,42,0.6)' : 'rgba(255,255,255,0.7)',
+                            width: '100%',
+                            height: '100%'
+                          }}>
+                            <ActivityIndicator size="large" color={logoGreen} />
+                            <Text style={{ fontSize: 11, color: theme?.textSecondary || '#64748B', marginTop: 8, fontWeight: '600' }}>
+                              Loading Exercise Tutorial...
+                            </Text>
+                          </View>
+                        )}
+
+                        <ExpoImage
+                          source={{ uri: displayUri }}
+                          placeholder={{ uri: currentTut.image_url }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="contain"
+                          cachePolicy="memory-disk"
+                          transition={200}
+                          autoplay={true}
+                          onLoadStart={() => setIsMediaLoading(true)}
+                          onLoad={() => setIsMediaLoading(false)}
+                          onError={() => {
+                            setIsMediaLoading(false);
+                            setMediaLoadError(true);
+                          }}
+                        />
+                      </View>
+
+                      {/* Interactive Media Control Bar */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 8 }}>
+                        <Text style={{ fontSize: 10, color: theme?.textSecondary || '#94A3B8' }}>
+                          {mediaType === 'gif' && !mediaLoadError ? '🎬 Animated GIF' : '📷 HD Diagram'} · Gym Visual
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <TouchableOpacity
+                            onPress={() => { setMediaType('gif'); setMediaLoadError(false); setIsMediaLoading(true); }}
+                            style={{
+                              paddingHorizontal: 9,
+                              paddingVertical: 4,
+                              borderRadius: 10,
+                              backgroundColor: mediaType === 'gif' && !mediaLoadError ? logoGreen : (isDarkMode ? '#334155' : '#E2E8F0')
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: mediaType === 'gif' && !mediaLoadError ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }}>
+                              Loop GIF
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => { setMediaType('image'); setIsMediaLoading(true); }}
+                            style={{
+                              paddingHorizontal: 9,
+                              paddingVertical: 4,
+                              borderRadius: 10,
+                              backgroundColor: mediaType === 'image' || mediaLoadError ? logoGreen : (isDarkMode ? '#334155' : '#E2E8F0')
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: mediaType === 'image' || mediaLoadError ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }}>
+                              HD Still
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* STEP-BY-STEP INSTRUCTIONS from exercises dataset */}
+                {Array.isArray(activeRoutine.tutorials[currentStepIndex].instruction_steps) &&
+                  activeRoutine.tutorials[currentStepIndex].instruction_steps.length > 0 ? (
+                  <View style={{
+                    backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 12,
+                    borderWidth: 1.2,
+                    borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
+                  }}>
+                    <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 10 }]}>📋 Step-by-Step Tutorial:</Text>
+                    {activeRoutine.tutorials[currentStepIndex].instruction_steps.map((step, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <View style={{
+                          width: 24, height: 24, borderRadius: 12,
+                          backgroundColor: logoGreen,
+                          alignItems: 'center', justifyContent: 'center',
+                          marginRight: 10, marginTop: 1, flexShrink: 0
+                        }}>
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{idx + 1}</Text>
+                        </View>
+                        <Text style={[styles.instructionParagraphText, { flex: 1 }]}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  // Fallback to old setup/form text if no dataset steps
+                  <>
+                    {activeRoutine.tutorials[currentStepIndex].setup ? (
+                      <View style={{
+                        backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
+                        borderRadius: 16, padding: 16, marginBottom: 12,
+                        borderWidth: 1.2, borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
+                      }}>
+                        <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>How to Set Up:</Text>
+                        <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
+                      </View>
+                    ) : null}
+                    {activeRoutine.tutorials[currentStepIndex].form ? (
+                      <View style={{
+                        backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
+                        borderRadius: 16, padding: 16, marginBottom: 12,
+                        borderWidth: 1.2, borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
+                      }}>
+                        <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>Proper Execution Form:</Text>
+                        <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                )}
               </ScrollView>
 
               <View style={styles.playerGlassDivider} />
@@ -580,7 +730,11 @@ export default function WorkoutScreen({
                   <TouchableOpacity 
                     style={styles.playerSecondaryNeuActionBtn} 
                     activeOpacity={0.8}
-                    onPress={() => setCurrentStepIndex(currentStepIndex - 1)}
+                    onPress={() => {
+                      setCurrentStepIndex(currentStepIndex - 1);
+                      setIsMediaLoading(true);
+                      setMediaLoadError(false);
+                    }}
                   >
                     <RotateCcw color={theme?.textSecondary || "#64748B"} size={16} style={{ marginRight: 4 }} />
                     <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
@@ -609,6 +763,14 @@ export default function WorkoutScreen({
         style={styles.container} 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isGeneratingWorkout}
+            onRefresh={handleRegenerateWorkouts}
+            tintColor={logoGreen}
+            colors={[logoGreen]}
+          />
+        }
       >
         {/* HEADER BRANDING SECTION */}
         <View style={styles.header}>
@@ -734,6 +896,20 @@ export default function WorkoutScreen({
                   </View>
                 </View>
               </View>
+
+              {/* EXERCISE STEPS PREVIEW */}
+              {Array.isArray(workout.tutorials) && workout.tutorials.length > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: logoGreen }}>🎬 Animated GIF Tutorials</Text>
+                  </View>
+                  {workout.tutorials.slice(0, 3).map((tut, tIdx) => (
+                    <Text key={tIdx} style={{ fontSize: 11, color: theme?.textSecondary || '#64748B' }}>
+                      {tut.name}{tIdx < Math.min(workout.tutorials.length, 3) - 1 ? ' •' : ''}
+                    </Text>
+                  ))}
+                </View>
+              )}
 
               {/* LAUNCH BUTTON */}
               <TouchableOpacity 

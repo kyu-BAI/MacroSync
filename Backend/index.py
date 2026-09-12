@@ -920,25 +920,69 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
 
             new_title = title
             import re
-            for cat in triggered_categories:
-                repls = ALLERGEN_MAP[cat]["title_replacements"]
-                for old_t, new_t in repls:
-                    if old_t.lower() in new_title.lower():
-                        new_title = re.sub(r'\b' + re.escape(old_t) + r'\b', new_t, new_title, flags=re.IGNORECASE)
+            
+            # Check if the title itself contains any of the triggered allergens
+            title_contains_allergen = any(has_allergen(title, ALLERGEN_MAP[cat]["keywords"]) for cat in triggered_categories)
+            
+            if title_contains_allergen:
+                # Attempt word replacement first (e.g. Bangus -> Chicken Breast, Shrimp -> Lean Pork)
+                for cat in triggered_categories:
+                    repls = ALLERGEN_MAP[cat]["title_replacements"]
+                    for old_t, new_t in repls:
                         if old_t.lower() in new_title.lower():
-                            new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
+                            new_title = re.sub(r'\b' + re.escape(old_t) + r'\b', new_t, new_title, flags=re.IGNORECASE)
+                            if old_t.lower() in new_title.lower():
+                                new_title = re.sub(re.escape(old_t), new_t, new_title, flags=re.IGNORECASE)
 
-            if new_title == title or any(has_allergen(new_title, ALLERGEN_MAP[cat]["keywords"]) for cat in triggered_categories):
-                m_type = meal_copy.get('mealType', 'Breakfast')
-                if "Breakfast" in m_type:
-                    new_title = "Pinoy Garlic Chicken Breast & Kamote Hash"
-                elif "Lunch" in m_type:
-                    new_title = "Grilled Skinless Chicken Inasal & Kangkong Stir-Fry"
-                elif "Snack" in m_type:
-                    new_title = "Roasted Garlic Kamote & Toasted Sesame Dip"
-                else:
-                    new_title = "Pan-Seared Lean Pork Tenderloin with Steamed Squash"
+                # If the title STILL contains an allergen word after substitution, pick from a rotating safe Filipino dish pool
+                if any(has_allergen(new_title, ALLERGEN_MAP[cat]["keywords"]) for cat in triggered_categories):
+                    day_idx = datetime.now(timezone(timedelta(hours=8))).weekday()
+                    m_type = meal_copy.get('mealType', 'Breakfast')
+                    
+                    ROTATING_SAFE_MEALS = {
+                        "Breakfast": [
+                            "Ginisang Sayote with Ground Lean Chicken & Steamed Kamote",
+                            "Chicken Breast Tocino with Garlic Rice & Kamatis",
+                            "Skinless Chicken Longganisa with Sautéed Malunggay",
+                            "Pinoy Shredded Chicken Arroz Caldo with Crispy Garlic",
+                            "Grilled Pork Tenderloin Tapa with Garlic Rice & Sliced Tomato",
+                            "Sautéed Kalabasa & Minced Chicken Hash",
+                            "Native Garlic Chicken Fillet with Sweet Potato Wedges"
+                        ],
+                        "Lunch": [
+                            "Chicken Breast Tinola with Green Papaya & Dahon ng Sili",
+                            "Pork Sinigang sa Kamias with Kangkong & Labanos",
+                            "Grilled Chicken Inasal Skewers with Achara & Brown Rice",
+                            "Ginisang Monggo with Malunggay & Lean Pork Tenderloin",
+                            "Chicken Pochero with Saging na Saba & Baguio Beans",
+                            "Bicol Express with Lean Pork & Fresh Coconut Milk",
+                            "Chicken Binakol with Young Coconut Water & Sayote"
+                        ],
+                        "Snack": [
+                            "Boiled Sweet Corn on the Cob with a Pinch of Sea Salt",
+                            "Steamed Banana Saba with Calamansi Honey Drizzle",
+                            "Baked Kamote Wedges with Garlic Herb Dip",
+                            "Ginataang Bilo-Bilo with Kamote & Langka",
+                            "Roasted Pumpkin Seeds with Fresh Calamansi Cooler",
+                            "Fresh Mango Slices with Chia Seeds",
+                            "Steamed Yellow Corn with Fresh Coconut Shreds"
+                        ],
+                        "Dinner": [
+                            "Pan-Roasted Chicken Breast with Ginisang Sitaw",
+                            "Lean Pork Nilaga with Pechay, Potatoes & Corn",
+                            "Chicken Afritada with Carrots & Sweet Bell Peppers",
+                            "Pork Bistek Tagalog with Sweet Onion Rings & Rice",
+                            "Ginisang Ampalaya with Lean Chicken Strips",
+                            "Chicken Pastel with Mushrooms & Diced Carrots",
+                            "Sinigang na Baka with Kangkong & String Beans"
+                        ]
+                    }
+                    m_key = "Breakfast" if "breakfast" in m_type.lower() else ("Lunch" if "lunch" in m_type.lower() else ("Snack" if "snack" in m_type.lower() else "Dinner"))
+                    pool = ROTATING_SAFE_MEALS.get(m_key, ROTATING_SAFE_MEALS["Dinner"])
+                    new_title = pool[day_idx % len(pool)]
 
+            # If the title was already free of allergens (allergen was only in ingredients like patis/toyo),
+            # KEEP the original delicious AI-generated recipe title!
             meal_copy["title"] = new_title
 
             clean_ing = []
@@ -2540,96 +2584,328 @@ def recommend_workouts(user_id: str):
         except Exception as ai_err:
             print("WORKOUT RECOMMENDATION FALLBACK TRIGGERED:", ai_err)
         
-        # High-quality personalized fallback workouts tailored to user goal
-        return [
-            {
-                "id": 1,
-                "title": f"Light {goal} Mobility Flow",
-                "intensity": "Light",
-                "duration": "15 mins",
-                "targetGains": "Active Recovery & Flexibility",
-                "caloriesBurn": 130,
-                "description": f"Gentle low-impact mobility flow to activate your muscles and flexibility.",
-                "tutorials": [
-                    {
-                        "name": "Arm Circles & Torso Twists",
-                        "target": "3 Sets x 45 Seconds",
-                        "setup": "Stand with feet shoulder-width apart and extend arms out wide.",
-                        "form": "Make small controlled circles with your arms, then twist smoothly side to side."
-                    },
-                    {
-                        "name": "Bodyweight Incline Push-Ups",
-                        "target": "3 Sets x 10 Reps",
-                        "setup": "Place hands against a sturdy wall or elevated surface slightly wider than shoulders.",
-                        "form": "Lower your chest under control while keeping your body in a straight plank line."
-                    },
-                    {
-                        "name": "Cat-Cow & Child's Pose Stretch",
-                        "target": "2 Sets x 60 Seconds",
-                        "setup": "Kneel on a soft mat on hands and knees.",
-                        "form": "Arch your spine gently upward on exhales and dip down on inhales."
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "title": f"Full Body {goal} Conditioning",
-                "intensity": "Moderate",
-                "duration": "25 mins",
-                "targetGains": "Lean Muscle & Stamina",
-                "caloriesBurn": 240,
-                "description": f"Balanced bodyweight circuit to build strength and daily endurance.",
-                "tutorials": [
-                    {
-                        "name": "Pinoy Bodyweight Squats",
-                        "target": "4 Sets x 15 Reps",
-                        "setup": "Stand upright with feet shoulder-width apart and toes angled slightly outward.",
-                        "form": "Lower your hips down as if sitting in a chair, keeping knees aligned over toes."
-                    },
-                    {
-                        "name": "Standard Floor Push-Ups",
-                        "target": "3 Sets x 12 Reps",
-                        "setup": "Get into a plank position with hands slightly wider than shoulders.",
-                        "form": "Lower your chest to an inch off the ground, keeping elbows at a 45-degree angle."
-                    },
-                    {
-                        "name": "Forearm Core Plank Hold",
-                        "target": "3 Sets x 45 Seconds",
-                        "setup": "Rest on forearms and toes with elbows directly beneath your shoulders.",
-                        "form": "Tighten your abs and glutes, maintaining a straight horizontal posture."
-                    }
-                ]
-            },
-            {
-                "id": 3,
-                "title": f"High Intensity {goal} Fat Burn",
-                "intensity": "Intense",
-                "duration": "30 mins",
-                "targetGains": "Max Calorie Burn & Athletic Power",
-                "caloriesBurn": 340,
-                "description": f"High-energy bodyweight circuit to maximize calorie burn and tone.",
-                "tutorials": [
-                    {
-                        "name": "Jumping Jacks & High Knees",
-                        "target": "4 Sets x 60 Seconds",
-                        "setup": "Stand tall with arms at your sides in an open room.",
-                        "form": "Jump with high energy, landing softly on the balls of your feet."
-                    },
-                    {
-                        "name": "Mountain Climbers",
-                        "target": "4 Sets x 45 Seconds",
-                        "setup": "Assume a high push-up position with hands shoulder-width apart.",
-                        "form": "Drive knees alternately toward your chest in a quick, controlled running motion."
-                    },
-                    {
-                        "name": "Bodyweight Walking Lunges",
-                        "target": "3 Sets x 14 Reps",
-                        "setup": "Stand with hands on hips and chest upright.",
-                        "form": "Step forward into a 90-degree bend, pressing off the front heel to return."
-                    }
-                ]
-            }
+        # High-quality personalized fallback workouts rotated daily (7 days of the week)
+        day_idx = now_manila.weekday()  # 0 = Monday, 6 = Sunday
+
+        DAILY_FALLBACK_POOLS = [
+            # Day 0 (Monday) - Core & Posture
+            [
+                {
+                    "id": 1,
+                    "title": f"Monday {goal} Core Activation",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Core Stability & Posture",
+                    "caloriesBurn": 120,
+                    "description": "Gentle core activation and posture alignment to kickstart your week.",
+                    "tutorials": [
+                        {"name": "Arm Circles & Torso Twists", "target": "3 Sets x 45 Secs", "setup": "Stand with feet shoulder-width, arms extended wide.", "form": "Rotate arms and twist torso smoothly side to side."},
+                        {"name": "Forearm Core Plank Hold", "target": "3 Sets x 40 Secs", "setup": "Forearms on ground, elbows under shoulders.", "form": "Hold straight plank line, squeezing abs and glutes."},
+                        {"name": "Cat-Cow & Child's Pose Stretch", "target": "2 Sets x 60 Secs", "setup": "On hands and knees on soft mat.", "form": "Arch back gently on exhales, dip chest on inhales."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Monday {goal} Core Sculpt",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "Abdominal Definition",
+                    "caloriesBurn": 220,
+                    "description": "Midsection sculpting routine targeting upper and lower abs.",
+                    "tutorials": [
+                        {"name": "Russian Twists", "target": "4 Sets x 20 Reps", "setup": "Sit back at 45-degree angle with knees bent.", "form": "Rotate torso from side to side in controlled rhythm."},
+                        {"name": "Standard Floor Push-Ups", "target": "3 Sets x 12 Reps", "setup": "High plank, hands shoulder-width apart.", "form": "Lower chest to ground and push firmly back up."},
+                        {"name": "Flutter Kicks", "target": "3 Sets x 40 Secs", "setup": "Lie on back, hands at sides, legs straight.", "form": "Kick legs up and down rapidly while keeping core braced."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Monday {goal} Power Core Burn",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "Maximum Core Strength",
+                    "caloriesBurn": 330,
+                    "description": "High-tension core and upper body burnout circuit.",
+                    "tutorials": [
+                        {"name": "Mountain Climbers", "target": "4 Sets x 45 Secs", "setup": "High push-up position, wrists below shoulders.", "form": "Drive knees alternately to chest in swift running motion."},
+                        {"name": "Bicycle Crunches", "target": "4 Sets x 20 Reps", "setup": "Lie on back with hands behind head.", "form": "Alternate opposite elbow to knee with smooth pedaling."},
+                        {"name": "Burpees", "target": "3 Sets x 12 Reps", "setup": "Stand tall in open area.", "form": "Drop to floor, perform push-up, and explode into a jump."}
+                    ]
+                }
+            ],
+            # Day 1 (Tuesday) - Lower Body Sculpt
+            [
+                {
+                    "id": 1,
+                    "title": f"Tuesday {goal} Leg Mobility",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Hip & Ankle Mobility",
+                    "caloriesBurn": 130,
+                    "description": "Low-impact lower body mobility to loosen hips and hamstrings.",
+                    "tutorials": [
+                        {"name": "Bodyweight Squat", "target": "3 Sets x 12 Reps", "setup": "Feet shoulder-width apart, chest upright.", "form": "Sit back into heels and press up through feet."},
+                        {"name": "Glute Bridges", "target": "3 Sets x 14 Reps", "setup": "Lie on back, knees bent, feet flat.", "form": "Lift hips toward ceiling, squeezing glutes at peak."},
+                        {"name": "Standing Calf Raises", "target": "3 Sets x 18 Reps", "setup": "Stand tall, balls of feet on floor.", "form": "Rise up onto toes, hold briefly, then lower slowly."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Tuesday {goal} Lower Body Tone",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "Quad & Glute Strength",
+                    "caloriesBurn": 250,
+                    "description": "Strengthen legs and firm glutes with no gym gear needed.",
+                    "tutorials": [
+                        {"name": "Walking Lunges", "target": "3 Sets x 14 Reps", "setup": "Step forward, bending knees to 90 degrees.", "form": "Drive through front heel and step forward into next lunge."},
+                        {"name": "Wall Sit", "target": "3 Sets x 45 Secs", "setup": "Back flat against wall, thighs parallel to floor.", "form": "Hold position steadily while breathing evenly."},
+                        {"name": "Incline Pushup", "target": "3 Sets x 12 Reps", "setup": "Hands on elevated surface like bench or wall.", "form": "Lower chest smoothly and press back up to full extension."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Tuesday {goal} Leg Power Burn",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "Athletic Lower Body Explosiveness",
+                    "caloriesBurn": 360,
+                    "description": "Explosive lower body conditioning for calorie burn and power.",
+                    "tutorials": [
+                        {"name": "Jump Squats", "target": "4 Sets x 14 Reps", "setup": "Feet shoulder-width apart, lower into squat.", "form": "Explode upward into a jump, landing softly on balls of feet."},
+                        {"name": "Mountain Climbers", "target": "4 Sets x 45 Secs", "setup": "High plank position.", "form": "Pump knees rapidly forward toward chest."},
+                        {"name": "Single Leg Glute Bridge", "target": "3 Sets x 12 Reps", "setup": "Lie on back, one leg lifted in air.", "form": "Drive through grounded heel to thrust hips up."}
+                    ]
+                }
+            ],
+            # Day 2 (Wednesday) - Upper Body Tone
+            [
+                {
+                    "id": 1,
+                    "title": f"Wednesday {goal} Upper Body Flow",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Shoulder & Chest Mobility",
+                    "caloriesBurn": 125,
+                    "description": "Light upper body flow to improve posture and shoulder strength.",
+                    "tutorials": [
+                        {"name": "Bodyweight Incline Push-Ups", "target": "3 Sets x 10 Reps", "setup": "Hands placed on wall or raised platform.", "form": "Lower chest in controlled line and push back up."},
+                        {"name": "Superman", "target": "3 Sets x 12 Reps", "setup": "Lie face down on mat, arms extended forward.", "form": "Lift chest and legs off floor simultaneously and hold."},
+                        {"name": "Arm Circles & Torso Twists", "target": "2 Sets x 60 Secs", "setup": "Stand upright with arms extended.", "form": "Rotate smoothly in controlled circular arcs."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Wednesday {goal} Push & Pull Strength",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "Chest, Triceps & Upper Back",
+                    "caloriesBurn": 240,
+                    "description": "Build upper body definition with chest and tricep bodyweight sets.",
+                    "tutorials": [
+                        {"name": "Standard Floor Push-Ups", "target": "3 Sets x 12 Reps", "setup": "Hands shoulder-width apart, body straight.", "form": "Lower until elbows hit 90 degrees, then press up."},
+                        {"name": "Bench Dips", "target": "3 Sets x 12 Reps", "setup": "Hands on chair or sofa edge behind back.", "form": "Lower hips by bending elbows, press up through palms."},
+                        {"name": "Plank Hold", "target": "3 Sets x 45 Secs", "setup": "Forearms on ground, elbows below shoulders.", "form": "Keep core tight and spine straight throughout."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Wednesday {goal} Upper Body Blast",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "Max Upper Body Stamina",
+                    "caloriesBurn": 340,
+                    "description": "High-rep bodyweight push progression for sculpted arms and chest.",
+                    "tutorials": [
+                        {"name": "Diamond Push-Ups", "target": "3 Sets x 10 Reps", "setup": "Hands together under chest forming diamond.", "form": "Lower chest toward hands, elbows tucked in."},
+                        {"name": "Decline Push-Ups", "target": "3 Sets x 10 Reps", "setup": "Feet elevated on chair, hands on floor.", "form": "Lower chest to floor and push up with power."},
+                        {"name": "Burpees", "target": "3 Sets x 12 Reps", "setup": "Stand in open area.", "form": "Drop to push-up, jump feet back in, leap upward."}
+                    ]
+                }
+            ],
+            # Day 3 (Thursday) - Full Body Cardio & Agility
+            [
+                {
+                    "id": 1,
+                    "title": f"Thursday {goal} Cardio Primer",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Cardiovascular Health",
+                    "caloriesBurn": 135,
+                    "description": "Low-impact aerobic circuit to elevate heart rate and metabolism.",
+                    "tutorials": [
+                        {"name": "Jumping Jacks", "target": "3 Sets x 45 Secs", "setup": "Feet together, hands at sides.", "form": "Jump feet out while clapping hands overhead."},
+                        {"name": "Standing High Knees", "target": "3 Sets x 30 Secs", "setup": "Stand tall in open area.", "form": "Drive knees high toward chest alternately."},
+                        {"name": "Cat-Cow Stretch", "target": "2 Sets x 60 Secs", "setup": "Hands and knees on floor.", "form": "Breathe deeply while flexing and extending spine."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Thursday {goal} Fat Burn Circuit",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "High Calorie Burn",
+                    "caloriesBurn": 260,
+                    "description": "Metabolic conditioning circuit to accelerate fat burning.",
+                    "tutorials": [
+                        {"name": "Mountain Climbers", "target": "4 Sets x 40 Secs", "setup": "High plank position with straight arms.", "form": "Run knees toward chest with rapid alternating pace."},
+                        {"name": "Bodyweight Squats", "target": "3 Sets x 15 Reps", "setup": "Feet hip-width apart.", "form": "Lower deep into squat, press up through heels."},
+                        {"name": "Russian Twists", "target": "3 Sets x 20 Reps", "setup": "Sit on floor, lean back 45 degrees.", "form": "Twist torso side to side, engaging obliques."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Thursday {goal} Speed & Agility",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "Peak VO2 Max & Endurance",
+                    "caloriesBurn": 370,
+                    "description": "High-intensity agility training for explosive endurance.",
+                    "tutorials": [
+                        {"name": "Burpees", "target": "4 Sets x 12 Reps", "setup": "Stand tall, feet shoulder-width.", "form": "Drop to push-up, jump forward, explode into air."},
+                        {"name": "Jumping Jacks & High Knees", "target": "4 Sets x 45 Secs", "setup": "Stand tall with arms ready.", "form": "Alternate fast jumping jacks with high knee sprints."},
+                        {"name": "Plank Hip Twists", "target": "3 Sets x 20 Reps", "setup": "Forearm plank position.", "form": "Rotate hips to touch floor lightly on each side."}
+                    ]
+                }
+            ],
+            # Day 4 (Friday) - Full Body HIIT
+            [
+                {
+                    "id": 1,
+                    "title": f"Friday {goal} Friday Warmup",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Full Body Readiness",
+                    "caloriesBurn": 130,
+                    "description": "Dynamic full-body warmup to energize before the weekend.",
+                    "tutorials": [
+                        {"name": "Inchworm", "target": "3 Sets x 6 Reps", "setup": "Stand tall, bend and place hands on floor.", "form": "Walk hands out into plank, then walk back to standing."},
+                        {"name": "Glute Bridges", "target": "3 Sets x 15 Reps", "setup": "Lie on back with feet flat.", "form": "Squeeze glutes to lift hips level with knees."},
+                        {"name": "Arm Circles", "target": "2 Sets x 60 Secs", "setup": "Stand with arms outstretched.", "form": "Rotate arms smoothly in large circles."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Friday {goal} Full Body HIIT",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "Full Body Conditioning",
+                    "caloriesBurn": 270,
+                    "description": "Total body fat burning routine combining strength and intervals.",
+                    "tutorials": [
+                        {"name": "Standard Floor Push-Ups", "target": "3 Sets x 12 Reps", "setup": "Hands slightly wider than shoulders.", "form": "Lower chest smoothly, push up explosively."},
+                        {"name": "Walking Lunges", "target": "3 Sets x 14 Reps", "setup": "Step forward into deep 90-degree lunge.", "form": "Drive through front heel to step forward."},
+                        {"name": "Plank Hold", "target": "3 Sets x 45 Secs", "setup": "Forearms on mat, body straight.", "form": "Brace core muscles tightly and breathe."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Friday {goal} Weekend Warrior HIIT",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "Maximum Metabolic Calorie Burn",
+                    "caloriesBurn": 380,
+                    "description": "High-octane interval workout to maximize weekend calorie burn.",
+                    "tutorials": [
+                        {"name": "Jump Squats", "target": "4 Sets x 14 Reps", "setup": "Squat down with weight on heels.", "form": "Explode upward and land softly into next rep."},
+                        {"name": "Mountain Climbers", "target": "4 Sets x 45 Secs", "setup": "High plank position.", "form": "Pump knees rapidly into chest."},
+                        {"name": "Burpees", "target": "4 Sets x 10 Reps", "setup": "Stand tall in open area.", "form": "Drop to push-up, jump in, leap upward with arms high."}
+                    ]
+                }
+            ],
+            # Day 5 (Saturday) - Strength & Balance
+            [
+                {
+                    "id": 1,
+                    "title": f"Saturday {goal} Balance & Flow",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Core Balance & Joint Health",
+                    "caloriesBurn": 120,
+                    "description": "Gentle balance and joint stabilization for active recovery.",
+                    "tutorials": [
+                        {"name": "Wall Sit", "target": "3 Sets x 40 Secs", "setup": "Lean flat against wall at 90 degrees.", "form": "Hold posture steadily while breathing deeply."},
+                        {"name": "Single Leg Glute Bridge", "target": "3 Sets x 10 Reps", "setup": "Lie on back, lift one leg straight.", "form": "Drive through grounded foot to elevate hips."},
+                        {"name": "Upper Back Stretch", "target": "2 Sets x 60 Secs", "setup": "Sit cross-legged, interlace fingers forward.", "form": "Round upper back and breathe into shoulder blades."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Saturday {goal} Strength Circuit",
+                    "intensity": "Moderate",
+                    "duration": "25 mins",
+                    "targetGains": "Functional Strength",
+                    "caloriesBurn": 240,
+                    "description": "Functional bodyweight strength movements for posture and stamina.",
+                    "tutorials": [
+                        {"name": "Bodyweight Squat", "target": "4 Sets x 15 Reps", "setup": "Feet shoulder-width apart.", "form": "Lower hips back and down, rise smoothly."},
+                        {"name": "Bench Dips", "target": "3 Sets x 12 Reps", "setup": "Hands resting on sturdy chair edge.", "form": "Dip hips downward and push up through triceps."},
+                        {"name": "Side Plank", "target": "3 Sets x 30 Secs", "setup": "Prop up on one forearm on side.", "form": "Maintain straight lateral alignment head to feet."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Saturday {goal} Athletic Conditioning",
+                    "intensity": "Intense",
+                    "duration": "35 mins",
+                    "targetGains": "All-Around Athleticism",
+                    "caloriesBurn": 350,
+                    "description": "Total body endurance workout to push your functional limits.",
+                    "tutorials": [
+                        {"name": "Walking Lunges", "target": "4 Sets x 16 Reps", "setup": "Step forward into smooth lunge strides.", "form": "Keep posture upright and knees aligned."},
+                        {"name": "Standard Floor Push-Ups", "target": "4 Sets x 14 Reps", "setup": "High plank, hands shoulder-width.", "form": "Press smoothly with chest and triceps."},
+                        {"name": "Russian Twists", "target": "4 Sets x 25 Reps", "setup": "Lean back on floor with core braced.", "form": "Twist side to side with fast, controlled tempo."}
+                    ]
+                }
+            ],
+            # Day 6 (Sunday) - Active Recovery & Mobility
+            [
+                {
+                    "id": 1,
+                    "title": f"Sunday {goal} Restorative Flow",
+                    "intensity": "Light",
+                    "duration": "15 mins",
+                    "targetGains": "Deep Relaxation & Recovery",
+                    "caloriesBurn": 110,
+                    "description": "Slow restorative mobility routine to recharge your body for the new week.",
+                    "tutorials": [
+                        {"name": "Cat-Cow Stretch", "target": "3 Sets x 45 Secs", "setup": "Hands and knees on yoga mat.", "form": "Inhale to arch back gently, exhale to round spine."},
+                        {"name": "All Fours Squad Stretch", "target": "3 Sets x 45 Secs", "setup": "Kneel on soft surface, extend one leg.", "form": "Ease gently into stretch, breathing calmly."},
+                        {"name": "Arm Circles & Torso Twists", "target": "2 Sets x 60 Secs", "setup": "Stand relaxed, arms wide.", "form": "Slow circles to release tension in neck and shoulders."}
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": f"Sunday {goal} Active Reset",
+                    "intensity": "Moderate",
+                    "duration": "20 mins",
+                    "targetGains": "Muscle Recovery & Flexibility",
+                    "caloriesBurn": 180,
+                    "description": "Low-impact full body reset to stimulate blood flow and ease stiffness.",
+                    "tutorials": [
+                        {"name": "Inchworm", "target": "3 Sets x 8 Reps", "setup": "Stand tall, hinge hips to touch floor.", "form": "Walk hands to plank and back smoothly."},
+                        {"name": "Glute Bridges", "target": "3 Sets x 12 Reps", "setup": "Lie on back with knees bent.", "form": "Raise hips up and squeeze glutes at top."},
+                        {"name": "Forearm Core Plank Hold", "target": "3 Sets x 35 Secs", "setup": "Forearms on ground, elbows below shoulders.", "form": "Brace abdominal wall steadily."}
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": f"Sunday {goal} Full Reset Burn",
+                    "intensity": "Intense",
+                    "duration": "30 mins",
+                    "targetGains": "Aerobic Flush & Endurance",
+                    "caloriesBurn": 290,
+                    "description": "Steady-paced aerobic flush to burn calories without high joint impact.",
+                    "tutorials": [
+                        {"name": "Jumping Jacks", "target": "4 Sets x 45 Secs", "setup": "Feet together, arms at sides.", "form": "Rhythmic jumps with light foot landings."},
+                        {"name": "Bodyweight Squats", "target": "4 Sets x 15 Reps", "setup": "Feet shoulder-width apart.", "form": "Slow controlled descent and steady rise."},
+                        {"name": "Mountain Climbers", "target": "3 Sets x 40 Secs", "setup": "Hands on floor in high plank.", "form": "Steady rhythmic knee drives into chest."}
+                    ]
+                }
+            ]
         ]
+
+        return DAILY_FALLBACK_POOLS[day_idx % len(DAILY_FALLBACK_POOLS)]
             
     except HTTPException as he:
         raise he
@@ -2639,7 +2915,13 @@ def recommend_workouts(user_id: str):
 
 
 @app.get("/meals/recommend/{user_id}")
-def recommend_meals(user_id: str):
+def recommend_meals(
+    user_id: str,
+    goal_weight: Optional[float] = None,
+    goal: Optional[str] = None,
+    current_weight: Optional[float] = None,
+    date: Optional[str] = None
+):
     try:
         profile = {}
         if user_id and is_valid_uuid(user_id):
@@ -2665,8 +2947,32 @@ def recommend_meals(user_id: str):
             except Exception:
                 prefs = {}
 
-        goal = profile.get("goal") or "Maintain Weight"
-        weight_kg = float(profile.get("weight_kg") or 70.0)
+        # Current Weight
+        weight_kg = float(current_weight or profile.get("weight_kg") or profile.get("weight") or 70.0)
+        
+        # Target Goal Weight
+        resolved_gw = (
+            goal_weight or 
+            profile.get("goal_weight") or 
+            profile.get("goalWeight") or 
+            profile.get("target_weight") or 
+            profile.get("targetWeight") or 
+            prefs.get("goalWeight") or 
+            prefs.get("target_weight") or 
+            weight_kg
+        )
+        goal_weight_kg = float(resolved_gw)
+
+        # Goal resolution
+        user_goal = (goal or profile.get("goal") or "").strip()
+        if not user_goal:
+            if goal_weight_kg < (weight_kg - 0.5):
+                user_goal = "Lose Fat / Weight Loss"
+            elif goal_weight_kg > (weight_kg + 0.5):
+                user_goal = "Build Muscle / Weight Gain"
+            else:
+                user_goal = "Maintain Weight"
+
         height_cm = float(profile.get("height_cm") or 170.0)
         age = int(profile.get("age") or 25)
         dietary_pref = profile.get("dietary_preference") or "Palengke Budget-Friendly"
@@ -2681,7 +2987,7 @@ def recommend_meals(user_id: str):
 
         user_address = prefs.get("address") or "Philippines"
 
-        # Calculate Mifflin-St Jeor BMR & TDEE based on exact onboarding biometrics
+        # Calculate Mifflin-St Jeor BMR & TDEE
         bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
         act_multipliers = {
             "sedentary": 1.2,
@@ -2693,48 +2999,72 @@ def recommend_meals(user_id: str):
         act_key = str(activity_level).lower().replace(" ", "_")
         tdee = bmr * act_multipliers.get(act_key, 1.55)
 
-        # Read custom target macro overrides if set in user profile
+        weight_diff = abs(goal_weight_kg - weight_kg)
+
+        # Custom macro overrides if explicitly set in profile
         custom_cals = profile.get("target_calories") or profile.get("targetCalories")
         custom_prot = profile.get("target_protein") or profile.get("targetProtein")
         custom_carbs = profile.get("target_carbs") or profile.get("targetCarbs")
         custom_fats = profile.get("target_fats") or profile.get("targetFats")
 
-        if "lose" in goal.lower() or "fat" in goal.lower():
-            target_calories = int(custom_cals) if custom_cals else max(1200, int(tdee - 500))
-            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.0)
-            target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.40) / 4)
-            target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
-        elif "gain" in goal.lower() or "muscle" in goal.lower():
-            target_calories = int(custom_cals) if custom_cals else int(tdee + 400)
-            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 2.2)
+        if "lose" in user_goal.lower() or "fat" in user_goal.lower() or goal_weight_kg < (weight_kg - 0.5):
+            # Target calorie deficit scaled to goal weight
+            deficit = min(600, max(350, int(weight_diff * 40))) if weight_diff > 1 else 500
+            target_calories = int(custom_cals) if custom_cals else max(1250, int(tdee - deficit))
+            target_protein = int(custom_prot) if custom_prot else int(goal_weight_kg * 2.1)
+            target_carbs = int(custom_carbs) if custom_carbs else max(80, int((target_calories * 0.40) / 4))
+            target_fats = int(custom_fats) if custom_fats else max(35, int((target_calories * 0.25) / 9))
+        elif "gain" in user_goal.lower() or "muscle" in user_goal.lower() or goal_weight_kg > (weight_kg + 0.5):
+            # Target calorie surplus scaled to goal weight
+            surplus = min(500, max(300, int(weight_diff * 35))) if weight_diff > 1 else 400
+            target_calories = int(custom_cals) if custom_cals else int(tdee + surplus)
+            target_protein = int(custom_prot) if custom_prot else int(goal_weight_kg * 2.2)
             target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.45) / 4)
             target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
         else:
             target_calories = int(custom_cals) if custom_cals else int(tdee)
-            target_protein = int(custom_prot) if custom_prot else int(weight_kg * 1.8)
+            target_protein = int(custom_prot) if custom_prot else int(goal_weight_kg * 1.8)
             target_carbs = int(custom_carbs) if custom_carbs else int((target_calories * 0.45) / 4)
             target_fats = int(custom_fats) if custom_fats else int((target_calories * 0.25) / 9)
 
         manila_tz = timezone(timedelta(hours=8))
         now_manila = datetime.now(manila_tz)
+        if date:
+            try:
+                parsed_d = datetime.strptime(date.strip()[:10], "%Y-%m-%d")
+                now_manila = parsed_d.replace(tzinfo=manila_tz)
+            except Exception:
+                pass
+
         date_str = now_manila.strftime("%A, %B %d, %Y")
+        day_of_week = now_manila.weekday() # 0 = Monday ... 6 = Sunday
+        day_of_year = now_manila.timetuple().tm_yday
 
         prompt = f"""
         You are an elite personal fitness dietitian in the Philippines. Recommend exactly 4 custom recipes (Breakfast, Lunch, Snack, Dinner) specifically calculated for this user profile:
-        - Primary Fitness Goal: {goal}
-        - User Baseline: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg, Activity Level: {activity_level}
+        - Primary Fitness Goal: {user_goal}
+        - Current Weight: {weight_kg} kg | Target Goal Weight: {goal_weight_kg} kg
+        - User Baseline: Age {age}, Height {height_cm}cm, Activity Level: {activity_level}
         - Regional Context / Location: {user_address}
         - Dietary Preference: {dietary_pref}
-        - STRICT ALLERGIES / RESTRICTIONS: {allergies}
+        - STRICT REGISTERED ALLERGIES: {allergies}
         - Total Daily Nutritional Targets: {target_calories} kcal, {target_protein}g Protein, {target_carbs}g Carbs, {target_fats}g Fats.
-        - Date Rotation Seed: {date_str}
+        - Date Rotation Seed: {date_str} (Day {day_of_year} of the year).
+
+        CRITICAL ALLERGY EXCLUSION MANDATE:
+        The user has registered allergies: {allergies}.
+        You are STRICTLY FORBIDDEN from including any of the following allergen ingredients or their derivatives (such as fish sauce/patis, shrimp paste/bagoong, dried fish/tinapa, oyster sauce, egg wash, peanut oil, etc.) in ANY recipe title, ingredient, or instruction.
+        Every single dish you recommend MUST be 100% free of {allergies}. Failure to adhere to this is dangerous.
+
+        CRITICAL DAILY ROTATION INSTRUCTION:
+        Today is {date_str}. You MUST generate unique recipes specifically for {date_str} so that the user receives an exciting, fresh variety of meals every day. Do NOT repeat meals from other days.
 
         Guidelines:
         - Distribute the targets: Breakfast (25% calories), Lunch (35% calories), Snack (10% calories), Dinner (30% calories).
         - Recommend exclusively healthy Filipino dishes or fitness-oriented adaptations of local Filipino cuisine.
         - The recipes must use ingredients that are easily available in local Philippine wet markets (palengke) and grocery stores (e.g. calamansi, bangus, tilapia, chicken breast, kangkong, sitaw, squash, sweet potato/kamote, brown/white rice). Avoid expensive or hard-to-find western ingredients.
-        - CRITICAL ALLERGY SAFETY REQUIREMENT: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients (for example, if allergic to eggs, do NOT include eggs, egg whites, balut, mayo, or egg batter in any dish).
-        - Do not use generic title names like "High-Protein Breakfast". Create specific, appetizing recipe names like "Garlic Calamansi Chicken Breast & Kamote Hash" or "Pan-Seared Tilapia Fillet with Malunggay Soup".
+        - CRITICAL ALLERGY SAFETY REQUIREMENT: Strictly respect all specified allergies ({allergies}). Do NOT include any forbidden allergen ingredients.
+        - Do not use generic title names like "High-Protein Breakfast". Create specific, appetizing recipe names.
         - Do not use any currency symbols other than the Philippine Peso sign (₱).
 
         Return ONLY a JSON array of exactly 4 objects (no markdown blocks, no backticks, just raw JSON).
@@ -2770,163 +3100,181 @@ def recommend_meals(user_id: str):
         except Exception as ai_err:
             print("GEMINI MEAL GENERATION WARNING:", ai_err)
 
-        # High Quality Personalized Fallback Array based on Onboarding Goals & Allergies
+        # ── 7-DAY DYNAMIC ROTATION FALLBACK ENGINE ──
+        # Guarantees that every day of the week has a completely unique, delicious Filipino menu!
         b_cals = int(target_calories * 0.25)
         l_cals = int(target_calories * 0.35)
         s_cals = int(target_calories * 0.10)
         d_cals = int(target_calories * 0.30)
 
+        b_prot = int(target_protein * 0.25)
+        l_prot = int(target_protein * 0.35)
+        s_prot = int(target_protein * 0.10)
+        d_prot = int(target_protein * 0.30)
+
+        b_carbs = int(target_carbs * 0.25)
+        l_carbs = int(target_carbs * 0.35)
+        s_carbs = int(target_carbs * 0.10)
+        d_carbs = int(target_carbs * 0.30)
+
+        b_fats = max(5, int(target_fats * 0.25))
+        l_fats = max(8, int(target_fats * 0.35))
+        s_fats = max(2, int(target_fats * 0.10))
+        d_fats = max(6, int(target_fats * 0.30))
+
         allergies_lower = allergies.lower()
         is_egg_allergic = any(a in allergies_lower for a in ["egg", "itlog"])
         is_seafood_allergic = any(a in allergies_lower for a in ["seafood", "fish", "bangus", "tilapia", "shellfish", "shrimp", "isda", "hipon", "pusit"])
         is_nut_allergic = any(a in allergies_lower for a in ["peanut", "nut", "mani", "cashew"])
-        is_soy_allergic = any(a in allergies_lower for a in ["soy", "tofu", "tokwa", "tokwa't"])
         is_chicken_allergic = any(a in allergies_lower for a in ["chicken", "manok", "poultry"])
-        is_dairy_allergic = any(a in allergies_lower for a in ["dairy", "milk", "gatas", "cheese", "whey"])
 
-        # Breakfast customization
-        if is_egg_allergic:
-            if is_chicken_allergic:
-                b_title = "Pinoy High-Protein Pork Tenderloin & Kamote Hash"
-                b_prot = "150g Skinless Pork Tenderloin Cubes"
-            else:
-                b_title = "Pinoy High-Protein Chicken & Kamote Hash"
-                b_prot = "150g Skinless Chicken Breast Cubes"
-        else:
-            b_title = "Pinoy High-Protein Eggs & Kamote Hash"
-            b_prot = "3 Large Native Eggs (Scrambled or Soft-Boiled)"
-
-        b_ing = [
-            b_prot,
-            "150g Steamed Yellow Kamote (Sweet Potato)",
-            "1 cup Fresh Malunggay (Moringa) Leaves",
-            "1 tsp Native Coconut Oil"
+        WEEKLY_MENUS = [
+            # Day 0: Monday
+            {
+                "b_title": "Chicken Breast & Garlic Kamote Hash" if is_egg_allergic else "Native Scrambled Eggs with Gisadong Kamatis & Kamote",
+                "b_ing": ["3 Native Eggs" if not is_egg_allergic else "150g Chicken Breast", "150g Yellow Kamote", "1 cup Malunggay Leaves", "1 tsp Native Coconut Oil"],
+                "l_title": "Sinugbang Bangus Belly with Kangkong Garlic Stir-Fry" if not is_seafood_allergic else "Grilled Chicken Inasal with Garlic Kangkong",
+                "l_ing": ["200g Boneless Bangus Belly", "1.5 cups Steamed Brown Rice", "1 bunch Fresh River Kangkong", "Garlic & Calamansi Juice"],
+                "s_title": "Chilled Boiled Saba Bananas with Toasted Sesame",
+                "s_ing": ["2 Boiled Saba Bananas", "1 glass Cold Calamansi Drink", "1 tbsp Toasted Sesame Seeds"],
+                "d_title": "Skinless Chicken Breast Tinola with Squash & Moringa" if not is_chicken_allergic else "Lean Pork Tenderloin Tinola with Kalabasa",
+                "d_ing": ["220g Chicken Breast Fillet", "1 cup Kalabasa Cubes", "1 cup Fresh Malunggay", "Ginger Lemongrass Broth"]
+            },
+            # Day 1: Tuesday
+            {
+                "b_title": "Tortang Talong with Lean Ground Pork & Tomatoes" if not is_egg_allergic else "Pan-Seared Lean Pork Slices with Steamed Kamote",
+                "b_ing": ["2 Roasted Eggplants", "2 Large Eggs" if not is_egg_allergic else "120g Lean Pork", "Chopped Native Tomatoes", "1 cup Malunggay"],
+                "l_title": "Chicken Inasal Breast with Atchara & Brown Rice" if not is_chicken_allergic else "Pork Tenderloin Inasal with Atchara",
+                "l_ing": ["200g Chicken Breast Inasal", "1.5 cups Steamed Rice", "Fresh Papaya Atchara", "Sinamak Spiced Vinegar"],
+                "s_title": "Fresh Buko Water with Chia Seeds & Sweet Mango Slices",
+                "s_ing": ["1 glass Fresh Coconut Water", "1 tbsp Chia Seeds", "1 fresh Carabao Mango"],
+                "d_title": "Pan-Seared Tilapia Fillet with Ginisang Sitaw at Kalabasa" if not is_seafood_allergic else "Lean Pork Medallions with Kalabasa",
+                "d_ing": ["220g Fresh Tilapia Fillet", "1 cup Sitaw (String Beans)", "1 cup Kalabasa Cubes", "Garlic & Onions"]
+            },
+            # Day 2: Wednesday
+            {
+                "b_title": "Sautéed Firm Tofu & Malunggay with Brown Garlic Rice",
+                "b_ing": ["180g Firm Tofu Cubes", "1 cup Fresh Malunggay", "1 cup Steamed Brown Rice", "Minced Garlic & Calamansi"],
+                "l_title": "Lean Pork Tenderloin Bistek Tagalog with Steamed Sayote",
+                "l_ing": ["200g Lean Pork Tenderloin", "1.5 cups Steamed Rice", "1 cup Steamed Sayote", "Calamansi-Soy Reduction with White Onions"],
+                "s_title": "Chilled Sweet Mango & Papaya Bowl with Chia Seeds",
+                "s_ing": ["1 Fresh Carabao Mango", "1 cup Sliced Ripe Papaya", "1 tbsp Chia Seeds", "1 glass Cold Buko Water"],
+                "d_title": "Sinigang na Isda sa Kamias with Kangkong & Radish" if not is_seafood_allergic else "Sinigang na Baboy (Lean) sa Kamias",
+                "d_ing": ["220g Fresh Fish Fillet", "1 bunch River Kangkong", "Sliced White Radish", "Natural Kamias Sour Broth"]
+            },
+            # Day 3: Thursday
+            {
+                "b_title": "Poached Native Eggs with Garlic Kangkong & Saba" if not is_egg_allergic else "Shredded Chicken Breast with Garlic Kangkong & Saba",
+                "b_ing": ["2 Poached Eggs" if not is_egg_allergic else "140g Chicken Breast", "1 Boiled Saba Banana", "1 plate Sautéed Garlic Kangkong"],
+                "l_title": "Grilled Yellowfin Tuna Steak with Lato Seaweed Salad" if not is_seafood_allergic else "Grilled Herb Chicken Breast with Tomato Salad",
+                "l_ing": ["200g Yellowfin Tuna Steak", "1 cup Fresh Lato (Sea Grapes)", "1.5 cups Rice", "Calamansi Ginger Dip"],
+                "s_title": "Steamed Yellow Sweet Corn with Calamansi-Infused Water",
+                "s_ing": ["1 Large Sweet Corn on the Cob", "1 glass Chilled Water with Calamansi"],
+                "d_title": "Ginisang Monggo Guisado with Chicken Breast & Malunggay" if not is_chicken_allergic else "Ginisang Monggo Guisado with Tofu & Malunggay",
+                "d_ing": ["1 bowl Stewed Green Mung Beans", "120g Lean Protein", "2 cups Fresh Malunggay Leaves", "Garlic Tomato Broth"]
+            },
+            # Day 4: Friday
+            {
+                "b_title": "Crispy Chicken Breast Flakes with Garlic Brown Rice & Tomato" if not is_chicken_allergic else "Tofu & Mushroom Scramble with Garlic Rice",
+                "b_ing": ["130g Chicken Flakes", "1 cup Garlic Brown Rice", "Sliced Native Tomatoes", "Calamansi Juice"],
+                "l_title": "Pan-Seared Bangus Fillet with Charred Eggplant Salad" if not is_seafood_allergic else "Lean Beef Salpicao with Eggplant Salad",
+                "l_ing": ["200g Boneless Bangus Fillet", "1 Charred Eggplant Ensalada with Tomatoes", "1.5 cups Rice"],
+                "s_title": "Chilled Ripe Papaya Slices with Crushed Roasted Sesame",
+                "s_ing": ["2 cups Fresh Papaya Slices", "1 tbsp Toasted Sesame or Chia Seeds"],
+                "d_title": "Lean Tenderloin Salpicao with Steamed Broccoli & Sayote",
+                "d_ing": ["220g Lean Tenderloin Cubes", "1 cup Steamed Sayote & Broccoli", "Toasted Golden Garlic Flakes"]
+            },
+            # Day 5: Saturday
+            {
+                "b_title": "Ginger Chicken Breast Rice Porridge (Arroz Caldo) with Soft Egg" if not is_chicken_allergic else "Fish Fillet Arroz Caldo with Ginger",
+                "b_ing": ["130g Shredded Chicken Breast", "1 Soft Boiled Egg" if not is_egg_allergic else "Steamed Kamote", "Ginger Scallion Rice Porridge"],
+                "l_title": "Inihaw na Pork Steak (Lean Cut) with Pinakbet Ilocano",
+                "l_ing": ["180g Lean Pork Loin Inihaw", "1 bowl Pinakbet (Sitaw, Kalabasa, Ampalaya)", "1.5 cups Rice"],
+                "s_title": "Chilled Fresh Silken Soy Pudding with Warm Calamansi",
+                "s_ing": ["1 cup Silken Tofu Pudding", "1 tsp Muscovado / Calamansi"],
+                "d_title": "Pesang Isda Fillet with Pechay & Ginger Broth" if not is_seafood_allergic else "Chicken Breast Pesa with Pechay & Ginger",
+                "d_ing": ["220g White Fish Fillet", "1 cup Chopped Pechay", "Sliced Ginger & Scallions"]
+            },
+            # Day 6: Sunday
+            {
+                "b_title": "Pinoy Shredded Chicken Arroz Caldo with Crispy Garlic" if not is_chicken_allergic else "Native Egg & Sautéed Malunggay Hash",
+                "b_ing": ["150g Shredded Chicken Breast", "1 cup Brown Rice Lugaw", "1 cup Fresh Malunggay", "Crispy Golden Garlic Flakes"],
+                "l_title": "Chicken Inasal Pecho with Sautéed Alugbati & Brown Rice" if not is_chicken_allergic else "Grilled Fish Steak with Sautéed Alugbati",
+                "l_ing": ["200g Grilled Chicken Pecho", "1.5 cups Steamed Brown Rice", "1 bunch Fresh Alugbati Greens"],
+                "s_title": "Pan-Toasted Saba Bananas with Calamansi Drizzle",
+                "s_ing": ["2 Pan-Toasted Saba Bananas", "Calamansi Juice", "1 glass Cold Water"],
+                "d_title": "Lean Pork Tenderloin Sinigang with Kalabasa & Kangkong",
+                "d_ing": ["220g Lean Pork Medallions", "1 cup Kalabasa Cubes", "1 bunch River Kangkong", "Natural Tamarind Broth"]
+            }
         ]
 
-        # Lunch customization
-        if is_seafood_allergic:
-            if is_chicken_allergic:
-                l_title = "Grilled Pork Tenderloin Inasal with Kangkong Garlic Stir-Fry"
-                l_ing = [
-                    "200g Lean Pork Tenderloin Inasal",
-                    "1.5 cups Steamed Brown or White Rice",
-                    "1 bunch Fresh River Kangkong",
-                    "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
-                ]
-            else:
-                l_title = "Grilled Skinless Chicken Inasal with Kangkong Garlic Stir-Fry"
-                l_ing = [
-                    "200g Lean Chicken Breast Inasal",
-                    "1.5 cups Steamed Brown or White Rice",
-                    "1 bunch Fresh River Kangkong",
-                    "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
-                ]
-        else:
-            l_title = "Grilled Bangus Belly with Kangkong Garlic Stir-Fry"
-            l_ing = [
-                "200g Fresh Dagupan Bangus Belly (Boneless)",
-                "1.5 cups Steamed Brown or White Rice",
-                "1 bunch Fresh River Kangkong",
-                "3 cloves Chopped Garlic & 1 tbsp Calamansi Juice"
-            ]
-
-        # Snack customization
-        s_nut = "1 tbsp Chia Seeds or Toasted Sesame Seeds" if is_nut_allergic else "1 tsp Crushed Roasted Peanuts"
-        if is_soy_allergic or is_dairy_allergic:
-            s_drink = "1 glass Fresh Coconut Water & Plant Protein"
-        else:
-            s_drink = "1 glass Cold Soy Milk or Protein Shake"
-
-        s_ing = [
-            "2 Ripe Boiled Saba Bananas",
-            s_drink,
-            s_nut
-        ]
-
-        # Dinner customization
-        if is_chicken_allergic:
-            if is_seafood_allergic:
-                d_title = "Lean Pork Tenderloin Soup with Kalabasa & Moringa"
-                d_prot = "220g Lean Pork Tenderloin Cubes"
-            else:
-                d_title = "Fresh Tilapia Fillet Soup with Kalabasa & Moringa"
-                d_prot = "220g Fresh Tilapia Fillet"
-        else:
-            d_title = "Skinless Chicken Breast Tinola with Squash & Moringa"
-            d_prot = "220g Boneless Skinless Chicken Breast"
-
-        d_ing = [
-            d_prot,
-            "1 cup Kalabasa (Squash) Cubes",
-            "1 cup Fresh Malunggay Leaves",
-            "Ginger Slices & Lemongrass"
-        ]
+        menu = WEEKLY_MENUS[day_of_week % len(WEEKLY_MENUS)]
 
         raw_fallback_meals = [
             {
-                "id": "dp1",
+                "id": f"dp1_{now_manila.strftime('%Y%m%d')}",
                 "mealType": "Breakfast",
-                "title": b_title,
+                "title": menu["b_title"],
                 "calories": b_cals,
-                "protein": f"{int(target_protein * 0.25)}g",
-                "carbs": f"{int(target_carbs * 0.25)}g",
-                "fats": f"{int(target_fats * 0.25)}g",
+                "protein": f"{b_prot}g",
+                "carbs": f"{b_carbs}g",
+                "fats": f"{b_fats}g",
                 "time": "8:00 AM",
-                "ingredients": b_ing,
+                "ingredients": menu["b_ing"],
                 "instructions": [
-                    "Prepare ingredients and heat coconut oil in a pan.",
-                    "Sauté malunggay leaves and protein for 2-3 minutes.",
-                    "Serve hot with steamed kamote cubes!"
+                    "Prepare fresh ingredients and heat a non-stick skillet with 1 tsp coconut oil.",
+                    "Sauté the protein and greens over medium heat for 4-5 minutes until thoroughly cooked.",
+                    "Serve warm with steamed carbohydrate source for sustainable morning energy!"
                 ]
             },
             {
-                "id": "dp2",
+                "id": f"dp2_{now_manila.strftime('%Y%m%d')}",
                 "mealType": "Lunch",
-                "title": l_title,
+                "title": menu["l_title"],
                 "calories": l_cals,
-                "protein": f"{int(target_protein * 0.35)}g",
-                "carbs": f"{int(target_carbs * 0.35)}g",
-                "fats": f"{int(target_fats * 0.35)}g",
+                "protein": f"{l_prot}g",
+                "carbs": f"{l_carbs}g",
+                "fats": f"{l_fats}g",
                 "time": "12:30 PM",
-                "ingredients": l_ing,
+                "ingredients": menu["l_ing"],
                 "instructions": [
-                    "Marinate protein with calamansi juice and sea salt for 10 minutes.",
-                    "Grill or pan-sear protein until golden brown.",
-                    "Stir-fry kangkong with minced garlic and a splash of soy sauce.",
+                    "Marinate the lean protein in native calamansi, garlic, and sea salt for 10 minutes.",
+                    "Grill or pan-sear until golden and tender.",
+                    "Stir-fry the fresh greens with minced garlic for 2 minutes.",
                     "Plate with warm steamed rice and fresh calamansi halves!"
                 ]
             },
             {
-                "id": "dp3",
+                "id": f"dp3_{now_manila.strftime('%Y%m%d')}",
                 "mealType": "Snack",
-                "title": "Chilled Native Boiled Saba Banana & Recovery Drink",
+                "title": menu["s_title"],
                 "calories": s_cals,
-                "protein": f"{int(target_protein * 0.10)}g",
-                "carbs": f"{int(target_carbs * 0.10)}g",
-                "fats": f"{int(target_fats * 0.10)}g",
+                "protein": f"{s_prot}g",
+                "carbs": f"{s_carbs}g",
+                "fats": f"{s_fats}g",
                 "time": "4:00 PM",
-                "ingredients": s_ing,
+                "ingredients": menu["s_ing"],
                 "instructions": [
-                    "Boil saba bananas in fresh water for 12 minutes until soft.",
-                    "Peel and slice the bananas.",
-                    "Enjoy with cold recovery drink for post-workout nutrition!"
+                    "Prepare fresh seasonal ingredients.",
+                    "Combine high-fiber fruit with natural seed protein.",
+                    "Enjoy for clean midday energy and steady blood sugar!"
                 ]
             },
             {
-                "id": "dp4",
+                "id": f"dp4_{now_manila.strftime('%Y%m%d')}",
                 "mealType": "Dinner",
-                "title": d_title,
+                "title": menu["d_title"],
                 "calories": d_cals,
-                "protein": f"{int(target_protein * 0.30)}g",
-                "carbs": f"{int(target_carbs * 0.30)}g",
-                "fats": f"{int(target_fats * 0.30)}g",
+                "protein": f"{d_prot}g",
+                "carbs": f"{d_carbs}g",
+                "fats": f"{d_fats}g",
                 "time": "7:30 PM",
-                "ingredients": d_ing,
+                "ingredients": menu["d_ing"],
                 "instructions": [
-                    "Simmer ginger, garlic, and lemongrass in 3 cups of water.",
-                    "Add protein and cook for 10 minutes.",
-                    "Add kalabasa cubes and cook until tender.",
-                    "Turn off heat and stir in fresh malunggay leaves before serving!"
+                    "Simmer ginger, garlic, and fresh water in a pot.",
+                    "Add protein and cook gently until tender.",
+                    "Add vegetables and cook for 3 minutes.",
+                    "Season with calamansi and serve hot for restorative evening recovery!"
                 ]
             }
         ]
