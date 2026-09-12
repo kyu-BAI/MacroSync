@@ -65,7 +65,7 @@ export default function MapcnMap({
     }
   }, [centerCoords[0], centerCoords[1], zoom]);
 
-  const bgColor = isDarkMode ? '#0B0F19' : '#F8FAFC';
+  const bgColor = '#F8FAFC';
   const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
 
   // Standardize markers array
@@ -105,19 +105,19 @@ export default function MapcnMap({
           z-index: 15;
           display: ${showDimensionToggle ? 'flex' : 'none'};
           align-items: center;
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.94)'};
+          background: rgba(255, 255, 255, 0.94);
           backdrop-filter: blur(14px);
           -webkit-backdrop-filter: blur(14px);
-          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)'};
+          border: 1px solid rgba(0, 0, 0, 0.1);
           border-radius: 20px;
           padding: 3px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
           gap: 2px;
         }
         .dim-btn {
           background: transparent;
           border: none;
-          color: ${isDarkMode ? '#94A3B8' : '#64748B'};
+          color: #64748B;
           padding: 4px 12px;
           font-size: 11px;
           font-weight: 800;
@@ -134,12 +134,12 @@ export default function MapcnMap({
 
         /* ── Map Zoom/Compass Controls ── */
         .maplibregl-ctrl-group {
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'} !important;
+          background: rgba(255, 255, 255, 0.92) !important;
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'} !important;
+          border: 1px solid rgba(0, 0, 0, 0.08) !important;
           border-radius: 8px !important;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
           overflow: hidden;
           margin: 10px 10px 0 0 !important;
         }
@@ -147,7 +147,7 @@ export default function MapcnMap({
           width: 32px !important;
           height: 32px !important;
           border: none !important;
-          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
           background: transparent !important;
           display: flex !important;
           align-items: center !important;
@@ -157,7 +157,6 @@ export default function MapcnMap({
           border-bottom: none !important;
         }
         .maplibregl-ctrl-icon {
-          ${isDarkMode ? 'filter: invert(1);' : ''}
           opacity: 0.85;
         }
 
@@ -198,16 +197,16 @@ export default function MapcnMap({
         /* ── MarkerTooltip ── */
         .mapcn-marker-tooltip {
           margin-top: 3px;
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)'};
-          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'};
+          background: rgba(255, 255, 255, 0.95);
+          color: #0F172A;
+          border: 1px solid rgba(0, 0, 0, 0.08);
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
           border-radius: 6px;
           padding: 2px 6px;
           font-size: 10px;
           font-weight: 700;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
           white-space: nowrap;
           pointer-events: none;
         }
@@ -219,26 +218,26 @@ export default function MapcnMap({
           padding: 0 !important;
         }
         .maplibregl-popup-tip {
-          border-top-color: ${isDarkMode ? '#0F172A' : '#FFFFFF'} !important;
+          border-top-color: #FFFFFF !important;
         }
         .mapcn-popup-card {
-          background: ${isDarkMode ? '#0F172A' : '#FFFFFF'};
-          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'};
+          background: #FFFFFF;
+          color: #0F172A;
+          border: 1px solid rgba(0, 0, 0, 0.1);
           border-radius: 12px;
           padding: 10px 14px;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
           min-width: 140px;
         }
         .mapcn-popup-name {
           font-size: 13px;
           font-weight: 700;
-          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
+          color: #0F172A;
         }
         .mapcn-popup-coords {
           font-size: 10px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          color: ${isDarkMode ? '#94A3B8' : '#64748B'};
+          color: #64748B;
           margin-top: 2px;
         }
         .mapcn-popup-desc {
