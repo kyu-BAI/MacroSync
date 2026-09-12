@@ -248,30 +248,14 @@ export default function MapcnMap({
           margin-top: 4px;
         }
 
-        /* ── Watermark ── */
-        .mapcn-watermark {
-          position: absolute;
-          bottom: 8px;
-          right: 8px;
-          z-index: 10;
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.82)' : 'rgba(255, 255, 255, 0.88)'};
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'};
-          border-radius: 12px;
-          padding: 3px 8px;
-          font-size: 9px;
-          font-weight: 700;
-          color: ${isDarkMode ? '#94A3B8' : '#64748B'};
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          pointer-events: none;
+        /* ── Hidden Attributions ── */
+        .mapcn-watermark,
+        .maplibregl-ctrl-attrib,
+        .maplibregl-ctrl-bottom-right,
+        .mapboxgl-ctrl-attrib,
+        .mapboxgl-ctrl-bottom-right { 
+          display: none !important; 
         }
-        .mapcn-watermark .brand {
-          color: ${isDarkMode ? '#10B981' : '#059669'};
-        }
-        .maplibregl-ctrl-attrib { display: none !important; }
       </style>
     </head>
     <body>
@@ -282,10 +266,6 @@ export default function MapcnMap({
       </div>
 
       <div id="map"></div>
-
-      <div class="mapcn-watermark">
-        <span class="brand">▰ OpenFreeMap</span>, © OpenStreetMap ⓘ
-      </div>
 
       <script>
         // OpenFreeMap: Bright (2D colorful) & Liberty (3D buildings)
