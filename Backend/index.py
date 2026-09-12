@@ -3320,7 +3320,7 @@ async def google_webpage():
     </head>
     <body>
         <div class="card">
-            <div class="logo">🥗</div>
+            <div class="logo" style="color: #FFFFFF; font-weight: 900;">M</div>
             <h1>MacroSync</h1>
             <p>Continue to MacroSync with your Google Account</p>
             

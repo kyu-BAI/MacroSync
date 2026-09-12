@@ -296,7 +296,7 @@ export default function SettingsScreen({
     const buttons = [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Choose from Gallery 🖼️",
+        text: "Choose from Gallery",
         style: "default",
         onPress: handleLaunchImagePicker,
       },
@@ -304,12 +304,12 @@ export default function SettingsScreen({
 
     if (hasImage) {
       buttons.unshift({
-        text: "View Full Photo 🔍",
+        text: "View Full Photo",
         style: "default",
         onPress: () => setShowPhotoPreviewModal(true),
       });
       buttons.push({
-        text: "Remove Photo 🗑️",
+        text: "Remove Photo",
         style: "destructive",
         onPress: handleRemoveProfileImage,
       });
@@ -590,7 +590,7 @@ export default function SettingsScreen({
 
       setTimeout(() => {
         showAlert(
-          "Password Updated 🔒",
+          "Password Updated",
           "Your password has been changed successfully. For your security, please sign in with your new password.",
           [
             {

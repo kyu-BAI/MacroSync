@@ -435,12 +435,12 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
             <Text style={styles.confirmSubtitle}>Please double check your parameters before finalizing baseline calibrations.</Text>
 
             <View style={styles.confirmDataBlock}>
-              <Text style={styles.confirmDataLabel}>📍 Current Address String</Text>
+              <Text style={styles.confirmDataLabel}>Current Address String</Text>
               <Text style={styles.confirmDataValue}>{compiledAddress}</Text>
 
               <View style={styles.confirmDivider} />
 
-              <Text style={styles.confirmDataLabel}>⚠️ Profile Exclusions & Allergies</Text>
+              <Text style={styles.confirmDataLabel}>Profile Exclusions & Allergies</Text>
               <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#94A3B8' } : { color: '#64748B' }]}>
                 {compiledAllergiesText}
               </Text>

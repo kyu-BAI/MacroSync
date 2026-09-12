@@ -204,8 +204,8 @@ export default function ChatbotAIScreen({
 
     // Mobile Expo Go fallback — guide user to use keyboard mic
     showAlert(
-      "🎙️ Use Your Keyboard Mic",
-      "Tap the microphone icon on your phone keyboard (🎤) to speak. Your spoken words will appear in the text box automatically.",
+      "Use Your Keyboard Mic",
+      "Tap the microphone icon on your phone keyboard to speak. Your spoken words will appear in the text box automatically.",
       [{ text: "Got it!", style: "cancel" }],
     );
   };
@@ -335,7 +335,7 @@ export default function ChatbotAIScreen({
           [
             { text: "Continue on Free Plan", style: "cancel" },
             {
-              text: "Upgrade to Premium ✨",
+              text: "Upgrade to Premium",
               onPress: () => onTabChange("SETTINGS"),
             },
           ],
@@ -461,8 +461,8 @@ export default function ChatbotAIScreen({
 
   const handleShowTipsModal = () => {
     showAlert(
-      "Vita AI Guidance & Limits 💡",
-      "• Ask tailored questions about your target macros, local Filipino recipes, or zero-equipment home workouts.\n\n⚠️ Note: On the Free Plan, every message sent deducts 1 count from your 10 daily free messages.",
+      "Vita AI Guidance & Limits",
+      "• Ask tailored questions about your target macros, local Filipino recipes, or zero-equipment home workouts.\n\nNote: On the Free Plan, every message sent deducts 1 count from your 10 daily free messages.",
       [{ text: "Got it!", style: "default" }],
     );
   };
@@ -568,7 +568,7 @@ export default function ChatbotAIScreen({
                 ]}
               >
                 {chatInfo.isPremium
-                  ? "Unlimited Messages ✨"
+                  ? "Unlimited Messages"
                   : `${chatInfo.remaining} / 10 Messages Left`}
               </Text>
               <Info
@@ -734,7 +734,7 @@ export default function ChatbotAIScreen({
                   flex: 1,
                 }}
               >
-                🎙️ Listening to your voice... Speak now!
+                Listening to your voice... Speak now!
               </Text>
               <TouchableOpacity onPress={() => setIsListening(false)}>
                 <X color="#EF4444" size={14} />

@@ -199,7 +199,7 @@ export default function WorkoutScreen({
       }, 1000);
     } else if (restTimer === 0) {
       setIsTimerRunning(false);
-      showAlert("Rest Period Complete! ⏱️", "Ready for your next set or exercise step?");
+      showAlert("Rest Period Complete!", "Ready for your next set or exercise step?");
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, restTimer]);
@@ -394,7 +394,7 @@ export default function WorkoutScreen({
       if (activeRoutine) {
         await pushNotificationIfAllowed({
           id: `n-${Date.now()}`,
-          title: 'Workout Completed! 🏋️‍♂️',
+          title: 'Workout Completed!',
           category: 'workout',
           time: 'Just Now',
           read: false,
@@ -535,14 +535,14 @@ export default function WorkoutScreen({
                   {activeRoutine.tutorials[currentStepIndex].body_part && (
                     <View style={{ backgroundColor: 'rgba(139,92,246,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' }}>
                       <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6', textTransform: 'capitalize' }}>
-                        💪 {activeRoutine.tutorials[currentStepIndex].body_part}
+                        {activeRoutine.tutorials[currentStepIndex].body_part}
                       </Text>
                     </View>
                   )}
                   {activeRoutine.tutorials[currentStepIndex].target && (
                     <View style={{ backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
                       <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', textTransform: 'capitalize' }}>
-                        🎯 {activeRoutine.tutorials[currentStepIndex].target}
+                        {activeRoutine.tutorials[currentStepIndex].target}
                       </Text>
                     </View>
                   )}
@@ -562,7 +562,7 @@ export default function WorkoutScreen({
                 >
                   <Clock color="#FFFFFF" size={14} style={{ marginRight: 6 }} />
                   <Text style={styles.targetMetricChipText}>
-                    {isTimerRunning ? `Rest: ${restTimer}s` : '⏱️ 45s Rest Timer'}
+                    {isTimerRunning ? `Rest: ${restTimer}s` : '45s Rest Timer'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -632,7 +632,7 @@ export default function WorkoutScreen({
                       {/* Interactive Media Control Bar */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 8 }}>
                         <Text style={{ fontSize: 10, color: theme?.textSecondary || '#94A3B8' }}>
-                          {mediaType === 'gif' && !mediaLoadError ? '🎬 Animated GIF' : '📷 HD Diagram'} · Gym Visual
+                          {mediaType === 'gif' && !mediaLoadError ? 'Animated GIF' : 'HD Diagram'} · Gym Visual
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 6 }}>
                           <TouchableOpacity
@@ -680,7 +680,7 @@ export default function WorkoutScreen({
                     borderWidth: 1.2,
                     borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
                   }}>
-                    <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 10 }]}>📋 Step-by-Step Tutorial:</Text>
+                    <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 10 }]}>Step-by-Step Tutorial:</Text>
                     {activeRoutine.tutorials[currentStepIndex].instruction_steps.map((step, idx) => (
                       <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
                         <View style={{
@@ -790,7 +790,7 @@ export default function WorkoutScreen({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
-                  Active Recovery Recommended 🧘
+                  Active Recovery Recommended
                 </Text>
                 <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B', lineHeight: 17 }}>
                   Great effort today! You burned {dailyExercise?.caloriesBurned || 0} kcal across {dailyExercise?.activeMinutes || 0} active minutes. Consider taking a light rest or stretching day tomorrow to prevent overtraining.
@@ -901,7 +901,7 @@ export default function WorkoutScreen({
               {Array.isArray(workout.tutorials) && workout.tutorials.length > 0 && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                   <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: logoGreen }}>🎬 Animated GIF Tutorials</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: logoGreen }}>Animated GIF Tutorials</Text>
                   </View>
                   {workout.tutorials.slice(0, 3).map((tut, tIdx) => (
                     <Text key={tIdx} style={{ fontSize: 11, color: theme?.textSecondary || '#64748B' }}>

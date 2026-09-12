@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, SafeAreaView } from 'react-native';
+import { WifiOff } from 'lucide-react-native';
 import { styles } from '../../App.styles';
 
 export default function OfflineBanner({ isOnline }) {
@@ -7,7 +8,7 @@ export default function OfflineBanner({ isOnline }) {
   return (
     <SafeAreaView style={styles.offlineBannerContainer}>
       <View style={styles.offlineBannerPill}>
-        <Text style={styles.offlineBannerIcon}>📴</Text>
+        <WifiOff size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
         <Text style={styles.offlineBannerText}>
           Offline Mode — Showing cached data. Logs will sync when back online.
         </Text>

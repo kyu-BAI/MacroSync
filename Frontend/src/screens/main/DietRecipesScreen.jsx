@@ -231,10 +231,10 @@ export default function DietRecipesScreen({
       palengkeItems: 'Pasil Fresh Fish, Singkamas, Pork Belly, Kangkong, Calamansi',
       lat: 10.3157, lng: 123.8854,
       famousDishes: [
-        { name: 'Pasil Tuslob Buwa', emoji: '🧠', desc: 'Frothy pig brain & liver stew cooked with onions & chili, dipped with puso (hanging rice).' },
-        { name: 'Cebuano Ngohiong', emoji: '🌯', desc: 'Crispy five-spice fried lumpia stuffed with ubod/singkamas, served with garlic brown dip.' },
-        { name: 'Lechon sa Sugbo', emoji: '🐖', desc: 'World-famous herb & lemongrass stuffed charcoal roasted pork with super crispy skin.' },
-        { name: 'Ginabot (Chicharon Bulaklak)', emoji: '🍳', desc: 'Deep-fried pork mesentery, a legendary Cebuano night market street food staple.' }
+        { name: 'Pasil Tuslob Buwa', desc: 'Frothy pig brain & liver stew cooked with onions & chili, dipped with puso (hanging rice).' },
+        { name: 'Cebuano Ngohiong', desc: 'Crispy five-spice fried lumpia stuffed with ubod/singkamas, served with garlic brown dip.' },
+        { name: 'Lechon sa Sugbo', desc: 'World-famous herb & lemongrass stuffed charcoal roasted pork with super crispy skin.' },
+        { name: 'Ginabot (Chicharon Bulaklak)', desc: 'Deep-fried pork mesentery, a legendary Cebuano night market street food staple.' }
       ]
     },
     'Lapu-Lapu City': {
@@ -242,9 +242,9 @@ export default function DietRecipesScreen({
       palengkeItems: 'Tangigue, Saang, Bakasi, Calamansi, Fresh Lato',
       lat: 10.3103, lng: 123.9494,
       famousDishes: [
-        { name: 'Sutukil Seafood Trilogy', emoji: '🐟', desc: 'Iconic 3-way seafood meal: Sugba (Grilled), Tula (Fish Soup), and Kinilaw (Raw Cured).' },
-        { name: 'Linarang na Bakasi sa Cordova', emoji: '🐍', desc: 'Cordova moray eel stew cooked with kamias souring broth, black beans, and chili.' },
-        { name: 'Presko nga Saang sa Mactan', emoji: '🐚', desc: 'Steamed local sea snails dipped in spicy native tuba vinegar and ginger.' }
+        { name: 'Sutukil Seafood Trilogy', desc: 'Iconic 3-way seafood meal: Sugba (Grilled), Tula (Fish Soup), and Kinilaw (Raw Cured).' },
+        { name: 'Linarang na Bakasi sa Cordova', desc: 'Cordova moray eel stew cooked with kamias souring broth, black beans, and chili.' },
+        { name: 'Presko nga Saang sa Mactan', desc: 'Steamed local sea snails dipped in spicy native tuba vinegar and ginger.' }
       ]
     },
     'Mandaue City': {
@@ -252,9 +252,9 @@ export default function DietRecipesScreen({
       palengkeItems: 'Native Chicken, Kangkong, Sayote, Eggplant, Sweet Rice',
       lat: 10.3333, lng: 123.9333,
       famousDishes: [
-        { name: 'Bibingka sa Mandaue', emoji: '🫓', desc: 'Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves.' },
-        { name: 'Tagaktak sa Mandaue', emoji: '🕸️', desc: 'Crispy net-like sweet rice flour treat fried to golden perfection.' },
-        { name: 'Utan Bisaya sa Mandaue', emoji: '🥣', desc: 'Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens.' }
+        { name: 'Bibingka sa Mandaue', desc: 'Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves.' },
+        { name: 'Tagaktak sa Mandaue', desc: 'Crispy net-like sweet rice flour treat fried to golden perfection.' },
+        { name: 'Utan Bisaya sa Mandaue', desc: 'Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens.' }
       ]
     },
     'Talisay City': {
@@ -262,8 +262,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Pork Belly, Inun-unan Fish, Kangkong, Cucumber, Native Tomatoes',
       lat: 10.2447, lng: 123.8494,
       famousDishes: [
-        { name: 'Inasal nga Lechon sa Talisay', emoji: '🍖', desc: 'Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork.' },
-        { name: 'Inun-unan nga Bisaya', emoji: '🐟', desc: 'Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant.' }
+        { name: 'Inasal nga Lechon sa Talisay', desc: 'Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork.' },
+        { name: 'Inun-unan nga Bisaya', desc: 'Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant.' }
       ]
     },
     'Carcar City': {
@@ -271,9 +271,9 @@ export default function DietRecipesScreen({
       palengkeItems: 'Native Pork, Ampaw, Chicharon, Kangkong, Squash, Sitaw',
       lat: 10.1044, lng: 123.6419,
       famousDishes: [
-        { name: 'Chicharon sa Carcar', emoji: '🥓', desc: 'Famous crunchy pork cracklings crafted with thick savory meat & fat layers.' },
-        { name: 'Ampaw sa Carcar', emoji: '🍿', desc: 'Puffed rice crispy square treats bound with sweet native syrup and peanuts.' },
-        { name: 'Humba sa Carcar', emoji: '🍲', desc: 'Tender pork belly braised with fermented black beans, banana blossoms, and tuba sugar.' }
+        { name: 'Chicharon sa Carcar', desc: 'Famous crunchy pork cracklings crafted with thick savory meat & fat layers.' },
+        { name: 'Ampaw sa Carcar', desc: 'Puffed rice crispy square treats bound with sweet native syrup and peanuts.' },
+        { name: 'Humba sa Carcar', desc: 'Tender pork belly braised with fermented black beans, banana blossoms, and tuba sugar.' }
       ]
     },
     'Argao': {
@@ -281,9 +281,9 @@ export default function DietRecipesScreen({
       palengkeItems: 'Native Sikwate (Cacao), Torta, Native Pork, Alugbati, Eggplant',
       lat: 9.8808, lng: 123.5975,
       famousDishes: [
-        { name: 'Torta sa Argao', emoji: '🥮', desc: 'Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese.' },
-        { name: 'Batirol nga Sikwate sa Argao', emoji: '☕', desc: 'Rich hot chocolate frothed with a batirol using 100% native cacao tablea.' },
-        { name: 'Chiu-Chiu nga Baboy sa Argao', emoji: '🍲', desc: 'Traditional Argao braised pork belly stewed with spices and native herbs.' }
+        { name: 'Torta sa Argao', desc: 'Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese.' },
+        { name: 'Batirol nga Sikwate sa Argao', desc: 'Rich hot chocolate frothed with a batirol using 100% native cacao tablea.' },
+        { name: 'Chiu-Chiu nga Baboy sa Argao', desc: 'Traditional Argao braised pork belly stewed with spices and native herbs.' }
       ]
     },
     'Bogo City': {
@@ -291,8 +291,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Tangigue, Sweet Corn, Native Tomatoes, Cucumber, Calamansi',
       lat: 11.0517, lng: 124.0055,
       famousDishes: [
-        { name: 'Pintos sa Bogo', emoji: '🌽', desc: 'Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks.' },
-        { name: 'Kinilaw nga Tangigue sa Amihanan', emoji: '🥗', desc: 'Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies.' }
+        { name: 'Pintos sa Bogo', desc: 'Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks.' },
+        { name: 'Kinilaw nga Tangigue sa Amihanan', desc: 'Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies.' }
       ]
     },
     'San Remigio': {
@@ -300,8 +300,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Bangus, Tilapia, Fresh Lato, Kangkong, Squash, Gabi Leaves',
       lat: 11.0772, lng: 123.9356,
       famousDishes: [
-        { name: 'Presko nga Salada nga Lato', emoji: '🌿', desc: 'Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions.' },
-        { name: 'Sinugbang Bangus sa Dahon sa Saging', emoji: '🐟', desc: 'Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf.' }
+        { name: 'Presko nga Salada nga Lato', desc: 'Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions.' },
+        { name: 'Sinugbang Bangus sa Dahon sa Saging', desc: 'Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf.' }
       ]
     },
     'Daanbantayan': {
@@ -309,8 +309,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger',
       lat: 11.2589, lng: 124.0153,
       famousDishes: [
-        { name: 'Inun-unan nga Bodboron', emoji: '🍲', desc: 'Small ocean fish simmered gently in native vinegar, ginger, and green peppers.' },
-        { name: 'Linat-ang Tulingan sa Daanbantayan', emoji: '🐟', desc: 'Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes.' }
+        { name: 'Inun-unan nga Bodboron', desc: 'Small ocean fish simmered gently in native vinegar, ginger, and green peppers.' },
+        { name: 'Linat-ang Tulingan sa Daanbantayan', desc: 'Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes.' }
       ]
     },
     'Bantayan Island': {
@@ -318,9 +318,9 @@ export default function DietRecipesScreen({
       palengkeItems: 'Dried Danggit, Blue Crab, Shellfish, Calamansi, Young Coconut',
       lat: 11.1681, lng: 123.7222,
       famousDishes: [
-        { name: 'Buwad nga Danggit sa Bantayan', emoji: '🐟', desc: 'World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar.' },
-        { name: 'Nilung-ag nga Kasag sa Bantayan', emoji: '🦀', desc: 'Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi.' },
-        { name: 'Buwad nga Pusit', emoji: '🦑', desc: 'Crispy sun-dried squid toasted over coals until golden and fragrant.' }
+        { name: 'Buwad nga Danggit sa Bantayan', desc: 'World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar.' },
+        { name: 'Nilung-ag nga Kasag sa Bantayan', desc: 'Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi.' },
+        { name: 'Buwad nga Pusit', desc: 'Crispy sun-dried squid toasted over coals until golden and fragrant.' }
       ]
     },
     'Camotes Islands': {
@@ -328,8 +328,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Cassava, Buko, Native Chicken, Fresh Ocean Fish, Kangkong',
       lat: 10.6558, lng: 124.3431,
       famousDishes: [
-        { name: 'Cassava Cake sa Camotes', emoji: '🥧', desc: 'Traditional baked cassava root cake enriched with fresh coconut milk and sugar.' },
-        { name: 'Halang-Halang nga Manok sa Gata', emoji: '🌶️', desc: 'Spicy chicken coconut milk soup infused with chili leaves, ginger, and lemongrass.' }
+        { name: 'Cassava Cake sa Camotes', desc: 'Traditional baked cassava root cake enriched with fresh coconut milk and sugar.' },
+        { name: 'Halang-Halang nga Manok sa Gata', desc: 'Spicy chicken coconut milk soup infused with chili leaves, ginger, and lemongrass.' }
       ]
     },
     'Toledo City': {
@@ -337,8 +337,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'River Prawns, Tilapia, Corn Grit, Squash, Sitaw',
       lat: 10.3772, lng: 123.6406,
       famousDishes: [
-        { name: 'Gisadong Ulang sa Toledo', emoji: '🦐', desc: 'Large freshwater river prawns sautéed in garlic, butter, and native tomatoes.' },
-        { name: 'Sinugbang Tilapia sa Kamayan', emoji: '🐟', desc: 'Fresh river tilapia grilled over charcoal, served with calamansi soy dip.' }
+        { name: 'Gisadong Ulang sa Toledo', desc: 'Large freshwater river prawns sautéed in garlic, butter, and native tomatoes.' },
+        { name: 'Sinugbang Tilapia sa Kamayan', desc: 'Fresh river tilapia grilled over charcoal, served with calamansi soy dip.' }
       ]
     },
     'Balamban': {
@@ -346,8 +346,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Stuffed Liempo, Native Chicken, Malunggay, Sayote',
       lat: 10.5042, lng: 123.7194,
       famousDishes: [
-        { name: 'Sinugbang Liempo sa Balamban', emoji: '🥓', desc: 'Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass.' },
-        { name: 'Tinolang Manok sa Balamban', emoji: '🍲', desc: 'Free-range chicken stewed with green papaya, ginger, and fresh malunggay.' }
+        { name: 'Sinugbang Liempo sa Balamban', desc: 'Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass.' },
+        { name: 'Tinolang Manok sa Balamban', desc: 'Free-range chicken stewed with green papaya, ginger, and fresh malunggay.' }
       ]
     },
     'Moalboal': {
@@ -355,8 +355,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Tuna Steak, Mackerel, Buko Water, Calamansi, Cucumber',
       lat: 9.9575, lng: 123.4000,
       famousDishes: [
-        { name: 'Sinugbang Tangigue Steak sa Moalboal', emoji: '🥩', desc: 'Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip.' },
-        { name: 'Kinilaw nga Mackerel sa Baybayon', emoji: '🥗', desc: 'Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger.' }
+        { name: 'Sinugbang Tangigue Steak sa Moalboal', desc: 'Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip.' },
+        { name: 'Kinilaw nga Mackerel sa Baybayon', desc: 'Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger.' }
       ]
     },
     'Oslob': {
@@ -364,8 +364,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Tangigue, Kamote Tops, Sinigang Greens, Calamansi, Mango',
       lat: 9.5350, lng: 123.4319,
       famousDishes: [
-        { name: 'Sinigang nga Tangigue sa Oslob', emoji: '🍲', desc: 'Sour fish soup made with fresh king mackerel, native tomatoes, and greens.' },
-        { name: 'Salada nga Dahon sa Kamote', emoji: '🌿', desc: 'Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes.' }
+        { name: 'Sinigang nga Tangigue sa Oslob', desc: 'Sour fish soup made with fresh king mackerel, native tomatoes, and greens.' },
+        { name: 'Salada nga Dahon sa Kamote', desc: 'Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes.' }
       ]
     },
     'Danao City': {
@@ -373,8 +373,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Kalamay, Bangus, Kangkong, Eggplant, Tomatoes',
       lat: 10.5256, lng: 124.0264,
       famousDishes: [
-        { name: 'Kalamay sa Danao', emoji: '🍯', desc: 'Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells.' },
-        { name: 'Inasal nga Bangus sa Danao', emoji: '🐟', desc: 'Whole milkfish deboned and stuffed with savory meat, raisins, and spices.' }
+        { name: 'Kalamay sa Danao', desc: 'Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells.' },
+        { name: 'Inasal nga Bangus sa Danao', desc: 'Whole milkfish deboned and stuffed with savory meat, raisins, and spices.' }
       ]
     },
     'Liloan': {
@@ -382,8 +382,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Lato, Fresh Fish, Native Chicken, Sayote, Masi',
       lat: 10.4000, lng: 123.9833,
       famousDishes: [
-        { name: 'Rosquillos sa Titay (Liloan)', emoji: '🥨', desc: 'The original ring-shaped crisp biscuit created in Liloan back in 1907.' },
-        { name: 'Masi sa Liloan', emoji: '🍡', desc: 'Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center.' }
+        { name: 'Rosquillos sa Titay (Liloan)', desc: 'The original ring-shaped crisp biscuit created in Liloan back in 1907.' },
+        { name: 'Masi sa Liloan', desc: 'Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center.' }
       ]
     },
     'Dalaguete': {
@@ -393,8 +393,8 @@ export default function DietRecipesScreen({
 
     
       famousDishes: [
-        { name: 'Gisadong Utan sa Mantalongon', emoji: '🥦', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
-        { name: 'Linat-ang Baboy ug Sayote', emoji: '🍲', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' }
+        { name: 'Gisadong Utan sa Mantalongon', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
+        { name: 'Linat-ang Baboy ug Sayote', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' }
       ]
     },
     'Barili': {
@@ -402,8 +402,8 @@ export default function DietRecipesScreen({
       palengkeItems: 'Carabao Milk, Pastillas, Native Eggs, Native Chicken, Squash',
       lat: 10.1133, lng: 123.5083,
       famousDishes: [
-        { name: 'Presko nga Gatas sa Kabaw ug Pastillas', emoji: '🥛', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
-        { name: 'Kinalan nga Manok Bisaya sa Barili', emoji: '🍲', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' }
+        { name: 'Presko nga Gatas sa Kabaw ug Pastillas', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
+        { name: 'Kinalan nga Manok Bisaya sa Barili', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' }
       ]
     }
   };
@@ -417,7 +417,7 @@ export default function DietRecipesScreen({
         title: cityName,
         lat: CITY_PROFILES[cityName].lat,
         lng: CITY_PROFILES[cityName].lng,
-        subtitle: topDish ? `${topDish.emoji || '🍽️'} ${topDish.name}` : '',
+        subtitle: topDish ? topDish.name : '',
         active: cityName === selectedLocation,
       };
     });
@@ -918,7 +918,7 @@ export default function DietRecipesScreen({
         
         await pushNotificationIfAllowed({
           id: `n-${Date.now()}`,
-          title: 'Meal Logged! 🍽️',
+          title: 'Meal Logged!',
           category: 'meal',
           time: 'Just Now',
           read: false,
@@ -953,7 +953,7 @@ export default function DietRecipesScreen({
               }
             });
           }
-          showAlert("📴 Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
+          showAlert("Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
           return;
         }
 
@@ -993,13 +993,13 @@ export default function DietRecipesScreen({
               }
             });
           }
-          showAlert("📴 Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
+          showAlert("Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
         }
       };
 
       if (excess > 0) {
         showAlert(
-          "Calorie Target Exceeded ⚠️",
+          "Calorie Target Exceeded",
           `Logging this meal (${addedCal} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
           [
             { text: "Cancel", style: "cancel" },
@@ -1043,7 +1043,7 @@ export default function DietRecipesScreen({
             }
           });
         }
-        showAlert('📴 Saved Offline', 'Meal removed locally. Will sync when back online.');
+        showAlert('Saved Offline', 'Meal removed locally. Will sync when back online.');
         return;
       }
 
@@ -1450,7 +1450,7 @@ export default function DietRecipesScreen({
                           fontWeight: '800',
                           color: isSelected ? '#FFFFFF' : (isDarkMode ? '#CBD5E1' : '#475569')
                         }}>
-                          📍 {loc}
+                          {loc}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1509,7 +1509,7 @@ export default function DietRecipesScreen({
                     return (
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>🍽️ 1-Day Local Diet ({selectedLocation})</Text>
+                          <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>1-Day Local Diet ({selectedLocation})</Text>
                           <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
                             <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
                               ~{totalKcal} Kcal Total
@@ -1531,7 +1531,7 @@ export default function DietRecipesScreen({
                         }}>
                           <CheckCircle2 size={14} color="#10B981" style={{ marginRight: 6 }} />
                           <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#A7F3D0' : '#047857', flex: 1 }}>
-                            🛡️ Allergy Safety Active: Filtered for your profile ({allergiesText})
+                            Allergy Safety Active: Filtered for your profile ({allergiesText})
                           </Text>
                         </View>
 
@@ -1647,12 +1647,12 @@ export default function DietRecipesScreen({
                             width: 38,
                             height: 38,
                             borderRadius: 12,
-                            backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : '#FEF3C7',
+                            backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5',
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginRight: 12
                           }}>
-                            <Text style={{ fontSize: 20 }}>{dish.emoji || '🍲'}</Text>
+                            <ChefHat size={18} color="#10B981" />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
@@ -1765,7 +1765,7 @@ export default function DietRecipesScreen({
           }}>
             <View>
               <Text style={{ fontSize: 18, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
-                🗺️ Full Cebu Island Food Map
+                Full Cebu Island Food Map
               </Text>
               <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 }}>
                 Tap any city marker to select local food market ({locations.length} cities)
@@ -1821,10 +1821,10 @@ export default function DietRecipesScreen({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={{ fontSize: 15, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }} numberOfLines={1}>
-                  📍 {CITY_PROFILES[selectedLocation]?.marketTitle || selectedLocation}
+                  {CITY_PROFILES[selectedLocation]?.marketTitle || selectedLocation}
                 </Text>
                 <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
-                  ✨ {CITY_PROFILES[selectedLocation]?.specialty}
+                  {CITY_PROFILES[selectedLocation]?.specialty}
                 </Text>
               </View>
               <TouchableOpacity

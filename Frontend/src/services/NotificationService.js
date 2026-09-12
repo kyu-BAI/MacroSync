@@ -75,7 +75,7 @@ export const NotificationService = {
       schedules.push(
         {
           id: 'breakfast',
-          title: 'Morning Fuel 🍳',
+          title: 'Morning Fuel',
           body: 'Time for breakfast! Start your day with a healthy meal and don\'t forget to log it.',
           hour: 8,
           minute: 0,
@@ -83,7 +83,7 @@ export const NotificationService = {
         },
         {
           id: 'lunch',
-          title: 'Lunch Break 🥗',
+          title: 'Lunch Break',
           body: 'Time to refuel! Take a break, have some lunch, and keep your energy up.',
           hour: 12,
           minute: 0,
@@ -91,7 +91,7 @@ export const NotificationService = {
         },
         {
           id: 'hydration',
-          title: 'Stay Hydrated! 💧',
+          title: 'Stay Hydrated!',
           body: 'Don\'t forget to drink water! Staying hydrated is key to your healthy routine.',
           hour: 14,
           minute: 0,
@@ -99,7 +99,7 @@ export const NotificationService = {
         },
         {
           id: 'dinner',
-          title: 'Dinner Time 🍽️',
+          title: 'Dinner Time',
           body: 'Time for dinner! End your day right and log your final macros.',
           hour: 19,
           minute: 0,
@@ -112,7 +112,7 @@ export const NotificationService = {
     if (motivationalUpdates) {
       schedules.push({
         id: 'workout',
-        title: 'Time to Move! 🏃‍♂️',
+        title: 'Time to Move!',
         body: 'Ready for your workout? Let\'s hit those exercise and step goals today!',
         hour: 17,
         minute: 0,
@@ -124,7 +124,7 @@ export const NotificationService = {
     if (personalizedAlerts) {
       schedules.push({
         id: 'smart_alert',
-        title: 'Vita AI Smart Check 💡',
+        title: 'Vita AI Smart Check',
         body: 'Check your macro balance for today! See how close you are to your protein target.',
         hour: 15,
         minute: 30,

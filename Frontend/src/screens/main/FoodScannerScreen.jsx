@@ -184,7 +184,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         setIsScanning(false);
         stopPulseAnimation();
         setCapturedImage(null);
-        showAlert("Camera Error 📷", "Failed to capture photo. Please try again.");
+        showAlert("Camera Error", "Failed to capture photo. Please try again.");
         return;
       }
 
@@ -206,7 +206,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         stopPulseAnimation();
         setCapturedImage(null);
         showAlert(
-          "Camera Not Ready 📷",
+          "Camera Not Ready",
           "The camera captured a blank image. Please wait a moment and try again."
         );
         return;
@@ -236,7 +236,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           "You've reached your daily limit of 5 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
           [
             { text: "Continue on Free Plan", style: "cancel" },
-            { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+            { text: "Upgrade to Premium", onPress: () => onTabChange('SETTINGS') }
           ]
         );
         return;
@@ -257,9 +257,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
           const isBusy = errStr.includes("busy") || errStr.includes("quota") || errStr.includes("temporarily");
           
-          let alertTitle = "Scan Error 📸";
-          if (isNotFood) alertTitle = "No Edible Food Detected 🍽️";
-          else if (isBusy) alertTitle = "AI Service Busy ⌛";
+          let alertTitle = "Scan Error";
+          if (isNotFood) alertTitle = "No Edible Food Detected";
+          else if (isBusy) alertTitle = "AI Service Busy";
 
           showAlert(alertTitle, data.error);
           setCapturedImage(null);
@@ -326,7 +326,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           stopPulseAnimation();
           setCapturedImage(null);
           showAlert(
-            "Image Error 📸",
+            "Image Error",
             "Could not read image file. Please choose another image or take a fresh photo."
           );
           return;
@@ -356,7 +356,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             "You've reached your daily limit of 5 scans on the Free Plan. You can continue using MacroSync without AI food scanning, or upgrade to Premium for unlimited scans and chatbot access.",
             [
               { text: "Continue on Free Plan", style: "cancel" },
-              { text: "Upgrade to Premium ✨", onPress: () => onTabChange('SETTINGS') }
+              { text: "Upgrade to Premium", onPress: () => onTabChange('SETTINGS') }
             ]
           );
           return;
@@ -377,9 +377,9 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
             const isNotFood = errStr.includes("no food") || errStr.includes("not food") || errStr.includes("edible") || errStr.includes("inedible");
             const isBusy = errStr.includes("busy") || errStr.includes("quota") || errStr.includes("temporarily");
             
-            let alertTitle = "Scan Error 📸";
-            if (isNotFood) alertTitle = "No Edible Food Detected 🍽️";
-            else if (isBusy) alertTitle = "AI Service Busy ⌛";
+            let alertTitle = "Scan Error";
+            if (isNotFood) alertTitle = "No Edible Food Detected";
+            else if (isBusy) alertTitle = "AI Service Busy";
 
             showAlert(alertTitle, data.error);
             setCapturedImage(null);
@@ -458,7 +458,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
     if (excess > 0) {
       showAlert(
-        "Calorie Target Exceeded ⚠️",
+        "Calorie Target Exceeded",
         `Logging this meal (${scaledCalories} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
         [
           { text: "Cancel", style: "cancel" },
@@ -671,7 +671,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
               styles.scanBadgeText, 
               scanInfo.isPremium ? styles.premiumBadgeText : (scanInfo.remaining <= 1 ? styles.warningBadgeText : styles.normalBadgeText)
             ]}>
-              {scanInfo.isPremium ? "Unlimited Scans ✨" : `${scanInfo.remaining} / 5 Scans Left Today`}
+              {scanInfo.isPremium ? "Unlimited Scans" : `${scanInfo.remaining} / 5 Scans Left Today`}
             </Text>
           </View>
         </View>

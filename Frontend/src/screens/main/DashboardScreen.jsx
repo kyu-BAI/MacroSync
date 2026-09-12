@@ -430,7 +430,7 @@ export default function DashboardScreen({
       if (newAmount === targetGlasses) {
         await pushNotificationIfAllowed({
           id: `n-${Date.now()}`,
-          title: 'Hydration Goal Reached! 💧',
+          title: 'Hydration Goal Reached!',
           category: 'hydration',
           time: 'Just Now',
           read: false,
@@ -463,7 +463,7 @@ export default function DashboardScreen({
 
     if (consumedGlasses >= targetGlasses) {
       showAlert(
-        "Hydration Target Reached 💧",
+        "Hydration Target Reached",
         "You have already reached your daily water intake quota. Drinking too much water can be harmful. Do you want to log another glass?",
         [
           { text: "Cancel", style: "cancel" },
@@ -492,7 +492,7 @@ export default function DashboardScreen({
     if (setNotifications) {
       setNotifications(prev => [{
         id: 'ng-' + Date.now(),
-        title: '🎯 New Goal Set!',
+        title: 'New Goal Set!',
         category: 'achievement',
         time: 'Just Now',
         read: false,
@@ -610,9 +610,9 @@ export default function DashboardScreen({
 
   const greetingObj = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return { text: 'Good Morning', emoji: '🌅' };
-    if (hour >= 12 && hour < 18) return { text: 'Good Afternoon', emoji: '☀️' };
-    return { text: 'Good Evening', emoji: '🌙' };
+    if (hour >= 5 && hour < 12) return { text: 'Good Morning' };
+    if (hour >= 12 && hour < 18) return { text: 'Good Afternoon' };
+    return { text: 'Good Evening' };
   }, []);
 
   const currentDateStr = useMemo(() => {
@@ -650,7 +650,7 @@ export default function DashboardScreen({
     setShowWeightModal(false);
     await pushNotificationIfAllowed({
       id: 'w' + Date.now(),
-      title: 'Weight Logged ⚖️',
+      title: 'Weight Logged',
       category: 'achievement',
       time: 'Just Now',
       read: false,
@@ -660,7 +660,7 @@ export default function DashboardScreen({
     if (!isOnline) {
       await addToSyncQueue({ type: 'LOG_WEIGHT', payload: { user_id: userId, new_weight: parsed, unit: userBaseline?.unit || 'kg' } });
       await updateCachedDashboardField(userId, { profile: { currentWeight: parsed } });
-      showAlert('📴 Saved Offline', 'Weight saved locally. Will sync when back online.');
+      showAlert('Saved Offline', 'Weight saved locally. Will sync when back online.');
       return;
     }
 
@@ -688,7 +688,7 @@ export default function DashboardScreen({
     const minVal = weightUnit === 'lbs' ? 55 : 25;
     const maxVal = weightUnit === 'lbs' ? 660 : 300;
     if (isNaN(parsed) || parsed < minVal || parsed > maxVal) {
-      showAlert("Invalid Weight Input ⚠️", `Please enter a realistic weight value between ${minVal} ${weightUnit} and ${maxVal} ${weightUnit}.`);
+      showAlert("Invalid Weight Input", `Please enter a realistic weight value between ${minVal} ${weightUnit} and ${maxVal} ${weightUnit}.`);
       return;
     }
 
@@ -696,7 +696,7 @@ export default function DashboardScreen({
     const weightJump = Math.abs(parsed - currentWeight);
     if (currentWeight > 0 && weightJump >= thresholdJump) {
       showAlert(
-        "Unusual Weight Jump ⚖️",
+        "Unusual Weight Jump",
         `You entered ${parsed.toFixed(1)} ${weightUnit}, which is ${weightJump.toFixed(1)} ${weightUnit} ${parsed > currentWeight ? 'higher' : 'lower'} than your recent weight (${currentWeight.toFixed(1)} ${weightUnit}). Are you sure?`,
         [
           { text: "Fix Input", style: "cancel" },
@@ -730,7 +730,7 @@ export default function DashboardScreen({
               minimumFontScale={0.85} 
               style={styles.greeting}
             >
-              {greetingObj.text}, {displayName}! {greetingObj.emoji}
+              {greetingObj.text}, {displayName}!
             </Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
@@ -876,7 +876,7 @@ export default function DashboardScreen({
               }
             ]}>
               <Text style={[styles.warningBannerText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>
-                ⚠️ You have reached or exceeded your daily calorie quota ({nutrition.consumedCalories} / {targetCalories} kcal).
+                You have reached or exceeded your daily calorie quota ({nutrition.consumedCalories} / {targetCalories} kcal).
               </Text>
             </View>
           )}
@@ -978,7 +978,7 @@ export default function DashboardScreen({
               }
             ]}>
               <Text style={[styles.warningBannerText, { color: isDarkMode ? '#FCD34D' : '#D97706' }]}>
-                ⚡ Daily exercise quota achieved ({exercise.activeMinutes} mins). Excellent work, make sure to rest!
+                Daily exercise quota achieved ({exercise.activeMinutes} mins). Excellent work, make sure to rest!
               </Text>
             </View>
           )}
@@ -1025,7 +1025,7 @@ export default function DashboardScreen({
           {consumedGlasses >= targetGlasses && (
             <View style={[styles.warningBanner, { borderColor: theme?.border || '#E2E8F0', backgroundColor: theme?.inputBg || '#F8FAFC' }]}>
               <Text style={[styles.warningBannerText, { color: waterColor }]}>
-                💧 Daily hydration target achieved ({consumedGlasses} / {targetGlasses} glasses). Stay balanced and avoid overhydrating.
+                Daily hydration target achieved ({consumedGlasses} / {targetGlasses} glasses). Stay balanced and avoid overhydrating.
               </Text>
             </View>
           )}
@@ -1154,7 +1154,7 @@ export default function DashboardScreen({
                   </View>
                   
                   <Text style={{ fontSize: 22, fontWeight: '900', color: theme?.textPrimary || '#0F172A', textAlign: 'center', letterSpacing: -0.5 }}>
-                    Goal Achieved! 🎉
+                    Goal Achieved!
                   </Text>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
                     Fantastic progress! You reached your target weight of <Text style={{ color: logoGreen, fontWeight: '800' }}>{goalWeight.toFixed(1)} {weightUnit}</Text>.{`\n`}Select your next goal to stay on track:
