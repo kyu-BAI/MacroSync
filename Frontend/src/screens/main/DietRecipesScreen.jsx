@@ -1625,7 +1625,6 @@ export default function DietRecipesScreen({
                 {Boolean(CITY_PROFILES[selectedLocation]?.famousDishes) && (
                   <View style={[styles.formCard, { marginBottom: 24 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                      <Sparkles size={18} color="#F59E0B" style={{ marginRight: 6 }} />
                       <Text style={styles.cardTitle}>Famous Delicacies ({selectedLocation})</Text>
                     </View>
                     <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 14, lineHeight: 18 }}>
@@ -1635,33 +1634,18 @@ export default function DietRecipesScreen({
                     <View style={{ gap: 10 }}>
                       {CITY_PROFILES[selectedLocation].famousDishes.map((dish, idx) => (
                         <View key={idx} style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
                           backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-                          padding: 12,
+                          padding: 14,
                           borderRadius: 14,
                           borderWidth: 1,
                           borderColor: isDarkMode ? '#334155' : '#E2E8F0'
                         }}>
-                          <View style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: 12,
-                            backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 12
-                          }}>
-                            <ChefHat size={18} color="#10B981" />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
-                              {translateMealTitle(dish.name, language)}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 2, lineHeight: 16 }}>
-                              {dish.desc}
-                            </Text>
-                          </View>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                            {translateMealTitle(dish.name, language)}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 4, lineHeight: 16 }}>
+                            {dish.desc}
+                          </Text>
                         </View>
                       ))}
                     </View>
