@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Text,
   View,
@@ -23,9 +23,9 @@ import {
   RotateCcw,
 } from "lucide-react-native";
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import API_URL from "../config/api";
 import { getExerciseMedia } from "../../data/exercises_index";
@@ -45,32 +45,87 @@ const logoGreen = "#10B981";
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   if (!setNotifications) return;
   try {
-    const stored = await AsyncStorage.getItem('@ms_notification_preferences');
-    const prefs = stored ? JSON.parse(stored) : { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+    const stored = await AsyncStorage.getItem("@ms_notification_preferences");
+    const prefs = stored
+      ? JSON.parse(stored)
+      : {
+          habitReminders: true,
+          motivationalUpdates: true,
+          personalizedAlerts: true,
+        };
     const category = newNotif.category;
-    if ((category === 'hydration' || category === 'meal') && prefs.habitReminders === false) return;
-    if ((category === 'workout' || category === 'achievement') && prefs.motivationalUpdates === false) return;
-    if (category === 'smart' && prefs.personalizedAlerts === false) return;
-    setNotifications(prev => [newNotif, ...prev]);
+    if (
+      (category === "hydration" || category === "meal") &&
+      prefs.habitReminders === false
+    )
+      return;
+    if (
+      (category === "workout" || category === "achievement") &&
+      prefs.motivationalUpdates === false
+    )
+      return;
+    if (category === "smart" && prefs.personalizedAlerts === false) return;
+    setNotifications((prev) => [newNotif, ...prev]);
   } catch (e) {
-    setNotifications(prev => [newNotif, ...prev]);
+    setNotifications((prev) => [newNotif, ...prev]);
   }
 };
 
 // Resolves exercise media (GIF + instructions + image) from the exercises dataset
-const enrichTutorialWithDataset = (tutorial, index = 0, intensity = 'Moderate') => {
+const enrichTutorialWithDataset = (
+  tutorial,
+  index = 0,
+  intensity = "Moderate",
+) => {
   const media = getExerciseMedia(tutorial?.name, index, intensity);
   return {
     ...tutorial,
     gif_url: tutorial?.gif_url || media?.gif_url,
     image_url: tutorial?.image_url || media?.image_url,
-    // Use dataset step-by-step instructions if not already set
-    instruction_steps: (Array.isArray(tutorial?.instruction_steps) && tutorial.instruction_steps.length > 0)
-      ? tutorial.instruction_steps
-      : (media?.instruction_steps || []),
+    instruction_steps:
+      Array.isArray(tutorial?.instruction_steps) &&
+      tutorial.instruction_steps.length > 0
+        ? tutorial.instruction_steps
+        : media?.instruction_steps || [],
     body_part: tutorial?.body_part || media?.body_part,
     target: tutorial?.target || media?.target,
+    // Preserve muscles data if already set; dataset may provide it too
+    muscles: tutorial?.muscles || media?.muscles || null,
   };
+};
+
+/**
+ * Calculates calorie burn using the scientific MET (Metabolic Equivalent of Task) formula:
+ * Calories Burned = MET * Weight (kg) * Duration (hours)
+ * Light (Core, stretch, yoga) = 3.5 MET
+ * Moderate (Bodyweight calisthenics, squats) = 5.5 MET
+ * Intense (HIIT, burpees, plyometrics) = 8.0 MET
+ */
+export const calculateMETCalories = (
+  intensity,
+  durationStrOrMins,
+  weightKg = 70,
+) => {
+  let mins = 20;
+  if (typeof durationStrOrMins === "number") {
+    mins = durationStrOrMins;
+  } else if (typeof durationStrOrMins === "string") {
+    const match = durationStrOrMins.match(/\d+/);
+    if (match) mins = parseInt(match[0], 10);
+  }
+  const safeWeight = Math.max(35, parseFloat(weightKg) || 70);
+  const intens = String(intensity || "Moderate").toLowerCase();
+  let met = 5.5;
+  if (intens.includes("intense") || intens.includes("hiit")) {
+    met = 8.0;
+  } else if (
+    intens.includes("light") ||
+    intens.includes("stretch") ||
+    intens.includes("recovery")
+  ) {
+    met = 3.5;
+  }
+  return Math.round(met * safeWeight * (mins / 60));
 };
 
 const DEFAULT_WORKOUT_ROUTINES = [
@@ -88,18 +143,21 @@ const DEFAULT_WORKOUT_ROUTINES = [
         target: "3 Sets x 12 Reps",
         setup: "Feet shoulder-width apart.",
         form: "Sit back into heels; stand up.",
+        muscles: { primary: ["Quadriceps", "Glutes"], secondary: ["Hamstrings", "Core"] },
       },
       {
         name: "Incline Pushup",
         target: "3 Sets x 10 Reps",
         setup: "Hands on wall or bench.",
         form: "Lower chest to 45°; press up.",
+        muscles: { primary: ["Chest", "Triceps"], secondary: ["Shoulders", "Core"] },
       },
       {
         name: "Standing High Knees",
         target: "3 Sets x 30 Secs",
         setup: "Stand tall, drive knee up.",
         form: "Pump arms and land softly.",
+        muscles: { primary: ["Hip Flexors", "Core"], secondary: ["Quads", "Calves"] },
       },
     ],
   },
@@ -117,18 +175,21 @@ const DEFAULT_WORKOUT_ROUTINES = [
         target: "4 Sets x 45 Secs",
         setup: "Feet together, arms down.",
         form: "Jump out and raise arms overhead.",
+        muscles: { primary: ["Full Body", "Cardio"], secondary: ["Shoulders", "Calves"] },
       },
       {
         name: "Mountain Climbers",
         target: "4 Sets x 40 Secs",
         setup: "High plank, wrists under shoulders.",
         form: "Drive knees forward quickly.",
+        muscles: { primary: ["Core", "Hip Flexors"], secondary: ["Chest", "Triceps"] },
       },
       {
         name: "Walking Lunges",
         target: "3 Sets x 14 Reps",
         setup: "Step forward, bend knees 90°.",
         form: "Push forward into next step.",
+        muscles: { primary: ["Quadriceps", "Glutes"], secondary: ["Hamstrings", "Balance"] },
       },
     ],
   },
@@ -146,18 +207,21 @@ const DEFAULT_WORKOUT_ROUTINES = [
         target: "4 Sets x 60 Secs",
         setup: "Elbows on floor under shoulders.",
         form: "Hold straight line; brace core.",
+        muscles: { primary: ["Core", "Transverse Abs"], secondary: ["Shoulders", "Glutes"] },
       },
       {
         name: "Standard Pushups",
         target: "4 Sets x 15 Reps",
         setup: "High plank, hands shoulder-width.",
         form: "Lower chest to floor; push up.",
+        muscles: { primary: ["Chest", "Triceps"], secondary: ["Shoulders", "Core"] },
       },
       {
         name: "Russian Twists",
         target: "4 Sets x 20 Reps",
         setup: "Sit back 45° with feet up.",
         form: "Twist torso side to side.",
+        muscles: { primary: ["Obliques", "Core"], secondary: ["Hip Flexors", "Lower Back"] },
       },
     ],
   },
@@ -172,24 +236,32 @@ export default function WorkoutScreen({
   setDailyExercise,
   setNotifications,
   userGoals,
-  userBaseline
+  userBaseline,
 }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
+  const currentWeightKg = parseFloat(
+    userBaseline?.weight || userBaseline?.startingWeight || 70,
+  );
   const [isPressedBtn, setIsPressedBtn] = useState(null);
   const [selectedIntensity, setSelectedIntensity] = useState("All");
 
   // --- TUTORIAL ENGINE NAVIGATION STATES ---
   const [activeRoutine, setActiveRoutine] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [mediaType, setMediaType] = useState('gif'); // 'gif' | 'image'
+  const [mediaType, setMediaType] = useState("gif"); // 'gif' | 'image'
   const [isMediaLoading, setIsMediaLoading] = useState(true);
   const [mediaLoadError, setMediaLoadError] = useState(false);
 
   // --- REST TIMER STATE ---
   const [restTimer, setRestTimer] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // --- NEXT-EXERCISE COUNTDOWN STATE ---
+  const [countdownActive, setCountdownActive] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const pendingNextStep = useRef(null);
 
   useEffect(() => {
     let interval = null;
@@ -199,7 +271,10 @@ export default function WorkoutScreen({
       }, 1000);
     } else if (restTimer === 0) {
       setIsTimerRunning(false);
-      showAlert("Rest Period Complete!", "Ready for your next set or exercise step?");
+      showAlert(
+        "Rest Period Complete!",
+        "Ready for your next set or exercise step?",
+      );
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, restTimer]);
@@ -209,10 +284,48 @@ export default function WorkoutScreen({
     setIsTimerRunning(true);
   };
 
-  const intensityTiers = ['All', 'Light', 'Moderate', 'Intense'];
+  // --- NEXT-EXERCISE COUNTDOWN LOGIC ---
+  // Derive rest time from routine intensity or explicit restTime field
+  const getRestSeconds = (routine) => {
+    if (routine?.restTime) return parseInt(routine.restTime) || 45;
+    const intensity = (routine?.intensity || '').toLowerCase();
+    if (intensity === 'light')    return 30;
+    if (intensity === 'intense')  return 60;
+    return 45; // Moderate default
+  };
+
+  useEffect(() => {
+    if (!countdownActive) return;
+    if (countdown <= 0) {
+      setCountdownActive(false);
+      setCountdown(3);
+      if (pendingNextStep.current) {
+        pendingNextStep.current();
+        pendingNextStep.current = null;
+      }
+      return;
+    }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdownActive, countdown]);
+
+  const handleNextWithCountdown = () => {
+    // Last step → go straight to completion (no countdown needed)
+    if (currentStepIndex >= activeRoutine?.tutorials?.length - 1) {
+      handleNextStep();
+      return;
+    }
+    pendingNextStep.current = handleNextStep;
+    setCountdown(getRestSeconds(activeRoutine));
+    setCountdownActive(true);
+  };
+
+  const intensityTiers = ["All", "Light", "Moderate", "Intense"];
 
   // --- AI RECOMMENDATION SYSTEM STATE ---
-  const [workoutRoutines, setWorkoutRoutines] = useState(DEFAULT_WORKOUT_ROUTINES);
+  const [workoutRoutines, setWorkoutRoutines] = useState(
+    DEFAULT_WORKOUT_ROUTINES,
+  );
   const [isLoadingWorkouts, setIsLoadingWorkouts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
@@ -220,10 +333,13 @@ export default function WorkoutScreen({
   const handleRegenerateWorkouts = useCallback(async () => {
     setIsGeneratingWorkout(true);
     try {
-      const res = await fetch(`${API_URL}/workouts/recommend/${userId || 'default'}`, {
-        method: 'GET',
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      const res = await fetch(
+        `${API_URL}/workouts/recommend/${userId || "default"}`,
+        {
+          method: "GET",
+          headers: { "Cache-Control": "no-cache" },
+        },
+      );
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -245,7 +361,10 @@ export default function WorkoutScreen({
       }
     } catch (err) {
       if (__DEV__) console.warn("REGENERATE WORKOUT ERROR:", err);
-      showAlert('Customization Error', 'Failed to customize workouts. Please check your network connection.');
+      showAlert(
+        "Customization Error",
+        "Failed to customize workouts. Please check your network connection.",
+      );
     } finally {
       setIsGeneratingWorkout(false);
     }
@@ -261,7 +380,11 @@ export default function WorkoutScreen({
         const cachedRaw = await AsyncStorage.getItem("ms_workouts_cache");
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (String(parsed.userId) === String(userId) && Array.isArray(parsed.workouts) && parsed.workouts.length > 0) {
+          if (
+            String(parsed.userId) === String(userId) &&
+            Array.isArray(parsed.workouts) &&
+            parsed.workouts.length > 0
+          ) {
             setWorkoutRoutines(parsed.workouts);
             setIsLoadingWorkouts(false);
             if (parsed.date === todayStr) return; // Fresh cache — no network needed
@@ -312,34 +435,39 @@ export default function WorkoutScreen({
         {
           name: "Jumping Jacks",
           target: "3 Sets x 45 Seconds",
-          setup: "Stand tall in an open area with knees slightly bent and core engaged.",
-          form: "Maintain steady breathing. Jump feet out while raising arms overhead."
+          setup:
+            "Stand tall in an open area with knees slightly bent and core engaged.",
+          form: "Maintain steady breathing. Jump feet out while raising arms overhead.",
         },
         {
           name: "Bodyweight Squat",
           target: "4 Sets x 12 Reps",
-          setup: "Position your feet shoulder-width apart, spine aligned and chest open.",
-          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles."
+          setup:
+            "Position your feet shoulder-width apart, spine aligned and chest open.",
+          form: "Inhale as you lower down, press firmly through your heels to return up, squeezing target muscles.",
         },
         {
           name: "Plank Hold",
           target: "2 Sets x 60 Seconds",
-          setup: "Lower down onto your yoga mat or clean floor, keeping hands aligned with shoulders.",
-          form: "Hold steady isometric tension, breathing slowly into your diaphragm."
-        }
+          setup:
+            "Lower down onto your yoga mat or clean floor, keeping hands aligned with shoulders.",
+          form: "Hold steady isometric tension, breathing slowly into your diaphragm.",
+        },
       ];
     }
 
     // ✅ Enrich every tutorial step with GIF animation + static image + step-by-step instructions from exercises dataset
-    const enrichedTutorials = tutorials.map((tut, idx) => enrichTutorialWithDataset(tut, idx, routine.intensity));
+    const enrichedTutorials = tutorials.map((tut, idx) =>
+      enrichTutorialWithDataset(tut, idx, routine.intensity),
+    );
 
     setActiveRoutine({
       ...routine,
       tutorials: enrichedTutorials,
-      caloriesBurn: routine.caloriesBurn || routine.caloriesBurned || 200
+      caloriesBurn: routine.caloriesBurn || routine.caloriesBurned || 200,
     });
     setCurrentStepIndex(0);
-    setMediaType('gif');
+    setMediaType("gif");
     setIsMediaLoading(true);
     setMediaLoadError(false);
   };
@@ -351,14 +479,14 @@ export default function WorkoutScreen({
       [
         {
           text: "Keep Going",
-          style: "cancel"
+          style: "cancel",
         },
         {
           text: "Quit Workout",
           style: "destructive",
-          onPress: () => setActiveRoutine(null)
-        }
-      ]
+          onPress: () => setActiveRoutine(null),
+        },
+      ],
     );
   };
 
@@ -369,71 +497,85 @@ export default function WorkoutScreen({
       setMediaLoadError(false);
     } else {
       if (!userId) {
-        showAlert("Authentication Error", "You must be logged in to log workouts.");
+        showAlert(
+          "Authentication Error",
+          "You must be logged in to log workouts.",
+        );
         return;
       }
 
       // Optimistic UI updates
       const workoutDuration = parseInt(activeRoutine.duration) || 15;
       const workoutSteps = workoutDuration * 100;
+      const routineBurn = activeRoutine?.caloriesBurn
+        ? activeRoutine.caloriesBurn
+        : calculateMETCalories(
+            activeRoutine?.intensity,
+            workoutDuration,
+            currentWeightKg,
+          );
+
       const newExercise = {
-        caloriesBurned: ((dailyExercise?.caloriesBurned || 0) + (activeRoutine?.caloriesBurn || 0)),
-        activeMinutes: ((dailyExercise?.activeMinutes || 0) + workoutDuration),
-        steps: ((dailyExercise?.steps || 0) + workoutSteps),
+        caloriesBurned: (dailyExercise?.caloriesBurned || 0) + routineBurn,
+        activeMinutes: (dailyExercise?.activeMinutes || 0) + workoutDuration,
+        steps: (dailyExercise?.steps || 0) + workoutSteps,
         targetSteps: dailyExercise?.targetSteps || 10000,
-        recentExercise: activeRoutine?.title || 'Workout'
+        recentExercise: activeRoutine?.title || "Workout",
       };
 
       if (setDailyExercise) {
-        setDailyExercise(prev => ({
+        setDailyExercise((prev) => ({
           ...prev,
-          ...newExercise
+          ...newExercise,
         }));
       }
 
       if (activeRoutine) {
-        await pushNotificationIfAllowed({
-          id: `n-${Date.now()}`,
-          title: 'Workout Completed!',
-          category: 'workout',
-          time: 'Just Now',
-          read: false,
-          message: `Motivational update: Awesome job! You burned ${activeRoutine.caloriesBurn} calories completing "${activeRoutine.title}".`
-        }, setNotifications);
+        await pushNotificationIfAllowed(
+          {
+            id: `n-${Date.now()}`,
+            title: "Workout Completed!",
+            category: "workout",
+            time: "Just Now",
+            read: false,
+            message: `Motivational update: Awesome job! You burned ${routineBurn} calories completing "${activeRoutine.title}".`,
+          },
+          setNotifications,
+        );
       }
 
       const workoutPayload = {
         id: Date.now().toString(),
         user_id: userId,
         name: activeRoutine.title,
-        calories_burned: activeRoutine.caloriesBurn,
-        active_minutes: workoutDuration
+        calories_burned: routineBurn,
+        active_minutes: workoutDuration,
       };
 
       if (!isOnline) {
-        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        await addToSyncQueue({ type: "LOG_WORKOUT", payload: workoutPayload });
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
         showAlert(
           "Workout Complete! (Offline)",
           `Awesome work! You crushed "${activeRoutine?.title}". Since you are offline, it was saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
         return;
       }
 
       try {
         const response = await fetch(`${API_URL}/workouts`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(workoutPayload),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to log workout on server');
+          throw new Error("Failed to log workout on server");
         }
 
         if (onRefreshDashboard) {
@@ -443,45 +585,56 @@ export default function WorkoutScreen({
         showAlert(
           "Workout Complete!",
           `Awesome work! You crushed "${activeRoutine?.title}" and logged ${activeRoutine?.caloriesBurn} kcal into MacroSync!`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
       } catch (error) {
-        if (__DEV__) console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
-        await addToSyncQueue({ type: 'LOG_WORKOUT', payload: workoutPayload });
+        if (__DEV__)
+          console.warn("LOG WORKOUT API ERROR (falling back to queue):", error);
+        await addToSyncQueue({ type: "LOG_WORKOUT", payload: workoutPayload });
         if (newExercise) {
           await updateCachedDashboardField(userId, { exercise: newExercise });
         }
         showAlert(
           "Workout Saved Locally",
           `Could not reach the server. "${activeRoutine?.title}" has been saved locally and will sync later.`,
-          [{ text: "Finish", onPress: () => setActiveRoutine(null) }]
+          [{ text: "Finish", onPress: () => setActiveRoutine(null) }],
         );
       }
     }
   };
 
-  const filteredWorkouts = workoutRoutines.filter(workout => {
-    return selectedIntensity === 'All' || workout.intensity === selectedIntensity;
+  const filteredWorkouts = workoutRoutines.filter((workout) => {
+    return (
+      selectedIntensity === "All" || workout.intensity === selectedIntensity
+    );
   });
-
-
 
   return (
     <View style={styles.fullscreenOverlay}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-      
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent={true}
+      />
+
       {/* ── WORKOUT TUTORIAL PLAYER (FULL SCREEN MODAL) ── */}
-      <Modal 
-        visible={activeRoutine !== null} 
-        transparent={false} 
-        animationType="slide" 
+      <Modal
+        visible={activeRoutine !== null}
+        transparent={false}
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={handleExitWorkout}
       >
+        <StatusBar
+          barStyle={isDarkMode ? "light-content" : "dark-content"}
+          backgroundColor="transparent"
+          translucent={true}
+        />
         {Boolean(activeRoutine) && (
           <View style={styles.playerWrapper}>
             {/* PLAYER HEADER AREA */}
             <View style={styles.playerHeaderRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.playerBackNeuButton}
                 activeOpacity={0.8}
                 onPress={handleExitWorkout}
@@ -489,11 +642,21 @@ export default function WorkoutScreen({
                 <ArrowLeft color={logoGreen} size={20} strokeWidth={2.5} />
               </TouchableOpacity>
               <View style={styles.playerHeaderCenterText}>
-                <Text style={styles.playerRoutineSubTitle}>{activeRoutine.title}</Text>
-                <Text style={styles.playerStepIndicator}>Exercise {currentStepIndex + 1} of {activeRoutine.tutorials.length}</Text>
+                <Text style={styles.playerRoutineSubTitle}>
+                  {activeRoutine.title}
+                </Text>
+                <Text style={styles.playerStepIndicator}>
+                  Exercise {currentStepIndex + 1} of{" "}
+                  {activeRoutine.tutorials.length}
+                </Text>
               </View>
-              <TouchableOpacity 
-                style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                }}
                 onPress={() => handleStartRestTimer(45)}
                 activeOpacity={0.7}
               >
@@ -502,67 +665,142 @@ export default function WorkoutScreen({
             </View>
 
             {/* PROGRESS BAR TRACK */}
-            <View style={{ height: 4, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0', width: '100%', marginBottom: 12 }}>
-              <View style={{ 
-                height: '100%', 
-                backgroundColor: logoGreen, 
-                width: `${((currentStepIndex + 1) / activeRoutine.tutorials.length) * 100}%`,
-                borderRadius: 2 
-              }} />
+            <View
+              style={{
+                height: 4,
+                backgroundColor: isDarkMode ? "#334155" : "#E2E8F0",
+                width: "100%",
+                marginBottom: 12,
+              }}
+            >
+              <View
+                style={{
+                  height: "100%",
+                  backgroundColor: logoGreen,
+                  width: `${((currentStepIndex + 1) / activeRoutine.tutorials.length) * 100}%`,
+                  borderRadius: 2,
+                }}
+              />
             </View>
 
             {/* PLAYER MAIN EXERCISE CARD VIEWPORT */}
             <View style={styles.playerMainCard}>
-              
               {/* TUTORIAL STATUS PILL */}
-              <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <View style={[styles.liveActivityBadge, { position: 'relative', top: 0, left: 0 }]}>
+              <View style={{ alignItems: "center", marginBottom: 8 }}>
+                <View
+                  style={[
+                    styles.liveActivityBadge,
+                    { position: "relative", top: 0, left: 0 },
+                  ]}
+                >
                   <View style={styles.pulseDot} />
                   <Text style={styles.liveBadgeText}>
-                    {isTimerRunning ? `REST TIMER: 00:${restTimer < 10 ? '0' : ''}${restTimer}` : 'TUTORIAL GUIDE ACTIVE'}
+                    {isTimerRunning
+                      ? `REST TIMER: 00:${restTimer < 10 ? "0" : ""}${restTimer}`
+                      : "TUTORIAL GUIDE ACTIVE"}
                   </Text>
                 </View>
               </View>
 
               {/* EXERCISE TITLE */}
-              <Text style={[styles.playerExerciseTitle, { textAlign: 'center', fontSize: 20, fontWeight: '900', marginBottom: 8 }]}>
+              <Text
+                style={[
+                  styles.playerExerciseTitle,
+                  {
+                    textAlign: "center",
+                    fontSize: 20,
+                    fontWeight: "900",
+                    marginBottom: 8,
+                  },
+                ]}
+              >
                 {activeRoutine.tutorials[currentStepIndex].name}
               </Text>
 
               {/* MUSCLE TARGET CHIPS */}
-              {(activeRoutine.tutorials[currentStepIndex].body_part || activeRoutine.tutorials[currentStepIndex].target) && (
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                  {activeRoutine.tutorials[currentStepIndex].body_part && (
-                    <View style={{ backgroundColor: 'rgba(139,92,246,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6', textTransform: 'capitalize' }}>
-                        {activeRoutine.tutorials[currentStepIndex].body_part}
-                      </Text>
-                    </View>
-                  )}
-                  {activeRoutine.tutorials[currentStepIndex].target && (
-                    <View style={{ backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', textTransform: 'capitalize' }}>
-                        {activeRoutine.tutorials[currentStepIndex].target}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {(() => {
+                const step = activeRoutine.tutorials[currentStepIndex];
+                const muscles = step.muscles;
+                const hasMuscles = muscles && (muscles.primary?.length || muscles.secondary?.length);
+                const hasLegacy  = step.body_part;
+                if (!hasMuscles && !hasLegacy) return null;
+                return (
+                  <View style={{ marginBottom: 10 }}>
+                    {/* Primary muscles */}
+                    {(hasMuscles ? muscles.primary : [step.body_part]).filter(Boolean).length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(139,92,246,0.7)', textTransform: 'uppercase', letterSpacing: 1, alignSelf: 'center', marginRight: 2 }}>Primary</Text>
+                        {(hasMuscles ? muscles.primary : [step.body_part]).map((m, i) => (
+                          <View key={i} style={{
+                            backgroundColor: 'rgba(139,92,246,0.13)',
+                            paddingHorizontal: 10, paddingVertical: 3,
+                            borderRadius: 20, borderWidth: 1,
+                            borderColor: 'rgba(139,92,246,0.3)',
+                          }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6', textTransform: 'capitalize' }}>{m}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {/* Secondary muscles */}
+                    {hasMuscles && muscles.secondary?.length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(16,185,129,0.7)', textTransform: 'uppercase', letterSpacing: 1, alignSelf: 'center', marginRight: 2 }}>Secondary</Text>
+                        {muscles.secondary.map((m, i) => (
+                          <View key={i} style={{
+                            backgroundColor: 'rgba(16,185,129,0.10)',
+                            paddingHorizontal: 10, paddingVertical: 3,
+                            borderRadius: 20, borderWidth: 1,
+                            borderColor: 'rgba(16,185,129,0.25)',
+                          }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', textTransform: 'capitalize' }}>{m}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 10,
+                }}
+              >
                 <View style={styles.targetMetricChipBox}>
-                  <Trophy color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.targetMetricChipText}>{activeRoutine.tutorials[currentStepIndex].target || activeRoutine.tutorials[currentStepIndex].sets || ''}</Text>
+                  <Trophy
+                    color="#FFFFFF"
+                    size={14}
+                    fill="#FFFFFF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.targetMetricChipText}>
+                    {activeRoutine.tutorials[currentStepIndex].target ||
+                      activeRoutine.tutorials[currentStepIndex].sets ||
+                      ""}
+                  </Text>
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.targetMetricChipBox, { backgroundColor: isTimerRunning ? '#F59E0B' : '#0EA5E9' }]}
-                  onPress={() => isTimerRunning ? setIsTimerRunning(false) : handleStartRestTimer(45)}
+                <TouchableOpacity
+                  style={[
+                    styles.targetMetricChipBox,
+                    { backgroundColor: isTimerRunning ? "#F59E0B" : "#0EA5E9" },
+                  ]}
+                  onPress={() =>
+                    isTimerRunning
+                      ? setIsTimerRunning(false)
+                      : handleStartRestTimer(45)
+                  }
                   activeOpacity={0.8}
                 >
                   <Clock color="#FFFFFF" size={14} style={{ marginRight: 6 }} />
                   <Text style={styles.targetMetricChipText}>
-                    {isTimerRunning ? `Rest: ${restTimer}s` : '45s Rest Timer'}
+                    {isTimerRunning ? `Rest: ${restTimer}s` : "45s Rest Timer"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -570,43 +808,60 @@ export default function WorkoutScreen({
               <View style={styles.playerGlassDivider} />
 
               {/* 🎥 EXERCISE ANIMATED GIF & HD IMAGE from exercises-dataset */}
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.instructionsTextScroll}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.instructionsTextScroll}
+              >
                 {(() => {
                   const currentTut = activeRoutine.tutorials[currentStepIndex];
                   const hasMedia = currentTut?.gif_url || currentTut?.image_url;
                   if (!hasMedia) return null;
 
-                  const displayUri = (mediaType === 'image' || mediaLoadError) 
-                    ? (currentTut.image_url || currentTut.gif_url)
-                    : (currentTut.gif_url || currentTut.image_url);
+                  const displayUri =
+                    mediaType === "image" || mediaLoadError
+                      ? currentTut.image_url || currentTut.gif_url
+                      : currentTut.gif_url || currentTut.image_url;
 
                   return (
-                    <View style={{ alignItems: 'center', marginBottom: 14 }}>
-                      <View style={{
-                        width: '100%',
-                        height: 220,
-                        borderRadius: 18,
-                        overflow: 'hidden',
-                        backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 1.5,
-                        borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                        position: 'relative'
-                      }}>
+                    <View style={{ alignItems: "center", marginBottom: 14 }}>
+                      <View
+                        style={{
+                          width: "100%",
+                          height: Math.min(screenHeight * 0.36, 290),
+                          borderRadius: 20,
+                          overflow: "hidden",
+                          backgroundColor: isDarkMode ? "#1E293B" : "#F8FAFC",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          borderWidth: 1.5,
+                          borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                          position: "relative",
+                        }}
+                      >
                         {/* Loading Spinner overlay while media buffers */}
                         {isMediaLoading && (
-                          <View style={{
-                            position: 'absolute',
-                            zIndex: 2,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: isDarkMode ? 'rgba(15,23,42,0.6)' : 'rgba(255,255,255,0.7)',
-                            width: '100%',
-                            height: '100%'
-                          }}>
+                          <View
+                            style={{
+                              position: "absolute",
+                              zIndex: 2,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: isDarkMode
+                                ? "rgba(15,23,42,0.6)"
+                                : "rgba(255,255,255,0.7)",
+                              width: "100%",
+                              height: "100%",
+                            }}
+                          >
                             <ActivityIndicator size="large" color={logoGreen} />
-                            <Text style={{ fontSize: 11, color: theme?.textSecondary || '#64748B', marginTop: 8, fontWeight: '600' }}>
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                color: theme?.textSecondary || "#64748B",
+                                marginTop: 8,
+                                fontWeight: "600",
+                              }}
+                            >
                               Loading Exercise Tutorial...
                             </Text>
                           </View>
@@ -615,7 +870,7 @@ export default function WorkoutScreen({
                         <ExpoImage
                           source={{ uri: displayUri }}
                           placeholder={{ uri: currentTut.image_url }}
-                          style={{ width: '100%', height: '100%' }}
+                          style={{ width: "100%", height: "100%" }}
                           contentFit="contain"
                           cachePolicy="memory-disk"
                           transition={200}
@@ -630,36 +885,87 @@ export default function WorkoutScreen({
                       </View>
 
                       {/* Interactive Media Control Bar */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 8 }}>
-                        <Text style={{ fontSize: 10, color: theme?.textSecondary || '#94A3B8' }}>
-                          {mediaType === 'gif' && !mediaLoadError ? 'Animated GIF' : 'HD Diagram'} · Gym Visual
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          marginTop: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            color: theme?.textSecondary || "#94A3B8",
+                          }}
+                        >
+                          {mediaType === "gif" && !mediaLoadError
+                            ? "Animated GIF"
+                            : "HD Diagram"}{" "}
+                          · Gym Visual
                         </Text>
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <View style={{ flexDirection: "row", gap: 6 }}>
                           <TouchableOpacity
-                            onPress={() => { setMediaType('gif'); setMediaLoadError(false); setIsMediaLoading(true); }}
+                            onPress={() => {
+                              setMediaType("gif");
+                              setMediaLoadError(false);
+                              setIsMediaLoading(true);
+                            }}
                             style={{
                               paddingHorizontal: 9,
                               paddingVertical: 4,
                               borderRadius: 10,
-                              backgroundColor: mediaType === 'gif' && !mediaLoadError ? logoGreen : (isDarkMode ? '#334155' : '#E2E8F0')
+                              backgroundColor:
+                                mediaType === "gif" && !mediaLoadError
+                                  ? logoGreen
+                                  : isDarkMode
+                                    ? "#334155"
+                                    : "#E2E8F0",
                             }}
                             activeOpacity={0.8}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: '700', color: mediaType === 'gif' && !mediaLoadError ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color:
+                                  mediaType === "gif" && !mediaLoadError
+                                    ? "#FFFFFF"
+                                    : theme?.textPrimary || "#0F172A",
+                              }}
+                            >
                               Loop GIF
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            onPress={() => { setMediaType('image'); setIsMediaLoading(true); }}
+                            onPress={() => {
+                              setMediaType("image");
+                              setIsMediaLoading(true);
+                            }}
                             style={{
                               paddingHorizontal: 9,
                               paddingVertical: 4,
                               borderRadius: 10,
-                              backgroundColor: mediaType === 'image' || mediaLoadError ? logoGreen : (isDarkMode ? '#334155' : '#E2E8F0')
+                              backgroundColor:
+                                mediaType === "image" || mediaLoadError
+                                  ? logoGreen
+                                  : isDarkMode
+                                    ? "#334155"
+                                    : "#E2E8F0",
                             }}
                             activeOpacity={0.8}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: '700', color: mediaType === 'image' || mediaLoadError ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color:
+                                  mediaType === "image" || mediaLoadError
+                                    ? "#FFFFFF"
+                                    : theme?.textPrimary || "#0F172A",
+                              }}
+                            >
                               HD Still
                             </Text>
                           </TouchableOpacity>
@@ -670,28 +976,70 @@ export default function WorkoutScreen({
                 })()}
 
                 {/* STEP-BY-STEP INSTRUCTIONS from exercises dataset */}
-                {Array.isArray(activeRoutine.tutorials[currentStepIndex].instruction_steps) &&
-                  activeRoutine.tutorials[currentStepIndex].instruction_steps.length > 0 ? (
-                  <View style={{
-                    backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                    borderRadius: 16,
-                    padding: 16,
-                    marginBottom: 12,
-                    borderWidth: 1.2,
-                    borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
-                  }}>
-                    <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 10 }]}>Step-by-Step Tutorial:</Text>
-                    {activeRoutine.tutorials[currentStepIndex].instruction_steps.map((step, idx) => (
-                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                        <View style={{
-                          width: 24, height: 24, borderRadius: 12,
-                          backgroundColor: logoGreen,
-                          alignItems: 'center', justifyContent: 'center',
-                          marginRight: 10, marginTop: 1, flexShrink: 0
-                        }}>
-                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{idx + 1}</Text>
+                {Array.isArray(
+                  activeRoutine.tutorials[currentStepIndex].instruction_steps,
+                ) &&
+                activeRoutine.tutorials[currentStepIndex].instruction_steps
+                  .length > 0 ? (
+                  <View
+                    style={{
+                      backgroundColor:
+                        theme?.surface || (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                      borderRadius: 16,
+                      padding: 16,
+                      marginBottom: 12,
+                      borderWidth: 1.2,
+                      borderColor:
+                        theme?.border || (isDarkMode ? "#334155" : "#E2E8F0"),
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.instructionSectionTitleLabel,
+                        { color: logoGreen, marginBottom: 10 },
+                      ]}
+                    >
+                      Step-by-Step Tutorial:
+                    </Text>
+                    {activeRoutine.tutorials[
+                      currentStepIndex
+                    ].instruction_steps.map((step, idx) => (
+                      <View
+                        key={idx}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "flex-start",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: logoGreen,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginRight: 10,
+                            marginTop: 1,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontSize: 11,
+                              fontWeight: "800",
+                            }}
+                          >
+                            {idx + 1}
+                          </Text>
                         </View>
-                        <Text style={[styles.instructionParagraphText, { flex: 1 }]}>{step}</Text>
+                        <Text
+                          style={[styles.instructionParagraphText, { flex: 1 }]}
+                        >
+                          {step}
+                        </Text>
                       </View>
                     ))}
                   </View>
@@ -699,69 +1047,225 @@ export default function WorkoutScreen({
                   // Fallback to old setup/form text if no dataset steps
                   <>
                     {activeRoutine.tutorials[currentStepIndex].setup ? (
-                      <View style={{
-                        backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                        borderRadius: 16, padding: 16, marginBottom: 12,
-                        borderWidth: 1.2, borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
-                      }}>
-                        <Text style={[styles.instructionSectionTitleLabel, { color: logoGreen, marginBottom: 6 }]}>How to Set Up:</Text>
-                        <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].setup}</Text>
+                      <View
+                        style={{
+                          backgroundColor:
+                            theme?.surface ||
+                            (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                          borderRadius: 16,
+                          padding: 16,
+                          marginBottom: 12,
+                          borderWidth: 1.2,
+                          borderColor:
+                            theme?.border ||
+                            (isDarkMode ? "#334155" : "#E2E8F0"),
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.instructionSectionTitleLabel,
+                            { color: logoGreen, marginBottom: 6 },
+                          ]}
+                        >
+                          How to Set Up:
+                        </Text>
+                        <Text style={styles.instructionParagraphText}>
+                          {activeRoutine.tutorials[currentStepIndex].setup}
+                        </Text>
                       </View>
                     ) : null}
                     {activeRoutine.tutorials[currentStepIndex].form ? (
-                      <View style={{
-                        backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#F8FAFC'),
-                        borderRadius: 16, padding: 16, marginBottom: 12,
-                        borderWidth: 1.2, borderColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0')
-                      }}>
-                        <Text style={[styles.instructionSectionTitleLabel, { color: '#0EA5E9', marginBottom: 6 }]}>Proper Execution Form:</Text>
-                        <Text style={styles.instructionParagraphText}>{activeRoutine.tutorials[currentStepIndex].form}</Text>
+                      <View
+                        style={{
+                          backgroundColor:
+                            theme?.surface ||
+                            (isDarkMode ? "#1E293B" : "#F8FAFC"),
+                          borderRadius: 16,
+                          padding: 16,
+                          marginBottom: 12,
+                          borderWidth: 1.2,
+                          borderColor:
+                            theme?.border ||
+                            (isDarkMode ? "#334155" : "#E2E8F0"),
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.instructionSectionTitleLabel,
+                            { color: "#0EA5E9", marginBottom: 6 },
+                          ]}
+                        >
+                          Proper Execution Form:
+                        </Text>
+                        <Text style={styles.instructionParagraphText}>
+                          {activeRoutine.tutorials[currentStepIndex].form}
+                        </Text>
                       </View>
                     ) : null}
                   </>
                 )}
               </ScrollView>
+            </View>
 
-              <View style={styles.playerGlassDivider} />
-
-              {/* CONTROLS TOGGLE HUB BUTTONS */}
-              <View style={styles.playerControlActionRow}>
-                {currentStepIndex > 0 && (
-                  <TouchableOpacity 
-                    style={styles.playerSecondaryNeuActionBtn} 
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setCurrentStepIndex(currentStepIndex - 1);
-                      setIsMediaLoading(true);
-                      setMediaLoadError(false);
-                    }}
-                  >
-                    <RotateCcw color={theme?.textSecondary || "#64748B"} size={16} style={{ marginRight: 4 }} />
-                    <Text style={styles.playerSecondaryActionBtnText}>Previous</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity 
-                  style={[styles.playerPrimaryActionBtn, { flex: currentStepIndex === 0 ? 1 : 1.3 }]} 
+            {/* DOCKED FULL-WIDTH BOTTOM ACTION BUTTONS */}
+            <View style={styles.playerControlActionRow}>
+              {currentStepIndex > 0 && (
+                <TouchableOpacity
+                  style={styles.playerSecondaryNeuActionBtn}
                   activeOpacity={0.8}
-                  onPress={handleNextStep}
+                  onPress={() => {
+                    setCurrentStepIndex(currentStepIndex - 1);
+                    setIsMediaLoading(true);
+                    setMediaLoadError(false);
+                  }}
                 >
-                  <CheckCircle2 color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
-                  <Text style={styles.playerPrimaryActionBtnText}>
-                    {currentStepIndex === activeRoutine.tutorials.length - 1 ? 'Complete Workout' : 'Next Exercise Step'}
+                  <RotateCcw
+                    color={theme?.textSecondary || "#64748B"}
+                    size={16}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={styles.playerSecondaryActionBtnText}>
+                    Previous
                   </Text>
                 </TouchableOpacity>
-              </View>
+              )}
 
+              <TouchableOpacity
+                style={[
+                  styles.playerPrimaryActionBtn,
+                  { flex: currentStepIndex === 0 ? 1 : 1.3 },
+                ]}
+                activeOpacity={0.8}
+                onPress={handleNextWithCountdown}
+              >
+                <CheckCircle2
+                  color="#FFFFFF"
+                  size={16}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.playerPrimaryActionBtnText}>
+                  {currentStepIndex === activeRoutine.tutorials.length - 1
+                    ? "Complete Workout"
+                    : "Next Exercise Step"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
       </Modal>
 
+      {/* ── NEXT EXERCISE COUNTDOWN OVERLAY ── */}
+      <Modal
+        visible={countdownActive}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setCountdownActive(false);
+          setCountdown(3);
+          pendingNextStep.current = null;
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            // Tap anywhere to skip countdown
+            setCountdownActive(false);
+            setCountdown(3);
+            if (pendingNextStep.current) {
+              pendingNextStep.current();
+              pendingNextStep.current = null;
+            }
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.88)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* REST label */}
+          <Text style={{
+            fontSize: 11,
+            fontWeight: '800',
+            color: '#10B981',
+            letterSpacing: 4,
+            textTransform: 'uppercase',
+            marginBottom: 8,
+          }}>
+            Rest
+          </Text>
+
+          {/* Big countdown number */}
+          <Text style={{
+            fontSize: countdown <= 3 ? 72 : 96,
+            fontWeight: '900',
+            color: countdown <= 3 ? '#10B981' : '#FFFFFF',
+            lineHeight: countdown <= 3 ? 80 : 104,
+            letterSpacing: -2,
+          }}>
+            {countdown === 0 ? 'GO!' : countdown}
+          </Text>
+
+          <Text style={{
+            fontSize: 13,
+            color: 'rgba(255,255,255,0.4)',
+            fontWeight: '600',
+            marginTop: 6,
+          }}>seconds</Text>
+
+          {/* Next exercise name preview */}
+          {activeRoutine?.tutorials?.[currentStepIndex + 1] && (
+            <View style={{
+              marginTop: 32,
+              paddingHorizontal: 24, paddingVertical: 14,
+              backgroundColor: 'rgba(255,255,255,0.07)',
+              borderRadius: 18,
+              alignItems: 'center',
+              maxWidth: 290,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+            }}>
+              <Text style={{
+                fontSize: 10, fontWeight: '800',
+                color: '#10B981',
+                textTransform: 'uppercase', letterSpacing: 2,
+                marginBottom: 8,
+              }}>Up Next</Text>
+              <Text style={{
+                fontSize: 19, fontWeight: '900',
+                color: '#FFFFFF',
+                textAlign: 'center',
+                lineHeight: 24,
+              }}>
+                {activeRoutine.tutorials[currentStepIndex + 1].name}
+              </Text>
+              {activeRoutine.tutorials[currentStepIndex + 1].target && (
+                <Text style={{
+                  fontSize: 12, fontWeight: '600',
+                  color: 'rgba(255,255,255,0.5)',
+                  marginTop: 6,
+                }}>
+                  {activeRoutine.tutorials[currentStepIndex + 1].target}
+                </Text>
+              )}
+            </View>
+          )}
+
+          <Text style={{
+            marginTop: 36,
+            fontSize: 11,
+            color: 'rgba(255,255,255,0.25)',
+            fontWeight: '500',
+            letterSpacing: 0.5,
+          }}>Tap anywhere to skip rest</Text>
+        </TouchableOpacity>
+      </Modal>
+
       {/* STANDARD ROUTINES SELECTION HUB LIST VIEW */}
-      <ScrollView 
-        style={styles.container} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -777,23 +1281,63 @@ export default function WorkoutScreen({
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Daily Home Workouts</Text>
-            <Text style={styles.subGreeting}>Zero-equipment home workout routines</Text>
+            <Text style={styles.subGreeting}>
+              Zero-equipment home workout routines
+            </Text>
           </View>
         </View>
 
         {/* OVER-EXERCISING / ACTIVE RECOVERY SMART ALERT BANNER */}
-        {((dailyExercise?.caloriesBurned || 0) >= 500 || (dailyExercise?.activeMinutes || 0) >= 60) && (
-          <View style={[styles.formCard, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.14)' : 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)', borderWidth: 1, marginBottom: 16 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-              <View style={{ backgroundColor: '#F59E0B', padding: 8, borderRadius: 12, marginRight: 12, marginTop: 2 }}>
+        {((dailyExercise?.caloriesBurned || 0) >= 500 ||
+          (dailyExercise?.activeMinutes || 0) >= 60) && (
+          <View
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: isDarkMode
+                  ? "rgba(245, 158, 11, 0.14)"
+                  : "rgba(245, 158, 11, 0.08)",
+                borderColor: "rgba(245, 158, 11, 0.3)",
+                borderWidth: 1,
+                marginBottom: 16,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              <View
+                style={{
+                  backgroundColor: "#F59E0B",
+                  padding: 8,
+                  borderRadius: 12,
+                  marginRight: 12,
+                  marginTop: 2,
+                }}
+              >
                 <Flame color="#FFFFFF" size={18} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "800",
+                    color: "#F59E0B",
+                    marginBottom: 2,
+                  }}
+                >
                   Active Recovery Recommended
                 </Text>
-                <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B', lineHeight: 17 }}>
-                  Great effort today! You burned {dailyExercise?.caloriesBurned || 0} kcal across {dailyExercise?.activeMinutes || 0} active minutes. Consider taking a light rest or stretching day tomorrow to prevent overtraining.
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: theme?.textSecondary || "#64748B",
+                    lineHeight: 17,
+                  }}
+                >
+                  Great effort today! You burned{" "}
+                  {dailyExercise?.caloriesBurned || 0} kcal across{" "}
+                  {dailyExercise?.activeMinutes || 0} active minutes. Consider
+                  taking a light rest or stretching day tomorrow to prevent
+                  overtraining.
                 </Text>
               </View>
             </View>
@@ -809,15 +1353,24 @@ export default function WorkoutScreen({
               <TouchableOpacity
                 key={tier}
                 style={[
-                  styles.filterChipButton, 
-                  selectedIntensity === tier ? styles.filterChipActive : styles.filterChipInactive
+                  styles.filterChipButton,
+                  selectedIntensity === tier
+                    ? styles.filterChipActive
+                    : styles.filterChipInactive,
                 ]}
                 onPress={() => setSelectedIntensity(tier)}
               >
-                <Text style={[
-                  styles.filterChipText, 
-                  { color: selectedIntensity === tier ? '#FFFFFF' : (theme?.textPrimary || '#0F172A') }
-                ]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color:
+                        selectedIntensity === tier
+                          ? "#FFFFFF"
+                          : theme?.textPrimary || "#0F172A",
+                    },
+                  ]}
+                >
                   {tier}
                 </Text>
               </TouchableOpacity>
@@ -826,7 +1379,9 @@ export default function WorkoutScreen({
         </View>
 
         {/* WORKOUT PLAN CARD LISTINGS */}
-        <Text style={styles.sectionLabelTitle}>Your Tailored Home Routines</Text>
+        <Text style={styles.sectionLabelTitle}>
+          Your Tailored Home Routines
+        </Text>
 
         {/* Skeleton placeholders while loading */}
         {isLoadingWorkouts && workoutRoutines.length === 0 && (
@@ -840,91 +1395,166 @@ export default function WorkoutScreen({
         {filteredWorkouts.map((workout, staggerIndex) => {
           if (!workout) return null;
           return (
-            <StaggerCard
-              key={workout.id}
-              index={staggerIndex}
-            >
-            <PressableCard
-              style={styles.workoutFormCard}
-              onPress={() => handleStartTutorialEngine(workout)}
-              scaleDown={0.97}
-            >
-              <View style={styles.workoutHeaderRow}>
-                <View style={styles.workoutTitleContainer}>
-                  <Text style={styles.workoutMainTitle}>{workout.title}</Text>
-                  <Text style={styles.workoutDescriptionText}>{workout.description}</Text>
-                </View>
-              </View>
-
-              <View style={styles.glassDivider} />
-
-              {/* QUICK METRICS TILES */}
-              <View style={styles.workoutMetricsSummaryGrid}>
-                <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: "rgba(14, 165, 233, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Clock color={"#0EA5E9"} size={13} />
-                  </View>
-                  <View>
-                    <Text style={styles.metricTileLabel}>Duration</Text>
-                    <Text style={[styles.metricTileValue, { color: "#0EA5E9" }]}>
-                      {workout.duration}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: "rgba(249, 115, 22, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Flame color={"#F97316"} size={13} />
-                  </View>
-                  <View>
-                    <Text style={styles.metricTileLabel}>Est. Burn</Text>
-                    <Text style={[styles.metricTileValue, { color: "#F97316" }]}>
-                      {workout?.caloriesBurn ?? workout?.caloriesBurned} kcal
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.metricItemBox}>
-                  <View style={{ backgroundColor: "rgba(245, 158, 11, 0.12)", borderRadius: 8, padding: 5, marginRight: 8 }}>
-                    <Trophy color={"#F59E0B"} size={13} />
-                  </View>
-                  <View>
-                    <Text style={styles.metricTileLabel}>Intensity</Text>
-                    <Text style={[styles.metricTileValue, { color: "#F59E0B" }]}>
-                      {workout?.intensity}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* EXERCISE STEPS PREVIEW */}
-              {Array.isArray(workout.tutorials) && workout.tutorials.length > 0 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                  <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: logoGreen }}>Animated GIF Tutorials</Text>
-                  </View>
-                  {workout.tutorials.slice(0, 3).map((tut, tIdx) => (
-                    <Text key={tIdx} style={{ fontSize: 11, color: theme?.textSecondary || '#64748B' }}>
-                      {tut.name}{tIdx < Math.min(workout.tutorials.length, 3) - 1 ? ' •' : ''}
-                    </Text>
-                  ))}
-                </View>
-              )}
-
-              {/* LAUNCH BUTTON */}
-              <TouchableOpacity 
-                style={styles.startWorkoutActionButton} 
-                activeOpacity={0.8}
+            <StaggerCard key={workout.id} index={staggerIndex}>
+              <PressableCard
+                style={styles.workoutFormCard}
                 onPress={() => handleStartTutorialEngine(workout)}
+                scaleDown={0.97}
               >
-                <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.startWorkoutButtonText}>Begin Active Routine</Text>
-              </TouchableOpacity>
-            </PressableCard>
+                <View style={styles.workoutHeaderRow}>
+                  <View style={styles.workoutTitleContainer}>
+                    <Text style={styles.workoutMainTitle}>{workout.title}</Text>
+                    <Text style={styles.workoutDescriptionText}>
+                      {workout.description}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.glassDivider} />
+
+                {/* QUICK METRICS TILES */}
+                <View style={styles.workoutMetricsSummaryGrid}>
+                  <View style={styles.metricItemBox}>
+                    <View
+                      style={{
+                        backgroundColor: "rgba(14, 165, 233, 0.12)",
+                        borderRadius: 8,
+                        padding: 5,
+                        marginRight: 8,
+                      }}
+                    >
+                      <Clock color={"#0EA5E9"} size={13} />
+                    </View>
+                    <View>
+                      <Text style={styles.metricTileLabel}>Duration</Text>
+                      <Text
+                        style={[styles.metricTileValue, { color: "#0EA5E9" }]}
+                      >
+                        {workout.duration}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.metricItemBox}>
+                    <View
+                      style={{
+                        backgroundColor: "rgba(249, 115, 22, 0.12)",
+                        borderRadius: 8,
+                        padding: 5,
+                        marginRight: 8,
+                      }}
+                    >
+                      <Flame color={"#F97316"} size={13} />
+                    </View>
+                    <View>
+                      <Text style={styles.metricTileLabel}>
+                        MET Burn ({Math.round(currentWeightKg)}kg)
+                      </Text>
+                      <Text
+                        style={[styles.metricTileValue, { color: "#F97316" }]}
+                      >
+                        {workout?.caloriesBurn ||
+                          calculateMETCalories(
+                            workout?.intensity,
+                            workout?.duration,
+                            currentWeightKg,
+                          )}{" "}
+                        kcal
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.metricItemBox}>
+                    <View
+                      style={{
+                        backgroundColor: "rgba(245, 158, 11, 0.12)",
+                        borderRadius: 8,
+                        padding: 5,
+                        marginRight: 8,
+                      }}
+                    >
+                      <Trophy color={"#F59E0B"} size={13} />
+                    </View>
+                    <View>
+                      <Text style={styles.metricTileLabel}>Intensity</Text>
+                      <Text
+                        style={[styles.metricTileValue, { color: "#F59E0B" }]}
+                      >
+                        {workout?.intensity}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* EXERCISE STEPS PREVIEW */}
+                {Array.isArray(workout.tutorials) &&
+                  workout.tutorials.length > 0 && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: "rgba(16, 185, 129, 0.12)",
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: "rgba(16, 185, 129, 0.3)",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: logoGreen,
+                          }}
+                        >
+                          Animated GIF Tutorials
+                        </Text>
+                      </View>
+                      {workout.tutorials.slice(0, 3).map((tut, tIdx) => (
+                        <Text
+                          key={tIdx}
+                          style={{
+                            fontSize: 11,
+                            color: theme?.textSecondary || "#64748B",
+                          }}
+                        >
+                          {tut.name}
+                          {tIdx < Math.min(workout.tutorials.length, 3) - 1
+                            ? " •"
+                            : ""}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+
+                {/* LAUNCH BUTTON */}
+                <TouchableOpacity
+                  style={styles.startWorkoutActionButton}
+                  activeOpacity={0.8}
+                  onPress={() => handleStartTutorialEngine(workout)}
+                >
+                  <Play
+                    color="#FFFFFF"
+                    size={14}
+                    fill="#FFFFFF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.startWorkoutButtonText}>
+                    Begin Active Routine
+                  </Text>
+                </TouchableOpacity>
+              </PressableCard>
             </StaggerCard>
           );
         })}
-
       </ScrollView>
 
       {/* UIverse Inspired AI Customization Loading Modal */}

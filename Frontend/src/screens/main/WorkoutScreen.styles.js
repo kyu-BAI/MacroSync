@@ -1,4 +1,4 @@
-import { StyleSheet, Dimensions, Platform } from 'react-native';
+import { StyleSheet, Dimensions, Platform, StatusBar } from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const baseColor = '#F8FAFC';           
@@ -213,22 +213,23 @@ export const getStyles = (theme) => StyleSheet.create({
 
   playerWrapper: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 54 : 48,
-    paddingBottom: 24,
+    paddingHorizontal: 0,
+    paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 8,
+    paddingBottom: 0,
     backgroundColor: theme?.background || baseColor,
   },
   playerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
     width: '100%',
   },
   playerBackNeuButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: theme?.surface || baseColor,
     alignItems: 'center',
     justifyContent: 'center',
@@ -240,7 +241,7 @@ export const getStyles = (theme) => StyleSheet.create({
   playerHeaderCenterText: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   playerRoutineSubTitle: {
     fontSize: 12,
@@ -250,18 +251,20 @@ export const getStyles = (theme) => StyleSheet.create({
     textTransform: 'uppercase',
   },
   playerStepIndicator: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '900',
     color: theme?.textPrimary || '#0F172A',
     marginTop: 1,
   },
   playerMainCard: {
     flex: 1,
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1.5, 
-    borderColor: theme?.border || '#E2E8F0',
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 0,
+    borderWidth: 0, 
+    borderColor: 'transparent',
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -359,6 +362,12 @@ export const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    backgroundColor: theme?.surface || baseColor,
+    borderTopWidth: 1,
+    borderTopColor: theme?.border || '#E2E8F0',
   },
   playerSecondaryNeuActionBtn: {
     flex: 0.7,

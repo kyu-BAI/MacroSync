@@ -170,6 +170,7 @@ function MainApp() {
   const [globalConsumedGlasses, setGlobalConsumedGlasses] = useState(4);
   const [globalLoggedMeals, setGlobalLoggedMeals] = useState([]);
   const [sessionRecipes, setSessionRecipes] = useState([]);
+  const [sessionDailyPlan, setSessionDailyPlan] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
 
   // Lifted Goal completion & Reset States to survive tab switches
@@ -560,16 +561,17 @@ function MainApp() {
     const fetchRecommendedMeals = async () => {
       if (!userId) return;
 
-      const CACHE_KEY = `ms_meals_cache_${userId}`;
       const todayStr = new Date().toISOString().split('T')[0];
+      const CACHE_KEY = `ms_meals_cache_${userId}_${todayStr}`;
 
       // 1. Load from cache instantly first for 0ms load speed
       try {
-        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        const cached = (await AsyncStorage.getItem(CACHE_KEY)) || (await AsyncStorage.getItem(`ms_meals_cache_${userId}`));
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             setSessionRecipes(parsed.meals);
+            setSessionDailyPlan(prev => (prev && prev.length > 0) ? prev : parsed.meals);
           }
         }
       } catch (e) {}
@@ -581,6 +583,7 @@ function MainApp() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             setSessionRecipes(data);
+            setSessionDailyPlan(prev => (prev && prev.length > 0) ? prev : data);
             await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
           }
         }
@@ -936,11 +939,14 @@ function MainApp() {
             onTabChange={(tab) => setActiveTab(tab)} 
             dailyNutrition={dailyNutrition}
             setDailyNutrition={setDailyNutrition}
+            dailyExercise={dailyExercise}
             guestBaseline={userBaseline}
             guestGoals={userGoals}
             globalLoggedMeals={globalLoggedMeals}
             setGlobalLoggedMeals={setGlobalLoggedMeals}
             sessionRecipes={sessionRecipes}
+            sessionDailyPlan={sessionDailyPlan}
+            setSessionDailyPlan={setSessionDailyPlan}
             userId={userId}
             isOnline={isOnline}
             setNotifications={setNotifications}
@@ -1050,6 +1056,8 @@ function MainApp() {
             dailyExercise={dailyExercise}
             setDailyExercise={setDailyExercise}
             setNotifications={setNotifications}
+            userGoals={userGoals}
+            userBaseline={userBaseline}
           />
         </FadeTabView>
       )}

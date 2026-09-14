@@ -71,15 +71,20 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   }
 };
 
+let memoryDailyPlanCache = null;
+
 export default function DietRecipesScreen({ 
   onTabChange, 
   dailyNutrition, 
   setDailyNutrition, 
+  dailyExercise,
   guestGoals, 
   guestBaseline, 
   globalLoggedMeals = [], 
   setGlobalLoggedMeals,
   sessionRecipes,
+  sessionDailyPlan,
+  setSessionDailyPlan,
   userId,
   isOnline = true,
   setNotifications
@@ -694,20 +699,46 @@ export default function DietRecipesScreen({
   };
 
   // AI Daily Meal Recommendation State
-  const [dailyPlan, setDailyPlan] = useState([]);
+  const [dailyPlan, setDailyPlanState] = useState(() => {
+    if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) return sessionDailyPlan;
+    if (Array.isArray(memoryDailyPlanCache) && memoryDailyPlanCache.length > 0) return memoryDailyPlanCache;
+    return [];
+  });
   const [loadingMeals, setLoadingMeals] = useState(false);
+  const [isGeneratingAIPlan, setIsGeneratingAIPlan] = useState(false);
+
+  const setDailyPlan = useCallback((newPlan) => {
+    setDailyPlanState(prev => {
+      const resolved = typeof newPlan === 'function' ? newPlan(prev) : newPlan;
+      memoryDailyPlanCache = resolved;
+      if (setSessionDailyPlan) {
+        setSessionDailyPlan(resolved);
+      }
+      return resolved;
+    });
+  }, [setSessionDailyPlan]);
+
+  useEffect(() => {
+    if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) {
+      setDailyPlanState(sessionDailyPlan);
+      memoryDailyPlanCache = sessionDailyPlan;
+    }
+  }, [sessionDailyPlan]);
 
   const goalWeight = guestGoals?.goalWeight || guestBaseline?.targetWeight || '';
   const currentWeight = guestBaseline?.weight || '';
   const userGoal = guestGoals?.goal || '';
 
-  const handleFetchFreshMeals = useCallback(async (force = false) => {
+  const handleFetchFreshMeals = useCallback(async (force = false, isManualAction = false) => {
+    if (isManualAction) {
+      setIsGeneratingAIPlan(true);
+    }
     setLoadingMeals(true);
     const todayStr = new Date().toISOString().split('T')[0];
     const targetId = userId || 'guest';
     const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
 
-    if (force) {
+    if (force && isManualAction) {
       try { await AsyncStorage.removeItem(CACHE_KEY); } catch (_) {}
     }
 
@@ -720,7 +751,7 @@ export default function DietRecipesScreen({
       params.append('_t', String(Date.now()));
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch(`${API_URL}/meals/recommend/${targetId}?${params.toString()}`, { 
         signal: controller.signal,
         headers: { 'Cache-Control': 'no-cache' }
@@ -750,7 +781,7 @@ export default function DietRecipesScreen({
               goal: String(userGoal || ''),
               meals: data
             }));
-            // 🧹 Clean up yesterday's cache to prevent storage bloat
+            // Clean up yesterday's cache to prevent storage bloat
             try {
               const yesterday = new Date();
               yesterday.setDate(yesterday.getDate() - 1);
@@ -763,27 +794,33 @@ export default function DietRecipesScreen({
       }
 
       // If network returns empty or non-200, fallback to dynamic daily plan
-      const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
-      if (localPlan && localPlan.length > 0) {
-        setDailyPlan(localPlan);
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-          userId: targetId,
-          date: todayStr,
-          goalWeight: String(goalWeight || ''),
-          goal: String(userGoal || ''),
-          meals: localPlan
-        }));
-      }
+      setDailyPlan(prev => {
+        if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
+        const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
+        if (localPlan && localPlan.length > 0) {
+          AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+            userId: targetId,
+            date: todayStr,
+            goalWeight: String(goalWeight || ''),
+            goal: String(userGoal || ''),
+            meals: localPlan
+          })).catch(() => {});
+          return localPlan;
+        }
+        return prev;
+      });
     } catch (e) {
-      if (__DEV__) console.warn("Notice: Using local rotating dynamic plan:", e?.message || e);
-      const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
-      if (localPlan && localPlan.length > 0) {
-        setDailyPlan(localPlan);
-      }
+      if (__DEV__) console.log("Notice: Using local rotating dynamic plan:", e?.message || e);
+      setDailyPlan(prev => {
+        if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
+        const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
+        return (localPlan && localPlan.length > 0) ? localPlan : prev;
+      });
     } finally {
       setLoadingMeals(false);
+      setIsGeneratingAIPlan(false);
     }
-  }, [userId, goalWeight, userGoal, currentWeight, selectedLocation, targetCalories]);
+  }, [userId, goalWeight, userGoal, currentWeight, selectedLocation, targetCalories, setDailyPlan]);
 
   useEffect(() => {
     let isMounted = true;
@@ -793,18 +830,17 @@ export default function DietRecipesScreen({
       const targetId = userId || 'guest';
       const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
 
-      try {
-        // 🧹 One-time migration: remove old undated cache keys
-        try { await AsyncStorage.removeItem(`ms_meals_cache_${targetId}`); } catch (_) {}
+      // 1. If we already have meals in memory or session, keep them immediately (0ms load speed!)
+      if (Array.isArray(dailyPlan) && dailyPlan.length > 0) {
+        return;
+      }
 
-        // 1. Check today's date-specific cache
-        const cachedRaw = await AsyncStorage.getItem(CACHE_KEY);
+      try {
+        // 2. Check today's date-specific cache or undated cache
+        const cachedRaw = (await AsyncStorage.getItem(CACHE_KEY)) || (await AsyncStorage.getItem(`ms_meals_cache_${targetId}`));
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          const isSameGoalWeight = String(parsed.goalWeight || '') === String(goalWeight || '');
-          const isSameGoal = String(parsed.goal || '') === String(userGoal || '');
-
-          if (isSameGoalWeight && isSameGoal && Array.isArray(parsed.meals) && parsed.meals.length > 0) {
+          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             const hasGenericTitle = parsed.meals.some(m => String(m.title || '').includes('Allergen-Free Pinoy High-Protein'));
             const hasOldBuggyTitles = parsed.meals.some(m =>
               String(m.title || '').includes('Pinoy Garlic Chicken Breast & Kamote Hash') ||
@@ -817,29 +853,36 @@ export default function DietRecipesScreen({
               String(m.title || '').includes('Sinugbang Lean Baboy Tenderloin ug Luto nga Squash')
             );
 
-            // If it's a valid fresh meal plan without the old buggy repetitive titles, use it!
             if (!hasGenericTitle && !hasOldBuggyTitles && isMounted) {
               setDailyPlan(parsed.meals);
               setLoadingMeals(false);
-              return;
+              if (parsed.date === todayStr) {
+                return; // Cache is fresh for today
+              }
             }
           }
         }
 
-        // 2. Old bug detected, or no cache for today — immediately generate a fresh plan!
+        // 3. No cache or older date: fetch fresh meals silently in the background
         if (isMounted) {
-          handleFetchFreshMeals(true);
+          handleFetchFreshMeals(false, false);
         }
       } catch (err) {
         if (__DEV__) console.log("MEAL CACHE VERIFICATION NOTICE:", err);
-        if (isMounted) handleFetchFreshMeals(true);
+        if (isMounted) {
+          const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
+          if (localPlan && localPlan.length > 0) {
+            setDailyPlan(localPlan);
+          }
+          setLoadingMeals(false);
+        }
       }
     };
 
     loadCachedOrFetchMeals();
 
     return () => { isMounted = false; };
-  }, [userId, goalWeight, userGoal, currentWeight]);
+  }, [userId]);
 
   const handlePressIn = (id) => setIsPressedBtn(id);
   const handlePressOut = () => setIsPressedBtn(null);
@@ -1089,7 +1132,11 @@ export default function DietRecipesScreen({
   });
 
   const consumedCalories = dailyNutrition?.consumedCalories || 0;
-  const isOverCalories = consumedCalories > targetCalories;
+  const burnedCalories   = dailyExercise?.caloriesBurned || 0;
+  const netCalories      = Math.max(0, consumedCalories - burnedCalories);
+  const isOverGross      = consumedCalories > targetCalories;
+  const isOverCalories   = netCalories > targetCalories;
+  const isSavedByWorkout = isOverGross && !isOverCalories;
   const planList = recipes || [];
   const isGeneratingMealPlan = isGenerating;
   const isCacheChecked = true;
@@ -1107,7 +1154,7 @@ export default function DietRecipesScreen({
         refreshControl={
           <RefreshControl
             refreshing={loadingMeals}
-            onRefresh={() => handleFetchFreshMeals(true)}
+            onRefresh={() => handleFetchFreshMeals(true, false)}
             tintColor={logoGreen}
             colors={[logoGreen]}
           />
@@ -1144,19 +1191,14 @@ export default function DietRecipesScreen({
           <View style={styles.dailyPlanSection}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginLeft: 4 }}>
               <Text style={[styles.sectionLabelTitle, { marginBottom: 0, marginLeft: 0 }]}>Today's Target Macros</Text>
-              {isOverCalories && (
-                <View style={styles.warningBadge}>
-                  <Text style={styles.warningBadgeText}>Over Calories!</Text>
-                </View>
-              )}
             </View>
             <View style={styles.dailyProgressCard}>
               <View style={styles.macroRowInline}>
                 <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: isOverCalories ? '#EF4444' : '#F97316' }]} numberOfLines={1} ellipsizeMode="tail">
-                    {Math.round(parseFloat(consumedCalories) || 0)}/{Math.round(parseFloat(targetCalories) || 0)}
+                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: isOverCalories ? '#EF4444' : isSavedByWorkout ? '#10B981' : '#F97316' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {Math.round(parseFloat(netCalories) || 0)}/{Math.round(parseFloat(targetCalories) || 0)}
                   </Text>
-                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Kcal</Text>
+                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Net Kcal</Text>
                 </View>
                 <View style={styles.macroMiniBox}>
                   <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#10B981' }]} numberOfLines={1} ellipsizeMode="tail">
@@ -1239,7 +1281,7 @@ export default function DietRecipesScreen({
                           flexDirection: "row",
                           alignItems: "center",
                         }}
-                        onPress={handleFetchFreshMeals}
+                        onPress={() => handleFetchFreshMeals(true, true)}
                         activeOpacity={0.8}
                       >
                         <Sparkles
@@ -1829,10 +1871,10 @@ export default function DietRecipesScreen({
 
       {/* ── UIVERSE INSPIRED AI LOADING MODAL ── */}
       <AILoadingModal
-        visible={isFetchingRecipe || loadingMeals}
-        type={isFetchingRecipe ? "recipe" : "meal"}
-        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
-        subtitle={isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
+        visible={isGenerating || isFetchingRecipe || isGeneratingAIPlan}
+        type={isGenerating || isFetchingRecipe ? "recipe" : "meal"}
+        title={isGenerating || isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
+        subtitle={isGenerating || isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
       />
     </View>
   );

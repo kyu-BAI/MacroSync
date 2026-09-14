@@ -2512,6 +2512,27 @@ async def paymongo_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def calculate_met_calories(intensity: str, duration_mins: int, weight_kg: float) -> int:
+    """
+    Calculates calorie burn using the scientific MET (Metabolic Equivalent of Task) formula:
+    Calories Burned = MET * Weight (kg) * Duration (hours)
+    Light = 3.5 MET (Stretching, mobility, core plank holds)
+    Moderate = 5.5 MET (Standard bodyweight calisthenics, squats, pushups)
+    Intense = 8.0 MET (HIIT, burpees, high cadence plyometrics)
+    """
+    intens = str(intensity or "Moderate").lower()
+    if "intense" in intens or "hiit" in intens:
+        met = 8.0
+    elif "light" in intens or "stretch" in intens or "recovery" in intens:
+        met = 3.5
+    else:
+        met = 5.5
+
+    hours = max(5, duration_mins) / 60.0
+    safe_weight = max(35.0, float(weight_kg or 70.0))
+    return max(30, round(met * safe_weight * hours))
+
+
 @app.get("/workouts/recommend/{user_id}")
 def recommend_workouts(user_id: str):
     try:
@@ -2550,7 +2571,7 @@ def recommend_workouts(user_id: str):
         
         Guidelines:
         - Tailor set/rep schemes, rest periods, and exercise selections uniquely to their physical baseline (BMI {bmi}, activity level {activity_level}, goal {goal}).
-        - Calorie burn estimations MUST be calculated realistically for a {weight_kg}kg individual performing each specific routine.
+        - Calorie burn estimations MUST be calculated realistically for a {weight_kg}kg individual performing each specific routine using MET values (Light=3.5, Moderate=5.5, Intense=8.0).
         - Generate safe, effective routines requiring no gym equipment.
         - Recommend a unique combination of exercises for this specific date seed ({date_str}), ensuring daily variety.
 
@@ -2580,6 +2601,13 @@ def recommend_workouts(user_id: str):
                 text = text[:-3]
             workouts = json.loads(text.strip())
             if isinstance(workouts, list) and len(workouts) == 3:
+                import re
+                for w in workouts:
+                    dur_str = str(w.get("duration", "20"))
+                    dur_match = re.search(r'\d+', dur_str)
+                    dur_mins = int(dur_match.group(0)) if dur_match else 20
+                    w["caloriesBurn"] = calculate_met_calories(w.get("intensity", "Moderate"), dur_mins, weight_kg)
+                    w["calculated_for_weight_kg"] = weight_kg
                 return workouts
         except Exception as ai_err:
             print("WORKOUT RECOMMENDATION FALLBACK TRIGGERED:", ai_err)
@@ -2905,7 +2933,16 @@ def recommend_workouts(user_id: str):
             ]
         ]
 
-        return DAILY_FALLBACK_POOLS[day_idx % len(DAILY_FALLBACK_POOLS)]
+        selected_pool = DAILY_FALLBACK_POOLS[day_idx % len(DAILY_FALLBACK_POOLS)]
+        import copy, re
+        scaled_pool = copy.deepcopy(selected_pool)
+        for w in scaled_pool:
+            dur_str = str(w.get("duration", "20"))
+            dur_match = re.search(r'\d+', dur_str)
+            dur_mins = int(dur_match.group(0)) if dur_match else 20
+            w["caloriesBurn"] = calculate_met_calories(w.get("intensity", "Moderate"), dur_mins, weight_kg)
+            w["calculated_for_weight_kg"] = weight_kg
+        return scaled_pool
             
     except HTTPException as he:
         raise he
@@ -3360,3 +3397,68 @@ async def google_webpage():
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+# ---------------- DYNAMIC LOCALIZATION & TRANSLATIONS ----------------
+from translations_data import get_translations_for_language
+
+class TranslateTitleRequest(BaseModel):
+    title: str
+    target_lang: str = "English"
+
+@app.get("/translations/{language}")
+def get_translations_endpoint(language: str):
+    """
+    Serves dynamic OTA localization dictionary for the requested language.
+    Checks Supabase 'app_translations' table if present, otherwise returns catalog.
+    """
+    normalized_lang = language.capitalize() if language else "English"
+    if normalized_lang not in ["English", "Tagalog", "Cebuano"]:
+        normalized_lang = "English"
+
+    # 1. Attempt to fetch custom overrides from Supabase app_translations table
+    supabase_overrides = {}
+    if supabase is not None:
+        try:
+            res = supabase.table("app_translations").select("*").eq("language", normalized_lang).execute()
+            if res.data and len(res.data) > 0:
+                for row in res.data:
+                    k = row.get("key")
+                    v = row.get("translation")
+                    if k and v:
+                        supabase_overrides[k] = v
+        except Exception:
+            pass  # Fall back cleanly if table does not exist
+
+    # 2. Get base localization data
+    data = get_translations_for_language(normalized_lang)
+
+    # 3. Apply Supabase overrides if any
+    if supabase_overrides:
+        data["strings"].update(supabase_overrides)
+
+    return data
+
+
+@app.post("/translate/meal-title")
+def translate_meal_title_api(payload: TranslateTitleRequest):
+    """
+    On-the-fly AI translation for novel / custom AI-generated meal recipe titles.
+    """
+    title = payload.title.strip() if payload.title else ""
+    target_lang = payload.target_lang.capitalize() if payload.target_lang else "English"
+    if not title or target_lang == "English":
+        return {"original": title, "translated": title, "language": target_lang}
+
+    prompt = (
+        f"Translate the following Filipino/English food recipe title into natural {target_lang} (specifically Philippine culinary terms):\n"
+        f"Recipe Title: \"{title}\"\n\n"
+        f"Return ONLY the translated title text as a single string. Do NOT add quotes, markdown, or explanations."
+    )
+
+    translated_text = ask_gemini_with_fallback(prompt)
+    if translated_text:
+        clean = translated_text.strip().strip('"\'')
+        return {"original": title, "translated": clean, "language": target_lang}
+
+    return {"original": title, "translated": title, "language": target_lang}
