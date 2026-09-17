@@ -3460,9 +3460,13 @@ def translate_meal_title_api(payload: TranslateTitleRequest):
         f"Return ONLY the translated title text as a single string. Do NOT add quotes, markdown, or explanations."
     )
 
-    translated_text = ask_gemini_with_fallback(prompt)
-    if translated_text:
-        clean = translated_text.strip().strip('"\'')
-        return {"original": title, "translated": clean, "language": target_lang}
+    try:
+        response = generate_gemini_content(prompt)
+        translated_text = response.text.strip() if hasattr(response, 'text') else str(response).strip()
+        if translated_text:
+            clean = translated_text.strip().strip('"\'')
+            return {"original": title, "translated": clean, "language": target_lang}
+    except Exception as e:
+        print("TRANSLATE MEAL TITLE ERROR:", repr(e))
 
     return {"original": title, "translated": title, "language": target_lang}
