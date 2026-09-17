@@ -174,11 +174,10 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.4,
+        base64: true,
         exif: false,
         skipProcessing: true,
       });
-
-
 
       if (!photo || !photo.uri) {
         setIsScanning(false);
@@ -197,11 +196,18 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
 
       setCapturedImage(formattedUri);
 
-      const base64Data = await FileSystem.readAsStringAsync(photo.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let base64Data = photo.base64 || '';
+      if (!base64Data && photo.uri) {
+        try {
+          base64Data = await FileSystem.readAsStringAsync(photo.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (fsErr) {
+          if (__DEV__) console.log("FileSystem read error:", fsErr);
+        }
+      }
 
-      if (!base64Data || base64Data.length < 4000) {
+      if (!base64Data || base64Data.length < 100) {
         setIsScanning(false);
         stopPulseAnimation();
         setCapturedImage(null);
@@ -219,7 +225,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
         },
         body: JSON.stringify({
           image_base64: base64Data,
-          user_id: userId
+          user_id: userId || ""
         })
       });
 
@@ -339,7 +345,7 @@ export default function FoodScannerScreen({ onTabChange, onLogMeal, userId, user
           },
           body: JSON.stringify({
             image_base64: cleanBase64,
-            user_id: userId
+            user_id: userId || ""
           })
         });
 

@@ -183,13 +183,13 @@ class RecipeRequest(BaseModel):
     ingredients: str
     budget: str = "All"
     location: str = "Any"
-    user_id: str = None
+    user_id: Optional[str] = None
     allergies: list = []
 
 
 class AnalyzeFoodRequest(BaseModel):
     image_base64: str
-    user_id: str = None
+    user_id: Optional[str] = None
 
 
 class UpdateSubscriptionRequest(BaseModel):
@@ -1558,13 +1558,11 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     # Pre-encode image base64 once outside the nested loop
     b64_img = base64.b64encode(image_bytes).decode("utf-8") if (image_bytes and len(image_bytes) > 0) else None
 
-    # Models prioritized by capacity, speed, and fallback availability
+    # Models prioritized by capacity, speed, and active availability
     models_to_try = [
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-8b',
-        'gemini-2.5-flash'
+        'gemini-2.5-flash',
+        'gemini-flash-latest',
+        'gemini-3.6-flash'
     ]
     
     # 1. Direct REST API execution with key and model failover
@@ -2255,14 +2253,20 @@ def analyze_food(data: AnalyzeFoodRequest):
              {"error": "No edible food detected. Please align an edible food item, meal, or beverage in the frame."}
 
         2. IF IT IS EDIBLE FOOD OR BEVERAGE:
-           Precisely identify the exact food item.
-           - If it is a single food item like an Egg (boiled egg, fried egg, raw egg, scrambled egg, poached egg), identify it specifically (e.g. "Boiled Egg", "Fried Egg", "Raw Egg", "Scrambled Egg"). Do NOT misidentify simple eggs or single ingredients as complex mixed dishes.
-           - Estimate the portion size/weight in grams ("serving_weight_g") realistically (e.g. 1 large egg ~50g).
-           - Provide accurate calorie and macronutrient values based on standard USDA nutritional data (e.g. 1 egg ~50g contains ~70 calories, ~6g protein, ~0.5g carbs, ~5g fat).
+           Precisely identify the food items in the image.
+           - COMBO / HEALTHY MULTI-ITEM PLATES:
+             If the plate or bowl contains 2, 3, or more distinct healthy foods (for example: grilled chicken with broccoli and avocado/rice; or salmon with asparagus and sweet potato; or eggs with avocado and toast):
+             - Recognize all distinct foods on the plate.
+             - Formulate a clear, appetizing name including all major items (e.g., "Grilled Chicken with Broccoli & Avocado", "Salmon with Asparagus & Sweet Potato").
+             - Sum up the combined portion weight ("serving_weight_g") and total combined calories, protein, carbs, and fats for the entire plate.
+           - SINGLE FOOD ITEMS:
+             If it is a single food item (e.g., boiled egg, apple, banana, steak, protein shake), identify it specifically with accurate single-portion metrics.
+           - Estimate the portion size/weight in grams ("serving_weight_g") realistically.
+           - Provide accurate calorie and macronutrient values based on standard USDA/nutritional benchmarks.
            - Return a valid JSON object with:
-             - "name": Precise descriptive name of the food or beverage
+             - "name": Precise descriptive name of the food, beverage, or combo plate
              - "serving_weight_g": Estimated portion weight in grams (integer)
-             - "confidence": Integer between 85 and 99
+             - "confidence": Integer between 90 and 99
              - "calories": Total estimated calories (integer)
              - "protein": Protein in grams (integer)
              - "carbs": Carbs in grams (integer)
