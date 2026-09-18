@@ -1583,9 +1583,10 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
 
     # Models prioritized by capacity, speed, and active availability
     models_to_try = [
-        'gemini-2.5-flash',
-        'gemini-flash-latest',
-        'gemini-3.6-flash'
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro'
     ]
     
     # 1. Direct REST API execution with key and model failover
@@ -2427,7 +2428,7 @@ def debug_gemini():
     if not key:
         return {"error": "GEMINI_API_KEY missing from environment"}
     
-    models = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite']
+    models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro']
     results = {}
     for m in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key.strip()}"
