@@ -68,7 +68,7 @@ _DEFAULT_URL = _b64dec("aHR0cHM6Ly96Z3BtdXR4cnJoZm5zam5teGh2ci5zdXBhYmFzZS5jbw==
 _DEFAULT_KEY = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGMzT1Rnek5qUTVOQ3dpWlhod0lqb3lNRGsxTkRFeU5EazBmUS5uMFlBSzBITEh5bnJQRk5WZGJSVEROcm96M1FNUnZJLUlhaWJhdElEc1hn")
 _DEFAULT_ANON = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkltRnViMjRpTENKaVhHaDBJam9pTVRjM05UazNNREExTmlJc0ltVjRjQ0k2TVRjM05UazNNREExTmlKOS5XajUteWhzbjlJRkNBZHkxVGU5ZGI3OTlvQlZadVFxelp1SUhyVWhKWEVVOQ==")
 _DEFAULT_RESEND = _b64dec("cmVfRjhrSEN5cGhfMkdob3ljSkJqVVV5RFZuQW9YYnA4RUty")
-_DEFAULT_GEMINI = _b64dec("QVEuQWI4Uk42SUpXMERXc1BsRnZEWld6azJmVmtsenMyeE8xenZQZGJLdXpteTMyUU1ibVE=")
+_DEFAULT_GEMINI = _b64dec("QVEuQWI4Uk42TGpRMHktUkVHLUZRcEpQX2JBeDc5RTNXamVMVkFnWUhNclB2THRGYngwcHc=")
 _DEFAULT_PAYMONGO = _b64dec("c2tfdGVzdF94Vkt1elVlZzc0Rm9TeGFVRXIyeXZuVFg=")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL") or _DEFAULT_URL
@@ -1585,12 +1585,12 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     # Key format sanity check & diagnostics
     valid_keys = []
     for k in keys:
-        if k.startswith("AQ."):
-            print(f"WARNING: Gemini key '{k[:8]}...' starts with 'AQ.', which appears to be an OAuth/Vertex token, not a Google AI Studio API key (starts with 'AIzaSy...').")
         valid_keys.append(k)
 
-    # Models prioritized by capacity, speed, and active availability
+    # Models prioritized by active capability, speed, and API availability
     models_to_try = [
+        'gemini-3.6-flash',
+        'gemini-2.5-flash',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
         'gemini-1.5-flash-latest',
