@@ -866,6 +866,8 @@ function MainApp() {
     setGlobalLoggedMeals([]);
     setGlobalConsumedGlasses(0);
     setIsLoadedFromCache(false);
+    setSessionRecipes([]);
+    setSessionDailyPlan([]);
     setDailyNutrition({
       targetCalories: 2500,
       consumedCalories: 0,

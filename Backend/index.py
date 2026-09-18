@@ -231,6 +231,20 @@ class ProfilePictureUpdate(BaseModel):
     profile_image: str
 
 
+def normalize_goal(goal_raw: Any) -> str:
+    """
+    Normalizes arbitrary raw goal string inputs from onboarding or database 
+    into standard canonical keys: 'fatloss', 'muscle', or 'maintain'.
+    """
+    if not goal_raw or not isinstance(goal_raw, str):
+        return "maintain"
+    g = goal_raw.strip().lower()
+    if any(k in g for k in ["fatloss", "fat", "lose", "loss", "cutting", "slimming"]):
+        return "fatloss"
+    elif any(k in g for k in ["muscle", "gain", "bulking", "hypertrophy", "mass", "build"]):
+        return "muscle"
+    return "maintain"
+
 
 def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync Verification OTP") -> bool:
     clean_to = to_email.strip().lower()
@@ -1227,23 +1241,32 @@ async def get_dashboard_data(user_id: str):
         target_weight_kg = float(user.get("goalWeight") or 70.0)
         
         # Calculate dynamic macros based on goals using kg
-        goal = user.get("goal") or "Maintain Weight"
+        raw_goal = user.get("goal") or "maintain"
+        norm_goal = normalize_goal(raw_goal)
+
+        age_num = int(user.get("age") or 25)
+        height_num = float(user.get("height_cm") or 170.0)
+        # BMR calculation (Mifflin-St Jeor)
+        bmr = (10 * current_weight_kg) + (6.25 * height_num) - (5 * age_num) + 5
+        act_level = prefs.get("activity_level", "moderate")
+        mult = 1.55 if act_level == "moderate" else (1.725 if act_level == "active" else 1.2)
+        tdee = bmr * mult
         
-        if "Lose" in goal:
-            target_calories = 1800
-            target_protein = int(current_weight_kg * 2.2) # High protein to preserve muscle
-            target_carbs = 150
-            target_fats = 60
-        elif "Gain" in goal:
-            target_calories = 2800
-            target_protein = int(current_weight_kg * 2.0)
-            target_carbs = 350
-            target_fats = 80
+        if norm_goal == "fatloss":
+            target_calories = max(1200, int(tdee - 500))
+            target_protein = int((target_calories * 0.35) / 4)
+            target_carbs = int((target_calories * 0.35) / 4)
+            target_fats = int((target_calories * 0.30) / 9)
+        elif norm_goal == "muscle":
+            target_calories = max(2000, int(tdee + 300))
+            target_protein = int((target_calories * 0.30) / 4)
+            target_carbs = int((target_calories * 0.50) / 4)
+            target_fats = int((target_calories * 0.20) / 9)
         else:
-            target_calories = 2200
-            target_protein = int(current_weight_kg * 1.8)
-            target_carbs = 250
-            target_fats = 70
+            target_calories = max(1500, int(tdee))
+            target_protein = int((target_calories * 0.25) / 4)
+            target_carbs = int((target_calories * 0.50) / 4)
+            target_fats = int((target_calories * 0.25) / 9)
             
         # Convert to lbs if user operates in lbs
         if unit == "lbs":
@@ -2537,6 +2560,114 @@ def calculate_met_calories(intensity: str, duration_mins: int, weight_kg: float)
     return max(30, round(met * safe_weight * hours))
 
 
+@app.get("/meals/recommend/{user_id}")
+def recommend_meals(user_id: str):
+    try:
+        profile_res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        profile = profile_res.data[0] if profile_res.data else {}
+
+        prefs = {}
+        if profile.get("location"):
+            try:
+                prefs = json.loads(profile["location"])
+            except Exception:
+                pass
+
+        raw_goal = profile.get("goal") or "maintain"
+        norm_goal = normalize_goal(raw_goal)
+        weight_kg = float(profile.get("weight_kg") or 70.0)
+        height_cm = float(profile.get("height_cm") or 170.0)
+        age = int(profile.get("age") or 25)
+        allergies = profile.get("allergies") or prefs.get("allergies") or []
+        address = prefs.get("address") or "Cebu City"
+
+        # Calculate TDEE & goal-specific macros
+        bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
+        tdee = bmr * 1.55
+        if norm_goal == "fatloss":
+            target_calories = max(1200, int(tdee - 500))
+            p_ratio, c_ratio, f_ratio = 0.35, 0.35, 0.30
+        elif norm_goal == "muscle":
+            target_calories = max(2000, int(tdee + 300))
+            p_ratio, c_ratio, f_ratio = 0.30, 0.50, 0.20
+        else:
+            target_calories = max(1500, int(tdee))
+            p_ratio, c_ratio, f_ratio = 0.25, 0.50, 0.25
+
+        target_protein = int((target_calories * p_ratio) / 4)
+        target_carbs = int((target_calories * c_ratio) / 4)
+        target_fats = int((target_calories * f_ratio) / 9)
+
+        manila_tz = timezone(timedelta(hours=8))
+        today_str = datetime.now(manila_tz).strftime("%Y-%m-%d")
+
+        prompt = f"""
+        You are an expert nutritionist generating a custom, personalized 4-meal daily nutrition plan (Breakfast, Lunch, Snack, Dinner) for a user with the following data:
+        - Goal: {norm_goal.upper()} ({raw_goal})
+        - Daily Target Calories: {target_calories} kcal
+        - Daily Target Macros: Protein {target_protein}g, Carbs {target_carbs}g, Fats {target_fats}g
+        - User Location: {address}
+        - User Allergies: {allergies}
+        - Date Seed: {today_str}
+
+        Format output as raw JSON array of 4 objects:
+        Each object must have:
+        - "id" (string)
+        - "mealType" ("Breakfast", "Lunch", "Snack", or "Dinner")
+        - "time" (string, e.g. "8:00 AM")
+        - "title" (string, name of Filipino/healthy meal)
+        - "calories" (integer)
+        - "protein" (string, e.g. "35g")
+        - "carbs" (string, e.g. "45g")
+        - "fats" (string, e.g. "12g")
+        - "ingredients" (list of strings)
+        - "instructions" (list of strings)
+        """
+
+        try:
+            response = generate_gemini_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.endswith("```"):
+                text = text[:-3]
+            meals = json.loads(text.strip())
+            if isinstance(meals, list) and len(meals) == 4:
+                sanitized = sanitize_meals_for_allergies(meals, allergies)
+                return sanitized
+        except Exception as ai_err:
+            print("MEAL RECOMMENDATION AI FALLBACK TRIGGERED:", ai_err)
+
+        # Fallback tailored meals per goal
+        if norm_goal == "fatloss":
+            fallback = [
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "High-Protein Egg White & Spinach Scramble with Kamote", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["4 Egg whites", "1 cup Spinach", "100g Steamed Kamote"], "instructions": ["Scramble egg whites with spinach in non-stick pan.", "Serve with steamed kamote."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Grilled Chicken Breast Tinola with Sayote & Brown Rice", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["200g Skinless Chicken Breast", "1 cup Sayote", "1/2 cup Brown Rice"], "instructions": ["Simmer chicken in ginger broth with sayote.", "Serve with portioned brown rice."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Boiled Sweet Corn & Calamansi Juice", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 ear Sweet corn", "Fresh calamansi water"], "instructions": ["Boil corn and serve with fresh calamansi."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Sinugbang Bangus Belly with Garlic Kangkong", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["180g Grilled Bangus Belly", "2 cups Stir-fried Kangkong"], "instructions": ["Grill bangus with lemon.", "Sauté kangkong with garlic and soy sauce."] }
+            ]
+        elif norm_goal == "muscle":
+            fallback = [
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Mass-Building Whole Eggs & Chicken Sausage Rice Bowl", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["3 Whole eggs", "2 Skinless chicken sausages", "1.5 cups Rice"], "instructions": ["Fry eggs and sausages.", "Serve over hot rice."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Double Chicken Inasal with Garlic Rice & Atchara", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["250g Chicken Inasal", "2 cups Garlic Rice", "Atchara side"], "instructions": ["Grill chicken with calamansi marinade.", "Serve with garlic rice."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "High-Carb Peanut Butter Saba Banana Toast", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["2 Slices Wheat bread", "2 tbsp Peanut butter", "1 Saba banana"], "instructions": ["Spread peanut butter on bread and top with sliced banana."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Beef Bistek Tagalog with Roasted Kalabasa & Rice", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["220g Beef tenderloin", "1 cup Kalabasa", "1.5 cups Rice"], "instructions": ["Simmer beef in calamansi soy marinade.", "Serve with kalabasa and rice."] }
+            ]
+        else:
+            fallback = [
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Balanced Scrambled Eggs with Tomatoes & Toast", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["2 Whole eggs", "1 Tomato", "2 Slices toast"], "instructions": ["Scramble eggs with tomato and serve with toast."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Chicken Pochero with Saba Banana & Rice", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["180g Chicken", "1 Saba banana", "1 cup Rice"], "instructions": ["Simmer chicken pochero stew until rich and tender."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Fresh Mango & Chilled Buko Water", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 Fresh mango", "1 glass Buko water"], "instructions": ["Slice ripe mango and drink fresh coconut water."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Ginisang Monggo with Malunggay & Pork Tenderloin", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["1 cup Monggo soup", "100g Pork tenderloin", "1 cup Malunggay"], "instructions": ["Sauté monggo stew with malunggay and lean pork."] }
+            ]
+
+        return sanitize_meals_for_allergies(fallback, allergies)
+
+    except Exception as e:
+        print("RECOMMEND MEALS ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve personalized meal recommendations.")
+
+
 @app.get("/workouts/recommend/{user_id}")
 def recommend_workouts(user_id: str):
     try:
@@ -2550,7 +2681,8 @@ def recommend_workouts(user_id: str):
             except Exception:
                 pass
 
-        goal = profile.get("goal", "Maintain Weight")
+        raw_goal = profile.get("goal", "Maintain Weight")
+        norm_goal = normalize_goal(raw_goal)
         weight_kg = float(profile.get("weight_kg") or 70.0)
         goal_weight = float(profile.get("goalWeight") or 70.0)
         height_cm = float(profile.get("height_cm") or 170.0)
@@ -2569,12 +2701,12 @@ def recommend_workouts(user_id: str):
         You are an elite personal fitness trainer. Recommend exactly 3 custom bodyweight home workout routines (one Light, one Moderate, one Intense) specifically calculated for this user's data analytics:
         - User Profile Analytics: Age {age}, Height {height_cm}cm, Current Weight {weight_kg}kg, Starting Weight {starting_weight}kg, Calculated BMI: {bmi}
         - User Target Weight: {goal_weight}kg (Total weight delta to achieve: {weight_gap}kg)
-        - Primary Fitness Goal: {goal}
+        - Primary Fitness Goal: {norm_goal.upper()} ({raw_goal})
         - Activity Level: {activity_level}
         - Date Rotation Seed: {date_str}
         
         Guidelines:
-        - Tailor set/rep schemes, rest periods, and exercise selections uniquely to their physical baseline (BMI {bmi}, activity level {activity_level}, goal {goal}).
+        - Tailor set/rep schemes, rest periods, and exercise selections uniquely to their physical baseline (BMI {bmi}, activity level {activity_level}, goal {norm_goal}).
         - Calorie burn estimations MUST be calculated realistically for a {weight_kg}kg individual performing each specific routine using MET values (Light=3.5, Moderate=5.5, Intense=8.0).
         - Generate safe, effective routines requiring no gym equipment.
         - Recommend a unique combination of exercises for this specific date seed ({date_str}), ensuring daily variety.

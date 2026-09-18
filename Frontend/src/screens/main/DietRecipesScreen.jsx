@@ -71,7 +71,7 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
   }
 };
 
-let memoryDailyPlanCache = null;
+const memoryDailyPlanCache = {};
 
 export default function DietRecipesScreen({ 
   onTabChange, 
@@ -437,9 +437,11 @@ export default function DietRecipesScreen({
 
   const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const userGoalStr = guestGoals?.goal || 'maintain';
+    const userKeyStr = userId || 'anon';
     
     let hash = 0;
-    const seedString = `${todayStr}_${location}`;
+    const seedString = `${todayStr}_${location}_${userKeyStr}_${userGoalStr}`;
     for (let i = 0; i < seedString.length; i++) {
       hash = ((hash << 5) - hash) + seedString.charCodeAt(i);
       hash |= 0;
@@ -665,16 +667,26 @@ export default function DietRecipesScreen({
     
     let tdee = bmr * multiplier;
     
-    // Goal Adjustment
-    if (guestGoals.goal === 'muscle') tdee += 300;
-    if (guestGoals.goal === 'fatloss') tdee -= 500;
-    
-    calculatedTargetCalories = Math.round(tdee);
-    
-    // Calculate Macros (30% Protein, 45% Carbs, 25% Fats)
-    targetProtein = Math.round((calculatedTargetCalories * 0.30) / 4);
-    targetCarbs = Math.round((calculatedTargetCalories * 0.45) / 4);
-    targetFats = Math.round((calculatedTargetCalories * 0.25) / 9);
+    // Goal Adjustment & Macro Tailoring
+    const g = String(guestGoals?.goal || '').toLowerCase();
+    if (g.includes('fat') || g.includes('lose')) {
+      tdee -= 500;
+      calculatedTargetCalories = Math.max(1200, Math.round(tdee));
+      targetProtein = Math.round((calculatedTargetCalories * 0.35) / 4);
+      targetCarbs = Math.round((calculatedTargetCalories * 0.35) / 4);
+      targetFats = Math.round((calculatedTargetCalories * 0.30) / 9);
+    } else if (g.includes('muscle') || g.includes('gain')) {
+      tdee += 300;
+      calculatedTargetCalories = Math.max(2000, Math.round(tdee));
+      targetProtein = Math.round((calculatedTargetCalories * 0.30) / 4);
+      targetCarbs = Math.round((calculatedTargetCalories * 0.50) / 4);
+      targetFats = Math.round((calculatedTargetCalories * 0.20) / 9);
+    } else {
+      calculatedTargetCalories = Math.max(1500, Math.round(tdee));
+      targetProtein = Math.round((calculatedTargetCalories * 0.25) / 4);
+      targetCarbs = Math.round((calculatedTargetCalories * 0.50) / 4);
+      targetFats = Math.round((calculatedTargetCalories * 0.25) / 9);
+    }
   }
 
   const targetCalories = calculatedTargetCalories;
@@ -699,9 +711,10 @@ export default function DietRecipesScreen({
   };
 
   // AI Daily Meal Recommendation State
+  const userKey = userId || 'default';
   const [dailyPlan, setDailyPlanState] = useState(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) return sessionDailyPlan;
-    if (Array.isArray(memoryDailyPlanCache) && memoryDailyPlanCache.length > 0) return memoryDailyPlanCache;
+    if (Array.isArray(memoryDailyPlanCache[userKey]) && memoryDailyPlanCache[userKey].length > 0) return memoryDailyPlanCache[userKey];
     return [];
   });
   const [loadingMeals, setLoadingMeals] = useState(false);
@@ -710,13 +723,13 @@ export default function DietRecipesScreen({
   const setDailyPlan = useCallback((newPlan) => {
     setDailyPlanState(prev => {
       const resolved = typeof newPlan === 'function' ? newPlan(prev) : newPlan;
-      memoryDailyPlanCache = resolved;
+      memoryDailyPlanCache[userId || 'default'] = resolved;
       if (setSessionDailyPlan) {
         setSessionDailyPlan(resolved);
       }
       return resolved;
     });
-  }, [setSessionDailyPlan]);
+  }, [userId, setSessionDailyPlan]);
 
   useEffect(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) {

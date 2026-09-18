@@ -346,8 +346,9 @@ export default function WorkoutScreen({
           setWorkoutRoutines(data);
         }
         const todayStr = new Date().toISOString().split("T")[0];
+        const cacheKey = `ms_workouts_cache_${userId || "default"}`;
         await AsyncStorage.setItem(
-          "ms_workouts_cache",
+          cacheKey,
           JSON.stringify({
             userId,
             date: todayStr,
@@ -376,8 +377,9 @@ export default function WorkoutScreen({
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-        // 1. Check local cache first — shows real data instantly
-        const cachedRaw = await AsyncStorage.getItem("ms_workouts_cache");
+        // 1. Check local user-scoped cache first — shows real data instantly
+        const cacheKey = `ms_workouts_cache_${userId || "default"}`;
+        const cachedRaw = await AsyncStorage.getItem(cacheKey);
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
           if (
@@ -400,7 +402,7 @@ export default function WorkoutScreen({
             setWorkoutRoutines(data);
           }
           await AsyncStorage.setItem(
-            "ms_workouts_cache",
+            cacheKey,
             JSON.stringify({
               userId,
               date: todayStr,
