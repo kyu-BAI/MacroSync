@@ -135,9 +135,16 @@ export default function LoginScreen({
   };
 
   // GOOGLE OAUTH POPUP TRIGGER
-  const handleGoogleSignIn = async (selectedEmail, selectedName) => {
+  const handleGoogleSignIn = () => {
+    if (isLoading) return;
+    setIsGoogleModalVisible(true);
+  };
+
+  // GOOGLE ACCOUNT SELECTION HANDLER
+  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
     try {
       setIsLoading(true);
+      setIsGooglePressed(true);
       console.log("Initiating Google Sign-In backend verification for:", selectedEmail, selectedName);
 
       const response = await fetch(`${API_URL}/auth/google-signin`, {
