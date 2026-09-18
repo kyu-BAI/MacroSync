@@ -64,21 +64,14 @@ def _b64dec(s: str) -> str:
     except Exception:
         return ""
 
-_DEFAULT_URL = _b64dec("aHR0cHM6Ly96Z3BtdXR4cnJoZm5zam5teGh2ci5zdXBhYmFzZS5jbw==")
-_DEFAULT_KEY = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGMzT1Rnek5qUTVOQ3dpWlhod0lqb3lNRGsxTkRFeU5EazBmUS5uMFlBSzBITEh5bnJQRk5WZGJSVEROcm96M1FNUnZJLUlhaWJhdElEc1hn")
-_DEFAULT_ANON = _b64dec("ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5wbmNHMTFkSGh5Y21obWJuTnFibTE0YUhaeUlpd2ljbTlzWlNJNkltRnViMjRpTENKaVhHaDBJam9pTVRjM05UazNNREExTmlJc0ltVjRjQ0k2TVRjM05UazNNREExTmlKOS5XajUteWhzbjlJRkNBZHkxVGU5ZGI3OTlvQlZadVFxelp1SUhyVWhKWEVVOQ==")
-_DEFAULT_RESEND = _b64dec("cmVfRjhrSEN5cGhfMkdob3ljSkJqVVV5RFZuQW9YYnA4RUty")
-_DEFAULT_GEMINI = _b64dec("QVEuQWI4Uk42TGpRMHktUkVHLUZRcEpQX2JBeDc5RTNXamVMVkFnWUhNclB2THRGYngwcHc=")
-_DEFAULT_PAYMONGO = _b64dec("c2tfdGVzdF94Vkt1elVlZzc0Rm9TeGFVRXIyeXZuVFg=")
-
-SUPABASE_URL = os.getenv("SUPABASE_URL") or _DEFAULT_URL
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") or _DEFAULT_KEY
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or _DEFAULT_ANON
-RESEND_API_KEY = os.getenv("RESEND_API_KEY") or _DEFAULT_RESEND
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or _DEFAULT_GEMINI
-PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY") or _DEFAULT_PAYMONGO
-GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL") or "necoliejamescanales@gmail.com"
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") or "xfvmozpawqerxsps"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") 
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") 
+RESEND_API_KEY = os.getenv("RESEND_API_KEY") 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY") 
+GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL") 
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD") 
 
 
 # ---------------- INIT CLIENTS ----------------
@@ -2263,8 +2256,8 @@ def analyze_food(data: AnalyzeFoodRequest):
                     day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
 
                     if not is_premium:
-                        if day_usage.get("scans", 0) >= 5:
-                            raise HTTPException(status_code=403, detail="Daily food scanner limit reached. Please upgrade to premium for unlimited access.")
+                        if day_usage.get("scans", 0) >= 50:
+                            raise HTTPException(status_code=403, detail="Daily food scanner limit of 50 scans reached. Please upgrade to premium for unlimited access.")
                         day_usage["scans"] = day_usage.get("scans", 0) + 1
                     else:
                         # Fair Use Policy Guard (FUP) for Premium to prevent script bot spam
@@ -2383,7 +2376,7 @@ def analyze_food(data: AnalyzeFoodRequest):
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
             result_data["is_premium"] = is_premium
-            result_data["remaining_scans"] = "Unlimited" if is_premium else max(0, 5 - day_usage.get("scans", 0))
+            result_data["remaining_scans"] = "Unlimited" if is_premium else max(0, 50 - day_usage.get("scans", 0))
 
         return result_data
         
@@ -2418,7 +2411,7 @@ def get_scan_status(user_id: str):
         usage = prefs.get("usage", {})
         day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
         scans_used = day_usage.get("scans", 0)
-        remaining = max(0, 5 - scans_used)
+        remaining = max(0, 50 - scans_used)
         
         return {"is_premium": False, "scans_used": scans_used, "remaining": remaining}
     except Exception as e:
