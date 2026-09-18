@@ -734,9 +734,9 @@ export default function DietRecipesScreen({
   useEffect(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) {
       setDailyPlanState(sessionDailyPlan);
-      memoryDailyPlanCache = sessionDailyPlan;
+      memoryDailyPlanCache[userId || 'default'] = sessionDailyPlan;
     }
-  }, [sessionDailyPlan]);
+  }, [sessionDailyPlan, userId]);
 
   const goalWeight = guestGoals?.goalWeight || guestBaseline?.targetWeight || '';
   const currentWeight = guestBaseline?.weight || '';

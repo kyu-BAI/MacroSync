@@ -2681,7 +2681,8 @@ def recommend_workouts(user_id: str):
             except Exception:
                 pass
 
-        raw_goal = profile.get("goal", "Maintain Weight")
+        goal = profile.get("goal", "Maintain Weight")
+        raw_goal = goal
         norm_goal = normalize_goal(raw_goal)
         weight_kg = float(profile.get("weight_kg") or 70.0)
         goal_weight = float(profile.get("goalWeight") or 70.0)
