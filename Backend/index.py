@@ -1582,6 +1582,13 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     # Pre-encode image base64 once outside the nested loop
     b64_img = base64.b64encode(image_bytes).decode("utf-8") if (image_bytes and len(image_bytes) > 0) else None
 
+    # Key format sanity check & diagnostics
+    valid_keys = []
+    for k in keys:
+        if k.startswith("AQ."):
+            print(f"WARNING: Gemini key '{k[:8]}...' starts with 'AQ.', which appears to be an OAuth/Vertex token, not a Google AI Studio API key (starts with 'AIzaSy...').")
+        valid_keys.append(k)
+
     # Models prioritized by capacity, speed, and active availability
     models_to_try = [
         'gemini-2.0-flash',
@@ -1614,7 +1621,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
                     print(f"REST Gemini {model} (Key {key[:6]}...) HTTP 429 Rate Limited. Failover to next model/key...")
                     time.sleep(0.2)
                 else:
-                    print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:120]}")
+                    print(f"REST Gemini {model} HTTP {res.status_code}: {res.text[:140]}")
             except Exception as rest_err:
                 print(f"REST Gemini {model} error:", rest_err)
 
@@ -1632,8 +1639,8 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
             except Exception as sdk_err:
                 print(f"SDK Gemini {model} error:", sdk_err)
 
-    # 3. Graceful Fallback if all models/keys hit quota limits
-    print("Warning: All Gemini API keys and models currently rate-limited. Returning fallback response.")
+    # 3. Graceful Fallback if all models/keys hit quota or key limits
+    print("Warning: All Gemini API keys and models currently unavailable or rate-limited. Returning fallback response.")
     return GeminiRESTResponse(
         "I am currently receiving high request volume. Your daily macro targets and logs have been safely preserved. Please try asking again in a few moments!"
     )
@@ -1952,6 +1959,50 @@ def chat_with_ai(data: ChatMessageRequest):
         try:
             response = generate_gemini_content(full_prompt)
             reply_text = response.text or ""
+
+            # If Gemini returned generic rate-limit fallback, check offline nutrition database for instant accurate answer
+            if "receiving high request volume" in reply_text or "safely preserved" in reply_text or not reply_text.strip():
+                msg_q = (data.message or "").lower()
+                
+                # Check profile / identity queries
+                if any(q in msg_q for q in ["who am i", "my profile", "my stats", "my name", "where do i live"]):
+                    reply_text = (
+                        f"👋 Hi **{display_user_name}**! Here is your current MacroSync profile summary:\n\n"
+                        f"👤 **Name:** {display_user_name}\n"
+                        f"📧 **Email:** {data.email or user.get('email', 'N/A')}\n"
+                        f"🎯 **Fitness Goal:** {goal}\n"
+                        f"⚖️ **Current Weight:** {current_weight_str} (Target: {target_weight_str})\n"
+                        f"🔥 **Today's Nutrition:** {consumed_calories} / {target_calories} kcal ({consumed_protein}g P | {consumed_carbs}g C | {consumed_fats}g F)\n"
+                        f"💧 **Water Tracker:** {glasses} / 8 glasses\n"
+                        f"⚠️ **Allergies:** {allergies_str}"
+                    )
+                # Check egg nutrition queries
+                elif "egg" in msg_q or "itlog" in msg_q:
+                    reply_text = (
+                        "🥚 **Egg Nutritional Information:**\n\n"
+                        "• **1 Large Egg (50g):** ~72–78 kcal | **6.3g Protein** | 0.4g Carbs | 5.0g Fat\n"
+                        "• **2 Large Eggs (100g):** ~144–156 kcal | **12.6g Protein** | 0.8g Carbs | 10.0g Fat\n"
+                        "• **1 Hard-Boiled Egg:** ~77 kcal | **6.3g Protein** | 0.6g Carbs | 5.3g Fat\n"
+                        "• **1 Fried Egg (light oil):** ~90–100 kcal | **6.3g Protein** | 0.4g Carbs | 7.0g Fat\n\n"
+                        "💡 *Eggs are an excellent complete protein source containing all 9 essential amino acids, choline, and healthy fats!*"
+                    )
+                elif "chicken" in msg_q or "manok" in msg_q:
+                    reply_text = (
+                        "🍗 **Chicken Breast Nutritional Information:**\n\n"
+                        "• **100g Cooked Skinless Chicken Breast:** ~165 kcal | **31g Protein** | 0g Carbs | 3.6g Fat\n"
+                        "• **1 Medium Chicken Breast (175g):** ~284 kcal | **54g Protein** | 0g Carbs | 6.2g Fat"
+                    )
+                elif "rice" in msg_q or "kanin" in msg_q or "bugas" in msg_q:
+                    reply_text = (
+                        "🍚 **White Rice Nutritional Information:**\n\n"
+                        "• **1 Cup Cooked White Rice (158g):** ~206 kcal | **4.3g Protein** | 45g Carbs | 0.4g Fat\n"
+                        "• **1/2 Cup Cooked White Rice (79g):** ~103 kcal | **2.1g Protein** | 22.5g Carbs | 0.2g Fat"
+                    )
+                elif "banana" in msg_q or "saging" in msg_q:
+                    reply_text = (
+                        "🍌 **Banana Nutritional Information:**\n\n"
+                        "• **1 Medium Banana (118g):** ~105 kcal | **1.3g Protein** | 27g Carbs | 0.3g Fat (3g Fiber)"
+                    )
 
             # Check if Gemini output LOG_MEAL, LOG_WORKOUT, or LOG_WATER instructions
             if "LOG_MEAL:" in reply_text and user_id:
@@ -2304,18 +2355,21 @@ def analyze_food(data: AnalyzeFoodRequest):
             response = generate_gemini_content(prompt, image_bytes=image_bytes, mime_type=mime_type)
             raw_text = response.text.strip() if hasattr(response, 'text') else str(response).strip()
             
-            # Clean potential markdown wrappers
-            if "```" in raw_text:
-                raw_text = re.sub(r'```(?:json)?', '', raw_text).replace('```', '').strip()
-            
-            # Extract JSON substring if surrounded by extra text
-            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-            if json_match:
-                result_json_str = json_match.group(0)
+            if "receiving high request volume" in raw_text or "safely preserved" in raw_text:
+                result_data = {"error": "AI Scanner API key requires configuration or quota refill. Please update your GEMINI_API_KEY in Backend environment."}
             else:
-                result_json_str = raw_text
+                # Clean potential markdown wrappers
+                if "```" in raw_text:
+                    raw_text = re.sub(r'```(?:json)?', '', raw_text).replace('```', '').strip()
+                
+                # Extract JSON substring if surrounded by extra text
+                json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                if json_match:
+                    result_json_str = json_match.group(0)
+                else:
+                    result_json_str = raw_text
 
-            result_data = json.loads(result_json_str)
+                result_data = json.loads(result_json_str)
         except HTTPException as he:
             raise he
         except Exception as scan_err:
