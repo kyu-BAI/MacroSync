@@ -1241,7 +1241,8 @@ async def get_dashboard_data(user_id: str):
         target_weight_kg = float(user.get("goalWeight") or 70.0)
         
         # Calculate dynamic macros based on goals using kg
-        raw_goal = user.get("goal") or "maintain"
+        goal = user.get("goal") or "Maintain Weight"
+        raw_goal = goal
         norm_goal = normalize_goal(raw_goal)
 
         age_num = int(user.get("age") or 25)

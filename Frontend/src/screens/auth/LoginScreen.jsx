@@ -111,7 +111,7 @@ export default function LoginScreen({
         }
 
         // Call onLoginSuccess INSTANTLY for 0ms screen switch
-        onLoginSuccess(userId, data.is_onboarded);
+        onLoginSuccess(userId, data.is_onboarded, data.user);
 
         // Perform storage persistence non-blockingly in background
         Promise.all([
@@ -135,26 +135,17 @@ export default function LoginScreen({
   };
 
   // GOOGLE OAUTH POPUP TRIGGER
-  const handleGoogleSignIn = () => {
-    if (isLoading) return;
-    setIsGoogleModalVisible(true);
-  };
-
-  // GOOGLE ACCOUNT SELECTION HANDLER
-  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
-    setIsLoading(true);
-    setIsGooglePressed(true);
-
+  const handleGoogleSignIn = async (selectedEmail, selectedName) => {
     try {
+      setIsLoading(true);
+      console.log("Initiating Google Sign-In backend verification for:", selectedEmail, selectedName);
+
       const response = await fetch(`${API_URL}/auth/google-signin`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          email: selectedEmail,
-          name: selectedName,
-        }),
+        body: JSON.stringify({ email: selectedEmail, name: selectedName })
       });
 
       let data = {};
@@ -192,10 +183,10 @@ export default function LoginScreen({
           }
         } else if (data.is_onboarded === true) {
           // Existing registered & onboarded user -> redirect directly to dashboard
-          onLoginSuccess(uid, true);
+          onLoginSuccess(uid, true, data.user);
         } else {
           // Existing user but not onboarded -> redirect to onboarding STEP_ONE
-          onLoginSuccess(uid, false);
+          onLoginSuccess(uid, false, data.user);
         }
       } else {
         showAlert(

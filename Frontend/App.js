@@ -628,10 +628,17 @@ function MainApp() {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
-        onLoginSuccess={(loggedInUserId, isOnboarded) => {
+        onLoginSuccess={(loggedInUserId, isOnboarded, userObj) => {
           if (loggedInUserId) {
             setUserId(loggedInUserId);
             saveUserId(loggedInUserId);
+            if (userObj && (userObj.name || userObj.email)) {
+              setUserProfile(prev => ({
+                ...prev,
+                name: userObj.name || prev.name,
+                email: userObj.email || prev.email,
+              }));
+            }
             // Non-blocking background cache hydration for instant 0ms screen switch
             getCachedDashboardData(loggedInUserId)
               .then(cached => {
