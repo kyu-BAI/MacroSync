@@ -24,6 +24,7 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   cacheDashboardData,
   getCachedDashboardData,
+  clearDashboardCache,
   saveUserId,
   getSavedUserId,
   clearSavedUserId,
@@ -61,6 +62,19 @@ import API_URL from "./src/screens/config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from './src/services/NotificationService';
 import { Pedometer } from 'expo-sensors';
+
+
+const normalizeGoalKey = (goalStr) => {
+  if (!goalStr || typeof goalStr !== 'string') return 'maintain';
+  const g = goalStr.toLowerCase();
+  if (g.includes('fat') || g.includes('lose') || g.includes('loss') || g.includes('cut') || g.includes('slim')) {
+    return 'fatloss';
+  }
+  if (g.includes('muscle') || g.includes('gain') || g.includes('bulk') || g.includes('build')) {
+    return 'muscle';
+  }
+  return 'maintain';
+};
 
 
 function MainApp() {
@@ -188,19 +202,24 @@ function MainApp() {
 
   // ── Apply dashboard API response to all state variables ─────────────────
   const applyDashboardData = (data) => {
-    setUserBaseline({
-      weight: data.profile.currentWeight ? data.profile.currentWeight.toString() : '70',
-      height: data.profile.height ? data.profile.height.toString() : '170',
-      age: data.profile.age ? data.profile.age.toString() : '25',
-      startingWeight: data.profile.startingWeight ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : '70'),
-      unit: data.profile.unit || 'kg'
-    });
-    setUserGoals({
-      goal: data.profile.goal === 'Build Muscle' ? 'muscle' : data.profile.goal === 'Lose Weight' ? 'fatloss' : 'maintain',
-      goalWeight: data.profile.targetWeight ? data.profile.targetWeight.toString() : '70',
-      targetDate: data.profile.targetDate || '',
-      activityLevel: data.profile.activityLevel || 'moderate'
-    });
+    if (!data || !data.profile) return;
+    const goalNorm = normalizeGoalKey(data.profile.goal);
+
+    setUserBaseline(prev => ({
+      ...prev,
+      weight: data.profile.currentWeight !== undefined && data.profile.currentWeight !== null ? data.profile.currentWeight.toString() : (prev.weight || '70'),
+      height: data.profile.height ? data.profile.height.toString() : (prev.height || '170'),
+      age: data.profile.age ? data.profile.age.toString() : (prev.age || '25'),
+      startingWeight: data.profile.startingWeight !== undefined && data.profile.startingWeight !== null ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : (prev.startingWeight || '70')),
+      unit: data.profile.unit || prev.unit || 'kg'
+    }));
+    setUserGoals(prev => ({
+      ...prev,
+      goal: goalNorm,
+      goalWeight: data.profile.targetWeight !== undefined && data.profile.targetWeight !== null ? data.profile.targetWeight.toString() : (prev.goalWeight || '70'),
+      targetDate: data.profile.targetDate || prev.targetDate || '',
+      activityLevel: data.profile.activityLevel || prev.activityLevel || 'moderate'
+    }));
     setDailyNutrition({
       targetCalories: data.nutrition.targetCalories,
       consumedCalories: data.nutrition.consumedCalories,
@@ -708,15 +727,16 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
-          getCachedDashboardData(newUserId)
-            .then(cached => {
-              if (cached && cached.data) applyDashboardData(cached.data);
-            })
-            .catch(() => {});
-          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
+            getCachedDashboardData(newUserId)
+              .then(cached => {
+                if (cached && cached.data) applyDashboardData(cached.data);
+              })
+              .catch(() => {});
+            fetchDashboardData(newUserId);
             setCurrentScreen("DASHBOARD");
           } else {
+            clearDashboardCache();
             setCurrentScreen("STEP_ONE");
           }
         }}
@@ -734,15 +754,16 @@ function MainApp() {
           if (!newUserId) return;
           setUserId(newUserId);
           saveUserId(newUserId);
-          getCachedDashboardData(newUserId)
-            .then(cached => {
-              if (cached && cached.data) applyDashboardData(cached.data);
-            })
-            .catch(() => {});
-          fetchDashboardData(newUserId);
           if (isOnboarded === true) {
+            getCachedDashboardData(newUserId)
+              .then(cached => {
+                if (cached && cached.data) applyDashboardData(cached.data);
+              })
+              .catch(() => {});
+            fetchDashboardData(newUserId);
             setCurrentScreen("DASHBOARD");
           } else {
+            clearDashboardCache();
             setCurrentScreen("STEP_ONE");
           }
         }}
@@ -837,21 +858,27 @@ function MainApp() {
         profileData={tempOnboardingData}
         onComplete={(finalData) => {
           if (finalData) {
-            setUserBaseline({
-              age: finalData.age || userBaseline.age,
-              weight: finalData.weight || userBaseline.weight,
-              height: finalData.height || userBaseline.height,
-              startingWeight: finalData.startingWeight || finalData.weight || userBaseline.startingWeight || userBaseline.weight || '70',
-              unit: finalData.weightUnit || userBaseline.unit || 'kg',
-            });
-            setUserGoals({
-              activityLevel: finalData.activityLevel || userGoals.activityLevel,
-              goal: finalData.goal || userGoals.goal,
-              goalWeight: finalData.goalWeight || userGoals.goalWeight,
-              targetDate: finalData.targetDate || userGoals.targetDate,
-            });
+            const goalNormKey = normalizeGoalKey(finalData.goal);
+            setUserBaseline(prev => ({
+              ...prev,
+              age: finalData.age !== undefined && finalData.age !== null ? finalData.age.toString() : prev.age,
+              weight: finalData.weight !== undefined && finalData.weight !== null ? finalData.weight.toString() : prev.weight,
+              height: finalData.height !== undefined && finalData.height !== null ? finalData.height.toString() : prev.height,
+              startingWeight: finalData.startingWeight !== undefined && finalData.startingWeight !== null ? finalData.startingWeight.toString() : (finalData.weight ? finalData.weight.toString() : prev.startingWeight),
+              unit: finalData.weightUnit || prev.unit || 'kg',
+            }));
+            setUserGoals(prev => ({
+              ...prev,
+              activityLevel: finalData.activityLevel || prev.activityLevel,
+              goal: goalNormKey,
+              goalWeight: finalData.goalWeight !== undefined && finalData.goalWeight !== null ? finalData.goalWeight.toString() : prev.goalWeight,
+              targetDate: finalData.targetDate || prev.targetDate,
+            }));
           }
           if (userId) saveUserId(userId);
+          clearDashboardCache().then(() => {
+            fetchDashboardData(userId);
+          });
           setCurrentScreen('DASHBOARD');
         }}
       />

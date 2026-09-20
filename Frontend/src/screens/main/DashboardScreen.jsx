@@ -621,9 +621,9 @@ export default function DashboardScreen({
   const currentStreak = userProfile?.streakDays || 0;
   const primaryGoal =
     localGoalLabel ||
-    (userGoals?.goal === "muscle"
+    (userGoals?.goal === "muscle" || userGoals?.goal === "Build Muscle"
       ? "Build Muscle"
-      : userGoals?.goal === "maintain"
+      : userGoals?.goal === "maintain" || userGoals?.goal === "Maintain Weight"
         ? "Maintain Weight"
         : "Lose Weight");
   const startingWeight =
@@ -764,17 +764,25 @@ export default function DashboardScreen({
   // Select New Goal Handler
   const handleSelectNewGoal = useCallback(
     async (option) => {
-      const newStarting = currentWeight;
-      const newGoal = currentWeight + option.offsetKg;
+      const achievedWeight = goalWeight;
+      if (setGlobalLoggedWeight) setGlobalLoggedWeight(achievedWeight);
+
+      const newStarting = achievedWeight;
+      const newGoal =
+        option.targetWeight !== undefined
+          ? option.targetWeight
+          : (option.offsetKg !== undefined ? achievedWeight + option.offsetKg : achievedWeight);
+
       setLocalStartingWeight(newStarting);
       setLocalGoalWeight(newGoal);
       setLocalGoalLabel(option.label);
-      setGoalReachedAlertShown(false);
+      if (setGoalReachedAlertShown) setGoalReachedAlertShown(true);
       setShowNewGoalModal(false);
+      setSelectedNewGoalOption(null);
 
       if (setWeightHistory) {
         setWeightHistory(
-          Array.from({ length: 7 }, () => parseFloat(newStarting.toFixed(1))),
+          Array.from({ length: 7 }, () => parseFloat(achievedWeight.toFixed(1))),
         );
       }
 
@@ -786,7 +794,7 @@ export default function DashboardScreen({
             category: "achievement",
             time: "Just Now",
             read: false,
-            message: `Your weight goal has been reset. New target: ${option.label}. Starting from ${newStarting.toFixed(1)} kg → ${newGoal.toFixed(1)} kg. Let's go!`,
+            message: `Your weight goal has been reset. New target: ${option.label}. Starting from ${newStarting.toFixed(1)} ${weightUnit} → ${newGoal.toFixed(1)} ${weightUnit}. Let's go!`,
           },
           ...prev,
         ]);
@@ -804,13 +812,13 @@ export default function DashboardScreen({
             body: JSON.stringify({
               user_id: userId,
               age: parseInt(userBaseline?.age || 25, 10),
-              weight_kg: newStarting,
+              weight_kg: achievedWeight,
               height_cm: parseFloat(userBaseline?.height || 170),
               goal: option.id,
               goal_weight: newGoal,
               target_date: formattedTargetDate,
               weight_unit: userBaseline?.unit || "kg",
-              starting_weight: newStarting,
+              starting_weight: achievedWeight,
             }),
           });
 
@@ -823,10 +831,12 @@ export default function DashboardScreen({
       }
     },
     [
-      currentWeight,
+      goalWeight,
+      weightUnit,
       isOnline,
       userId,
       userBaseline,
+      setGlobalLoggedWeight,
       setNotifications,
       onRefreshDashboard,
       setLocalStartingWeight,
@@ -1036,7 +1046,13 @@ export default function DashboardScreen({
 
   const executeWeightSave = async (parsed) => {
     if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
-    if (setGoalReachedAlertShown) setGoalReachedAlertShown(false);
+    const isNewWeightAchieved =
+      Math.abs(parsed - goalWeight) <= 0.1 ||
+      (activeGoalType === "muscle" && parsed >= goalWeight) ||
+      (activeGoalType === "fatloss" && parsed <= goalWeight);
+    if (!isNewWeightAchieved && setGoalReachedAlertShown) {
+      setGoalReachedAlertShown(false);
+    }
     if (setWeightHistory) {
       setWeightHistory((prev) => {
         const base =
@@ -2243,6 +2259,7 @@ export default function DashboardScreen({
                   onPress={() => {
                     setShowNewGoalModal(false);
                     setSelectedNewGoalOption(null);
+                    if (setGoalReachedAlertShown) setGoalReachedAlertShown(true);
                   }}
                 >
                   <Text
@@ -2314,7 +2331,7 @@ export default function DashboardScreen({
                   >
                     {selectedNewGoalOption.id === "fatloss" ? "lose" : "gain"}
                   </Text>{" "}
-                  from your current weight ({currentWeight.toFixed(1)}{" "}
+                  from your achieved weight ({goalWeight.toFixed(1)}{" "}
                   {weightUnit})?
                 </Text>
 
@@ -2430,8 +2447,8 @@ export default function DashboardScreen({
                   const numKg = parseFloat(weightChangeKg) || 0;
                   const calculatedTarget =
                     selectedNewGoalOption.id === "fatloss"
-                      ? Math.max(30, currentWeight - numKg)
-                      : currentWeight + numKg;
+                      ? Math.max(30, goalWeight - numKg)
+                      : goalWeight + numKg;
                   return (
                     <View
                       style={{
@@ -2462,7 +2479,7 @@ export default function DashboardScreen({
                           color: theme?.textPrimary || "#0F172A",
                         }}
                       >
-                        {currentWeight.toFixed(1)} {weightUnit} ➔ Target:{" "}
+                        {goalWeight.toFixed(1)} {weightUnit} ➔ Target:{" "}
                         <Text
                           style={{ color: selectedNewGoalOption.accentColor }}
                         >
@@ -2487,10 +2504,15 @@ export default function DashboardScreen({
                     const numKg = parseFloat(weightChangeKg) || 5;
                     const offsetKg =
                       selectedNewGoalOption.id === "fatloss" ? -numKg : +numKg;
+                    const targetWeight =
+                      selectedNewGoalOption.id === "fatloss"
+                        ? Math.max(30, goalWeight - numKg)
+                        : goalWeight + numKg;
                     handleSelectNewGoal({
                       ...selectedNewGoalOption,
-                      label: `${selectedNewGoalOption.label} (${selectedNewGoalOption.id === "fatloss" ? "-" : "+"}${numKg}kg)`,
+                      label: `${selectedNewGoalOption.label} (${selectedNewGoalOption.id === "fatloss" ? "-" : "+"}${numKg}${weightUnit})`,
                       offsetKg,
+                      targetWeight,
                     });
                     setSelectedNewGoalOption(null);
                   }}

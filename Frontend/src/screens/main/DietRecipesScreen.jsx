@@ -632,10 +632,10 @@ export default function DietRecipesScreen({
     const sCarb = Math.round(targetCarbs * 0.15);
     const sFat = Math.round(targetFats * 0.15);
 
-    const dKcal = Math.round(totalUserCalories * 0.25);
-    const dProt = Math.round(targetProtein * 0.25);
-    const dCarb = Math.round(targetCarbs * 0.25);
-    const dFat = Math.round(targetFats * 0.25);
+    const dKcal = Math.max(1, totalUserCalories - (bKcal + lKcal + sKcal));
+    const dProt = Math.max(0, targetProtein - (bProt + lProt + sProt));
+    const dCarb = Math.max(0, targetCarbs - (bCarb + lCarb + sCarb));
+    const dFat = Math.max(0, targetFats - (bFat + lFat + sFat));
 
     return [
       { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, mealType: 'Breakfast', time: '8:00 AM', title: bTitle, calories: bKcal, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt}g`, carbs: `${bCarb}g`, fats: `${bFat}g` },
@@ -689,7 +689,9 @@ export default function DietRecipesScreen({
     }
   }
 
-  const targetCalories = calculatedTargetCalories;
+  const targetCalories = (dailyNutrition && dailyNutrition.targetCalories && dailyNutrition.targetCalories > 0)
+    ? dailyNutrition.targetCalories
+    : calculatedTargetCalories;
 
   const getMealAccentColor = (typeOrTime) => {
     const val = String(typeOrTime || '');
@@ -710,6 +712,46 @@ export default function DietRecipesScreen({
     return UtensilsCrossed;
   };
 
+  // Helper function to scale meal plan calories so they never exceed the daily target
+  const ensurePlanWithinTargetCalories = useCallback((plan, maxTarget) => {
+    if (!Array.isArray(plan) || plan.length === 0 || !maxTarget || maxTarget <= 0) return plan;
+    const currentTotal = plan.reduce((sum, m) => sum + (parseInt(m.calories || m.kcal, 10) || 0), 0);
+    if (currentTotal <= 0) return plan;
+
+    if (currentTotal > maxTarget || Math.abs(currentTotal - maxTarget) > 10) {
+      const ratio = maxTarget / currentTotal;
+      let runningSum = 0;
+
+      return plan.map((m, idx) => {
+        const origCal = parseInt(m.calories || m.kcal, 10) || 0;
+        let newCal;
+        if (idx === plan.length - 1) {
+          newCal = Math.max(1, maxTarget - runningSum);
+        } else {
+          newCal = Math.max(1, Math.round(origCal * ratio));
+          runningSum += newCal;
+        }
+
+        const scaleMacro = (strVal) => {
+          if (!strVal) return strVal;
+          const num = parseInt(String(strVal).replace(/[^0-9]/g, ''), 10);
+          if (isNaN(num)) return strVal;
+          return `${Math.max(0, Math.round(num * ratio))}g`;
+        };
+
+        return {
+          ...m,
+          calories: newCal,
+          kcal: newCal,
+          protein: scaleMacro(m.protein),
+          carbs: scaleMacro(m.carbs),
+          fats: scaleMacro(m.fats),
+        };
+      });
+    }
+    return plan;
+  }, []);
+
   // AI Daily Meal Recommendation State
   const userKey = userId || 'default';
   const [dailyPlan, setDailyPlanState] = useState(() => {
@@ -722,14 +764,15 @@ export default function DietRecipesScreen({
 
   const setDailyPlan = useCallback((newPlan) => {
     setDailyPlanState(prev => {
-      const resolved = typeof newPlan === 'function' ? newPlan(prev) : newPlan;
+      const rawResolved = typeof newPlan === 'function' ? newPlan(prev) : newPlan;
+      const resolved = ensurePlanWithinTargetCalories(rawResolved, targetCalories);
       memoryDailyPlanCache[userId || 'default'] = resolved;
       if (setSessionDailyPlan) {
         setSessionDailyPlan(resolved);
       }
       return resolved;
     });
-  }, [userId, setSessionDailyPlan]);
+  }, [userId, setSessionDailyPlan, targetCalories, ensurePlanWithinTargetCalories]);
 
   useEffect(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) {

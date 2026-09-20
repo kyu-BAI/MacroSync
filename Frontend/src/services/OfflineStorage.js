@@ -41,6 +41,16 @@ export async function getCachedDashboardData(userId) {
   }
 }
 
+// ─── Clear cached dashboard data ─────────────────────────────────────────────
+export async function clearDashboardCache() {
+  try {
+    await AsyncStorage.removeItem(KEYS.DASHBOARD_CACHE);
+  } catch (e) {
+    console.warn('OfflineStorage: Failed to clear dashboard cache', e);
+  }
+}
+
+
 // ─── Save logged-in user ID for auto-restore ─────────────────────────────────
 export async function saveUserId(userId) {
   try {

@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import API_URL from '../config/api';
+import { clearDashboardCache } from '../../services/OfflineStorage';
 
 import { useTheme } from '../../context/ThemeContext';
 import { getStyles, COLORS } from './GeneratingPlanScreen.styles';
@@ -75,13 +76,21 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
     const generatePlanAndSave = async () => {
       try {
         const pData = profileData || {};
+        const rawGoal = (pData.goal || '').toString().toLowerCase();
+        let goalLabel = 'Maintain Weight';
+        if (rawGoal.includes('muscle') || rawGoal.includes('gain') || rawGoal.includes('build')) {
+          goalLabel = 'Build Muscle';
+        } else if (rawGoal.includes('fat') || rawGoal.includes('lose') || rawGoal.includes('loss')) {
+          goalLabel = 'Lose Weight';
+        }
+
         const payload = {
           user_id: pData.userId || null,
           age: parseInt(pData.age) || 25,
           weight_kg: parseFloat(pData.weight) || 70,
           height_cm: parseFloat(pData.height) || 170,
-          goal: pData.goal === 'muscle' ? 'Build Muscle' : pData.goal === 'fatloss' ? 'Lose Weight' : 'Maintain Weight',
-          goal_weight: parseFloat(pData.goalWeight) || 70,
+          goal: goalLabel,
+          goal_weight: parseFloat(pData.goalWeight) || parseFloat(pData.weight) || 70,
           target_date: pData.targetDate || new Date().toISOString().split('T')[0],
           weight_unit: pData.weightUnit || "kg",
           starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70,
@@ -107,12 +116,16 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           throw new Error(errData.detail || "Failed to save onboarding data");
         }
 
+        // Wipe any stale pre-onboarding cache from AsyncStorage
+        await clearDashboardCache();
+
         setTimeout(() => {
           if (onComplete) onComplete(profileData);
         }, 1500); // Wait for the short animation for nice UX illusion
 
       } catch (err) {
         console.log("Error saving onboarding data:", err);
+        await clearDashboardCache();
         // Fallback progress
         setTimeout(() => {
           if (onComplete) onComplete(profileData);
