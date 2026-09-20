@@ -1055,6 +1055,8 @@ async def save_onboarding(data: OnboardingData):
         else:
             st_weight = float(data.weight_kg)
     prefs["starting_weight"] = float(st_weight) if st_weight is not None else float(data.weight_kg)
+    prefs["goal"] = data.goal
+    prefs["goal_weight"] = float(data.goal_weight) if data.goal_weight is not None else float(data.weight_kg)
     if data.allergies is not None:
         prefs["allergies"] = data.allergies
     if data.address:
@@ -1238,10 +1240,11 @@ async def get_dashboard_data(user_id: str):
                 starting_weight_kg = current_weight_kg
         else:
             starting_weight_kg = current_weight_kg
-        target_weight_kg = float(user.get("goalWeight") or 70.0)
+        
+        target_weight_kg = float(user.get("goalWeight") or user.get("goal_weight") or prefs.get("goal_weight") or current_weight_kg)
         
         # Calculate dynamic macros based on goals using kg
-        goal = user.get("goal") or "Maintain Weight"
+        goal = user.get("goal") or prefs.get("goal") or "Maintain Weight"
         raw_goal = goal
         norm_goal = normalize_goal(raw_goal)
 
@@ -2269,8 +2272,8 @@ def analyze_food(data: AnalyzeFoodRequest):
                     day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
 
                     if not is_premium:
-                        if day_usage.get("scans", 0) >= 50:
-                            raise HTTPException(status_code=403, detail="Daily food scanner limit of 50 scans reached. Please upgrade to premium for unlimited access.")
+                        if day_usage.get("scans", 0) >= 5:
+                            raise HTTPException(status_code=403, detail="Daily food scanner limit of 5 scans reached. Please upgrade to premium for unlimited access.")
                         day_usage["scans"] = day_usage.get("scans", 0) + 1
                     else:
                         # Fair Use Policy Guard (FUP) for Premium to prevent script bot spam
@@ -2389,7 +2392,7 @@ def analyze_food(data: AnalyzeFoodRequest):
         # Attach scan usage metadata for frontend remaining scan badge
         if isinstance(result_data, dict):
             result_data["is_premium"] = is_premium
-            result_data["remaining_scans"] = "Unlimited" if is_premium else max(0, 50 - day_usage.get("scans", 0))
+            result_data["remaining_scans"] = "Unlimited" if is_premium else max(0, 5 - day_usage.get("scans", 0))
 
         return result_data
         
@@ -2424,7 +2427,7 @@ def get_scan_status(user_id: str):
         usage = prefs.get("usage", {})
         day_usage = usage.get(today_str, {"scans": 0, "chats": 0})
         scans_used = day_usage.get("scans", 0)
-        remaining = max(0, 50 - scans_used)
+        remaining = max(0, 5 - scans_used)
         
         return {"is_premium": False, "scans_used": scans_used, "remaining": remaining}
     except Exception as e:
@@ -2622,6 +2625,36 @@ def calculate_met_calories(intensity: str, duration_mins: int, weight_kg: float)
     return max(30, round(met * safe_weight * hours))
 
 
+def normalize_meals_to_target(meals: List[Dict[str, Any]], target_cal: int) -> List[Dict[str, Any]]:
+    if not isinstance(meals, list) or not meals or target_cal <= 0:
+        return meals
+    total_gen_cal = sum(int(m.get("calories") or m.get("kcal") or 0) for m in meals)
+    if total_gen_cal <= 0:
+        return meals
+        
+    if total_gen_cal > target_cal or abs(total_gen_cal - target_cal) > 30:
+        scale = float(target_cal) / float(total_gen_cal)
+        acc_cal = 0
+        for i, m in enumerate(meals):
+            old_c = int(m.get("calories") or m.get("kcal") or 0)
+            if i == len(meals) - 1:
+                new_c = max(1, target_cal - acc_cal)
+            else:
+                new_c = max(1, int(round(old_c * scale)))
+                acc_cal += new_c
+            m["calories"] = new_c
+            m["kcal"] = new_c
+            
+            for m_key in ["protein", "carbs", "fats"]:
+                val_str = str(m.get(m_key) or "")
+                digits = re.findall(r'\d+', val_str)
+                if digits:
+                    old_g = int(digits[0])
+                    new_g = max(0, int(round(old_g * scale)))
+                    m[m_key] = f"{new_g}g"
+    return meals
+
+
 @app.get("/meals/recommend/{user_id}")
 def recommend_meals(user_id: str):
     try:
@@ -2643,9 +2676,11 @@ def recommend_meals(user_id: str):
         allergies = profile.get("allergies") or prefs.get("allergies") or []
         address = prefs.get("address") or "Cebu City"
 
-        # Calculate TDEE & goal-specific macros
+        # Calculate TDEE & goal-specific macros matching dashboard analytics
         bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
-        tdee = bmr * 1.55
+        act_level = prefs.get("activity_level", "moderate")
+        mult = 1.55 if act_level == "moderate" else (1.725 if act_level == "active" else 1.2)
+        tdee = bmr * mult
         if norm_goal == "fatloss":
             target_calories = max(1200, int(tdee - 500))
             p_ratio, c_ratio, f_ratio = 0.35, 0.35, 0.30
@@ -2672,6 +2707,14 @@ def recommend_meals(user_id: str):
         - User Allergies: {allergies}
         - Date Seed: {today_str}
 
+        CRITICAL CALORIE BUDGET RULE:
+        The SUM of calories across all 4 meals (Breakfast + Lunch + Snack + Dinner) MUST EXACTLY EQUAL or NOT EXCEED {target_calories} kcal total!
+        Allocate the calories across meals as:
+        - Breakfast: ~25% of {target_calories} kcal ({int(target_calories * 0.25)} kcal)
+        - Lunch: ~35% of {target_calories} kcal ({int(target_calories * 0.35)} kcal)
+        - Snack: ~15% of {target_calories} kcal ({int(target_calories * 0.15)} kcal)
+        - Dinner: ~25% of {target_calories} kcal ({int(target_calories * 0.25)} kcal)
+
         Format output as raw JSON array of 4 objects:
         Each object must have:
         - "id" (string)
@@ -2696,34 +2739,40 @@ def recommend_meals(user_id: str):
             meals = json.loads(text.strip())
             if isinstance(meals, list) and len(meals) == 4:
                 sanitized = sanitize_meals_for_allergies(meals, allergies)
-                return sanitized
+                return normalize_meals_to_target(sanitized, target_calories)
         except Exception as ai_err:
             print("MEAL RECOMMENDATION AI FALLBACK TRIGGERED:", ai_err)
 
         # Fallback tailored meals per goal
+        b_cal = int(target_calories * 0.25)
+        l_cal = int(target_calories * 0.35)
+        s_cal = int(target_calories * 0.15)
+        d_cal = target_calories - (b_cal + l_cal + s_cal)
+
         if norm_goal == "fatloss":
             fallback = [
-                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "High-Protein Egg White & Spinach Scramble with Kamote", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["4 Egg whites", "1 cup Spinach", "100g Steamed Kamote"], "instructions": ["Scramble egg whites with spinach in non-stick pan.", "Serve with steamed kamote."] },
-                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Grilled Chicken Breast Tinola with Sayote & Brown Rice", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["200g Skinless Chicken Breast", "1 cup Sayote", "1/2 cup Brown Rice"], "instructions": ["Simmer chicken in ginger broth with sayote.", "Serve with portioned brown rice."] },
-                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Boiled Sweet Corn & Calamansi Juice", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 ear Sweet corn", "Fresh calamansi water"], "instructions": ["Boil corn and serve with fresh calamansi."] },
-                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Sinugbang Bangus Belly with Garlic Kangkong", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["180g Grilled Bangus Belly", "2 cups Stir-fried Kangkong"], "instructions": ["Grill bangus with lemon.", "Sauté kangkong with garlic and soy sauce."] }
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "High-Protein Egg White & Spinach Scramble with Kamote", "calories": b_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["4 Egg whites", "1 cup Spinach", "100g Steamed Kamote"], "instructions": ["Scramble egg whites with spinach in non-stick pan.", "Serve with steamed kamote."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Grilled Chicken Breast Tinola with Sayote & Brown Rice", "calories": l_cal, "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["200g Skinless Chicken Breast", "1 cup Sayote", "1/2 cup Brown Rice"], "instructions": ["Simmer chicken in ginger broth with sayote.", "Serve with portioned brown rice."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Boiled Sweet Corn & Calamansi Juice", "calories": s_cal, "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 ear Sweet corn", "Fresh calamansi water"], "instructions": ["Boil corn and serve with fresh calamansi."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Sinugbang Bangus Belly with Garlic Kangkong", "calories": d_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["180g Grilled Bangus Belly", "2 cups Stir-fried Kangkong"], "instructions": ["Grill bangus with lemon.", "Sauté kangkong with garlic and soy sauce."] }
             ]
         elif norm_goal == "muscle":
             fallback = [
-                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Mass-Building Whole Eggs & Chicken Sausage Rice Bowl", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["3 Whole eggs", "2 Skinless chicken sausages", "1.5 cups Rice"], "instructions": ["Fry eggs and sausages.", "Serve over hot rice."] },
-                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Double Chicken Inasal with Garlic Rice & Atchara", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["250g Chicken Inasal", "2 cups Garlic Rice", "Atchara side"], "instructions": ["Grill chicken with calamansi marinade.", "Serve with garlic rice."] },
-                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "High-Carb Peanut Butter Saba Banana Toast", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["2 Slices Wheat bread", "2 tbsp Peanut butter", "1 Saba banana"], "instructions": ["Spread peanut butter on bread and top with sliced banana."] },
-                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Beef Bistek Tagalog with Roasted Kalabasa & Rice", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["220g Beef tenderloin", "1 cup Kalabasa", "1.5 cups Rice"], "instructions": ["Simmer beef in calamansi soy marinade.", "Serve with kalabasa and rice."] }
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Mass-Building Whole Eggs & Chicken Sausage Rice Bowl", "calories": b_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["3 Whole eggs", "2 Skinless chicken sausages", "1.5 cups Rice"], "instructions": ["Fry eggs and sausages.", "Serve over hot rice."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Double Chicken Inasal with Garlic Rice & Atchara", "calories": l_cal, "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["250g Chicken Inasal", "2 cups Garlic Rice", "Atchara side"], "instructions": ["Grill chicken with calamansi marinade.", "Serve with garlic rice."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "High-Carb Peanut Butter Saba Banana Toast", "calories": s_cal, "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["2 Slices Wheat bread", "2 tbsp Peanut butter", "1 Saba banana"], "instructions": ["Spread peanut butter on bread and top with sliced banana."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Beef Bistek Tagalog with Roasted Kalabasa & Rice", "calories": d_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["220g Beef tenderloin", "1 cup Kalabasa", "1.5 cups Rice"], "instructions": ["Simmer beef in calamansi soy marinade.", "Serve with kalabasa and rice."] }
             ]
         else:
             fallback = [
-                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Balanced Scrambled Eggs with Tomatoes & Toast", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["2 Whole eggs", "1 Tomato", "2 Slices toast"], "instructions": ["Scramble eggs with tomato and serve with toast."] },
-                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Chicken Pochero with Saba Banana & Rice", "calories": int(target_calories * 0.35), "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["180g Chicken", "1 Saba banana", "1 cup Rice"], "instructions": ["Simmer chicken pochero stew until rich and tender."] },
-                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Fresh Mango & Chilled Buko Water", "calories": int(target_calories * 0.15), "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 Fresh mango", "1 glass Buko water"], "instructions": ["Slice ripe mango and drink fresh coconut water."] },
-                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Ginisang Monggo with Malunggay & Pork Tenderloin", "calories": int(target_calories * 0.25), "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["1 cup Monggo soup", "100g Pork tenderloin", "1 cup Malunggay"], "instructions": ["Sauté monggo stew with malunggay and lean pork."] }
+                {"id": f"m-{user_id[:6]}-b", "mealType": "Breakfast", "time": "8:00 AM", "title": "Balanced Scrambled Eggs with Tomatoes & Toast", "calories": b_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["2 Whole eggs", "1 Tomato", "2 Slices toast"], "instructions": ["Scramble eggs with tomato and serve with toast."] },
+                {"id": f"m-{user_id[:6]}-l", "mealType": "Lunch", "time": "12:30 PM", "title": "Chicken Pochero with Saba Banana & Rice", "calories": l_cal, "protein": f"{int(target_protein * 0.35)}g", "carbs": f"{int(target_carbs * 0.35)}g", "fats": f"{int(target_fats * 0.35)}g", "ingredients": ["180g Chicken", "1 Saba banana", "1 cup Rice"], "instructions": ["Simmer chicken pochero stew until rich and tender."] },
+                {"id": f"m-{user_id[:6]}-s", "mealType": "Snack", "time": "4:00 PM", "title": "Fresh Mango & Chilled Buko Water", "calories": s_cal, "protein": f"{int(target_protein * 0.15)}g", "carbs": f"{int(target_carbs * 0.15)}g", "fats": f"{int(target_fats * 0.15)}g", "ingredients": ["1 Fresh mango", "1 glass Buko water"], "instructions": ["Slice ripe mango and drink fresh coconut water."] },
+                {"id": f"m-{user_id[:6]}-d", "mealType": "Dinner", "time": "7:30 PM", "title": "Ginisang Monggo with Malunggay & Pork Tenderloin", "calories": d_cal, "protein": f"{int(target_protein * 0.25)}g", "carbs": f"{int(target_carbs * 0.25)}g", "fats": f"{int(target_fats * 0.25)}g", "ingredients": ["1 cup Monggo soup", "100g Pork tenderloin", "1 cup Malunggay"], "instructions": ["Sauté monggo stew with malunggay and lean pork."] }
             ]
 
-        return sanitize_meals_for_allergies(fallback, allergies)
+        sanitized_fallback = sanitize_meals_for_allergies(fallback, allergies)
+        return normalize_meals_to_target(sanitized_fallback, target_calories)
 
     except Exception as e:
         print("RECOMMEND MEALS ERROR:", repr(e))
