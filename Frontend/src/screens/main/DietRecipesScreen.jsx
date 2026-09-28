@@ -249,26 +249,65 @@ export default function DietRecipesScreen({
   // New UI States
   const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
 
+  // All 53 Cebu LGUs: 9 cities + 44 municipalities
   const locations = [
+    // === CITIES ===
     'Cebu City',
     'Lapu-Lapu City',
     'Mandaue City',
     'Talisay City',
     'Carcar City',
-    'Argao',
     'Bogo City',
-    'San Remigio',
-    'Daanbantayan',
-    'Bantayan Island',
-    'Camotes Islands',
+    'Danao City',
+    'Naga City',
     'Toledo City',
+    // === MUNICIPALITIES (Cebu mainland) ===
+    'Alcantara',
+    'Alcoy',
+    'Alegria',
+    'Aloguinsan',
+    'Argao',
+    'Asturias',
+    'Badian',
     'Balamban',
+    'Barili',
+    'Boljoon',
+    'Borbon',
+    'Carmen',
+    'Catmon',
+    'Compostela',
+    'Consolacion',
+    'Cordova',
+    'Daanbantayan',
+    'Dalaguete',
+    'Dumanjug',
+    'Ginatilan',
+    'Liloan',
+    'Malabuyoc',
+    'Medellin',
+    'Minglanilla',
     'Moalboal',
     'Oslob',
-    'Danao City',
-    'Liloan',
-    'Dalaguete',
-    'Barili'
+    'Pinamungajan',
+    'Ronda',
+    'Samboan',
+    'San Fernando',
+    'San Remigio',
+    'Santander',
+    'Sibonga',
+    'Sogod',
+    'Tabogon',
+    'Tabuelan',
+    'Tuburan',
+    // === BANTAYAN ISLAND GROUP ===
+    'Bantayan',
+    'Madridejos',
+    'Santa Fe',
+    // === CAMOTES ISLANDS GROUP ===
+    'San Francisco (Camotes)',
+    'Pilar (Camotes)',
+    'Poro (Camotes)',
+    'Tudela (Camotes)',
   ];
 
   // CITY_PROFILES replaced by dynamic cityProfilesCache + currentCityProfile
@@ -455,7 +494,46 @@ export default function DietRecipesScreen({
         { name: 'Presko nga Gatas sa Kabaw ug Pastillas', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
         { name: 'Kinalan nga Manok Bisaya sa Barili', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' }
       ]
-    }
+    },
+    // --- All other Cebu municipalities (coordinates only; food data fetched from API) ---
+    'Naga City':             { lat: 10.2108, lng: 123.7564 },
+    'Alcantara':             { lat: 10.1333, lng: 123.5833 },
+    'Alcoy':                 { lat: 9.7333,  lng: 123.5333 },
+    'Alegria':               { lat: 9.7167,  lng: 123.4167 },
+    'Aloguinsan':            { lat: 10.2167, lng: 123.5500 },
+    'Asturias':              { lat: 10.5000, lng: 123.7167 },
+    'Badian':                { lat: 9.8667,  lng: 123.3833 },
+    'Boljoon':               { lat: 9.6333,  lng: 123.4333 },
+    'Borbon':                { lat: 10.8333, lng: 124.0167 },
+    'Carmen':                { lat: 10.5833, lng: 124.0167 },
+    'Catmon':                { lat: 10.7333, lng: 123.9833 },
+    'Compostela':            { lat: 10.4667, lng: 124.0000 },
+    'Consolacion':           { lat: 10.3667, lng: 123.9667 },
+    'Cordova':               { lat: 10.2500, lng: 123.9667 },
+    'Dumanjug':              { lat: 9.9833,  lng: 123.4167 },
+    'Ginatilan':             { lat: 9.6833,  lng: 123.4000 },
+    'Malabuyoc':             { lat: 9.6167,  lng: 123.3833 },
+    'Medellin':              { lat: 11.1333, lng: 123.9667 },
+    'Minglanilla':           { lat: 10.2500, lng: 123.8000 },
+    'Pinamungajan':          { lat: 10.2667, lng: 123.5667 },
+    'Ronda':                 { lat: 10.0167, lng: 123.4167 },
+    'Samboan':               { lat: 9.5500,  lng: 123.3667 },
+    'San Fernando':          { lat: 10.1667, lng: 123.7000 },
+    'Santander':             { lat: 9.5000,  lng: 123.3833 },
+    'Sibonga':               { lat: 10.0167, lng: 123.5667 },
+    'Sogod':                 { lat: 10.7500, lng: 123.9833 },
+    'Tabogon':               { lat: 10.9333, lng: 123.9833 },
+    'Tabuelan':              { lat: 10.7000, lng: 123.7833 },
+    'Tuburan':               { lat: 10.7333, lng: 123.6500 },
+    // Bantayan Island group
+    'Bantayan':              { lat: 11.1681, lng: 123.7222 },
+    'Madridejos':            { lat: 11.2667, lng: 123.7167 },
+    'Santa Fe':              { lat: 11.1500, lng: 123.8000 },
+    // Camotes Islands group
+    'San Francisco (Camotes)': { lat: 10.6558, lng: 124.3431 },
+    'Pilar (Camotes)':       { lat: 10.6667, lng: 124.3500 },
+    'Poro (Camotes)':        { lat: 10.6333, lng: 124.4000 },
+    'Tudela (Camotes)':      { lat: 10.6500, lng: 124.3333 },
   };
 
   // Map markers: prefer live backend markers, fallback to static legacy
