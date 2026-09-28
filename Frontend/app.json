@@ -48,8 +48,7 @@
           }
         }
       ],
-      "expo-web-browser",
-      "expo-audio"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": false
