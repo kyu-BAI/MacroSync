@@ -3291,3 +3291,230 @@ def translate_meal_title_api(payload: TranslateTitleRequest):
         print("TRANSLATE MEAL TITLE ERROR:", repr(e))
 
     return {"original": title, "translated": title, "language": target_lang}
+
+
+# ============================================================
+# LOCAL FOOD MAP — CITY FOOD PROFILES
+# ============================================================
+# Table DDL (run once in Supabase SQL editor):
+#
+# CREATE TABLE IF NOT EXISTS city_food_profiles (
+#   id              BIGSERIAL PRIMARY KEY,
+#   city_name       TEXT UNIQUE NOT NULL,
+#   market_title    TEXT,
+#   palengke_items  TEXT,
+#   lat             DOUBLE PRECISION,
+#   lng             DOUBLE PRECISION,
+#   specialty       TEXT,
+#   famous_dishes   JSONB,
+#   created_at      TIMESTAMPTZ DEFAULT NOW(),
+#   updated_at      TIMESTAMPTZ DEFAULT NOW()
+# );
+# CREATE INDEX IF NOT EXISTS idx_city_food_city_name ON city_food_profiles(city_name);
+# ============================================================
+
+_SEED_PROFILES = [
+    {"city_name":"Cebu City","market_title":"Carbon Market & Pasil Fish Port (Cebu City)","palengke_items":"Pasil Fresh Fish, Singkamas, Pork Belly, Kangkong, Calamansi","lat":10.3157,"lng":123.8854,"specialty":"Lechon sa Sugbo","famous_dishes":[{"name":"Pasil Tuslob Buwa","desc":"Frothy pig brain & liver stew cooked with onions & chili, dipped with puso (hanging rice)."},{"name":"Cebuano Ngohiong","desc":"Crispy five-spice fried lumpia stuffed with ubod/singkamas, served with garlic brown dip."},{"name":"Lechon sa Sugbo","desc":"World-famous herb & lemongrass stuffed charcoal roasted pork with super crispy skin."},{"name":"Ginabot (Chicharon Bulaklak)","desc":"Deep-fried pork mesentery, a legendary Cebuano night market street food staple."}]},
+    {"city_name":"Lapu-Lapu City","market_title":"Mactan Public Market & Saang Pier (Lapu-Lapu City)","palengke_items":"Tangigue, Saang, Bakasi, Calamansi, Fresh Lato","lat":10.3103,"lng":123.9494,"specialty":"Sutukil Seafood Trilogy","famous_dishes":[{"name":"Sutukil Seafood Trilogy","desc":"Iconic 3-way seafood meal: Sugba (Grilled), Tula (Fish Soup), and Kinilaw (Raw Cured)."},{"name":"Linarang na Bakasi sa Cordova","desc":"Cordova moray eel stew cooked with kamias souring broth, black beans, and chili."},{"name":"Presko nga Saang sa Mactan","desc":"Steamed local sea snails dipped in spicy native tuba vinegar and ginger."}]},
+    {"city_name":"Mandaue City","market_title":"Mandaue City Public Market","palengke_items":"Native Chicken, Kangkong, Sayote, Eggplant, Sweet Rice","lat":10.3333,"lng":123.9333,"specialty":"Bibingka sa Mandaue","famous_dishes":[{"name":"Bibingka sa Mandaue","desc":"Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves."},{"name":"Tagaktak sa Mandaue","desc":"Crispy net-like sweet rice flour treat fried to golden perfection."},{"name":"Utan Bisaya sa Mandaue","desc":"Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens."}]},
+    {"city_name":"Talisay City","market_title":"Talisay City Public Market (Poblacion)","palengke_items":"Pork Belly, Inun-unan Fish, Kangkong, Cucumber, Native Tomatoes","lat":10.2447,"lng":123.8494,"specialty":"Inasal nga Lechon sa Talisay","famous_dishes":[{"name":"Inasal nga Lechon sa Talisay","desc":"Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork."},{"name":"Inun-unan nga Bisaya","desc":"Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant."}]},
+    {"city_name":"Carcar City","market_title":"Carcar City Public Market (Palengke sa Carcar)","palengke_items":"Native Pork, Ampaw, Chicharon, Kangkong, Squash, Sitaw","lat":10.1044,"lng":123.6419,"specialty":"Chicharon sa Carcar","famous_dishes":[{"name":"Chicharon sa Carcar","desc":"Famous crunchy pork cracklings crafted with thick savory meat & fat layers."},{"name":"Ampaw sa Carcar","desc":"Puffed rice crispy square treats bound with sweet native syrup and peanuts."},{"name":"Humba sa Carcar","desc":"Tender pork belly braised with fermented black beans, banana blossoms, and tuba sugar."}]},
+    {"city_name":"Argao","market_title":"Argao Public Market & Heritage District","palengke_items":"Native Sikwate (Cacao), Torta, Native Pork, Alugbati, Eggplant","lat":9.8808,"lng":123.5975,"specialty":"Torta sa Argao","famous_dishes":[{"name":"Torta sa Argao","desc":"Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese."},{"name":"Batirol nga Sikwate sa Argao","desc":"Rich hot chocolate frothed with a batirol using 100% native cacao tablea."},{"name":"Chiu-Chiu nga Baboy sa Argao","desc":"Traditional Argao braised pork belly stewed with spices and native herbs."}]},
+    {"city_name":"Bogo City","market_title":"Bogo City Public Market (Palengke sa Bogo)","palengke_items":"Tangigue, Sweet Corn, Native Tomatoes, Cucumber, Calamansi","lat":11.0517,"lng":124.0055,"specialty":"Pintos sa Bogo","famous_dishes":[{"name":"Pintos sa Bogo","desc":"Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks."},{"name":"Kinilaw nga Tangigue sa Amihanan","desc":"Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies."}]},
+    {"city_name":"San Remigio","market_title":"San Remigio Municipal Public Market","palengke_items":"Bangus, Tilapia, Fresh Lato, Kangkong, Squash, Gabi Leaves","lat":11.0772,"lng":123.9356,"specialty":"Presko nga Salada nga Lato","famous_dishes":[{"name":"Presko nga Salada nga Lato","desc":"Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions."},{"name":"Sinugbang Bangus sa Dahon sa Saging","desc":"Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf."}]},
+    {"city_name":"Daanbantayan","market_title":"Daanbantayan Public Market & Fish Landing","palengke_items":"Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger","lat":11.2589,"lng":124.0153,"specialty":"Inun-unan nga Bodboron","famous_dishes":[{"name":"Inun-unan nga Bodboron","desc":"Small ocean fish simmered gently in native vinegar, ginger, and green peppers."},{"name":"Linat-ang Tulingan sa Daanbantayan","desc":"Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes."}]},
+    {"city_name":"Bantayan Island","market_title":"Bantayan Island Fish Landing & Santa Fe Market","palengke_items":"Dried Danggit, Blue Crab, Shellfish, Calamansi, Young Coconut","lat":11.1681,"lng":123.7222,"specialty":"Buwad nga Danggit sa Bantayan","famous_dishes":[{"name":"Buwad nga Danggit sa Bantayan","desc":"World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar."},{"name":"Nilung-ag nga Kasag sa Bantayan","desc":"Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi."},{"name":"Buwad nga Pusit","desc":"Crispy sun-dried squid toasted over coals until golden and fragrant."}]},
+    {"city_name":"Camotes Islands","market_title":"San Francisco Public Market (Camotes)","palengke_items":"Cassava, Buko, Native Chicken, Fresh Ocean Fish, Kangkong","lat":10.6558,"lng":124.3431,"specialty":"Cassava Cake sa Camotes","famous_dishes":[{"name":"Cassava Cake sa Camotes","desc":"Traditional baked cassava root cake enriched with fresh coconut milk and sugar."},{"name":"Halang-Halang nga Manok sa Gata","desc":"Spicy chicken coconut milk soup infused with chili leaves, ginger, and lemongrass."}]},
+    {"city_name":"Toledo City","market_title":"Toledo City Public Market","palengke_items":"River Prawns, Tilapia, Corn Grit, Squash, Sitaw","lat":10.3772,"lng":123.6406,"specialty":"Gisadong Ulang sa Toledo","famous_dishes":[{"name":"Gisadong Ulang sa Toledo","desc":"Large freshwater river prawns sautéed in garlic, butter, and native tomatoes."},{"name":"Sinugbang Tilapia sa Kamayan","desc":"Fresh river tilapia grilled over charcoal, served with calamansi soy dip."}]},
+    {"city_name":"Balamban","market_title":"Balamban Public Market & Herb Port","palengke_items":"Stuffed Liempo, Native Chicken, Malunggay, Sayote","lat":10.5042,"lng":123.7194,"specialty":"Sinugbang Liempo sa Balamban","famous_dishes":[{"name":"Sinugbang Liempo sa Balamban","desc":"Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass."},{"name":"Tinolang Manok sa Balamban","desc":"Free-range chicken stewed with green papaya, ginger, and fresh malunggay."}]},
+    {"city_name":"Moalboal","market_title":"Moalboal Public Market & Beach Fish Landing","palengke_items":"Tuna Steak, Mackerel, Buko Water, Calamansi, Cucumber","lat":9.9575,"lng":123.4,"specialty":"Sinugbang Tangigue Steak sa Moalboal","famous_dishes":[{"name":"Sinugbang Tangigue Steak sa Moalboal","desc":"Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip."},{"name":"Kinilaw nga Mackerel sa Baybayon","desc":"Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger."}]},
+    {"city_name":"Oslob","market_title":"Oslob Municipal Market","palengke_items":"Tangigue, Kamote Tops, Sinigang Greens, Calamansi, Mango","lat":9.535,"lng":123.4319,"specialty":"Sinigang nga Tangigue sa Oslob","famous_dishes":[{"name":"Sinigang nga Tangigue sa Oslob","desc":"Sour fish soup made with fresh king mackerel, native tomatoes, and greens."},{"name":"Salada nga Dahon sa Kamote","desc":"Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes."}]},
+    {"city_name":"Danao City","market_title":"Danao City Central Market","palengke_items":"Kalamay, Bangus, Kangkong, Eggplant, Tomatoes","lat":10.5256,"lng":124.0264,"specialty":"Kalamay sa Danao","famous_dishes":[{"name":"Kalamay sa Danao","desc":"Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells."},{"name":"Inasal nga Bangus sa Danao","desc":"Whole milkfish deboned and stuffed with savory meat, raisins, and spices."}]},
+    {"city_name":"Liloan","market_title":"Liloan Public Market","palengke_items":"Lato, Fresh Fish, Native Chicken, Sayote, Masi","lat":10.4,"lng":123.9833,"specialty":"Rosquillos sa Titay (Liloan)","famous_dishes":[{"name":"Rosquillos sa Titay (Liloan)","desc":"The original ring-shaped crisp biscuit created in Liloan back in 1907."},{"name":"Masi sa Liloan","desc":"Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center."}]},
+    {"city_name":"Dalaguete","market_title":"Dalaguete Vegetable Trading Post (Mantalongon)","palengke_items":"Highland Sayote, Broccoli, Carrots, Cabbage, Pork Chops","lat":9.7619,"lng":123.535,"specialty":"Gisadong Utan sa Mantalongon","famous_dishes":[{"name":"Gisadong Utan sa Mantalongon","desc":"Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu."},{"name":"Linat-ang Baboy ug Sayote","desc":"Hearty highland pork soup simmered with freshly harvested sayote and ginger."}]},
+    {"city_name":"Barili","market_title":"Barili Public Market & Dairy Farm Center","palengke_items":"Carabao Milk, Pastillas, Native Eggs, Native Chicken, Squash","lat":10.1133,"lng":123.5083,"specialty":"Presko nga Gatas sa Kabaw ug Pastillas","famous_dishes":[{"name":"Presko nga Gatas sa Kabaw ug Pastillas","desc":"Creamy fresh water-buffalo milk and handcrafted sweet milk candies."},{"name":"Kinalan nga Manok Bisaya sa Barili","desc":"Slow-simmered native farm chicken with fresh yellow squash and sitaw."}]},
+]
+
+
+def _call_gemini_for_city(city_name: str) -> dict | None:
+    """
+    Calls Gemini AI to generate a local food profile for a Philippine city/municipality.
+    Returns a dict matching the city_food_profiles schema, or None on failure.
+    """
+    if not genai_client:
+        return None
+
+    prompt = f"""You are an expert on Philippine culinary heritage and local food markets.
+Generate an accurate local food profile for the Philippine city or municipality: "{city_name}".
+
+Return ONLY a valid JSON object (no markdown, no code block, no extra text) with this exact structure:
+{{
+  "market_title": "Name of the main public market or fish port in {city_name}",
+  "palengke_items": "Comma-separated list of 5-7 typical items sold at the local market",
+  "specialty": "The single most iconic dish or food product of {city_name}",
+  "famous_dishes": [
+    {{"name": "Dish name", "desc": "One rich sentence describing this local dish, its ingredients, and what makes it special to {city_name}."}},
+    {{"name": "Dish name", "desc": "Description..."}},
+    {{"name": "Dish name", "desc": "Description..."}}
+  ],
+  "lat": <latitude as number>,
+  "lng": <longitude as number>
+}}
+
+Rules:
+- Use real, historically accurate local dishes specific to {city_name}, Philippines.
+- If {city_name} is in Visayas, prefer Bisaya dish names.
+- If Luzon, prefer Tagalog/Ilocano names as appropriate.
+- If Mindanao, prefer local Mindanaoan or Muslim culinary traditions as appropriate.
+- famous_dishes must have 2 to 4 entries.
+- lat/lng must be the correct coordinates for {city_name}, Philippines.
+- Return ONLY the raw JSON. No markdown. No explanation.
+"""
+
+    try:
+        response = genai_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+        )
+        raw = response.text.strip() if hasattr(response, 'text') else ""
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        data = json.loads(raw)
+        return data
+    except Exception as e:
+        print(f"[CityFood] Gemini generation error for '{city_name}':", repr(e))
+        return None
+
+
+@app.get("/api/city-food")
+async def get_city_food_profile(city: str):
+    """
+    Returns local food profile for a Philippine city/municipality.
+    1. Check Supabase cache (city_food_profiles table)
+    2. If not found → generate via Gemini AI → save to Supabase → return
+    3. If Gemini fails → return 404
+    """
+    if not city or not city.strip():
+        raise HTTPException(status_code=400, detail="city parameter is required")
+
+    city_name = city.strip()
+
+    # 1. Check Supabase cache
+    if supabase:
+        try:
+            result = supabase.table("city_food_profiles") \
+                .select("*") \
+                .eq("city_name", city_name) \
+                .limit(1) \
+                .execute()
+            if result.data and len(result.data) > 0:
+                row = result.data[0]
+                profile = {
+                    "marketTitle": row.get("market_title", ""),
+                    "palengkeItems": row.get("palengke_items", ""),
+                    "lat": row.get("lat"),
+                    "lng": row.get("lng"),
+                    "specialty": row.get("specialty", ""),
+                    "famousDishes": row.get("famous_dishes") or [],
+                }
+                return {"profile": profile, "source": "cache"}
+        except Exception as db_err:
+            print(f"[CityFood] Supabase read error for '{city_name}':", repr(db_err))
+
+    # 2. Generate via Gemini AI
+    print(f"[CityFood] Cache miss for '{city_name}' — generating via Gemini...")
+    generated = _call_gemini_for_city(city_name)
+
+    if not generated:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No food profile found for '{city_name}' and AI generation failed."
+        )
+
+    # 3. Save to Supabase for future requests
+    if supabase:
+        try:
+            supabase.table("city_food_profiles").upsert({
+                "city_name": city_name,
+                "market_title": generated.get("market_title", ""),
+                "palengke_items": generated.get("palengke_items", ""),
+                "lat": generated.get("lat"),
+                "lng": generated.get("lng"),
+                "specialty": generated.get("specialty", ""),
+                "famous_dishes": generated.get("famous_dishes", []),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }, on_conflict="city_name").execute()
+            print(f"[CityFood] Saved '{city_name}' to Supabase cache.")
+        except Exception as save_err:
+            print(f"[CityFood] Failed to save '{city_name}' to cache:", repr(save_err))
+
+    profile = {
+        "marketTitle": generated.get("market_title", ""),
+        "palengkeItems": generated.get("palengke_items", ""),
+        "lat": generated.get("lat"),
+        "lng": generated.get("lng"),
+        "specialty": generated.get("specialty", ""),
+        "famousDishes": generated.get("famous_dishes", []),
+    }
+    return {"profile": profile, "source": "gemini"}
+
+
+@app.get("/api/city-food/markers")
+async def get_city_food_markers():
+    """
+    Returns lightweight marker data for all cached cities (for the map).
+    Returns: [{ city_name, lat, lng, specialty }]
+    """
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    try:
+        result = supabase.table("city_food_profiles") \
+            .select("city_name, lat, lng, specialty") \
+            .execute()
+        markers = result.data or []
+        return {"markers": markers, "count": len(markers)}
+    except Exception as e:
+        print("[CityFood] markers fetch error:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch markers")
+
+
+@app.post("/api/city-food/seed")
+async def seed_city_food_profiles():
+    """
+    Seeds all 18 original Cebu city profiles into Supabase.
+    Call once from Postman/curl after creating the table.
+    """
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    inserted = 0
+    errors = []
+    for profile in _SEED_PROFILES:
+        try:
+            supabase.table("city_food_profiles").upsert(
+                {
+                    "city_name": profile["city_name"],
+                    "market_title": profile.get("market_title", ""),
+                    "palengke_items": profile.get("palengke_items", ""),
+                    "lat": profile.get("lat"),
+                    "lng": profile.get("lng"),
+                    "specialty": profile.get("specialty", ""),
+                    "famous_dishes": profile.get("famous_dishes", []),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                on_conflict="city_name",
+            ).execute()
+            inserted += 1
+        except Exception as e:
+            errors.append({"city": profile["city_name"], "error": str(e)})
+
+    return {
+        "seeded": inserted,
+        "total": len(_SEED_PROFILES),
+        "errors": errors,
+    }

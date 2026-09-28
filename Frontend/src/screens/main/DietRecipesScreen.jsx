@@ -38,6 +38,7 @@ import {
   RotateCcw,
 } from "lucide-react-native";
 import API_URL from "../config/api";
+import { getCityFoodProfile, getAllCityMarkers } from "../../services/cityFoodService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   addToSyncQueue,
@@ -203,6 +204,46 @@ export default function DietRecipesScreen({
   const [showFullMapModal, setShowFullMapModal] = useState(false);
   const [showCityPickerModal, setShowCityPickerModal] = useState(false);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
+
+  // Dynamic city food data
+  const [cityProfilesCache, setCityProfilesCache] = useState({});
+  const [currentCityProfile, setCurrentCityProfile] = useState(null);
+  const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
+  const [dynamicMarkers, setDynamicMarkers] = useState([]);
+
+  // Load map markers from backend on mount
+  useEffect(() => {
+    getAllCityMarkers().then((markers) => {
+      if (markers && markers.length > 0) {
+        setDynamicMarkers(markers);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Fetch profile whenever selected city changes
+  useEffect(() => {
+    const cityName = selectedLocation;
+    if (!cityName) return;
+
+    // Instant: use cached profile if we already fetched it
+    if (cityProfilesCache[cityName]) {
+      setCurrentCityProfile(cityProfilesCache[cityName]);
+      return;
+    }
+
+    setIsFetchingCityProfile(true);
+    getCityFoodProfile(cityName)
+      .then((profile) => {
+        if (profile) {
+          setCityProfilesCache((prev) => ({ ...prev, [cityName]: profile }));
+          setCurrentCityProfile(profile);
+        } else {
+          setCurrentCityProfile(null);
+        }
+      })
+      .catch(() => setCurrentCityProfile(null))
+      .finally(() => setIsFetchingCityProfile(false));
+  }, [selectedLocation]);
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
   
   // New UI States
@@ -230,7 +271,11 @@ export default function DietRecipesScreen({
     'Barili'
   ];
 
-  const CITY_PROFILES = {
+  // CITY_PROFILES replaced by dynamic cityProfilesCache + currentCityProfile
+  // Legacy alias for any code that still references CITY_PROFILES[selectedLocation]
+  const CITY_PROFILES = cityProfilesCache;
+
+  const _LEGACY_CITY_PROFILES = {
     'Cebu City': {
       marketTitle: 'Carbon Market & Pasil Fish Port (Cebu City)',
       palengkeItems: 'Pasil Fresh Fish, Singkamas, Pork Belly, Kangkong, Calamansi',
@@ -413,26 +458,44 @@ export default function DietRecipesScreen({
     }
   };
 
+  // Map markers: prefer live backend markers, fallback to static legacy
   const mapMarkers = React.useMemo(() => {
-    return Object.keys(CITY_PROFILES).map((cityName) => {
-      const topDish = CITY_PROFILES[cityName]?.famousDishes?.[0];
+    if (dynamicMarkers.length > 0) {
+      return dynamicMarkers.map((m) => ({
+        id: m.city_name,
+        name: m.city_name,
+        title: m.city_name,
+        lat: m.lat,
+        lng: m.lng,
+        subtitle: m.specialty || '',
+        active: m.city_name === selectedLocation,
+      }));
+    }
+    // Fallback to static legacy profiles
+    return Object.keys(_LEGACY_CITY_PROFILES).map((cityName) => {
+      const topDish = _LEGACY_CITY_PROFILES[cityName]?.famousDishes?.[0];
       return {
         id: cityName,
         name: cityName,
         title: cityName,
-        lat: CITY_PROFILES[cityName].lat,
-        lng: CITY_PROFILES[cityName].lng,
+        lat: _LEGACY_CITY_PROFILES[cityName].lat,
+        lng: _LEGACY_CITY_PROFILES[cityName].lng,
         subtitle: topDish ? topDish.name : '',
         active: cityName === selectedLocation,
       };
     });
-  }, [selectedLocation]);
+  }, [dynamicMarkers, selectedLocation]);
 
+  // Map center: use currentCityProfile (dynamic), else fallback to static
   const currentMapCenter = React.useMemo(() => {
-    return CITY_PROFILES[selectedLocation]
-      ? [CITY_PROFILES[selectedLocation].lng, CITY_PROFILES[selectedLocation].lat]
-      : [123.8854, 10.3157];
-  }, [selectedLocation]);
+    if (currentCityProfile?.lat && currentCityProfile?.lng) {
+      return [currentCityProfile.lng, currentCityProfile.lat];
+    }
+    if (_LEGACY_CITY_PROFILES[selectedLocation]) {
+      return [_LEGACY_CITY_PROFILES[selectedLocation].lng, _LEGACY_CITY_PROFILES[selectedLocation].lat];
+    }
+    return [123.8854, 10.3157]; // Default: Cebu City
+  }, [currentCityProfile, selectedLocation]);
 
 
   const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
@@ -1520,7 +1583,7 @@ export default function DietRecipesScreen({
                   zoom={9}
                   markers={mapMarkers}
                   onMarkerPress={(cityName) => {
-                    if (cityName && locations.includes(cityName)) {
+                    if (cityName) {
                       setSelectedLocation(cityName);
                     }
                   }}
@@ -1531,13 +1594,20 @@ export default function DietRecipesScreen({
               </View>
 
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
-              {Boolean(CITY_PROFILES[selectedLocation]) && (
+              {isFetchingCityProfile ? (
+                <View style={{ marginTop: 12, alignItems: 'center', paddingVertical: 14 }}>
+                  <ActivityIndicator size="small" color={logoGreen} />
+                  <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 6 }}>
+                    Loading food profile for {selectedLocation}...
+                  </Text>
+                </View>
+              ) : Boolean(currentCityProfile) && (
                 <View style={{ marginTop: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
                       <Navigation size={14} color={logoGreen} style={{ marginRight: 6 }} />
                       <Text style={styles.cityDetailTitle} numberOfLines={1}>
-                        {CITY_PROFILES[selectedLocation].marketTitle || `${selectedLocation} Food Market`}
+                        {currentCityProfile.marketTitle || `${selectedLocation} Food Market`}
                       </Text>
                     </View>
                   </View>
@@ -1545,7 +1615,7 @@ export default function DietRecipesScreen({
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                     <ShoppingBag size={12} color={theme?.textSecondary || '#94A3B8'} style={{ marginRight: 5 }} />
                     <Text style={[styles.cityPalengkeText, { flex: 1 }]}>
-                      <Text style={{ fontWeight: '700' }}>Local Supplies:</Text> {CITY_PROFILES[selectedLocation].palengkeItems}
+                      <Text style={{ fontWeight: '700' }}>Local Supplies:</Text> {currentCityProfile.palengkeItems}
                     </Text>
                   </View>
                 </View>
@@ -1553,7 +1623,7 @@ export default function DietRecipesScreen({
             </View>
 
             {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD & FAMOUS DELICACIES CARD */}
-            {Boolean(CITY_PROFILES[selectedLocation]) && (
+            {Boolean(currentCityProfile) && (
               <>
                 <View style={{ marginBottom: 16 }}>
                   {(() => {
@@ -1677,7 +1747,7 @@ export default function DietRecipesScreen({
                 </View>
 
                 {/* FAMOUS NATIVE DISHES & CULINARY HERITAGE CARD */}
-                {Boolean(CITY_PROFILES[selectedLocation]?.famousDishes) && (
+                {Boolean(currentCityProfile?.famousDishes) && (
                   <View style={[styles.formCard, { marginBottom: 24 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={styles.cardTitle}>Famous Delicacies ({selectedLocation})</Text>
@@ -1687,7 +1757,7 @@ export default function DietRecipesScreen({
                     </Text>
 
                     <View style={{ gap: 10 }}>
-                      {CITY_PROFILES[selectedLocation].famousDishes.map((dish, idx) => (
+                      {currentCityProfile.famousDishes.map((dish, idx) => (
                         <View key={idx} style={{
                           backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
                           padding: 14,
@@ -1860,10 +1930,10 @@ export default function DietRecipesScreen({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={{ fontSize: 15, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }} numberOfLines={1}>
-                  {CITY_PROFILES[selectedLocation]?.marketTitle || selectedLocation}
+                  {currentCityProfile?.marketTitle || selectedLocation}
                 </Text>
                 <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
-                  {CITY_PROFILES[selectedLocation]?.specialty}
+                  {currentCityProfile?.specialty}
                 </Text>
               </View>
               <TouchableOpacity
