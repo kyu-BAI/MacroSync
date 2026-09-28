@@ -30,6 +30,7 @@ import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import { saveUserId, setRememberMe, saveRememberedGoogleEmail } from "../../services/OfflineStorage";
 import GoogleAccountModal from "../../components/GoogleAccountModal";
+import PrivacyPolicyModal from "../../components/PrivacyPolicyModal";
 import { getStyles, baseColor } from "./SignUpScreen.styles";
 
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
@@ -44,6 +45,9 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
   const [isPressed, setIsPressed] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [privacyInitialTab, setPrivacyInitialTab] = useState('terms');
 
   // Google Sign In States
   const [isGooglePressed, setIsGooglePressed] = useState(false);
@@ -87,6 +91,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
     }
     if (!isPasswordValid) {
       setPasswordTouched(true);
+      return;
+    }
+    if (!agreeToTerms) {
+      showAlert(
+        "Terms & Policies Required",
+        "Please check the agreement box to accept the Terms of Service, Privacy Policy, and Medical Scope before continuing."
+      );
       return;
     }
 
@@ -141,6 +152,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 
   const handleGoogleSignIn = () => {
     if (isLoading) return;
+    if (!agreeToTerms) {
+      showAlert(
+        "Terms & Policies Required",
+        "Please check the agreement box to accept the Terms of Service, Privacy Policy, and Medical Scope before continuing with Google."
+      );
+      return;
+    }
     setIsGoogleModalVisible(true);
   };
 
@@ -372,6 +390,80 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
               )}
             </View>
 
+            {/* MANDATORY AGREEMENT CHECKBOX */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setAgreeToTerms(!agreeToTerms)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                marginTop: 14,
+                marginBottom: 4,
+                paddingHorizontal: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 6,
+                  borderWidth: 1.8,
+                  borderColor: agreeToTerms ? '#10B981' : (theme?.border || '#CBD5E1'),
+                  backgroundColor: agreeToTerms ? '#10B981' : '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 2,
+                  marginRight: 10,
+                }}
+              >
+                {agreeToTerms && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
+              </View>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  color: theme?.textSecondary || '#64748B',
+                  lineHeight: 18,
+                  fontWeight: '500',
+                }}
+              >
+                I have read and agree to MacroSync's{' '}
+                <Text
+                  style={{ color: '#10B981', fontWeight: '800', textDecorationLine: 'underline' }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setPrivacyInitialTab('terms');
+                    setPrivacyModalVisible(true);
+                  }}
+                >
+                  Terms of Service
+                </Text>
+                {', '}
+                <Text
+                  style={{ color: '#10B981', fontWeight: '800', textDecorationLine: 'underline' }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setPrivacyInitialTab('privacy');
+                    setPrivacyModalVisible(true);
+                  }}
+                >
+                  Privacy Policy (RA 10173)
+                </Text>
+                {', & '}
+                <Text
+                  style={{ color: '#10B981', fontWeight: '800', textDecorationLine: 'underline' }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setPrivacyInitialTab('medical');
+                    setPrivacyModalVisible(true);
+                  }}
+                >
+                  Medical Disclaimer
+                </Text>
+                .
+              </Text>
+            </TouchableOpacity>
+
             {/* Get Started Button */}
             <TouchableOpacity
               activeOpacity={1}
@@ -462,6 +554,13 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
         onClose={() => setIsGoogleModalVisible(false)}
         onSelectAccount={handleGoogleAccountSelect}
         isLoading={isLoading && isGooglePressed}
+      />
+
+      {/* PRIVACY POLICY & TERMS MODAL */}
+      <PrivacyPolicyModal
+        visible={privacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+        initialTab={privacyInitialTab}
       />
     </SafeAreaView>
   );

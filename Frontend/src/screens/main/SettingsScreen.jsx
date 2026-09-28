@@ -46,6 +46,7 @@ import {
   X,
   Pencil,
   ImagePlus,
+  FileText,
 } from "lucide-react-native";
 import API_URL from "../config/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -55,6 +56,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { clearSavedUserId } from "../../services/OfflineStorage";
 import PressableCard from "../../components/PressableCard";
+import PrivacyPolicyModal from "../../components/PrivacyPolicyModal";
 import { getStyles } from "./SettingsScreen.styles";
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
@@ -83,6 +85,7 @@ export default function SettingsScreen({
   // --- PHOTO PREVIEW & AVATAR MANAGER STATES ---
   const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
   const getInitials = (name) => {
     if (!name) return "U";
@@ -1276,6 +1279,38 @@ export default function SettingsScreen({
           </PressableCard>
         </View>
 
+        {/* LEGAL & CLINICAL COMPLIANCE CARD */}
+        <Text style={styles.sectionLabelTitle}>Legal & Health Policy</Text>
+        <View style={styles.formCard}>
+          <PressableCard
+            scaleDown={0.97}
+            style={styles.settingActionRowItem}
+            onPress={() => setPrivacyModalVisible(true)}
+          >
+            <View style={styles.settingIconTextGroup}>
+              <View
+                style={{
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  borderRadius: 10,
+                  padding: 7,
+                  marginRight: 12,
+                }}
+              >
+                <FileText color={"#10B981"} size={16} />
+              </View>
+              <View>
+                <Text style={styles.settingRowItemMainTitle}>
+                  Privacy Policy & Medical Scope
+                </Text>
+                <Text style={styles.settingRowItemSubTitle}>
+                  RA 10173 data privacy & clinical terms
+                </Text>
+              </View>
+            </View>
+            <ChevronRight color={"#94A3B8"} size={16} />
+          </PressableCard>
+        </View>
+
         {/* LOGOUT BUTTON */}
         <PressableCard
           scaleDown={0.96}
@@ -1857,6 +1892,13 @@ export default function SettingsScreen({
           </View>
         </View>
       </Modal>
+
+      {/* --- PRIVACY POLICY & MEDICAL TERMS MODAL --- */}
+      <PrivacyPolicyModal
+        visible={privacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+        initialTab="medical"
+      />
 
       {/* --- BOTTOM NAVIGATION BAR --- */}
     </View>

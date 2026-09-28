@@ -133,6 +133,13 @@ import {
   MicOff,
   BotMessageSquare,
 } from "lucide-react-native";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
@@ -159,31 +166,74 @@ export default function ChatbotAIScreen({
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recognitionRef = useRef(null);
 
-  const handleToggleVoiceDictation = () => {
+  const handleToggleVoiceDictation = async () => {
+    // 1. If currently recording, STOP and transcribe audio via AI
     if (isListening) {
+      setIsListening(false);
+      setIsTranscribing(true);
+
+      // Web speech recognition stop (Chrome/Web browser)
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
         } catch (e) {}
         recognitionRef.current = null;
+        setIsTranscribing(false);
+        return;
       }
-      setIsListening(false);
+
+      // Native mobile audio recorder stop & AI transcribe
+      try {
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+        if (uri) {
+          const base64Audio = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          const response = await fetch(`${API_URL}/transcribe-audio`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              audio_base64: base64Audio,
+              mime_type: "audio/mp4",
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.text) {
+              setInputText((prev) => (prev ? `${prev.trim()} ${data.text}` : data.text));
+            }
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            showAlert("Dictation", errData.detail || "Could not transcribe audio. Please try speaking again.");
+          }
+        }
+      } catch (err) {
+        if (__DEV__) console.log("Audio stop/transcribe error:", err);
+        showAlert("Dictation Error", "Unable to transcribe audio. Please try speaking again.");
+      } finally {
+        setIsTranscribing(false);
+      }
       return;
     }
 
-    // Web Speech API — works on Chrome / Expo Web
+    // 2. Web Speech API (if running on Web browser)
     const SpeechRecognition =
       typeof window !== "undefined" &&
       (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-    if (SpeechRecognition) {
+    if (SpeechRecognition && Platform.OS === "web") {
       try {
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = true;
-        recognition.lang = "en-US";
+        recognition.lang = language === "Tagalog" ? "fil-PH" : language === "Cebuano" ? "ceb-PH" : "en-US";
         recognition.onstart = () => setIsListening(true);
         recognition.onresult = (evt) => {
           let t = "";
@@ -198,16 +248,33 @@ export default function ChatbotAIScreen({
         recognition.start();
         return;
       } catch (e) {
-        /* fall through */
+        /* fall through to native in-app audio recorder */
       }
     }
 
-    // Mobile Expo Go fallback — guide user to use keyboard mic
-    showAlert(
-      "Use Your Keyboard Mic",
-      "Tap the microphone icon on your phone keyboard to speak. Your spoken words will appear in the text box automatically.",
-      [{ text: "Got it!", style: "cancel" }],
-    );
+    // 3. Native mobile in-app microphone recording
+    try {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        showAlert(
+          "Microphone Permission",
+          "Microphone permission is required so Vita AI can listen to your voice. Please allow microphone access in your settings."
+        );
+        return;
+      }
+
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setIsListening(true);
+    } catch (err) {
+      if (__DEV__) console.log("Start recording error:", err);
+      showAlert("Microphone Error", "Unable to access microphone. Please check your permissions.");
+    }
   };
 
   // Chat remaining limits tracking state
@@ -710,7 +777,7 @@ export default function ChatbotAIScreen({
                 alignItems: "center",
                 backgroundColor: "rgba(239, 68, 68, 0.12)",
                 paddingHorizontal: 12,
-                paddingVertical: 6,
+                paddingVertical: 7,
                 borderRadius: 12,
                 marginBottom: 8,
                 borderWidth: 1,
@@ -734,11 +801,43 @@ export default function ChatbotAIScreen({
                   flex: 1,
                 }}
               >
-                Listening to your voice... Speak now!
+                Listening to your voice... Tap mic again when finished!
               </Text>
               <TouchableOpacity onPress={() => setIsListening(false)}>
                 <X color="#EF4444" size={14} />
               </TouchableOpacity>
+            </View>
+          )}
+
+          {isTranscribing && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "rgba(16, 185, 129, 0.12)",
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 12,
+                marginBottom: 8,
+                borderWidth: 1,
+                borderColor: "rgba(16, 185, 129, 0.3)",
+              }}
+            >
+              <ActivityIndicator
+                size="small"
+                color="#10B981"
+                style={{ marginRight: 8 }}
+              />
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: "#10B981",
+                  flex: 1,
+                }}
+              >
+                Transcribing your speech with AI...
+              </Text>
             </View>
           )}
 
@@ -747,8 +846,10 @@ export default function ChatbotAIScreen({
               style={styles.chatTextInputField}
               placeholder={
                 isListening
-                  ? "Listening... speak now..."
-                  : "Ask Vita AI about diet, macros, or workouts..."
+                  ? "Listening... speak now, tap mic when done..."
+                  : isTranscribing
+                    ? "Transcribing your speech..."
+                    : "Ask Vita AI about diet, macros, or workouts..."
               }
               placeholderTextColor={
                 isListening ? "#EF4444" : isDarkMode ? "#64748B" : "#94A3B8"
@@ -756,6 +857,7 @@ export default function ChatbotAIScreen({
               value={inputText}
               onChangeText={setInputText}
               multiline={true}
+              editable={!isTranscribing}
             />
             {/* VOICE DICTATION MICROPHONE BUTTON */}
             <TouchableOpacity
@@ -765,23 +867,30 @@ export default function ChatbotAIScreen({
                 borderRadius: 12,
                 backgroundColor: isListening
                   ? "#EF4444"
-                  : isDarkMode
-                    ? "#334155"
-                    : "#F1F5F9",
+                  : isTranscribing
+                    ? "rgba(16, 185, 129, 0.15)"
+                    : isDarkMode
+                      ? "#334155"
+                      : "#F1F5F9",
                 alignItems: "center",
                 justifyContent: "center",
                 marginRight: 8,
                 borderWidth: 1,
                 borderColor: isListening
                   ? "#DC2626"
-                  : isDarkMode
-                    ? "#475569"
-                    : "#E2E8F0",
+                  : isTranscribing
+                    ? "#10B981"
+                    : isDarkMode
+                      ? "#475569"
+                      : "#E2E8F0",
               }}
               activeOpacity={0.7}
               onPress={handleToggleVoiceDictation}
+              disabled={isTranscribing}
             >
-              {isListening ? (
+              {isTranscribing ? (
+                <ActivityIndicator size="small" color="#10B981" />
+              ) : isListening ? (
                 <MicOff color="#FFFFFF" size={17} />
               ) : (
                 <Mic color={isDarkMode ? "#F8FAFC" : "#0F172A"} size={17} />

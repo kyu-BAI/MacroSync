@@ -1566,7 +1566,7 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     ordered_keys = keys[start_idx:] + keys[:start_idx]
 
     # Optimize image payload with Pillow if provided to ensure ultra-fast network transfer
-    if image_bytes and len(image_bytes) > 80000:
+    if image_bytes and len(image_bytes) > 80000 and (mime_type or "").startswith("image/"):
         try:
             from PIL import Image
             import io
@@ -1653,6 +1653,43 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     return GeminiRESTResponse(
         "I am currently receiving high request volume. Your daily macro targets and logs have been safely preserved. Please try asking again in a few moments!"
     )
+
+
+# ---------------- AUDIO TRANSCRIPTION (SPEECH-TO-TEXT) ----------------
+class TranscribeAudioRequest(BaseModel):
+    audio_base64: str
+    mime_type: Optional[str] = "audio/mp4"
+
+
+@app.post("/transcribe-audio")
+def transcribe_audio(data: TranscribeAudioRequest):
+    try:
+        if not data.audio_base64:
+            raise HTTPException(status_code=400, detail="Audio base64 data is required")
+
+        audio_bytes = base64.b64decode(data.audio_base64)
+        mime = data.mime_type or "audio/mp4"
+
+        prompt = (
+            "You are an expert speech-to-text transcriber for a personal health and nutrition assistant named Vita AI. "
+            "Listen to this audio recording carefully and transcribe the user's spoken words verbatim into text. "
+            "The speaker may speak in English, Tagalog, or Cebuano. "
+            "Return ONLY the exact spoken transcription. "
+            "Do NOT include quotation marks, timestamps, introductory text, or explanations. "
+            "If no speech or words can be heard, return an empty string."
+        )
+
+        res = generate_gemini_content(prompt=prompt, image_bytes=audio_bytes, mime_type=mime)
+        text = (res.text or "").strip() if hasattr(res, "text") else str(res).strip()
+        # Clean any accidental wrapping quotes
+        if text.startswith('"') and text.endswith('"'):
+            text = text[1:-1].strip()
+        return {"success": True, "text": text}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("AUDIO TRANSCRIPTION ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------- AI CHATBOT ----------------
