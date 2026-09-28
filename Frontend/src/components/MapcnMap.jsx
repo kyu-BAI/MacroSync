@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
+import cebuBoundaries from '../data/cebu_boundaries.json';
 
 /**
  * MapcnMap
@@ -11,17 +12,19 @@ import { useTheme } from '../context/ThemeContext';
  *   - Immersive 3D Liberty Map (3D building extrusions & 60° tilt)
  *   - Sleek Apple/Google Maps-style [ 2D | 3D ] pill toggle
  *   - MapMarker, MarkerContent, MarkerTooltip, and MarkerPopup
+ *   - Municipality & City Boundary Polygons (with interactive highlights)
  *   - 100% Free & Open-source (Zero API keys required)
  *
  * Props:
  *   center: [lng, lat] or { lat, lng } (default: [123.8854, 10.3157])
  *   zoom: number (default: 9)
  *   markers: Array<{ id, name, title, lat, lng, latitude, longitude, subtitle, desc, active }>
- *   onMarkerPress: (id: string | number) => void
+ *   activeLocation?: string (selected municipality/city name to highlight boundary)
+ *   boundariesGeoJSON?: object (custom GeoJSON boundaries, defaults to all 53 Cebu LGUs)
+ *   onMarkerPress?: (id: string | number) => void
+ *   onSelectLocation?: (name: string) => void
  *   interactive?: boolean (default: true)
  *   showControls?: boolean (default: true)
- *   showDimensionToggle?: boolean (default: true)
- *   defaultDimension?: '2D' | '3D' (default: '2D')
  *   cardContainer?: boolean (default: true)
  *   height?: number | string (default: 260)
  *   style?: object
@@ -30,11 +33,12 @@ export default function MapcnMap({
   center = [123.8854, 10.3157],
   zoom = 9,
   markers = [],
+  activeLocation = '',
+  boundariesGeoJSON = cebuBoundaries,
   onMarkerPress,
+  onSelectLocation,
   interactive = true,
   showControls = true,
-  showDimensionToggle = true,
-  defaultDimension = '2D',
   cardContainer = true,
   height = 260,
   style,
@@ -64,6 +68,19 @@ export default function MapcnMap({
       webViewRef.current.injectJavaScript(script);
     }
   }, [centerCoords[0], centerCoords[1], zoom]);
+
+  // Highlight active boundary polygon and fitBounds when activeLocation changes
+  useEffect(() => {
+    if (webViewRef.current && activeLocation) {
+      const script = `
+        if (typeof applyActiveBoundary === 'function') {
+          applyActiveBoundary(${JSON.stringify(activeLocation)}, true);
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  }, [activeLocation]);
 
   const bgColor = '#F8FAFC';
   const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
@@ -96,155 +113,138 @@ export default function MapcnMap({
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
         }
         #map { width: 100%; height: 100%; }
-
-        /* ── Modern 2D | 3D Segmented Pill Switcher ── */
-        .dimension-pill {
-          position: absolute;
-          top: 10px;
-          left: 10px;
-          z-index: 15;
-          display: ${showDimensionToggle ? 'flex' : 'none'};
-          align-items: center;
-          background: rgba(255, 255, 255, 0.94);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          border: 1px solid rgba(0, 0, 0, 0.1);
-          border-radius: 20px;
-          padding: 3px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-          gap: 2px;
-        }
-        .dim-btn {
-          background: transparent;
-          border: none;
-          color: #64748B;
-          padding: 4px 12px;
-          font-size: 11px;
-          font-weight: 800;
-          border-radius: 16px;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-          outline: none;
-        }
-        .dim-btn.active {
-          background: #10B981;
-          color: #FFFFFF;
-          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.55);
+        #map .maplibregl-canvas {
+          filter: saturate(1.25) contrast(1.05);
         }
 
-        /* ── Map Zoom/Compass Controls ── */
+        /* ── Improved Modern Zoom Controls (+ and -) ── */
+        .maplibregl-ctrl-top-right {
+          top: 12px !important;
+          right: 12px !important;
+        }
         .maplibregl-ctrl-group {
-          background: rgba(255, 255, 255, 0.92) !important;
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 0, 0, 0.08) !important;
-          border-radius: 8px !important;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
-          overflow: hidden;
-          margin: 10px 10px 0 0 !important;
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)'} !important;
+          backdrop-filter: blur(14px) !important;
+          -webkit-backdrop-filter: blur(14px) !important;
+          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'} !important;
+          border-radius: 14px !important;
+          box-shadow: 0 6px 22px rgba(0, 0, 0, ${isDarkMode ? '0.4' : '0.14'}) !important;
+          overflow: hidden !important;
+          margin: 0 !important;
         }
         .maplibregl-ctrl-group button {
-          width: 32px !important;
-          height: 32px !important;
+          width: 38px !important;
+          height: 38px !important;
           border: none !important;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
           background: transparent !important;
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
+          cursor: pointer !important;
+          transition: background 0.15s ease, transform 0.1s ease !important;
+          padding: 0 !important;
         }
-        .maplibregl-ctrl-group button:last-child {
-          border-bottom: none !important;
+        .maplibregl-ctrl-group button:active {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          transform: scale(0.92) !important;
         }
-        .maplibregl-ctrl-icon {
-          opacity: 0.85;
+        .maplibregl-ctrl-group button + button {
+          border-top: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+        }
+        .maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='${isDarkMode ? '%23F8FAFC' : '%230F172A'}' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='5' x2='12' y2='19'%3E%3C/line%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E") !important;
+          background-size: 18px 18px !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          width: 100% !important;
+          height: 100% !important;
+          opacity: 1 !important;
+        }
+        .maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='${isDarkMode ? '%23F8FAFC' : '%230F172A'}' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E") !important;
+          background-size: 18px 18px !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          width: 100% !important;
+          height: 100% !important;
+          opacity: 1 !important;
+        }
+        /* Completely remove compass / reset-bearing button below +- */
+        .maplibregl-ctrl-compass,
+        .mapboxgl-ctrl-compass {
+          display: none !important;
         }
 
-        /* ── MapMarker & MarkerContent ── */
-        .mapcn-marker-wrapper {
+        /* ── Modern MapPin Marker ── */
+        .mapcn-mappin-wrapper {
           display: flex;
           flex-direction: column;
           align-items: center;
           cursor: pointer;
           user-select: none;
+          animation: pinDrop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .mapcn-marker-pin {
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: #10B981;
-          border: 2.5px solid #FFFFFF;
-          box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+        @keyframes pinDrop {
+          0% {
+            opacity: 0;
+            transform: translateY(-22px) scale(0.6);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .mapcn-mappin-pin {
+          width: 34px;
+          height: 42px;
           display: flex;
           align-items: center;
           justify-content: center;
-          position: relative;
-          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease;
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .mapcn-marker-pin.active {
-          background: #059669;
-          transform: scale(1.3);
-          box-shadow: 0 0 16px rgba(16, 185, 129, 0.85);
-          border-color: #6EE7B7;
-        }
-        .mapcn-marker-dot {
-          width: 4px;
-          height: 4px;
-          border-radius: 50%;
-          background: #FFFFFF;
+        .mapcn-mappin-pin:hover {
+          transform: scale(1.1);
         }
 
-        /* ── MarkerTooltip ── */
-        .mapcn-marker-tooltip {
-          margin-top: 3px;
-          background: rgba(255, 255, 255, 0.95);
-          color: #0F172A;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          border-radius: 6px;
-          padding: 2px 6px;
-          font-size: 10px;
-          font-weight: 700;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-          white-space: nowrap;
-          pointer-events: none;
+        /* ── Municipality Name Popup Badge ── */
+        .maplibregl-popup.mapcn-single-popup {
+          z-index: 50;
         }
-
-        /* ── MarkerPopup ── */
-        .maplibregl-popup-content {
+        .maplibregl-popup.mapcn-single-popup .maplibregl-popup-content {
           background: transparent !important;
           box-shadow: none !important;
           padding: 0 !important;
+          border: none !important;
         }
-        .maplibregl-popup-tip {
-          border-top-color: #FFFFFF !important;
+        .maplibregl-popup.mapcn-single-popup .maplibregl-popup-tip {
+          border-top-color: ${isDarkMode ? '#0F172A' : '#FFFFFF'} !important;
+          margin-bottom: -1px;
         }
         .mapcn-popup-card {
-          background: #FFFFFF;
-          color: #0F172A;
-          border: 1px solid rgba(0, 0, 0, 0.1);
-          border-radius: 12px;
-          padding: 10px 14px;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-          min-width: 140px;
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)'};
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
+          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'};
+          border-radius: 9999px;
+          padding: 6px 14px;
+          box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          white-space: nowrap;
+          animation: popupFade 0.25s ease-out;
+        }
+        @keyframes popupFade {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .mapcn-popup-name {
           font-size: 13px;
-          font-weight: 700;
-          color: #0F172A;
-        }
-        .mapcn-popup-coords {
-          font-size: 10px;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          color: #64748B;
-          margin-top: 2px;
-        }
-        .mapcn-popup-desc {
-          font-size: 11px;
-          font-weight: 500;
-          color: #10B981;
-          margin-top: 4px;
+          font-weight: 800;
+          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
+          letter-spacing: -0.2px;
+          line-height: 1.2;
         }
 
         /* ── Hidden Attributions ── */
@@ -258,31 +258,19 @@ export default function MapcnMap({
       </style>
     </head>
     <body>
-      <!-- 2D | 3D Segmented Pill Switcher -->
-      <div class="dimension-pill">
-        <button class="dim-btn ${defaultDimension === '2D' ? 'active' : ''}" id="btn-2d">2D</button>
-        <button class="dim-btn ${defaultDimension === '3D' ? 'active' : ''}" id="btn-3d">3D</button>
-      </div>
-
       <div id="map"></div>
 
       <script>
-        // OpenFreeMap: Bright (2D colorful) & Liberty (3D buildings)
-        var STYLES = {
-          '2D': 'https://tiles.openfreemap.org/styles/bright',
-          '3D': 'https://tiles.openfreemap.org/styles/liberty'
-        };
-
-        var currentDim = "${defaultDimension}";
-        var isInitial3D = currentDim === '3D';
+        // Map Style: CARTO Voyager (Light) / Dark Matter (Dark)
+        var mapStyle = ${isDarkMode ? "'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'" : "'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'"};
 
         var map = new maplibregl.Map({
           container: 'map',
-          style: STYLES[currentDim] || STYLES['2D'],
+          style: mapStyle,
           center: ${JSON.stringify(centerCoords)},
           zoom: ${zoom},
-          pitch: isInitial3D ? 60 : 0,
-          bearing: isInitial3D ? -15 : 0,
+          pitch: 0,
+          bearing: 0,
           interactive: ${interactive},
           attributionControl: false
         });
@@ -290,96 +278,380 @@ export default function MapcnMap({
 
         if (${showControls}) {
           map.addControl(new maplibregl.NavigationControl({
-            showCompass: true,
+            showCompass: false,
             showZoom: true,
-            visualizePitch: true
+            visualizePitch: false
           }), 'top-right');
         }
 
-        // Render MapMarkers, Tooltips & Popups
-        var markersData = ${JSON.stringify(formattedMarkers)};
-        var markerInstances = [];
+        // Enrich map colors: deepen water, lush green parks, crisp high-contrast roads, and remove pale look
+        function enhanceMapColors() {
+          try {
+            var layers = map.getStyle().layers || [];
 
-        function renderMarkers() {
-          markerInstances.forEach(function(inst) { inst.remove(); });
-          markerInstances = [];
-
-          markersData.forEach(function(m) {
-            // MarkerContent + MarkerTooltip
-            var el = document.createElement('div');
-            el.className = 'mapcn-marker-wrapper';
-            el.innerHTML = [
-              '<div class="mapcn-marker-pin' + (m.active ? ' active' : '') + '">',
-                '<div class="mapcn-marker-dot"></div>',
-              '</div>',
-              '<div class="mapcn-marker-tooltip">' + m.name + '</div>'
-            ].join('');
-
-            // MarkerPopup
-            var popupContent = [
-              '<div class="mapcn-popup-card">',
-                '<div class="mapcn-popup-name">' + m.name + '</div>',
-                '<div class="mapcn-popup-coords">' + m.lat.toFixed(4) + ', ' + m.lng.toFixed(4) + '</div>',
-                (m.subtitle ? '<div class="mapcn-popup-desc">' + m.subtitle + '</div>' : ''),
-              '</div>'
-            ].join('');
-
-            var popup = new maplibregl.Popup({
-              offset: 24,
-              closeButton: false,
-              closeOnClick: true
-            }).setHTML(popupContent);
-
-            el.addEventListener('click', function(e) {
-              e.stopPropagation();
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ 
-                  type: 'MARKER_CLICK', 
-                  id: m.id,
-                  name: m.name
-                }));
+            // 1. Enrich Water: replace washed out pale grayish blue with rich vibrant azure
+            var waterLayers = ['water', 'water-intermittent'];
+            waterLayers.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'fill-color', '#38BDF8');
+                map.setPaintProperty(id, 'fill-opacity', 0.95);
               }
             });
 
-            var inst = new maplibregl.Marker({ element: el })
-              .setLngLat([m.lng, m.lat])
-              .setPopup(popup)
-              .addTo(map);
+            var waterwayLayers = [
+              'waterway-river', 'waterway-stream-canal', 'waterway-other', 
+              'waterway_river', 'waterway_other', 'waterway_tunnel'
+            ];
+            waterwayLayers.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'line-color', '#0284C7');
+              }
+            });
 
-            markerInstances.push(inst);
-          });
-        }
+            // 2. Enrich Greenery & Parks: replace washed out pale olive with rich vibrant emerald
+            var parkLayers = ['park', 'landcover-grass', 'landcover-grass-park', 'landcover_grass', 'park_outline'];
+            parkLayers.forEach(function(id) {
+              if (map.getLayer(id)) {
+                if (map.getLayer(id).type === 'fill') {
+                  map.setPaintProperty(id, 'fill-color', '#86EFAC');
+                  map.setPaintProperty(id, 'fill-opacity', 0.65);
+                } else if (map.getLayer(id).type === 'line') {
+                  map.setPaintProperty(id, 'line-color', '#4ADE80');
+                }
+              }
+            });
 
-        map.on('style.load', function() {
-          renderMarkers();
-        });
-        renderMarkers();
+            var woodLayers = ['landcover-wood', 'landcover_wood'];
+            woodLayers.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'fill-color', '#4ADE80');
+                map.setPaintProperty(id, 'fill-opacity', 0.55);
+              }
+            });
 
-        // Handle 2D | 3D Pill Toggle
-        var btn2D = document.getElementById('btn-2d');
-        var btn3D = document.getElementById('btn-3d');
+            // 3. Clean Modern Canvas: replace dull grayish beige with clean modern slate canvas
+            if (map.getLayer('background')) {
+              map.setPaintProperty('background', 'background-color', '#F1F5F9');
+            }
 
-        function setDimension(dim) {
-          if (currentDim === dim) return;
-          currentDim = dim;
+            // 4. Roads: Remove Yellow Traffic Colors & Ensure Crisp High-Contrast White Roads
+            var yellowStreetLayerIds = [
+              'highway-primary', 'highway-trunk', 'highway-secondary-tertiary', 'highway-link',
+              'highway-motorway', 'highway-motorway-link',
+              'road_trunk_primary', 'road_secondary_tertiary', 'road_link',
+              'road_motorway', 'road_motorway_link',
+              'tunnel-secondary-tertiary', 'tunnel-trunk-primary', 'tunnel-link',
+              'tunnel-motorway', 'tunnel-motorway-link',
+              'tunnel_secondary_tertiary', 'tunnel_trunk_primary', 'tunnel_link',
+              'tunnel_motorway', 'tunnel_motorway_link',
+              'bridge-secondary-tertiary', 'bridge-trunk-primary', 'bridge-link',
+              'bridge-motorway', 'bridge-motorway-link',
+              'bridge_secondary_tertiary', 'bridge_trunk_primary', 'bridge_link',
+              'bridge_motorway', 'bridge_motorway_link'
+            ];
 
-          if (dim === '3D') {
-            btn3D.classList.add('active');
-            btn2D.classList.remove('active');
-            map.easeTo({ pitch: 60, bearing: -15, duration: 750 });
-            map.setStyle(STYLES['3D']);
-          } else {
-            btn2D.classList.add('active');
-            btn3D.classList.remove('active');
-            map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
-            map.setStyle(STYLES['2D']);
+            // Casing layers: give them crisp modern slate outlines so roads pop with clarity
+            var yellowCasingLayerIds = [
+              'highway-primary-casing', 'highway-trunk-casing', 'highway-secondary-tertiary-casing',
+              'highway-motorway-casing', 'highway-motorway-link-casing', 'highway-link-casing',
+              'road_trunk_primary_casing', 'road_secondary_tertiary_casing', 'road_motorway_casing',
+              'road_motorway_link_casing', 'road_link_casing',
+              'tunnel-primary-casing', 'tunnel-trunk-primary-casing', 'tunnel-secondary-tertiary-casing',
+              'tunnel-motorway-casing', 'tunnel-motorway-link-casing', 'tunnel-link-casing',
+              'tunnel_trunk_primary_casing', 'tunnel_secondary_tertiary_casing', 'tunnel_motorway_casing',
+              'tunnel_motorway_link_casing', 'tunnel_link_casing',
+              'bridge-trunk-primary-casing', 'bridge-secondary-tertiary-casing', 'bridge-motorway-casing',
+              'bridge-motorway-link-casing', 'bridge-link-casing',
+              'bridge_trunk_primary_casing', 'bridge_secondary_tertiary_casing', 'bridge_motorway_casing',
+              'bridge_motorway_link_casing', 'bridge_link_casing'
+            ];
+
+            // Pure clean crisp white road surface
+            yellowStreetLayerIds.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'line-color', '#FFFFFF');
+              }
+            });
+
+            // Crisp defined road border casing
+            yellowCasingLayerIds.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'line-color', '#94A3B8');
+              }
+            });
+
+            // Minor streets casing
+            var minorCasingIds = ['highway-minor-casing', 'road_minor_casing', 'tunnel-minor-casing', 'bridge-minor-casing'];
+            minorCasingIds.forEach(function(id) {
+              if (map.getLayer(id)) {
+                map.setPaintProperty(id, 'line-color', '#CBD5E1');
+              }
+            });
+
+            // Scan any remaining transportation line layers with yellow/orange
+            layers.forEach(function(l) {
+              if (l.type === 'line' && (l['source-layer'] === 'transportation')) {
+                var color = map.getPaintProperty(l.id, 'line-color');
+                if (typeof color === 'string') {
+                  var c = color.toLowerCase();
+                  if (c === '#fea' || c === '#fff4c6' || c === '#ffdaa6' || c === '#fc8' || c.indexOf('hsl(26') !== -1 || c.indexOf('hsl(28') !== -1) {
+                    map.setPaintProperty(l.id, 'line-color', '#FFFFFF');
+                  } else if (c === '#e9ac77') {
+                    map.setPaintProperty(l.id, 'line-color', '#94A3B8');
+                  }
+                }
+              }
+            });
+          } catch(err) {
+            console.warn('Error enhancing map colors:', err);
           }
         }
 
-        if (btn2D && btn3D) {
-          btn2D.addEventListener('click', function() { setDimension('2D'); });
-          btn3D.addEventListener('click', function() { setDimension('3D'); });
+        // ── Single Active Municipality <MapPin /> & Popup ──
+        var markersData = ${JSON.stringify(formattedMarkers)};
+        var activePinMarker = null;
+
+        function showActivePin(municipalityName, lngLat) {
+          if (!municipalityName || !lngLat) return;
+
+          if (activePinMarker) {
+            try { activePinMarker.remove(); } catch(_) {}
+            activePinMarker = null;
+          }
+
+          var el = document.createElement('div');
+          el.className = 'mapcn-mappin-wrapper';
+          el.innerHTML = [
+            '<div class="mapcn-mappin-pin">',
+              '<svg width="34" height="42" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
+                '<defs>',
+                  '<filter id="pinShadow" x="-30%" y="-15%" width="160%" height="160%">',
+                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.5" flood-color="rgba(0,0,0,0.38)"/>',
+                  '</filter>',
+                '</defs>',
+                '<path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" fill="#10B981" stroke="#065F46" stroke-width="1.2" filter="url(#pinShadow)"/>',
+                '<circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>',
+              '</svg>',
+            '</div>'
+          ].join('');
+
+          var popupContent = [
+            '<div class="mapcn-popup-card">',
+              '<div class="mapcn-popup-name">' + municipalityName + '</div>',
+            '</div>'
+          ].join('');
+
+          var popup = new maplibregl.Popup({
+            offset: [0, -38],
+            closeButton: false,
+            closeOnClick: false,
+            className: 'mapcn-single-popup'
+          }).setHTML(popupContent);
+
+          activePinMarker = new maplibregl.Marker({ 
+            element: el,
+            anchor: 'bottom'
+          })
+            .setLngLat(lngLat)
+            .setPopup(popup)
+            .addTo(map);
+
+          // Automatically toggle popup open with municipality name
+          if (activePinMarker.getPopup && !activePinMarker.getPopup().isOpen()) {
+            activePinMarker.togglePopup();
+          }
+
+          el.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (activePinMarker && activePinMarker.getPopup() && !activePinMarker.getPopup().isOpen()) {
+              activePinMarker.togglePopup();
+            }
+          });
         }
+
+        function renderMarkers() {
+          if (currentActiveLocation) {
+            applyActiveBoundary(currentActiveLocation, false);
+          }
+        }
+
+        // ── Cebu Municipality & City Boundary Polygons ──
+        var boundariesData = ${JSON.stringify(boundariesGeoJSON || null)};
+        var currentActiveLocation = ${JSON.stringify(activeLocation || '')};
+
+        function initBoundaries() {
+          if (!boundariesData) return;
+          try {
+            if (!map.getSource('cebu-boundaries')) {
+              map.addSource('cebu-boundaries', {
+                type: 'geojson',
+                data: boundariesData
+              });
+            }
+
+            // 1. All boundaries invisible fill (purely for click/touch detection)
+            if (!map.getLayer('cebu-boundaries-all-fill')) {
+              map.addLayer({
+                id: 'cebu-boundaries-all-fill',
+                type: 'fill',
+                source: 'cebu-boundaries',
+                paint: {
+                  'fill-color': '#000000',
+                  'fill-opacity': 0.00001
+                }
+              });
+            }
+
+            // 2. Highlighted active municipality fill (ONLY shown when pressed or located)
+            if (!map.getLayer('cebu-boundary-active-fill')) {
+              map.addLayer({
+                id: 'cebu-boundary-active-fill',
+                type: 'fill',
+                source: 'cebu-boundaries',
+                filter: ['==', ['get', 'name'], currentActiveLocation || '___NONE___'],
+                paint: {
+                  'fill-color': '#10B981',
+                  'fill-opacity': 0.22
+                }
+              });
+            }
+
+            // 3. Highlighted active municipality border (ONLY shown when pressed or located)
+            if (!map.getLayer('cebu-boundary-active-line')) {
+              map.addLayer({
+                id: 'cebu-boundary-active-line',
+                type: 'line',
+                source: 'cebu-boundaries',
+                filter: ['==', ['get', 'name'], currentActiveLocation || '___NONE___'],
+                paint: {
+                  'line-color': '#059669',
+                  'line-width': 2.8,
+                  'line-opacity': 0.95
+                }
+              });
+            }
+
+            // Click listener on polygon fill
+            map.on('click', 'cebu-boundaries-all-fill', function(e) {
+              if (e.features && e.features.length > 0) {
+                var clickedFeat = e.features[0];
+                var clickedName = clickedFeat.properties.name;
+                if (clickedName) {
+                  applyActiveBoundary(clickedName, true);
+                  if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'BOUNDARY_CLICK',
+                      name: clickedName
+                    }));
+                  }
+                }
+              }
+            });
+
+            // Canvas click fallback
+            map.on('click', function(e) {
+              var features = map.queryRenderedFeatures(e.point, { layers: ['cebu-boundaries-all-fill'] });
+              if (features && features.length > 0) {
+                var clickedName = features[0].properties.name;
+                if (clickedName) {
+                  applyActiveBoundary(clickedName, true);
+                  if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'BOUNDARY_CLICK',
+                      name: clickedName
+                    }));
+                  }
+                }
+              }
+            });
+
+            // Pointer cursor on hover over municipality
+            map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
+              map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
+              map.getCanvas().style.cursor = '';
+            });
+          } catch(err) {
+            console.warn('Error initializing boundaries:', err);
+          }
+        }
+
+        function applyActiveBoundary(name, shouldFly) {
+          if (!name) return;
+          currentActiveLocation = name;
+          try {
+            var matchedName = name;
+            var pinLng = null;
+            var pinLat = null;
+
+            if (boundariesData && boundariesData.features) {
+              var target = boundariesData.features.find(function(f) {
+                return f.properties && (
+                  f.properties.name === name ||
+                  f.properties.original_name === name ||
+                  (f.properties.name && name && f.properties.name.toLowerCase() === name.toLowerCase()) ||
+                  (f.properties.original_name && name && f.properties.original_name.toLowerCase() === name.toLowerCase())
+                );
+              });
+              if (target && target.properties) {
+                matchedName = target.properties.name;
+                if (target.properties.bbox) {
+                  var bb = target.properties.bbox;
+                  pinLng = (bb[0] + bb[2]) / 2;
+                  pinLat = (bb[1] + bb[3]) / 2;
+                  if (shouldFly) {
+                    map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], {
+                      padding: { top: 40, bottom: 40, left: 30, right: 30 },
+                      maxZoom: 13,
+                      duration: 850
+                    });
+                  }
+                }
+              }
+            }
+
+            // Coordinates from markersData if available
+            if (markersData && markersData.length > 0) {
+              var found = markersData.find(function(m) {
+                return m.name && (
+                  m.name.toLowerCase() === matchedName.toLowerCase() ||
+                  m.name.toLowerCase().includes(matchedName.toLowerCase()) ||
+                  matchedName.toLowerCase().includes(m.name.toLowerCase())
+                );
+              });
+              if (found && found.lng && found.lat) {
+                pinLng = found.lng;
+                pinLat = found.lat;
+              }
+            }
+
+            if (map.getLayer('cebu-boundary-active-fill')) {
+              map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], matchedName]);
+            }
+            if (map.getLayer('cebu-boundary-active-line')) {
+              map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], matchedName]);
+            }
+
+            // Show single <MapPin /> and popup for active municipality
+            if (pinLng !== null && pinLat !== null) {
+              showActivePin(matchedName, [pinLng, pinLat]);
+            }
+          } catch(err) {
+            console.warn('Error applying active boundary:', err);
+          }
+        }
+
+        window.applyActiveBoundary = applyActiveBoundary;
+
+        map.on('style.load', function() {
+          enhanceMapColors();
+          initBoundaries();
+          if (currentActiveLocation) {
+            applyActiveBoundary(currentActiveLocation, true);
+          }
+        });
+
       </script>
     </body>
     </html>
@@ -388,8 +660,13 @@ export default function MapcnMap({
   const handleMessage = (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'MARKER_CLICK' && onMarkerPress) {
-        onMarkerPress(data.id ?? data.name);
+      if (data.type === 'MARKER_CLICK') {
+        const target = data.name || data.id;
+        if (onMarkerPress) onMarkerPress(target);
+        if (onSelectLocation) onSelectLocation(target);
+      } else if (data.type === 'BOUNDARY_CLICK') {
+        if (onMarkerPress) onMarkerPress(data.name);
+        if (onSelectLocation) onSelectLocation(data.name);
       }
     } catch (err) {
       if (onMarkerPress) {

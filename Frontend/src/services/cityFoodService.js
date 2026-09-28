@@ -117,11 +117,6 @@ export async function getAllCityMarkers() {
     console.warn('[CityFoodService] Failed to load markers:', err.message);
   }
 
-  // Fallback: build markers from static data
-  return Object.entries(STATIC_FALLBACK).map(([name, profile]) => ({
-    city_name: name,
-    lat: profile.lat,
-    lng: profile.lng,
-    specialty: profile.specialty || profile.famousDishes?.[0]?.name || '',
-  }));
+  // Fallback: return empty array so no default city markers pop up
+  return [];
 }

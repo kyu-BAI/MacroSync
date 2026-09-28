@@ -17,8 +17,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCustomAlert } from '../../context/CustomAlertContext';
 import { useTheme } from '../../context/ThemeContext';
+import PrivacyPolicyModal from '../../components/PrivacyPolicyModal';
 import { getStyles, ITEM_HEIGHT, baseColor, logoGreen } from './StepThreeScreen.styles';
 
 export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
@@ -30,6 +32,14 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
   const [isLoading, setIsLoading] = useState(false);
   const [customAllergy, setCustomAllergy] = useState('');
   const [selectedAllergies, setSelectedAllergies] = useState([]);
+
+  // Medical Screening States
+  const [selectedConditions, setSelectedConditions] = useState(['none']);
+  const [customCondition, setCustomCondition] = useState('');
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [privacyInitialTab, setPrivacyInitialTab] = useState('medical');
+  const [compiledConditionsText, setCompiledConditionsText] = useState('');
 
   // Address Selector States
   const [province, setProvince] = useState(null);
@@ -55,6 +65,32 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
     { id: 'gluten', title: 'Gluten' },
     { id: 'nuts', title: 'Tree Nuts' }
   ];
+
+  const presetMedicalConditions = [
+    { id: 'diabetes', title: 'Diabetes (Type 1/2)' },
+    { id: 'eating_disorder', title: 'Eating Disorder' },
+    { id: 'hypertension', title: 'Hypertension' },
+    { id: 'renal', title: 'Kidney / Renal Issue' },
+    { id: 'fatty_liver', title: 'Fatty Liver' },
+    { id: 'gerd', title: 'Acid Reflux / GERD' },
+    { id: 'gout', title: 'Gout / Uric Acid' },
+    { id: 'none', title: 'None / Healthy' }
+  ];
+
+  const toggleCondition = (id) => {
+    if (id === 'none') {
+      setSelectedConditions(['none']);
+      return;
+    }
+    let updated = selectedConditions.filter(item => item !== 'none');
+    if (updated.includes(id)) {
+      updated = updated.filter(item => item !== id);
+      if (updated.length === 0) updated = ['none'];
+    } else {
+      updated.push(id);
+    }
+    setSelectedConditions(updated);
+  };
 
   // References for layout tracking
   const flatListRef = useRef(null);
@@ -224,12 +260,37 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
       return;
     }
 
+    const trimmedCustomCondition = customCondition.trim();
+    if (trimmedCustomCondition && trimmedCustomCondition.length < 2) {
+      triggerCustomError(
+        "Invalid Condition Name",
+        "Please enter a valid condition name or clear the custom field."
+      );
+      return;
+    }
+
+    if (!disclaimerAccepted) {
+      triggerCustomError(
+        "Medical Disclaimer Required",
+        "Please review and check the Medical Disclaimer acknowledgment below before completing your set up."
+      );
+      return;
+    }
+
     const compiledAddressString = `${city.name}, ${province.name}`;
     const activeAllergies = [...selectedAllergies.map(id => presetAllergens.find(p => p.id === id).title)];
     if (trimmedCustomAllergy) activeAllergies.push(trimmedCustomAllergy);
 
+    const activeConditions = selectedConditions.includes('none') && !trimmedCustomCondition
+      ? ["None declared (Healthy)"]
+      : [
+          ...selectedConditions.filter(id => id !== 'none').map(id => presetMedicalConditions.find(p => p.id === id)?.title || id),
+          ...(trimmedCustomCondition ? [trimmedCustomCondition] : [])
+        ];
+
     setCompiledAddress(compiledAddressString);
     setCompiledAllergiesText(activeAllergies.length === 0 ? "No allergies specified" : activeAllergies.join(', '));
+    setCompiledConditionsText(activeConditions.join(', '));
     setConfirmVisible(true);
   };
 
@@ -237,17 +298,32 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
     setConfirmVisible(false);
     setIsLoading(true);
     try {
-      await onSubmit?.({
+      const activeConditionsList = selectedConditions.includes('none') && !customCondition.trim()
+        ? []
+        : [
+            ...selectedConditions.filter(id => id !== 'none').map(id => presetMedicalConditions.find(p => p.id === id)?.title || id),
+            ...(customCondition.trim() ? [customCondition.trim()] : [])
+          ];
+
+      const stepThreePayload = {
         address: compiledAddress,
         structuredLocation: {
           province: province.name,
           city: city.name
         },
+        city: city.name,
         allergies: [
           ...selectedAllergies.map(id => presetAllergens.find(p => p.id === id)?.title || id),
           ...(customAllergy.trim() ? [customAllergy.trim()] : [])
-        ]
-      });
+        ],
+        medical_conditions: activeConditionsList,
+        medicalConditions: activeConditionsList,
+        disclaimer_accepted: true
+      };
+      try {
+        await AsyncStorage.setItem('@ms_onboarding_data', JSON.stringify(stepThreePayload));
+      } catch (_) {}
+      await onSubmit?.(stepThreePayload);
     } catch (err) {
       console.log(err);
     } finally {
@@ -353,6 +429,100 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
               </View>
             </View>
 
+            {/* HEALTH SCREENING & MEDICAL CONDITIONS */}
+            <Text style={[styles.sectionInputLabel, { marginTop: 18 }]}>Health Screening & Clinical Notice</Text>
+            
+            <View style={styles.medicalNoticeBox}>
+              <View style={styles.medicalNoticeHeader}>
+                <Ionicons name="medical-outline" size={16} color="#B45309" />
+                <Text style={styles.medicalNoticeTitle}>Pre-Existing Health Screening</Text>
+              </View>
+              <Text style={styles.medicalNoticeSubtitle}>
+                MacroSync is an educational wellness tool. Users with diabetes, eating disorders, or chronic conditions should consult a healthcare professional rather than relying solely on automated advice.
+              </Text>
+            </View>
+
+            <Text style={styles.inputLabel}>Select Any Known Medical Conditions</Text>
+            <View style={styles.chipGrid}>
+              {presetMedicalConditions.map((condition) => {
+                const isSelected = selectedConditions.includes(condition.id);
+                const isNone = condition.id === 'none';
+                return (
+                  <TouchableOpacity
+                    key={condition.id}
+                    activeOpacity={0.8}
+                    disabled={isLoading || isLoadingExternal}
+                    onPress={() => toggleCondition(condition.id)}
+                    style={[
+                      styles.chip,
+                      isSelected
+                        ? isNone
+                          ? styles.medicalChipActiveNone
+                          : styles.medicalChipActive
+                        : styles.medicalChipInactive
+                    ]}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                      {condition.title}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name={isNone ? "checkmark-circle" : "close-circle"}
+                        size={14}
+                        color="#FFFFFF"
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Other Medical Condition / Illness</Text>
+              <View style={styles.flatInputField}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., PCOS, Thyroid, Fatty Liver (Optional)"
+                  placeholderTextColor="#94A3B8"
+                  value={customCondition}
+                  onChangeText={setCustomCondition}
+                  autoCorrect={true}
+                  editable={!isLoading && !isLoadingExternal}
+                />
+              </View>
+            </View>
+
+            {/* MANDATORY DISCLAIMER CHECKBOX & PRIVACY POLICY TRIGGER */}
+            <View style={styles.disclaimerAgreementBox}>
+              <TouchableOpacity
+                style={styles.disclaimerAgreementRow}
+                activeOpacity={0.7}
+                onPress={() => setDisclaimerAccepted(!disclaimerAccepted)}
+              >
+                <View style={[styles.disclaimerCheckbox, disclaimerAccepted && styles.disclaimerCheckboxActive]}>
+                  {disclaimerAccepted && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
+                <Text style={styles.disclaimerAgreementText}>
+                  I acknowledge that MacroSync provides nutritional & workout tracking for general wellness only and does not replace licensed medical diagnosis or clinical treatment.
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.disclaimerLinkButton}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setPrivacyInitialTab('medical');
+                  setPrivacyModalVisible(true);
+                }}
+              >
+                <Text style={styles.disclaimerLinkText}>
+                  Read Medical Disclaimer & Privacy Policy (RA 10173)
+                </Text>
+                <Ionicons name="open-outline" size={13} color={logoGreen} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View>
+
           </View>
         </ScrollView>
 
@@ -444,6 +614,13 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
               <Text style={[styles.confirmDataValue, compiledAllergiesText.includes("No") ? { color: '#94A3B8' } : { color: '#64748B' }]}>
                 {compiledAllergiesText}
               </Text>
+
+              <View style={styles.confirmDivider} />
+
+              <Text style={styles.confirmDataLabel}>Health & Medical Screening</Text>
+              <Text style={[styles.confirmDataValue, compiledConditionsText.includes("None") ? { color: '#94A3B8' } : { color: '#D97706' }]}>
+                {compiledConditionsText}
+              </Text>
             </View>
 
             <View style={styles.confirmActionRow}>
@@ -468,7 +645,12 @@ const PHILIPPINE_PROVINCES_FALLBACK = [
         </View>
       </Modal>
 
-
+      {/* PRIVACY POLICY & CLINICAL SCOPE MODAL */}
+      <PrivacyPolicyModal
+        visible={privacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+        initialTab={privacyInitialTab}
+      />
 
     </SafeAreaView>
   );

@@ -363,4 +363,91 @@ export const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
+
+  // --- HEALTH & MEDICAL SCREENING STYLES ---
+  medicalNoticeBox: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderWidth: 1.2,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  medicalNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  medicalNoticeTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#B45309',
+    marginLeft: 6,
+  },
+  medicalNoticeSubtitle: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  medicalChipInactive: {
+    backgroundColor: theme?.surface || baseColor,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  medicalChipActive: {
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
+  },
+  medicalChipActiveNone: {
+    backgroundColor: logoGreen,
+    borderColor: logoGreen,
+  },
+  disclaimerAgreementBox: {
+    backgroundColor: theme?.inputBg || '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    padding: 14,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  disclaimerAgreementRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  disclaimerCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: theme?.border || '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    marginTop: 2,
+    marginRight: 10,
+  },
+  disclaimerCheckboxActive: {
+    backgroundColor: logoGreen,
+    borderColor: logoGreen,
+  },
+  disclaimerAgreementText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme?.textPrimary || '#334155',
+    lineHeight: 17,
+  },
+  disclaimerLinkButton: {
+    marginTop: 8,
+    marginLeft: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  disclaimerLinkText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: logoGreen,
+    textDecorationLine: 'underline',
+  },
 });

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../config/api';
 import { clearDashboardCache } from '../../services/OfflineStorage';
 
@@ -95,6 +96,7 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
           weight_unit: pData.weightUnit || "kg",
           starting_weight: parseFloat(pData.startingWeight) || parseFloat(pData.weight) || 70,
           allergies: pData.allergies || [],
+          medical_conditions: pData.medical_conditions || pData.medicalConditions || [],
           address: pData.address || "",
           structured_location: pData.structuredLocation || {}
         };
@@ -118,6 +120,9 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
 
         // Wipe any stale pre-onboarding cache from AsyncStorage
         await clearDashboardCache();
+        try {
+          await AsyncStorage.setItem('@ms_onboarding_data', JSON.stringify(profileData));
+        } catch (_) {}
 
         setTimeout(() => {
           if (onComplete) onComplete(profileData);
@@ -126,6 +131,9 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
       } catch (err) {
         console.log("Error saving onboarding data:", err);
         await clearDashboardCache();
+        try {
+          await AsyncStorage.setItem('@ms_onboarding_data', JSON.stringify(profileData));
+        } catch (_) {}
         // Fallback progress
         setTimeout(() => {
           if (onComplete) onComplete(profileData);

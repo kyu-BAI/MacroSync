@@ -36,9 +36,11 @@ import {
   Maximize2,
   X,
   RotateCcw,
+  Home,
 } from "lucide-react-native";
 import API_URL from "../config/api";
 import { getCityFoodProfile, getAllCityMarkers } from "../../services/cityFoodService";
+import * as Location from 'expo-location';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   addToSyncQueue,
@@ -74,6 +76,115 @@ const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
 
 const memoryDailyPlanCache = {};
 
+// All 53 Cebu LGUs: 9 cities + 44 municipalities
+const CEBU_LOCATIONS = [
+  // === CITIES ===
+  'Cebu City',
+  'Lapu-Lapu City',
+  'Mandaue City',
+  'Talisay City',
+  'Carcar City',
+  'Bogo City',
+  'Danao City',
+  'Naga City',
+  'Toledo City',
+  // === MUNICIPALITIES (Cebu mainland) ===
+  'Alcantara',
+  'Alcoy',
+  'Alegria',
+  'Aloguinsan',
+  'Argao',
+  'Asturias',
+  'Badian',
+  'Balamban',
+  'Barili',
+  'Boljoon',
+  'Borbon',
+  'Carmen',
+  'Catmon',
+  'Compostela',
+  'Consolacion',
+  'Cordova',
+  'Daanbantayan',
+  'Dalaguete',
+  'Dumanjug',
+  'Ginatilan',
+  'Liloan',
+  'Malabuyoc',
+  'Medellin',
+  'Minglanilla',
+  'Moalboal',
+  'Oslob',
+  'Pinamungajan',
+  'Ronda',
+  'Samboan',
+  'San Fernando',
+  'San Remigio',
+  'Santander',
+  'Sibonga',
+  'Sogod',
+  'Tabogon',
+  'Tabuelan',
+  'Tuburan',
+  // === BANTAYAN ISLAND GROUP ===
+  'Bantayan',
+  'Madridejos',
+  'Santa Fe',
+  // === CAMOTES ISLANDS GROUP ===
+  'San Francisco (Camotes)',
+  'Pilar (Camotes)',
+  'Poro (Camotes)',
+  'Tudela (Camotes)',
+];
+
+/**
+ * Normalizes any town/city string from onboarding or reverse geocoding to the canonical CEBU_LOCATIONS name.
+ * Handles prefixes ("City of", "Municipality of"), suffixes ("City"), subregions, and island groupings.
+ */
+export const normalizeToCebuLGU = (rawName) => {
+  if (!rawName || typeof rawName !== 'string') return null;
+  const clean = rawName
+    .replace(/^city of\s+/i, '')
+    .replace(/\s+city$/i, '')
+    .replace(/^municipality of\s+/i, '')
+    .replace(/,\s*cebu.*$/i, '')
+    .trim()
+    .toLowerCase();
+
+  if (!clean) return null;
+
+  // 1. Direct match against canonical CEBU_LOCATIONS
+  for (const loc of CEBU_LOCATIONS) {
+    const locClean = loc
+      .replace(/\s*\(camotes\)/i, '')
+      .replace(/\s+city$/i, '')
+      .trim()
+      .toLowerCase();
+
+    if (clean === locClean || clean === loc.toLowerCase()) {
+      return loc;
+    }
+  }
+
+  // 2. Special aliases & colloquial variants
+  if (clean === 'lapu lapu' || clean === 'lapulapu') return 'Lapu-Lapu City';
+  if (clean === 'sta fe' || clean === 'sta. fe') return 'Santa Fe';
+  if (clean === 'cebu') return 'Cebu City';
+  if (clean === 'san francisco') return 'San Francisco (Camotes)';
+  if (clean === 'pilar') return 'Pilar (Camotes)';
+  if (clean === 'poro') return 'Poro (Camotes)';
+  if (clean === 'tudela') return 'Tudela (Camotes)';
+
+  // 3. Substring / fuzzy match
+  const found = CEBU_LOCATIONS.find((loc) => {
+    const l = loc.toLowerCase();
+    const lClean = l.replace(/\s*\(camotes\)/i, '').replace(/\s+city$/i, '').trim();
+    return l.includes(clean) || clean.includes(lClean);
+  });
+
+  return found || null;
+};
+
 export default function DietRecipesScreen({ 
   onTabChange, 
   dailyNutrition, 
@@ -88,7 +199,8 @@ export default function DietRecipesScreen({
   setSessionDailyPlan,
   userId,
   isOnline = true,
-  setNotifications
+  setNotifications,
+  userProfile
 }) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
@@ -97,6 +209,21 @@ export default function DietRecipesScreen({
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
+
+  // Derive initial hometown synchronously from userProfile prop if already loaded
+  const initialHometown = React.useMemo(() => {
+    const raw = 
+      userProfile?.structuredLocation?.city || 
+      userProfile?.city || 
+      userProfile?.address ||
+      userProfile?.structured_location?.city;
+    return normalizeToCebuLGU(raw);
+  }, [userProfile]);
+
+  const [userHometown, setUserHometown] = useState(initialHometown || null);
+  const [selectedLocation, setSelectedLocation] = useState(initialHometown || null);
+  const [userAllergies, setUserAllergies] = useState(userProfile?.allergies || []);
+  const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
 
   const recipeCacheRef = React.useRef({});
 
@@ -170,37 +297,77 @@ export default function DietRecipesScreen({
       return () => clearTimeout(timer);
     }
   }, [sessionRecipes, userId]);
-  const [userAllergies, setUserAllergies] = useState([]);
 
   useEffect(() => {
-    const loadUserAllergies = async () => {
+    const loadUserDataAndLocation = async () => {
       try {
-        const storedProfile = await AsyncStorage.getItem('ms_user_profile');
+        let parsedProfile = null;
+        let parsedOnb = null;
+        let parsedCache = null;
+
+        const storedProfile = (await AsyncStorage.getItem('ms_user_profile')) || (await AsyncStorage.getItem('@ms_user_profile'));
         if (storedProfile) {
-          const parsed = JSON.parse(storedProfile);
-          if (Array.isArray(parsed.allergies) && parsed.allergies.length > 0) {
-            setUserAllergies(parsed.allergies);
-            return;
-          }
+          try { parsedProfile = JSON.parse(storedProfile); } catch (_) {}
         }
         const onboardingData = await AsyncStorage.getItem('@ms_onboarding_data');
         if (onboardingData) {
-          const parsedOnb = JSON.parse(onboardingData);
-          if (Array.isArray(parsedOnb.allergies) && parsedOnb.allergies.length > 0) {
-            setUserAllergies(parsedOnb.allergies);
-            return;
-          }
+          try { parsedOnb = JSON.parse(onboardingData); } catch (_) {}
+        }
+        const dashboardCache = await AsyncStorage.getItem('ms_dashboard_cache');
+        if (dashboardCache) {
+          try { parsedCache = JSON.parse(dashboardCache)?.data; } catch (_) {}
+        }
+
+        // 1. Allergies
+        const allergies = 
+          userProfile?.allergies || 
+          parsedProfile?.allergies || 
+          parsedOnb?.allergies || 
+          parsedCache?.profile?.allergies;
+        if (Array.isArray(allergies) && allergies.length > 0) {
+          setUserAllergies(allergies);
+        }
+
+        // 2. Hometown from Onboarding Step 3
+        const candidateTown = 
+          userProfile?.structuredLocation?.city || 
+          userProfile?.city || 
+          userProfile?.address ||
+          userProfile?.structured_location?.city ||
+          parsedOnb?.structuredLocation?.city || 
+          parsedOnb?.structured_location?.city || 
+          parsedOnb?.city || 
+          parsedOnb?.address ||
+          parsedCache?.profile?.structuredLocation?.city ||
+          parsedCache?.profile?.city ||
+          parsedCache?.profile?.address ||
+          parsedProfile?.structuredLocation?.city || 
+          parsedProfile?.structured_location?.city || 
+          parsedProfile?.city || 
+          parsedProfile?.address;
+
+        if (candidateTown) {
+          const chosenTown = normalizeToCebuLGU(candidateTown) || candidateTown;
+          setUserHometown(chosenTown);
+          // Set as active location for Explore tab
+          setSelectedLocation(chosenTown);
         }
       } catch (err) {
-        if (__DEV__) console.log("Error loading user allergies:", err);
+        if (__DEV__) console.log("Error loading user preferences & location:", err);
       }
     };
-    loadUserAllergies();
-  }, []);
+    loadUserDataAndLocation();
+  }, [userProfile]);
+
+  // Whenever the user opens/switches to the Explore Recipes tab, automatically default the map directly to their onboarding location
+  useEffect(() => {
+    if (activeDietTab === 'EXPLORE' && userHometown) {
+      setSelectedLocation(userHometown);
+    }
+  }, [activeDietTab, userHometown]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState('Cebu City');
   const [showFullMapModal, setShowFullMapModal] = useState(false);
   const [showCityPickerModal, setShowCityPickerModal] = useState(false);
   const [isPressedBtn, setIsPressedBtn] = useState(null);
@@ -209,16 +376,6 @@ export default function DietRecipesScreen({
   const [cityProfilesCache, setCityProfilesCache] = useState({});
   const [currentCityProfile, setCurrentCityProfile] = useState(null);
   const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
-  const [dynamicMarkers, setDynamicMarkers] = useState([]);
-
-  // Load map markers from backend on mount
-  useEffect(() => {
-    getAllCityMarkers().then((markers) => {
-      if (markers && markers.length > 0) {
-        setDynamicMarkers(markers);
-      }
-    }).catch(() => {});
-  }, []);
 
   // Fetch profile whenever selected city changes
   useEffect(() => {
@@ -245,70 +402,45 @@ export default function DietRecipesScreen({
       .finally(() => setIsFetchingCityProfile(false));
   }, [selectedLocation]);
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
-  
-  // New UI States
-  const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
+  const [isLocating, setIsLocating] = useState(false);
 
-  // All 53 Cebu LGUs: 9 cities + 44 municipalities
-  const locations = [
-    // === CITIES ===
-    'Cebu City',
-    'Lapu-Lapu City',
-    'Mandaue City',
-    'Talisay City',
-    'Carcar City',
-    'Bogo City',
-    'Danao City',
-    'Naga City',
-    'Toledo City',
-    // === MUNICIPALITIES (Cebu mainland) ===
-    'Alcantara',
-    'Alcoy',
-    'Alegria',
-    'Aloguinsan',
-    'Argao',
-    'Asturias',
-    'Badian',
-    'Balamban',
-    'Barili',
-    'Boljoon',
-    'Borbon',
-    'Carmen',
-    'Catmon',
-    'Compostela',
-    'Consolacion',
-    'Cordova',
-    'Daanbantayan',
-    'Dalaguete',
-    'Dumanjug',
-    'Ginatilan',
-    'Liloan',
-    'Malabuyoc',
-    'Medellin',
-    'Minglanilla',
-    'Moalboal',
-    'Oslob',
-    'Pinamungajan',
-    'Ronda',
-    'Samboan',
-    'San Fernando',
-    'San Remigio',
-    'Santander',
-    'Sibonga',
-    'Sogod',
-    'Tabogon',
-    'Tabuelan',
-    'Tuburan',
-    // === BANTAYAN ISLAND GROUP ===
-    'Bantayan',
-    'Madridejos',
-    'Santa Fe',
-    // === CAMOTES ISLANDS GROUP ===
-    'San Francisco (Camotes)',
-    'Pilar (Camotes)',
-    'Poro (Camotes)',
-    'Tudela (Camotes)',
-  ];
+  // GPS: locate user and snap map to their municipality/city
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Location Permission', 'Please enable location access to use Locate Me.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [geo] = await Location.reverseGeocodeAsync({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+      const candidates = [geo.city, geo.subregion, geo.district, geo.name].filter(Boolean);
+      let matched = null;
+      for (const c of candidates) {
+        const norm = normalizeToCebuLGU(c);
+        if (norm) {
+          matched = norm;
+          break;
+        }
+      }
+      if (matched) {
+        setSelectedLocation(matched);
+      } else {
+        const rawCity = geo.city || geo.subregion || 'Cebu City';
+        setSelectedLocation(normalizeToCebuLGU(rawCity) || rawCity);
+      }
+    } catch (err) {
+      showAlert('Location Error', 'Could not determine your location. Please try again.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const locations = CEBU_LOCATIONS;
 
   // CITY_PROFILES replaced by dynamic cityProfilesCache + currentCityProfile
   // Legacy alias for any code that still references CITY_PROFILES[selectedLocation]
@@ -536,40 +668,15 @@ export default function DietRecipesScreen({
     'Tudela (Camotes)':      { lat: 10.6500, lng: 124.3333 },
   };
 
-  // Map markers: prefer live backend markers, fallback to static legacy
-  const mapMarkers = React.useMemo(() => {
-    if (dynamicMarkers.length > 0) {
-      return dynamicMarkers.map((m) => ({
-        id: m.city_name,
-        name: m.city_name,
-        title: m.city_name,
-        lat: m.lat,
-        lng: m.lng,
-        subtitle: m.specialty || '',
-        active: m.city_name === selectedLocation,
-      }));
-    }
-    // Fallback to static legacy profiles
-    return Object.keys(_LEGACY_CITY_PROFILES).map((cityName) => {
-      const topDish = _LEGACY_CITY_PROFILES[cityName]?.famousDishes?.[0];
-      return {
-        id: cityName,
-        name: cityName,
-        title: cityName,
-        lat: _LEGACY_CITY_PROFILES[cityName].lat,
-        lng: _LEGACY_CITY_PROFILES[cityName].lng,
-        subtitle: topDish ? topDish.name : '',
-        active: cityName === selectedLocation,
-      };
-    });
-  }, [dynamicMarkers, selectedLocation]);
+  // No automatic multi-city markers — MapcnMap only renders single active <MapPin />
+  const mapMarkers = React.useMemo(() => [], []);
 
   // Map center: use currentCityProfile (dynamic), else fallback to static
   const currentMapCenter = React.useMemo(() => {
     if (currentCityProfile?.lat && currentCityProfile?.lng) {
       return [currentCityProfile.lng, currentCityProfile.lat];
     }
-    if (_LEGACY_CITY_PROFILES[selectedLocation]) {
+    if (selectedLocation && _LEGACY_CITY_PROFILES[selectedLocation]) {
       return [_LEGACY_CITY_PROFILES[selectedLocation].lng, _LEGACY_CITY_PROFILES[selectedLocation].lat];
     }
     return [123.8854, 10.3157]; // Default: Cebu City
@@ -1643,67 +1750,20 @@ export default function DietRecipesScreen({
                 </TouchableOpacity>
               </View>
 
-              {/* NATIVE CITY SELECTION HORIZONTAL SCROLL RADAR */}
-              <View style={{ marginBottom: 12 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
-                  <TouchableOpacity
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      borderRadius: 14,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: '#10B981',
-                      borderWidth: 1.5,
-                      borderColor: '#10B981'
-                    }}
-                    onPress={() => setShowCityPickerModal(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Compass size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
-                      All Cities ({locations.length})
-                    </Text>
-                  </TouchableOpacity>
 
-                  {locations.map((loc) => {
-                    const isSelected = selectedLocation === loc;
-                    return (
-                      <TouchableOpacity
-                        key={loc}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 14,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isSelected ? '#10B981' : (isDarkMode ? '#334155' : '#F1F5F9'),
-                          borderWidth: 1.5,
-                          borderColor: isSelected ? '#10B981' : (isDarkMode ? '#475569' : '#E2E8F0')
-                        }}
-                        onPress={() => setSelectedLocation(loc)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{
-                          fontSize: 12,
-                          fontWeight: '800',
-                          color: isSelected ? '#FFFFFF' : (isDarkMode ? '#CBD5E1' : '#475569')
-                        }}>
-                          {loc}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* mapcn MODERN MAP (MapLibre GL + CARTO Dark Matter / Positron) */}
-              <View style={styles.staticMapContainer}>
+              {/* mapcn MODERN MAP with Locate Me and My Town overlay */}
+              <View style={[styles.staticMapContainer, { position: 'relative' }]}>
                 <MapcnMap
                   center={currentMapCenter}
                   zoom={9}
                   markers={mapMarkers}
+                  activeLocation={selectedLocation}
                   onMarkerPress={(cityName) => {
+                    if (cityName) {
+                      setSelectedLocation(cityName);
+                    }
+                  }}
+                  onSelectLocation={(cityName) => {
                     if (cityName) {
                       setSelectedLocation(cityName);
                     }
@@ -1712,6 +1772,76 @@ export default function DietRecipesScreen({
                   height="100%"
                   style={{ width: '100%', height: '100%' }}
                 />
+
+                {/* Floating Map Buttons Overlay — bottom-right of map */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 14,
+                    right: 14,
+                    flexDirection: 'row',
+                    gap: 8,
+                    zIndex: 100,
+                  }}
+                >
+                  {/* My Town quick return button if user is away from their onboarding hometown */}
+                  {userHometown && selectedLocation !== userHometown ? (
+                    <TouchableOpacity
+                      onPress={() => setSelectedLocation(userHometown)}
+                      activeOpacity={0.85}
+                      style={{
+                        backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                        borderRadius: 50,
+                        paddingVertical: 9,
+                        paddingHorizontal: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 6,
+                        elevation: 8,
+                        borderWidth: 1.5,
+                        borderColor: '#10B981',
+                      }}
+                    >
+                      <Home size={13} color="#10B981" style={{ marginRight: 5 }} />
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>
+                        {userHometown}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {/* Locate Me floating button */}
+                  <TouchableOpacity
+                    onPress={handleLocateMe}
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                      borderRadius: 50,
+                      paddingVertical: 9,
+                      paddingHorizontal: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 6,
+                      elevation: 8,
+                      borderWidth: 1.5,
+                      borderColor: '#10B981',
+                    }}
+                  >
+                    {isLocating ? (
+                      <ActivityIndicator size="small" color="#10B981" style={{ marginRight: 6 }} />
+                    ) : (
+                      <LocateFixed size={14} color="#10B981" style={{ marginRight: 6 }} />
+                    )}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
+                      {isLocating ? 'Locating...' : 'Locate Me'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* SELECTED CITY CULINARY PROFILE BANNER */}
@@ -1730,6 +1860,11 @@ export default function DietRecipesScreen({
                       <Text style={styles.cityDetailTitle} numberOfLines={1}>
                         {currentCityProfile.marketTitle || `${selectedLocation} Food Market`}
                       </Text>
+                      {userHometown && selectedLocation === userHometown ? (
+                        <View style={{ marginLeft: 8, backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981' }}>Your Hometown</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
 
@@ -1998,7 +2133,7 @@ export default function DietRecipesScreen({
                 Full Cebu Island Food Map
               </Text>
               <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 }}>
-                Tap any city marker to select local food market ({locations.length} cities)
+                Tap any municipality or marker to see borders & food ({locations.length} LGUs)
               </Text>
             </View>
             <TouchableOpacity
@@ -2013,22 +2148,95 @@ export default function DietRecipesScreen({
             </TouchableOpacity>
           </View>
 
-          {/* FULLSCREEN mapcn MODERN MAP (MapLibre GL + CARTO Dark Matter / Positron) */}
+          {/* FULLSCREEN mapcn MODERN MAP with Boundary Polygons */}
           <View style={{ flex: 1 }}>
             <MapcnMap
               center={currentMapCenter}
               zoom={9}
               markers={mapMarkers}
+              activeLocation={selectedLocation}
               onMarkerPress={(cityName) => {
                 if (cityName && locations.includes(cityName)) {
                   setSelectedLocation(cityName);
-                  setShowFullMapModal(false);
+                }
+              }}
+              onSelectLocation={(cityName) => {
+                if (cityName && locations.includes(cityName)) {
+                  setSelectedLocation(cityName);
                 }
               }}
               cardContainer={false}
               height="100%"
               style={{ flex: 1, width: '100%' }}
             />
+          </View>
+
+          {/* Floating Action Buttons Overlay in Fullscreen Modal (Locate Me & My Town) */}
+          <View
+            style={{
+              position: 'absolute',
+              bottom: Platform.OS === 'ios' ? 125 : 105,
+              right: 20,
+              flexDirection: 'row',
+              gap: 8,
+              zIndex: 100,
+            }}
+          >
+            {userHometown && selectedLocation !== userHometown ? (
+              <TouchableOpacity
+                onPress={() => setSelectedLocation(userHometown)}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                  borderRadius: 50,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 6,
+                  elevation: 8,
+                  borderWidth: 1.5,
+                  borderColor: '#10B981',
+                }}
+              >
+                <Home size={13} color="#10B981" style={{ marginRight: 5 }} />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
+                  {userHometown}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <TouchableOpacity
+              onPress={handleLocateMe}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                borderRadius: 50,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.25,
+                shadowRadius: 6,
+                elevation: 8,
+                borderWidth: 1.5,
+                borderColor: '#10B981',
+              }}
+            >
+              {isLocating ? (
+                <ActivityIndicator size="small" color="#10B981" style={{ marginRight: 6 }} />
+              ) : (
+                <LocateFixed size={14} color="#10B981" style={{ marginRight: 6 }} />
+              )}
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
+                {isLocating ? 'Locating...' : 'Locate Me'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Bottom Floating City Bar */}

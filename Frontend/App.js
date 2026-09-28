@@ -258,7 +258,11 @@ function MainApp() {
       email: data.profile.email || prev.email || '',
       profileImage: data.profile.profileImage || null,
       isPremium: !!data.nutrition.isPremium,
-      streakDays: data.streakDays || 0
+      streakDays: data.streakDays || 0,
+      address: data.profile.address || prev.address || '',
+      structuredLocation: data.profile.structuredLocation || prev.structuredLocation || null,
+      city: data.profile.city || prev.city || '',
+      allergies: data.profile.allergies || prev.allergies || []
     }));
   };
 
@@ -845,6 +849,13 @@ function MainApp() {
             ...finalPersonalizationData
           };
           console.log("Complete Integrated Onboarding Payload Matrix:", onboardingPayload);
+          setUserProfile(prev => ({
+            ...prev,
+            address: finalPersonalizationData?.address || prev.address || '',
+            structuredLocation: finalPersonalizationData?.structuredLocation || prev.structuredLocation || null,
+            city: finalPersonalizationData?.city || prev.city || '',
+            allergies: finalPersonalizationData?.allergies || prev.allergies || []
+          }));
           setTempOnboardingData(onboardingPayload);
           setCurrentScreen('GENERATING_PLAN');
         }} 
@@ -986,6 +997,7 @@ function MainApp() {
             userId={userId}
             isOnline={isOnline}
             setNotifications={setNotifications}
+            userProfile={userProfile}
           />
         </FadeTabView>
       )}
