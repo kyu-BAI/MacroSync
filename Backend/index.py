@@ -1595,12 +1595,8 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
 
     # Models prioritized by active capability, speed, and active availability
     models_to_try = [
-        'gemini-3.5-flash',
-        'gemini-3.5-flash-lite',
-        'gemini-3.1-flash-lite',
-        'gemini-flash-lite-latest',
-        'gemini-3.7-flash',
-        'gemini-3.6-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
         'gemini-1.5-flash',
         'gemini-1.5-flash-latest',
         'gemini-1.5-pro'
@@ -1679,6 +1675,22 @@ def transcribe_audio(data: TranscribeAudioRequest):
             "If no speech or words can be heard, return an empty string."
         )
 
+        # 1. Direct high-speed SDK transcription using gemini-2.5-flash
+        if genai_client is not None and types is not None:
+            try:
+                audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime)
+                sdk_res = genai_client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[audio_part, prompt]
+                )
+                text = (sdk_res.text or "").strip()
+                if text.startswith('"') and text.endswith('"'):
+                    text = text[1:-1].strip()
+                return {"success": True, "text": text}
+            except Exception as sdk_err:
+                print("SDK Gemini audio transcription error, using REST fallback:", sdk_err)
+
+        # 2. REST failover with multi-key rotation
         res = generate_gemini_content(prompt=prompt, image_bytes=audio_bytes, mime_type=mime)
         text = (res.text or "").strip() if hasattr(res, "text") else str(res).strip()
         # Clean any accidental wrapping quotes
