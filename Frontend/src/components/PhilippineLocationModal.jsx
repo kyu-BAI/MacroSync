@@ -143,7 +143,7 @@ export default function PhilippineLocationModal({
         }
       } catch (err) {
         if (__DEV__) console.warn('[PhilippineLocationModal] Pin error:', err);
-        setStatusMessage('Pin dropped at coordinates');
+        setStatusMessage('Pin placed on Barangay');
       } finally {
         setIsResolvingBarangay(false);
       }
@@ -617,7 +617,7 @@ export default function PhilippineLocationModal({
             </View>
             <Text style={styles.bottomBarSub} numberOfLines={1}>
               {localPinnedBarangay
-                ? `Exact Barangay Pinned (${localPinnedBarangay.lat.toFixed(3)}, ${localPinnedBarangay.lng.toFixed(3)})`
+                ? `Exact Barangay: Brgy. ${localPinnedBarangay.barangay || localPinnedBarangay.name}, ${localPinnedBarangay.city}`
                 : (currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions')}
             </Text>
           </View>

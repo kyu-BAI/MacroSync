@@ -548,8 +548,19 @@ export default function MapcnMap({
           });
         }
 
+        function isCodeString(s) {
+          if (!s || typeof s !== 'string') return true;
+          var t = s.trim();
+          return t.indexOf('+') !== -1 || /^\d+(\.\d+)?[,\s]+\d+(\.\d+)?$/.test(t) || /^\d{3,6}$/.test(t) || (/^[A-Z0-9]{3,8}$/.test(t) && /\d/.test(t));
+        }
+
         function showActivePin(title, lngLat) {
           if (!lngLat || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number') return;
+
+          var displayTitle = title || 'Pinned Barangay';
+          if (isCodeString(displayTitle)) {
+            displayTitle = 'Pinned Barangay';
+          }
 
           if (activePinMarker) {
             try { activePinMarker.remove(); } catch(_) {}
@@ -582,7 +593,7 @@ export default function MapcnMap({
           var popupContent = [
             '<div class="mapcn-popup-card mapcn-popup-pinned">',
               '<div class="mapcn-popup-pinned-dot"></div>',
-              '<div class="mapcn-popup-name">' + (title || 'Pinned Barangay') + '</div>',
+              '<div class="mapcn-popup-name">' + displayTitle + '</div>',
             '</div>'
           ].join('');
 
@@ -624,11 +635,20 @@ export default function MapcnMap({
 
           clearCityHighlight();
 
-          var title = data.formattedTitle || data.name || (data.barangay ? ('Brgy. ' + data.barangay) : 'Pinned Location');
+          var title = '';
+          if (data.barangay && !isCodeString(data.barangay)) {
+            title = 'Brgy. ' + data.barangay + (data.city ? (', ' + data.city) : '');
+          } else if (data.formattedTitle && !isCodeString(data.formattedTitle)) {
+            title = data.formattedTitle;
+          } else if (data.name && !isCodeString(data.name)) {
+            title = data.name;
+          } else {
+            title = 'Pinned Barangay';
+          }
+
           showActivePin(title, [data.lng, data.lat]);
 
           if (window.map) {
-            // Smoothly pan to the pinned barangay coordinates without altering current zoom level
             window.map.panTo([data.lng, data.lat], {
               duration: 500,
               essential: true
