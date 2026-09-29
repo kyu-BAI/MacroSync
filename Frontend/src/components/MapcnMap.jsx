@@ -76,6 +76,9 @@ export default function MapcnMap({
     if (webViewRef.current && pinnedBarangay && pinnedBarangay.lat && pinnedBarangay.lng) {
       const title = pinnedBarangay.formattedTitle || pinnedBarangay.name || 'Pinned Barangay';
       const script = `
+        if (typeof clearCityHighlight === 'function') {
+          clearCityHighlight();
+        }
         if (typeof showActivePin === 'function') {
           showActivePin(${JSON.stringify(title)}, [${pinnedBarangay.lng}, ${pinnedBarangay.lat}]);
         }
@@ -90,12 +93,20 @@ export default function MapcnMap({
         true;
       `;
       webViewRef.current.injectJavaScript(script);
+    } else if (webViewRef.current && !pinnedBarangay) {
+      const script = `
+        if (typeof isBarangayPinned !== 'undefined') {
+          isBarangayPinned = false;
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(script);
     }
   }, [pinnedBarangay?.lat, pinnedBarangay?.lng, pinnedBarangay?.formattedTitle]);
 
-  // Highlight active boundary polygon and fitBounds when activeLocation changes
+  // Highlight active boundary polygon and fitBounds when activeLocation changes ONLY IF no barangay is pinned
   useEffect(() => {
-    if (webViewRef.current && activeLocation) {
+    if (webViewRef.current && activeLocation && !pinnedBarangay) {
       const script = `
         if (typeof applyActiveBoundary === 'function') {
           applyActiveBoundary(${JSON.stringify(activeLocation)}, true);
@@ -104,7 +115,7 @@ export default function MapcnMap({
       `;
       webViewRef.current.injectJavaScript(script);
     }
-  }, [activeLocation]);
+  }, [activeLocation, Boolean(pinnedBarangay)]);
 
   // Push updated barangay markers into webview when markers change
   useEffect(() => {
@@ -527,6 +538,20 @@ export default function MapcnMap({
         var markersData = ${JSON.stringify(formattedMarkers)};
         var activePinMarker = null;
         var barangayMarkerElements = [];
+        var isBarangayPinned = ${Boolean(pinnedBarangay)};
+
+        function clearCityHighlight() {
+          isBarangayPinned = true;
+          try {
+            if (map.getLayer('cebu-boundary-active-fill')) {
+              map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], '___NONE___']);
+            }
+            if (map.getLayer('cebu-boundary-active-line')) {
+              map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], '___NONE___']);
+            }
+          } catch(_) {}
+        }
+        window.clearCityHighlight = clearCityHighlight;
 
         function updateBarangayMarkers(newList) {
           markersData = newList || [];
@@ -543,6 +568,8 @@ export default function MapcnMap({
           if (!markersData || !markersData.length) return;
 
           markersData.forEach(function(item) {
+            // STRICT: Red dots MUST ONLY appear on each barangay, NEVER on the city!
+            if (!item.isBarangay && !item.barangay) return;
             if (!item.lat || !item.lng) return;
 
             var el = document.createElement('div');
@@ -557,6 +584,7 @@ export default function MapcnMap({
 
             el.addEventListener('click', function(e) {
               e.stopPropagation();
+              clearCityHighlight();
               showActivePin('📍 ' + item.name, [item.lng, item.lat]);
               if (window.ReactNativeWebView) {
                 window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -674,13 +702,13 @@ export default function MapcnMap({
               });
             }
 
-            // 2. Highlighted active municipality fill (ONLY shown when pressed or located)
+            // 2. Highlighted active municipality fill (hidden when barangay is pinned)
             if (!map.getLayer('cebu-boundary-active-fill')) {
               map.addLayer({
                 id: 'cebu-boundary-active-fill',
                 type: 'fill',
                 source: 'cebu-boundaries',
-                filter: ['==', ['get', 'name'], currentActiveLocation || '___NONE___'],
+                filter: ['==', ['get', 'name'], isBarangayPinned ? '___NONE___' : (currentActiveLocation || '___NONE___')],
                 paint: {
                   'fill-color': '#10B981',
                   'fill-opacity': 0.22
@@ -688,13 +716,13 @@ export default function MapcnMap({
               });
             }
 
-            // 3. Highlighted active municipality border (ONLY shown when pressed or located)
+            // 3. Highlighted active municipality border (hidden when barangay is pinned)
             if (!map.getLayer('cebu-boundary-active-line')) {
               map.addLayer({
                 id: 'cebu-boundary-active-line',
                 type: 'line',
                 source: 'cebu-boundaries',
-                filter: ['==', ['get', 'name'], currentActiveLocation || '___NONE___'],
+                filter: ['==', ['get', 'name'], isBarangayPinned ? '___NONE___' : (currentActiveLocation || '___NONE___')],
                 paint: {
                   'line-color': '#059669',
                   'line-width': 2.8,
@@ -710,6 +738,9 @@ export default function MapcnMap({
               var lng = e.lngLat.lng;
               var lat = e.lngLat.lat;
 
+              // Immediately remove green city highlight because a barangay is being pinned
+              clearCityHighlight();
+
               showActivePin(clickedName ? ('📍 ' + clickedName) : '📍 Pinning barangay...', [lng, lat]);
 
               if (window.ReactNativeWebView) {
@@ -719,10 +750,6 @@ export default function MapcnMap({
                   lat: lat,
                   name: clickedName
                 }));
-              }
-
-              if (clickedName) {
-                applyActiveBoundary(clickedName, false);
               }
             });
 
@@ -787,17 +814,18 @@ export default function MapcnMap({
               }
             }
 
-            if (map.getLayer('cebu-boundary-active-fill')) {
-              map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], matchedName]);
-            }
-            if (map.getLayer('cebu-boundary-active-line')) {
-              map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], matchedName]);
+            if (!isBarangayPinned) {
+              if (map.getLayer('cebu-boundary-active-fill')) {
+                map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], matchedName]);
+              }
+              if (map.getLayer('cebu-boundary-active-line')) {
+                map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], matchedName]);
+              }
+            } else {
+              clearCityHighlight();
             }
 
-            // Show single <MapPin /> and popup for active municipality
-            if (pinLng !== null && pinLat !== null) {
-              showActivePin(matchedName, [pinLng, pinLat]);
-            }
+            // (NOTE: Cities/municipalities DO NOT receive pins/red dots; only barangays do)
           } catch(err) {
             console.warn('Error applying active boundary:', err);
           }
@@ -809,7 +837,7 @@ export default function MapcnMap({
           enhanceMapColors();
           initBoundaries();
           renderBarangayMarkers();
-          if (currentActiveLocation) {
+          if (currentActiveLocation && !isBarangayPinned) {
             applyActiveBoundary(currentActiveLocation, true);
           }
         });
