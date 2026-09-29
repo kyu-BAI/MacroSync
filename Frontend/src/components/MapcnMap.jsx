@@ -489,64 +489,13 @@ export default function MapcnMap({
         window.clearCityHighlight = clearCityHighlight;
 
         function updateBarangayMarkers(newList) {
-          markersData = newList || [];
-          renderBarangayMarkers();
-        }
-        window.updateBarangayMarkers = updateBarangayMarkers;
-
-        function renderBarangayMarkers() {
+          // Keep map clean: remove all background pins on individual barangays
           barangayMarkerElements.forEach(function(m) {
             try { m.remove(); } catch(_) {}
           });
           barangayMarkerElements = [];
-
-          if (!markersData || !markersData.length) return;
-
-          markersData.forEach(function(item) {
-            if (!item.isBarangay && !item.barangay) return;
-            if (!item.lat || !item.lng) return;
-
-            var el = document.createElement('div');
-            el.className = 'mapcn-barangay-dot-marker';
-            var shortLabel = item.barangay || item.name.replace(/^Brgy\.\s*/i, '');
-            el.innerHTML = [
-              '<div class="mapcn-red-dot-core">',
-                '<div class="mapcn-red-dot-pulse"></div>',
-              '</div>',
-              '<div class="mapcn-barangay-label">' + shortLabel + '</div>'
-            ].join('');
-
-            el.addEventListener('click', function(e) {
-              e.stopPropagation();
-              isBarangayPinned = true;
-              window.isBarangayPinned = true;
-              clearCityHighlight();
-
-              var pinTitle = '📍 ' + item.name;
-              showActivePin(pinTitle, [item.lng, item.lat]);
-
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'MAP_TAP_COORDS',
-                  lng: item.lng,
-                  lat: item.lat,
-                  name: item.name,
-                  barangay: item.barangay,
-                  city: item.city
-                }));
-              }
-            });
-
-            var marker = new maplibregl.Marker({
-              element: el,
-              anchor: 'center'
-            })
-              .setLngLat([item.lng, item.lat])
-              .addTo(map);
-
-            barangayMarkerElements.push(marker);
-          });
         }
+        window.updateBarangayMarkers = updateBarangayMarkers;
 
         function isCodeString(s) {
           if (!s || typeof s !== 'string') return true;
@@ -800,7 +749,6 @@ export default function MapcnMap({
         map.on('style.load', function() {
           enhanceMapColors();
           initBoundaries();
-          renderBarangayMarkers();
 
           // Check if there is a pending pin from React Native
           if (window.pendingPin) {
