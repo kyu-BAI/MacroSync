@@ -61,6 +61,7 @@ import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
 import MapcnMap from "../../components/MapcnMap";
+import { reverseGeocodeToBarangay } from "../../services/barangayGeocodingService";
 
 // Re-export normalizeToCebuLGU for backward compatibility
 export { normalizeToCebuLGU };
@@ -198,6 +199,7 @@ export default function DietRecipesScreen({
 
   const [userHometown, setUserHometown] = useState(initialHometown || null);
   const [selectedLocation, setSelectedLocation] = useState(initialHometown || null);
+  const [pinnedBarangay, setPinnedBarangay] = useState(null);
   const [userAllergies, setUserAllergies] = useState(userProfile?.allergies || []);
   const [isLocating, setIsLocating] = useState(false);
 
@@ -205,6 +207,40 @@ export default function DietRecipesScreen({
   const [cityProfilesCache, setCityProfilesCache] = useState({});
   const [currentCityProfile, setCurrentCityProfile] = useState(null);
   const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
+
+  // Handle exact Barangay pinning
+  const handlePinBarangay = useCallback(async (barangayData) => {
+    if (!barangayData) return;
+    if (barangayData.lat && barangayData.lng && !barangayData.formattedTitle) {
+      try {
+        const resolved = await reverseGeocodeToBarangay(barangayData.lat, barangayData.lng);
+        if (resolved) {
+          setPinnedBarangay(resolved);
+          AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(resolved)).catch(() => {});
+          if (resolved.city) {
+            const normCity =
+              normalizeToPhilippineLocation(resolved.city) ||
+              normalizeToCebuLGU(resolved.city) ||
+              resolved.city;
+            setSelectedLocation(normCity);
+          }
+          return;
+        }
+      } catch (err) {
+        if (__DEV__) console.warn("[DietRecipes] Reverse geocode error:", err);
+      }
+    }
+
+    setPinnedBarangay(barangayData);
+    AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(barangayData)).catch(() => {});
+    if (barangayData.city) {
+      const normCity =
+        normalizeToPhilippineLocation(barangayData.city) ||
+        normalizeToCebuLGU(barangayData.city) ||
+        barangayData.city;
+      setSelectedLocation(normCity);
+    }
+  }, []);
 
   // Global meal log synchronization
   const loggedMeals = globalLoggedMeals;
@@ -230,6 +266,16 @@ export default function DietRecipesScreen({
         const storedProfile = (await AsyncStorage.getItem("ms_user_profile")) || (await AsyncStorage.getItem("@ms_user_profile"));
         const onboardingData = await AsyncStorage.getItem("@ms_onboarding_data");
         const dashboardCache = await AsyncStorage.getItem("ms_dashboard_cache");
+        const storedBarangay = await AsyncStorage.getItem("ms_pinned_barangay");
+
+        if (storedBarangay) {
+          try {
+            const parsedB = JSON.parse(storedBarangay);
+            if (parsedB && (parsedB.barangay || parsedB.formattedTitle)) {
+              setPinnedBarangay(parsedB);
+            }
+          } catch (_) {}
+        }
 
         const parsedProfile = storedProfile ? JSON.parse(storedProfile) : null;
         const parsedOnb = onboardingData ? JSON.parse(onboardingData) : null;
@@ -258,10 +304,10 @@ export default function DietRecipesScreen({
   }, [userProfile]);
 
   useEffect(() => {
-    if (activeDietTab === "EXPLORE" && userHometown) {
+    if (activeDietTab === "EXPLORE" && userHometown && !pinnedBarangay) {
       setSelectedLocation(userHometown);
     }
-  }, [activeDietTab, userHometown]);
+  }, [activeDietTab, userHometown, pinnedBarangay]);
 
   // City food profile
   useEffect(() => {
@@ -911,10 +957,12 @@ export default function DietRecipesScreen({
               {/* mapcn MAP CONTAINER */}
               <View style={styles.staticMapContainer}>
                 <MapcnMap
-                  center={currentMapCenter}
-                  zoom={9}
+                  center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
+                  zoom={pinnedBarangay ? 13 : 9}
                   markers={mapMarkers}
                   activeLocation={selectedLocation}
+                  pinnedBarangay={pinnedBarangay}
+                  onPinBarangay={handlePinBarangay}
                   onMarkerPress={(cityName) => cityName && setSelectedLocation(cityName)}
                   onSelectLocation={(cityName) => cityName && setSelectedLocation(cityName)}
                   cardContainer={false}
@@ -949,6 +997,49 @@ export default function DietRecipesScreen({
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* PINNED EXACT BARANGAY BANNER */}
+              {pinnedBarangay ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderRadius: 12,
+                    backgroundColor: isDarkMode ? "#1E293B" : "#ECFDF5",
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? "#334155" : "#A7F3D0",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
+                    <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: isDarkMode ? "#F8FAFC" : "#065F46",
+                      }}
+                      numberOfLines={1}
+                    >
+                      Exact Barangay: <Text style={{ fontWeight: "900", color: logoGreen }}>{pinnedBarangay.formattedTitle || `Brgy. ${pinnedBarangay.barangay}, ${pinnedBarangay.city}`}</Text>
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPinnedBarangay(null);
+                      AsyncStorage.removeItem("ms_pinned_barangay").catch(() => {});
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: isDarkMode ? "#94A3B8" : "#64748B" }}>
+                      Clear Pin
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {/* SELECTED CITY CULINARY BANNER */}
               {isFetchingCityProfile ? (
@@ -1111,10 +1202,12 @@ export default function DietRecipesScreen({
         visible={showFullMapModal}
         onClose={() => setShowFullMapModal(false)}
         isDarkMode={isDarkMode}
-        currentMapCenter={currentMapCenter}
+        currentMapCenter={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
         mapMarkers={mapMarkers}
         selectedLocation={selectedLocation}
         onSelectLocation={setSelectedLocation}
+        pinnedBarangay={pinnedBarangay}
+        onPinBarangay={handlePinBarangay}
         userHometown={userHometown}
         onLocateMe={handleLocateMe}
         isLocating={isLocating}

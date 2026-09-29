@@ -34,9 +34,11 @@ export default function MapcnMap({
   zoom = 9,
   markers = [],
   activeLocation = '',
+  pinnedBarangay = null,
   boundariesGeoJSON = cebuBoundaries,
   onMarkerPress,
   onSelectLocation,
+  onPinBarangay,
   interactive = true,
   showControls = true,
   cardContainer = true,
@@ -68,6 +70,28 @@ export default function MapcnMap({
       webViewRef.current.injectJavaScript(script);
     }
   }, [centerCoords[0], centerCoords[1], zoom]);
+
+  // Fly to and pin exact barangay when pinnedBarangay changes
+  useEffect(() => {
+    if (webViewRef.current && pinnedBarangay && pinnedBarangay.lat && pinnedBarangay.lng) {
+      const title = pinnedBarangay.formattedTitle || pinnedBarangay.name || 'Pinned Barangay';
+      const script = `
+        if (typeof showActivePin === 'function') {
+          showActivePin(${JSON.stringify(title)}, [${pinnedBarangay.lng}, ${pinnedBarangay.lat}]);
+        }
+        if (window.map) {
+          window.map.flyTo({
+            center: [${pinnedBarangay.lng}, ${pinnedBarangay.lat}],
+            zoom: 14.5,
+            essential: true,
+            duration: 850
+          });
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  }, [pinnedBarangay?.lat, pinnedBarangay?.lng, pinnedBarangay?.formattedTitle]);
 
   // Highlight active boundary polygon and fitBounds when activeLocation changes
   useEffect(() => {
@@ -531,37 +555,26 @@ export default function MapcnMap({
               });
             }
 
-            // Click listener on polygon fill
-            map.on('click', 'cebu-boundaries-all-fill', function(e) {
-              if (e.features && e.features.length > 0) {
-                var clickedFeat = e.features[0];
-                var clickedName = clickedFeat.properties.name;
-                if (clickedName) {
-                  applyActiveBoundary(clickedName, true);
-                  if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'BOUNDARY_CLICK',
-                      name: clickedName
-                    }));
-                  }
-                }
-              }
-            });
-
-            // Canvas click fallback
+            // Click listener for both polygon fill and general map canvas anywhere in the Philippines
             map.on('click', function(e) {
               var features = map.queryRenderedFeatures(e.point, { layers: ['cebu-boundaries-all-fill'] });
-              if (features && features.length > 0) {
-                var clickedName = features[0].properties.name;
-                if (clickedName) {
-                  applyActiveBoundary(clickedName, true);
-                  if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'BOUNDARY_CLICK',
-                      name: clickedName
-                    }));
-                  }
-                }
+              var clickedName = (features && features.length > 0) ? features[0].properties.name : null;
+              var lng = e.lngLat.lng;
+              var lat = e.lngLat.lat;
+
+              showActivePin(clickedName ? ('📍 ' + clickedName) : '📍 Pinning barangay...', [lng, lat]);
+
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'MAP_TAP_COORDS',
+                  lng: lng,
+                  lat: lat,
+                  name: clickedName
+                }));
+              }
+
+              if (clickedName) {
+                applyActiveBoundary(clickedName, false);
               }
             });
 
@@ -667,6 +680,12 @@ export default function MapcnMap({
       } else if (data.type === 'BOUNDARY_CLICK') {
         if (onMarkerPress) onMarkerPress(data.name);
         if (onSelectLocation) onSelectLocation(data.name);
+      } else if (data.type === 'MAP_TAP_COORDS') {
+        if (onPinBarangay) {
+          onPinBarangay({ lat: data.lat, lng: data.lng, name: data.name });
+        } else if (data.name && onSelectLocation) {
+          onSelectLocation(data.name);
+        }
       }
     } catch (err) {
       if (onMarkerPress) {

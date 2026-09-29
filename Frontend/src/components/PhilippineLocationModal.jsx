@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,28 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   Platform,
   Dimensions,
   StyleSheet,
 } from 'react-native';
-import { X, Home, LocateFixed, Search, MapPin, Sparkles, Compass } from 'lucide-react-native';
+import { X, Home, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight, Navigation } from 'lucide-react-native';
 import MapcnMap from './MapcnMap';
 import {
   PHILIPPINE_REGIONS,
   POPULAR_CULINARY_HUBS,
   searchPhilippineLocations,
   PHILIPPINE_CITY_COORDINATES,
+  normalizeToPhilippineLocation,
 } from '../data/philippine_locations';
+import { normalizeToCebuLGU } from '../data/cebuPalengkeMeals';
+import {
+  reverseGeocodeToBarangay,
+  searchPhilippineBarangays,
+  POPULAR_BARANGAYS_BY_CITY,
+  POPULAR_BARANGAY_COORDINATES,
+} from '../services/barangayGeocodingService';
 
 const { width: screenWidth } = Dimensions.get('window');
 const logoGreen = '#10B981';
@@ -31,6 +40,8 @@ export default function PhilippineLocationModal({
   mapMarkers = [],
   selectedLocation,
   onSelectLocation,
+  pinnedBarangay = null,
+  onPinBarangay,
   userHometown,
   onLocateMe,
   isLocating,
@@ -38,17 +49,153 @@ export default function PhilippineLocationModal({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('All');
-  const [activeViewMode, setActiveViewMode] = useState('EXPLORE'); // 'EXPLORE' (Search & Hubs) | 'MAP' (Interactive Map)
+  const [activeViewMode, setActiveViewMode] = useState('EXPLORE'); // 'EXPLORE' | 'MAP'
+  const [localPinnedBarangay, setLocalPinnedBarangay] = useState(pinnedBarangay);
+  const [isResolvingBarangay, setIsResolvingBarangay] = useState(false);
+  const [barangaySearchResults, setBarangaySearchResults] = useState([]);
+  const [statusMessage, setStatusMessage] = useState('');
 
-  // Filtered search results
+  // Sync incoming pinnedBarangay prop
+  useEffect(() => {
+    if (pinnedBarangay) {
+      setLocalPinnedBarangay(pinnedBarangay);
+    }
+  }, [pinnedBarangay]);
+
+  // City-level search results
   const searchResults = useMemo(() => {
     return searchPhilippineLocations(searchQuery, selectedRegion);
   }, [searchQuery, selectedRegion]);
 
+  // Instant barangay search when query >= 2 characters
+  useEffect(() => {
+    let isMounted = true;
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setBarangaySearchResults([]);
+      return;
+    }
+
+    const cleanQ = searchQuery.trim();
+    searchPhilippineBarangays(cleanQ)
+      .then((results) => {
+        if (isMounted) {
+          setBarangaySearchResults(results || []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setBarangaySearchResults([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [searchQuery]);
+
+  // Popular barangays for currently selected city
+  const quickBarangays = useMemo(() => {
+    if (!selectedLocation) return [];
+    return (
+      POPULAR_BARANGAYS_BY_CITY[selectedLocation] ||
+      POPULAR_BARANGAYS_BY_CITY[`${selectedLocation} City`] ||
+      []
+    );
+  }, [selectedLocation]);
+
+  // Handle choosing a city
   const handleChooseCity = (cityName) => {
     if (!cityName) return;
     onSelectLocation(cityName);
-    onClose();
+  };
+
+  // Handle pinning exact barangay from map tap
+  const handleMapPin = useCallback(
+    async ({ lat, lng }) => {
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
+      setIsResolvingBarangay(true);
+      setStatusMessage('Resolving exact Barangay...');
+
+      try {
+        const resolved = await reverseGeocodeToBarangay(lat, lng);
+        if (resolved) {
+          setLocalPinnedBarangay(resolved);
+          setStatusMessage(`Pinned: ${resolved.formattedTitle}`);
+
+          if (onPinBarangay) {
+            onPinBarangay(resolved);
+          }
+
+          if (resolved.city) {
+            const normalized =
+              normalizeToPhilippineLocation(resolved.city) ||
+              normalizeToCebuLGU(resolved.city) ||
+              resolved.city;
+            onSelectLocation(normalized);
+          }
+        }
+      } catch (err) {
+        if (__DEV__) console.warn('[PhilippineLocationModal] Pin error:', err);
+        setStatusMessage('Pin dropped at coordinates');
+      } finally {
+        setIsResolvingBarangay(false);
+      }
+    },
+    [onPinBarangay, onSelectLocation]
+  );
+
+  // Handle selecting a barangay from list or quick chip
+  const handleSelectBarangayItem = (item) => {
+    const barangayData = {
+      barangay: item.barangay || item.name.replace(/^Brgy\.\s*/i, ''),
+      city: item.city || selectedLocation || 'Philippines',
+      province: item.province || '',
+      formattedTitle: item.display || `Brgy. ${item.barangay}, ${item.city}`,
+      lat: item.lat,
+      lng: item.lng,
+    };
+
+    setLocalPinnedBarangay(barangayData);
+    if (onPinBarangay) {
+      onPinBarangay(barangayData);
+    }
+
+    if (item.city) {
+      const normalized =
+        normalizeToPhilippineLocation(item.city) ||
+        normalizeToCebuLGU(item.city) ||
+        item.city;
+      onSelectLocation(normalized);
+    }
+
+    // Switch to map view to visually confirm the pinned location
+    setActiveViewMode('MAP');
+    setStatusMessage(`Pinned: ${barangayData.formattedTitle}`);
+  };
+
+  // Quick chip select
+  const handleQuickChipSelect = (brgyName) => {
+    const key = brgyName.toLowerCase().trim();
+    const match = POPULAR_BARANGAY_COORDINATES[key];
+
+    if (match) {
+      handleSelectBarangayItem({
+        barangay: match.barangay,
+        city: match.city,
+        province: match.province,
+        display: `Brgy. ${match.barangay}, ${match.city}`,
+        lat: match.lat,
+        lng: match.lng,
+      });
+    } else {
+      // Search coordinate asynchronously
+      setIsResolvingBarangay(true);
+      searchPhilippineBarangays(`${brgyName}, ${selectedLocation}`)
+        .then((res) => {
+          if (res && res[0]) {
+            handleSelectBarangayItem(res[0]);
+          }
+        })
+        .finally(() => setIsResolvingBarangay(false));
+    }
   };
 
   const handleCustomCity = () => {
@@ -57,11 +204,26 @@ export default function PhilippineLocationModal({
     onClose();
   };
 
+  const handleConfirmAndClose = () => {
+    if (localPinnedBarangay && onPinBarangay) {
+      onPinBarangay(localPinnedBarangay);
+    }
+    onClose();
+  };
+
   const bgColor = isDarkMode ? '#0F172A' : '#F8FAFC';
   const cardBg = isDarkMode ? '#1E293B' : '#FFFFFF';
   const textColor = isDarkMode ? '#F8FAFC' : '#0F172A';
   const textMuted = isDarkMode ? '#94A3B8' : '#64748B';
   const borderColor = isDarkMode ? '#334155' : '#E2E8F0';
+
+  // Compute map center coordinate
+  const effectiveMapCenter = useMemo(() => {
+    if (localPinnedBarangay && localPinnedBarangay.lat && localPinnedBarangay.lng) {
+      return [localPinnedBarangay.lng, localPinnedBarangay.lat];
+    }
+    return currentMapCenter;
+  }, [localPinnedBarangay, currentMapCenter]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -76,7 +238,7 @@ export default function PhilippineLocationModal({
               </Text>
             </View>
             <Text style={[styles.headerSub, { color: textMuted }]}>
-              Explore local food & palengke diets anywhere in the Philippines
+              Pin your exact Barangay or search any city in the Philippines
             </Text>
           </View>
           <TouchableOpacity
@@ -94,7 +256,7 @@ export default function PhilippineLocationModal({
             <Search size={16} color={textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.textInput, { color: textColor }]}
-              placeholder="Search any Philippine city, province, or food..."
+              placeholder="Search exact barangay, city, or local food..."
               placeholderTextColor={textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -107,34 +269,36 @@ export default function PhilippineLocationModal({
             )}
           </View>
 
-          {/* Region Tabs */}
-          <View style={styles.regionTabRow}>
-            {PHILIPPINE_REGIONS.map((reg) => {
-              const isActive = selectedRegion === reg;
-              return (
-                <TouchableOpacity
-                  key={reg}
-                  onPress={() => setSelectedRegion(reg)}
-                  style={[
-                    styles.regionChip,
-                    isActive
-                      ? { backgroundColor: logoGreen, borderColor: logoGreen }
-                      : { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor },
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <Text
+          {/* Region Tabs (shown when not searching) */}
+          {!searchQuery ? (
+            <View style={styles.regionTabRow}>
+              {PHILIPPINE_REGIONS.map((reg) => {
+                const isActive = selectedRegion === reg;
+                return (
+                  <TouchableOpacity
+                    key={reg}
+                    onPress={() => setSelectedRegion(reg)}
                     style={[
-                      styles.regionChipText,
-                      isActive ? { color: '#FFFFFF', fontWeight: '800' } : { color: textMuted },
+                      styles.regionChip,
+                      isActive
+                        ? { backgroundColor: logoGreen, borderColor: logoGreen }
+                        : { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor },
                     ]}
+                    activeOpacity={0.7}
                   >
-                    {reg}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <Text
+                      style={[
+                        styles.regionChipText,
+                        isActive ? { color: '#FFFFFF', fontWeight: '800' } : { color: textMuted },
+                      ]}
+                    >
+                      {reg}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
 
           {/* View Toggle: List / Map */}
           <View style={styles.viewToggleRow}>
@@ -170,7 +334,7 @@ export default function PhilippineLocationModal({
                   activeViewMode === 'MAP' ? { color: '#FFFFFF' } : { color: textMuted },
                 ]}
               >
-                Interactive Map
+                Interactive Barangay Map
               </Text>
             </TouchableOpacity>
           </View>
@@ -179,17 +343,88 @@ export default function PhilippineLocationModal({
         {/* Content Area */}
         {activeViewMode === 'MAP' ? (
           <View style={{ flex: 1 }}>
-            <MapcnMap
-              center={currentMapCenter}
-              zoom={9}
-              markers={mapMarkers}
-              activeLocation={selectedLocation}
-              onMarkerPress={(cityName) => handleChooseCity(cityName)}
-              onSelectLocation={(cityName) => handleChooseCity(cityName)}
-              cardContainer={false}
-              height="100%"
-              style={{ flex: 1, width: '100%' }}
-            />
+            {/* Quick Barangay Chips Toolbar */}
+            {quickBarangays.length > 0 && (
+              <View style={[styles.quickBarangayToolbar, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
+                <Text style={[styles.quickBarangayLabel, { color: textMuted }]}>
+                  Barangays in {selectedLocation}:
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+                  {quickBarangays.map((bName) => {
+                    const isPinned =
+                      localPinnedBarangay &&
+                      localPinnedBarangay.barangay?.toLowerCase() === bName.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={bName}
+                        onPress={() => handleQuickChipSelect(bName)}
+                        style={[
+                          styles.barangayChip,
+                          {
+                            backgroundColor: isPinned ? logoGreen : isDarkMode ? '#0F172A' : '#F1F5F9',
+                            borderColor: isPinned ? logoGreen : borderColor,
+                          },
+                        ]}
+                        activeOpacity={0.75}
+                      >
+                        <MapPin size={10} color={isPinned ? '#FFFFFF' : logoGreen} style={{ marginRight: 4 }} />
+                        <Text
+                          style={[
+                            styles.barangayChipText,
+                            { color: isPinned ? '#FFFFFF' : textColor, fontWeight: isPinned ? '800' : '600' },
+                          ]}
+                        >
+                          {bName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Interactive Map */}
+            <View style={{ flex: 1 }}>
+              <MapcnMap
+                center={effectiveMapCenter}
+                zoom={localPinnedBarangay ? 14 : 9}
+                markers={mapMarkers}
+                activeLocation={selectedLocation}
+                pinnedBarangay={localPinnedBarangay}
+                onPinBarangay={handleMapPin}
+                onMarkerPress={(cityName) => handleChooseCity(cityName)}
+                onSelectLocation={(cityName) => handleChooseCity(cityName)}
+                cardContainer={false}
+                height="100%"
+                style={{ flex: 1, width: '100%' }}
+              />
+
+              {/* Floating Instruction Banner on Map */}
+              <View style={styles.floatingMapGuide}>
+                {isResolvingBarangay ? (
+                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
+                    <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text style={[styles.guideText, { color: logoGreen }]}>
+                      Resolving exact Barangay...
+                    </Text>
+                  </View>
+                ) : localPinnedBarangay ? (
+                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
+                    <CheckCircle2 size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text style={[styles.guideText, { color: textColor }]}>
+                      📍 Pinned: <Text style={{ fontWeight: '800', color: logoGreen }}>{localPinnedBarangay.formattedTitle || `Brgy. ${localPinnedBarangay.barangay}`}</Text>
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor }]}>
+                    <Navigation size={12} color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text style={[styles.guideText, { color: textColor }]}>
+                      Tap anywhere on the map to pin your exact Barangay
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
         ) : (
           <FlatList
@@ -198,43 +433,98 @@ export default function PhilippineLocationModal({
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={
-              !searchQuery ? (
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={[styles.sectionHeading, { color: textMuted }]}>
-                    POPULAR PHILIPPINE CULINARY CAPITALS
-                  </Text>
-                  <View style={styles.hubGrid}>
-                    {POPULAR_CULINARY_HUBS.map((hub) => {
-                      const isSelected = selectedLocation === hub.name;
+              <View>
+                {/* EXACT BARANGAY MATCHES SECTION */}
+                {barangaySearchResults.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={[styles.sectionHeading, { color: logoGreen }]}>
+                      EXACT BARANGAY MATCHES ({barangaySearchResults.length})
+                    </Text>
+                    {barangaySearchResults.map((brgyItem, idx) => {
+                      const isPinned =
+                        localPinnedBarangay &&
+                        localPinnedBarangay.barangay?.toLowerCase() === brgyItem.barangay?.toLowerCase();
                       return (
                         <TouchableOpacity
-                          key={hub.name}
-                          onPress={() => handleChooseCity(hub.name)}
+                          key={`${brgyItem.barangay}-${idx}`}
+                          onPress={() => handleSelectBarangayItem(brgyItem)}
                           style={[
-                            styles.hubCard,
-                            { backgroundColor: cardBg, borderColor: isSelected ? logoGreen : borderColor },
-                            isSelected && { borderWidth: 2 },
+                            styles.barangayItemCard,
+                            {
+                              backgroundColor: cardBg,
+                              borderColor: isPinned ? logoGreen : borderColor,
+                            },
+                            isPinned && { borderWidth: 1.8 },
                           ]}
                           activeOpacity={0.8}
                         >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <MapPin size={12} color={logoGreen} style={{ marginRight: 4 }} />
-                            <Text style={[styles.hubName, { color: textColor }]} numberOfLines={1}>
-                              {hub.name}
+                          <View style={[styles.pinIconBox, { backgroundColor: `${logoGreen}18` }]}>
+                            <MapPin size={16} color={logoGreen} />
+                          </View>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Text style={[styles.barangayTitle, { color: textColor }]}>
+                                {brgyItem.name}
+                              </Text>
+                              <View style={[styles.barangayBadge, { backgroundColor: `${logoGreen}20` }]}>
+                                <Text style={[styles.barangayBadgeText, { color: logoGreen }]}>
+                                  Exact Barangay
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={[styles.barangayCitySub, { color: textMuted }]}>
+                              {brgyItem.city} {brgyItem.province ? `• ${brgyItem.province}` : ''}
                             </Text>
                           </View>
-                          <Text style={styles.hubSpecialty} numberOfLines={1}>
-                            {hub.specialty}
-                          </Text>
+                          <View style={styles.pinActionBtn}>
+                            <Text style={styles.pinActionBtnText}>Pin</Text>
+                            <ChevronRight size={12} color="#FFFFFF" style={{ marginLeft: 2 }} />
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                  <Text style={[styles.sectionHeading, { color: textMuted, marginTop: 12 }]}>
-                    ALL CITIES & MUNICIPALITIES ({searchResults.length})
-                  </Text>
-                </View>
-              ) : null
+                )}
+
+                {/* Popular culinary hubs */}
+                {!searchQuery && (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={[styles.sectionHeading, { color: textMuted }]}>
+                      POPULAR PHILIPPINE CULINARY CAPITALS
+                    </Text>
+                    <View style={styles.hubGrid}>
+                      {POPULAR_CULINARY_HUBS.map((hub) => {
+                        const isSelected = selectedLocation === hub.name;
+                        return (
+                          <TouchableOpacity
+                            key={hub.name}
+                            onPress={() => handleChooseCity(hub.name)}
+                            style={[
+                              styles.hubCard,
+                              { backgroundColor: cardBg, borderColor: isSelected ? logoGreen : borderColor },
+                              isSelected && { borderWidth: 2 },
+                            ]}
+                            activeOpacity={0.8}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                              <MapPin size={12} color={logoGreen} style={{ marginRight: 4 }} />
+                              <Text style={[styles.hubName, { color: textColor }]} numberOfLines={1}>
+                                {hub.name}
+                              </Text>
+                            </View>
+                            <Text style={styles.hubSpecialty} numberOfLines={1}>
+                              {hub.specialty}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <Text style={[styles.sectionHeading, { color: textMuted, marginTop: 12 }]}>
+                      ALL CITIES & MUNICIPALITIES ({searchResults.length})
+                    </Text>
+                  </View>
+                )}
+              </View>
             }
             renderItem={({ item }) => {
               const isSelected = selectedLocation === item.name;
@@ -276,7 +566,7 @@ export default function PhilippineLocationModal({
               <View style={styles.emptyContainer}>
                 <Sparkles size={36} color={logoGreen} style={{ marginBottom: 12 }} />
                 <Text style={[styles.emptyTitle, { color: textColor }]}>
-                  City Not in Fast List?
+                  Location Not in Fast List?
                 </Text>
                 <Text style={[styles.emptySubtitle, { color: textMuted }]}>
                   We can generate authentic palengke food data for "{searchQuery}" anywhere in the Philippines!
@@ -327,17 +617,22 @@ export default function PhilippineLocationModal({
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Active City Bar */}
+        {/* Bottom Active Location / Pinned Barangay Bar */}
         <View style={[styles.bottomBar, { backgroundColor: cardBg, borderColor: logoGreen }]}>
           <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={[styles.bottomBarTitle, { color: textColor }]} numberOfLines={1}>
-              {currentCityProfile?.marketTitle || selectedLocation || 'Select Location'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MapPin size={13} color={logoGreen} style={{ marginRight: 5 }} />
+              <Text style={[styles.bottomBarTitle, { color: textColor }]} numberOfLines={1}>
+                {localPinnedBarangay?.formattedTitle || currentCityProfile?.marketTitle || selectedLocation || 'Select Location'}
+              </Text>
+            </View>
             <Text style={styles.bottomBarSub} numberOfLines={1}>
-              {currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions'}
+              {localPinnedBarangay
+                ? `Exact Barangay Pinned (${localPinnedBarangay.lat.toFixed(3)}, ${localPinnedBarangay.lng.toFixed(3)})`
+                : (currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions')}
             </Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.doneBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={handleConfirmAndClose} style={styles.doneBtn} activeOpacity={0.8}>
             <Text style={styles.doneBtnText}>Confirm</Text>
           </TouchableOpacity>
         </View>
@@ -383,8 +678,78 @@ const styles = StyleSheet.create({
   },
   viewToggleBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 9 },
   viewToggleText: { fontSize: 11, fontWeight: '800' },
+  quickBarangayToolbar: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  quickBarangayLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  barangayChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  barangayChipText: {
+    fontSize: 11,
+  },
+  floatingMapGuide: {
+    position: 'absolute',
+    top: 14,
+    left: 16,
+    right: 16,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  guidePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  guideText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   listContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 130 },
   sectionHeading: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 8 },
+  barangayItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  barangayTitle: { fontSize: 13, fontWeight: '800' },
+  barangayBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 6 },
+  barangayBadgeText: { fontSize: 9, fontWeight: '800' },
+  barangayCitySub: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  pinActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: logoGreen,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  pinActionBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   hubGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   hubCard: {
     width: (screenWidth - 40) / 2,
