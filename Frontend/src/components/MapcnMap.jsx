@@ -106,6 +106,30 @@ export default function MapcnMap({
     }
   }, [activeLocation]);
 
+  // Push updated barangay markers into webview when markers change
+  useEffect(() => {
+    if (webViewRef.current && Array.isArray(markers)) {
+      const standardized = markers.map((m, idx) => ({
+        id: m.id ?? idx,
+        name: m.name || m.title || 'Location',
+        barangay: m.barangay || '',
+        city: m.city || '',
+        lat: Number(m.lat ?? m.latitude ?? 0),
+        lng: Number(m.lng ?? m.longitude ?? 0),
+        subtitle: m.subtitle || m.desc || '',
+        active: Boolean(m.active),
+        isBarangay: Boolean(m.isBarangay || m.barangay),
+      }));
+      const script = `
+        if (typeof updateBarangayMarkers === 'function') {
+          updateBarangayMarkers(${JSON.stringify(standardized)});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  }, [markers]);
+
   const bgColor = '#F8FAFC';
   const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
 
@@ -279,6 +303,74 @@ export default function MapcnMap({
         .mapboxgl-ctrl-bottom-right { 
           display: none !important; 
         }
+
+        /* ── Exact Barangay Red Dot Pinpoint ── */
+        .mapcn-barangay-dot-marker {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+          user-select: none;
+          transform: translate(-50%, -50%);
+          z-index: 25;
+          transition: transform 0.15s ease-out;
+        }
+        .mapcn-barangay-dot-marker:hover {
+          transform: translate(-50%, -50%) scale(1.22);
+          z-index: 35;
+        }
+        .mapcn-red-dot-core {
+          width: 14px;
+          height: 14px;
+          background-color: #EF4444;
+          border: 2.5px solid #FFFFFF;
+          border-radius: 50%;
+          box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.45), 0 2px 7px rgba(0, 0, 0, 0.42);
+          position: relative;
+        }
+        .mapcn-red-dot-pulse {
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          width: 26px;
+          height: 26px;
+          border: 1.5px solid rgba(239, 68, 68, 0.65);
+          border-radius: 50%;
+          animation: redPulse 2.2s infinite ease-out;
+          pointer-events: none;
+        }
+        @keyframes redPulse {
+          0% { transform: scale(0.7); opacity: 0.95; }
+          100% { transform: scale(1.55); opacity: 0; }
+        }
+        .mapcn-barangay-label {
+          font-size: 10px;
+          font-weight: 800;
+          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)'};
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.12)'};
+          padding: 1px 6px;
+          border-radius: 6px;
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.22);
+          white-space: nowrap;
+          margin-top: 3px;
+          pointer-events: none;
+        }
+        .mapcn-exact-pinpoint-red-dot {
+          position: absolute;
+          bottom: -6px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 14px;
+          height: 14px;
+          background-color: #EF4444;
+          border: 2.5px solid #FFFFFF;
+          border-radius: 50%;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5), 0 2px 7px rgba(0, 0, 0, 0.45);
+          z-index: 15;
+        }
       </style>
     </head>
     <body>
@@ -434,6 +526,60 @@ export default function MapcnMap({
         // ── Single Active Municipality <MapPin /> & Popup ──
         var markersData = ${JSON.stringify(formattedMarkers)};
         var activePinMarker = null;
+        var barangayMarkerElements = [];
+
+        function updateBarangayMarkers(newList) {
+          markersData = newList || [];
+          renderBarangayMarkers();
+        }
+        window.updateBarangayMarkers = updateBarangayMarkers;
+
+        function renderBarangayMarkers() {
+          barangayMarkerElements.forEach(function(m) {
+            try { m.remove(); } catch(_) {}
+          });
+          barangayMarkerElements = [];
+
+          if (!markersData || !markersData.length) return;
+
+          markersData.forEach(function(item) {
+            if (!item.lat || !item.lng) return;
+
+            var el = document.createElement('div');
+            el.className = 'mapcn-barangay-dot-marker';
+            var shortLabel = item.barangay || item.name.replace(/^Brgy\.\s*/i, '');
+            el.innerHTML = [
+              '<div class="mapcn-red-dot-core">',
+                '<div class="mapcn-red-dot-pulse"></div>',
+              '</div>',
+              '<div class="mapcn-barangay-label">' + shortLabel + '</div>'
+            ].join('');
+
+            el.addEventListener('click', function(e) {
+              e.stopPropagation();
+              showActivePin('📍 ' + item.name, [item.lng, item.lat]);
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'MAP_TAP_COORDS',
+                  lng: item.lng,
+                  lat: item.lat,
+                  name: item.name,
+                  barangay: item.barangay,
+                  city: item.city
+                }));
+              }
+            });
+
+            var marker = new maplibregl.Marker({
+              element: el,
+              anchor: 'center'
+            })
+              .setLngLat([item.lng, item.lat])
+              .addTo(map);
+
+            barangayMarkerElements.push(marker);
+          });
+        }
 
         function showActivePin(municipalityName, lngLat) {
           if (!municipalityName || !lngLat) return;
@@ -454,9 +600,10 @@ export default function MapcnMap({
                   '</filter>',
                 '</defs>',
                 '<path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" fill="#10B981" stroke="#065F46" stroke-width="1.2" filter="url(#pinShadow)"/>',
-                '<circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>',
+                '<circle cx="12" cy="10" r="3.6" fill="#EF4444" stroke="#FFFFFF" stroke-width="1.2"/>',
               '</svg>',
-            '</div>'
+            '</div>',
+            '<div class="mapcn-exact-pinpoint-red-dot"></div>'
           ].join('');
 
           var popupContent = [
@@ -494,6 +641,7 @@ export default function MapcnMap({
         }
 
         function renderMarkers() {
+          renderBarangayMarkers();
           if (currentActiveLocation) {
             applyActiveBoundary(currentActiveLocation, false);
           }
@@ -660,6 +808,7 @@ export default function MapcnMap({
         map.on('style.load', function() {
           enhanceMapColors();
           initBoundaries();
+          renderBarangayMarkers();
           if (currentActiveLocation) {
             applyActiveBoundary(currentActiveLocation, true);
           }

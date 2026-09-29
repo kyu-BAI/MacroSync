@@ -44,7 +44,6 @@ import { normalizeToCebuLGU, getDynamicPalengkePlan } from "../../data/cebuPalen
 import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from "../../data/cebu_locations";
 import {
   PHILIPPINE_REGIONS,
-  POPULAR_CULINARY_HUBS,
   PHILIPPINE_CITY_COORDINATES,
   normalizeToPhilippineLocation,
 } from "../../data/philippine_locations";
@@ -61,7 +60,7 @@ import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
 import MapcnMap from "../../components/MapcnMap";
-import { reverseGeocodeToBarangay } from "../../services/barangayGeocodingService";
+import { reverseGeocodeToBarangay, getBarangayMarkersForCity } from "../../services/barangayGeocodingService";
 
 // Re-export normalizeToCebuLGU for backward compatibility
 export { normalizeToCebuLGU };
@@ -241,6 +240,11 @@ export default function DietRecipesScreen({
       setSelectedLocation(normCity);
     }
   }, []);
+
+  // Dynamic barangay markers with red dots for the selected city
+  const barangayMarkers = useMemo(() => {
+    return getBarangayMarkersForCity(selectedLocation);
+  }, [selectedLocation]);
 
   // Global meal log synchronization
   const loggedMeals = globalLoggedMeals;
@@ -925,41 +929,56 @@ export default function DietRecipesScreen({
                 </TouchableOpacity>
               </View>
 
-              {/* QUICK POPULAR PHILIPPINE CULINARY HUBS */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.hubScrollContainer}
-                contentContainerStyle={styles.hubScrollContent}
-              >
-                {POPULAR_CULINARY_HUBS.map((hub) => {
-                  const isSelected = selectedLocation === hub.name;
-                  return (
-                    <TouchableOpacity
-                      key={hub.name}
-                      onPress={() => setSelectedLocation(hub.name)}
-                      style={[styles.hubPill, isSelected && styles.hubPillActive]}
-                      activeOpacity={0.75}
-                    >
-                      <MapPin
-                        size={11}
-                        color={isSelected ? "#FFFFFF" : logoGreen}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text style={[styles.hubPillText, isSelected && styles.hubPillTextActive]}>
-                        {hub.name.split(" ")[0]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              {/* QUICK BARANGAY SELECTOR CHIPS WITH RED DOT PINPOINT */}
+              {barangayMarkers.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.hubScrollContainer}
+                  contentContainerStyle={styles.hubScrollContent}
+                >
+                  {barangayMarkers.map((b) => {
+                    const isPinned =
+                      pinnedBarangay &&
+                      (pinnedBarangay.barangay?.toLowerCase() === b.barangay.toLowerCase() ||
+                        pinnedBarangay.formattedTitle?.toLowerCase().includes(b.barangay.toLowerCase()));
+                    return (
+                      <TouchableOpacity
+                        key={b.id}
+                        onPress={() => handlePinBarangay(b)}
+                        style={[
+                          styles.hubPill,
+                          isPinned && styles.hubPillActive,
+                          { flexDirection: "row", alignItems: "center" },
+                        ]}
+                        activeOpacity={0.75}
+                      >
+                        <View
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 4,
+                            backgroundColor: isPinned ? "#FFFFFF" : "#EF4444",
+                            marginRight: 5,
+                            borderWidth: 1,
+                            borderColor: isPinned ? "#EF4444" : "#FFFFFF",
+                          }}
+                        />
+                        <Text style={[styles.hubPillText, isPinned && styles.hubPillTextActive]}>
+                          {b.barangay}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
 
               {/* mapcn MAP CONTAINER */}
               <View style={styles.staticMapContainer}>
                 <MapcnMap
                   center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
                   zoom={pinnedBarangay ? 13 : 9}
-                  markers={mapMarkers}
+                  markers={[...mapMarkers, ...barangayMarkers]}
                   activeLocation={selectedLocation}
                   pinnedBarangay={pinnedBarangay}
                   onPinBarangay={handlePinBarangay}
@@ -1046,7 +1065,7 @@ export default function DietRecipesScreen({
                 <View style={{ marginTop: 12, alignItems: "center", paddingVertical: 14 }}>
                   <ActivityIndicator size="small" color={logoGreen} />
                   <Text style={{ fontSize: 11, color: isDarkMode ? "#94A3B8" : "#64748B", marginTop: 6 }}>
-                    Loading culinary profile for {selectedLocation}...
+                    Loading local food profile for {selectedLocation}...
                   </Text>
                 </View>
               ) : (
@@ -1203,7 +1222,7 @@ export default function DietRecipesScreen({
         onClose={() => setShowFullMapModal(false)}
         isDarkMode={isDarkMode}
         currentMapCenter={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
-        mapMarkers={mapMarkers}
+        mapMarkers={[...mapMarkers, ...barangayMarkers]}
         selectedLocation={selectedLocation}
         onSelectLocation={setSelectedLocation}
         pinnedBarangay={pinnedBarangay}

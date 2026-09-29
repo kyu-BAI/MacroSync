@@ -16,7 +16,6 @@ import { X, Home, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, 
 import MapcnMap from './MapcnMap';
 import {
   PHILIPPINE_REGIONS,
-  POPULAR_CULINARY_HUBS,
   searchPhilippineLocations,
   PHILIPPINE_CITY_COORDINATES,
   normalizeToPhilippineLocation,
@@ -27,6 +26,7 @@ import {
   searchPhilippineBarangays,
   POPULAR_BARANGAYS_BY_CITY,
   POPULAR_BARANGAY_COORDINATES,
+  getBarangayMarkersForCity,
 } from '../services/barangayGeocodingService';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -100,6 +100,15 @@ export default function PhilippineLocationModal({
       []
     );
   }, [selectedLocation]);
+
+  // Dynamic barangay markers for the selected city with exact red dots
+  const barangayMarkers = useMemo(() => {
+    return getBarangayMarkersForCity(selectedLocation);
+  }, [selectedLocation]);
+
+  const combinedMarkers = useMemo(() => {
+    return [...mapMarkers, ...barangayMarkers];
+  }, [mapMarkers, barangayMarkers]);
 
   // Handle choosing a city
   const handleChooseCity = (cityName) => {
@@ -234,11 +243,11 @@ export default function PhilippineLocationModal({
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Compass size={18} color={logoGreen} style={{ marginRight: 6 }} />
               <Text style={[styles.headerTitle, { color: textColor }]}>
-                Philippine Food Explorer
+                Philippine Barangay & City Explorer
               </Text>
             </View>
             <Text style={[styles.headerSub, { color: textMuted }]}>
-              Pin your exact Barangay or search any city in the Philippines
+              Pin your exact Barangay or search any location in the Philippines
             </Text>
           </View>
           <TouchableOpacity
@@ -316,7 +325,7 @@ export default function PhilippineLocationModal({
                   activeViewMode === 'EXPLORE' ? { color: '#FFFFFF' } : { color: textMuted },
                 ]}
               >
-                Culinary Locations ({searchResults.length})
+                Locations ({searchResults.length})
               </Text>
             </TouchableOpacity>
 
@@ -367,7 +376,17 @@ export default function PhilippineLocationModal({
                         ]}
                         activeOpacity={0.75}
                       >
-                        <MapPin size={10} color={isPinned ? '#FFFFFF' : logoGreen} style={{ marginRight: 4 }} />
+                        <View
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 4,
+                            backgroundColor: isPinned ? '#FFFFFF' : '#EF4444',
+                            marginRight: 5,
+                            borderWidth: 1,
+                            borderColor: isPinned ? '#EF4444' : '#FFFFFF',
+                          }}
+                        />
                         <Text
                           style={[
                             styles.barangayChipText,
@@ -388,7 +407,7 @@ export default function PhilippineLocationModal({
               <MapcnMap
                 center={effectiveMapCenter}
                 zoom={localPinnedBarangay ? 14 : 9}
-                markers={mapMarkers}
+                markers={combinedMarkers}
                 activeLocation={selectedLocation}
                 pinnedBarangay={localPinnedBarangay}
                 onPinBarangay={handleMapPin}
@@ -458,8 +477,8 @@ export default function PhilippineLocationModal({
                           ]}
                           activeOpacity={0.8}
                         >
-                          <View style={[styles.pinIconBox, { backgroundColor: `${logoGreen}18` }]}>
-                            <MapPin size={16} color={logoGreen} />
+                          <View style={[styles.pinIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' }} />
                           </View>
                           <View style={{ flex: 1, paddingRight: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -486,40 +505,10 @@ export default function PhilippineLocationModal({
                   </View>
                 )}
 
-                {/* Popular culinary hubs */}
+                {/* Cities list heading */}
                 {!searchQuery && (
-                  <View style={{ marginBottom: 14 }}>
+                  <View style={{ marginBottom: 12 }}>
                     <Text style={[styles.sectionHeading, { color: textMuted }]}>
-                      POPULAR PHILIPPINE CULINARY CAPITALS
-                    </Text>
-                    <View style={styles.hubGrid}>
-                      {POPULAR_CULINARY_HUBS.map((hub) => {
-                        const isSelected = selectedLocation === hub.name;
-                        return (
-                          <TouchableOpacity
-                            key={hub.name}
-                            onPress={() => handleChooseCity(hub.name)}
-                            style={[
-                              styles.hubCard,
-                              { backgroundColor: cardBg, borderColor: isSelected ? logoGreen : borderColor },
-                              isSelected && { borderWidth: 2 },
-                            ]}
-                            activeOpacity={0.8}
-                          >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                              <MapPin size={12} color={logoGreen} style={{ marginRight: 4 }} />
-                              <Text style={[styles.hubName, { color: textColor }]} numberOfLines={1}>
-                                {hub.name}
-                              </Text>
-                            </View>
-                            <Text style={styles.hubSpecialty} numberOfLines={1}>
-                              {hub.specialty}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    <Text style={[styles.sectionHeading, { color: textMuted, marginTop: 12 }]}>
                       ALL CITIES & MUNICIPALITIES ({searchResults.length})
                     </Text>
                   </View>

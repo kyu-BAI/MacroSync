@@ -345,3 +345,31 @@ export async function searchPhilippineBarangays(query) {
 
   return localMatches;
 }
+
+/**
+ * Returns an array of barangay markers for a given city with exact coordinates
+ */
+export function getBarangayMarkersForCity(cityName) {
+  if (!cityName) return [];
+  const cleanCity = cityName.toLowerCase().replace(/\s+city$/i, '').trim();
+  const markers = [];
+
+  Object.keys(POPULAR_BARANGAY_COORDINATES).forEach((k) => {
+    const item = POPULAR_BARANGAY_COORDINATES[k];
+    const itemCity = item.city.toLowerCase().replace(/\s+city$/i, '').trim();
+    if (itemCity.includes(cleanCity) || cleanCity.includes(itemCity)) {
+      markers.push({
+        id: `brgy-${k}`,
+        name: `Brgy. ${item.barangay}`,
+        barangay: item.barangay,
+        city: item.city,
+        province: item.province,
+        lat: item.lat,
+        lng: item.lng,
+        isBarangay: true,
+      });
+    }
+  });
+
+  return markers;
+}
