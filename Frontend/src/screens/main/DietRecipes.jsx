@@ -977,7 +977,7 @@ export default function DietRecipesScreen({
               <View style={styles.staticMapContainer}>
                 <MapcnMap
                   center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
-                  zoom={pinnedBarangay ? 13 : 9}
+                  zoom={9}
                   markers={[...mapMarkers, ...barangayMarkers]}
                   activeLocation={selectedLocation}
                   pinnedBarangay={pinnedBarangay}

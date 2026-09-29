@@ -53,25 +53,23 @@ export default function MapcnMap({
     ? center
     : [center.lng ?? center.longitude ?? 123.8854, center.lat ?? center.latitude ?? 10.3157];
 
-  // Fly to new center when updated from React Native
+  // Pan to new center when updated from React Native (maintains current zoom level)
   useEffect(() => {
     if (webViewRef.current && centerCoords) {
       const script = `
         if (window.map) {
-          window.map.flyTo({
-            center: ${JSON.stringify(centerCoords)},
-            zoom: ${zoom},
-            essential: true,
-            duration: 800
+          window.map.panTo(${JSON.stringify(centerCoords)}, {
+            duration: 600,
+            essential: true
           });
         }
         true;
       `;
       webViewRef.current.injectJavaScript(script);
     }
-  }, [centerCoords[0], centerCoords[1], zoom]);
+  }, [centerCoords[0], centerCoords[1]]);
 
-  // Fly to and pin exact barangay when pinnedBarangay changes
+  // Pin exact barangay and pan without zooming in when pinnedBarangay changes
   useEffect(() => {
     if (webViewRef.current && pinnedBarangay && pinnedBarangay.lat && pinnedBarangay.lng) {
       const title = pinnedBarangay.formattedTitle || pinnedBarangay.name || 'Pinned Barangay';
@@ -83,11 +81,9 @@ export default function MapcnMap({
           showActivePin(${JSON.stringify(title)}, [${pinnedBarangay.lng}, ${pinnedBarangay.lat}]);
         }
         if (window.map) {
-          window.map.flyTo({
-            center: [${pinnedBarangay.lng}, ${pinnedBarangay.lat}],
-            zoom: 14.5,
-            essential: true,
-            duration: 850
+          window.map.panTo([${pinnedBarangay.lng}, ${pinnedBarangay.lat}], {
+            duration: 600,
+            essential: true
           });
         }
         true;
@@ -97,6 +93,9 @@ export default function MapcnMap({
       const script = `
         if (typeof isBarangayPinned !== 'undefined') {
           isBarangayPinned = false;
+        }
+        if (typeof removeActivePin === 'function') {
+          removeActivePin();
         }
         true;
       `;
@@ -368,19 +367,46 @@ export default function MapcnMap({
           white-space: nowrap;
           margin-top: 3px;
           pointer-events: none;
-        }
         .mapcn-exact-pinpoint-red-dot {
           position: absolute;
-          bottom: -6px;
+          bottom: -7px;
           left: 50%;
           transform: translateX(-50%);
           width: 14px;
           height: 14px;
           background-color: #EF4444;
-          border: 2.5px solid #FFFFFF;
+          border: 3px solid #FFFFFF;
           border-radius: 50%;
-          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5), 0 2px 7px rgba(0, 0, 0, 0.45);
-          z-index: 15;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.55), 0 3px 8px rgba(0, 0, 0, 0.5);
+          z-index: 25;
+        }
+        .mapcn-exact-pinpoint-pulse {
+          position: absolute;
+          bottom: -17px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 34px;
+          height: 34px;
+          border: 2.5px solid #EF4444;
+          border-radius: 50%;
+          animation: redPinpointPulse 1.8s infinite ease-out;
+          pointer-events: none;
+          z-index: 10;
+        }
+        @keyframes redPinpointPulse {
+          0% { transform: translateX(-50%) scale(0.3); opacity: 1; }
+          100% { transform: translateX(-50%) scale(1.6); opacity: 0; }
+        }
+        .mapcn-popup-pinned {
+          border-left: 3px solid #EF4444 !important;
+        }
+        .mapcn-popup-pinned-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: #EF4444;
+          margin-right: 6px;
+          flex-shrink: 0;
         }
       </style>
     </head>
@@ -621,27 +647,34 @@ export default function MapcnMap({
           el.className = 'mapcn-mappin-wrapper';
           el.innerHTML = [
             '<div class="mapcn-mappin-pin">',
-              '<svg width="34" height="42" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
+              '<svg width="38" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
                 '<defs>',
+                  '<linearGradient id="activeRedPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
+                    '<stop offset="0%" stop-color="#EF4444"/>',
+                    '<stop offset="100%" stop-color="#B91C1C"/>',
+                  '</linearGradient>',
                   '<filter id="pinShadow" x="-30%" y="-15%" width="160%" height="160%">',
-                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.5" flood-color="rgba(0,0,0,0.38)"/>',
+                    '<feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="rgba(185,28,28,0.45)"/>',
                   '</filter>',
                 '</defs>',
-                '<path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" fill="#10B981" stroke="#065F46" stroke-width="1.2" filter="url(#pinShadow)"/>',
-                '<circle cx="12" cy="10" r="3.6" fill="#EF4444" stroke="#FFFFFF" stroke-width="1.2"/>',
+                '<path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" fill="url(#activeRedPinGrad)" stroke="#7F1D1D" stroke-width="1.3" filter="url(#pinShadow)"/>',
+                '<circle cx="12" cy="10" r="4.2" fill="#FFFFFF"/>',
+                '<circle cx="12" cy="10" r="2.2" fill="#EF4444"/>',
               '</svg>',
             '</div>',
+            '<div class="mapcn-exact-pinpoint-pulse"></div>',
             '<div class="mapcn-exact-pinpoint-red-dot"></div>'
           ].join('');
 
           var popupContent = [
-            '<div class="mapcn-popup-card">',
+            '<div class="mapcn-popup-card mapcn-popup-pinned">',
+              '<div class="mapcn-popup-pinned-dot"></div>',
               '<div class="mapcn-popup-name">' + municipalityName + '</div>',
             '</div>'
           ].join('');
 
           var popup = new maplibregl.Popup({
-            offset: [0, -38],
+            offset: [0, -42],
             closeButton: false,
             closeOnClick: false,
             className: 'mapcn-single-popup'

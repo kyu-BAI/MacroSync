@@ -406,7 +406,7 @@ export default function PhilippineLocationModal({
             <View style={{ flex: 1 }}>
               <MapcnMap
                 center={effectiveMapCenter}
-                zoom={localPinnedBarangay ? 14 : 9}
+                zoom={9}
                 markers={combinedMarkers}
                 activeLocation={selectedLocation}
                 pinnedBarangay={localPinnedBarangay}
