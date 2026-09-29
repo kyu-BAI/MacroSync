@@ -37,7 +37,7 @@ const RECIPE_STAGES = [
   "Finalizing AI recipe card..."
 ];
 
-export default function AILoadingModal({
+export default function LoadingModal({
   visible,
   type = 'meal', // 'meal' | 'workout' | 'recipe'
   title,

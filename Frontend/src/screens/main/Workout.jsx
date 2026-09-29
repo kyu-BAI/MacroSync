@@ -11,6 +11,7 @@ import {
   Modal,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import {
@@ -35,11 +36,10 @@ import {
 } from "../../services/OfflineStorage";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
-import AILoadingModal from "../../components/AILoadingModal";
+import LoadingModal from "../../components/LoadingModal";
 import StaggerCard from "../../components/StaggerCard";
 import PressableCard from "../../components/PressableCard";
 import SkeletonCard from "../../components/SkeletonCard";
-import { getStyles } from "./WorkoutScreen.styles";
 const logoGreen = "#10B981";
 
 const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
@@ -1560,7 +1560,7 @@ export default function WorkoutScreen({
       </ScrollView>
 
       {/* UIverse Inspired AI Customization Loading Modal */}
-      <AILoadingModal
+      <LoadingModal
         visible={isGeneratingWorkout || loading}
         type="workout"
         title="Customizing Workout Routine"
@@ -1569,3 +1569,453 @@ export default function WorkoutScreen({
     </View>
   );
 }
+
+// --- COMPONENT STYLES ---
+const baseColor = '#F8FAFC';           
+        
+
+const getStyles = (theme) => StyleSheet.create({
+  fullscreenOverlay: { 
+    position: 'absolute', 
+    top: 0, 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    width: screenWidth, 
+    height: screenHeight, 
+    backgroundColor: theme?.background || baseColor,
+  },
+  container: { 
+    flex: 1,
+  },
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
+    paddingBottom: 85,
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 12, 
+    paddingHorizontal: 4, 
+    width: '100%',
+  },
+  headerTextGroup: { 
+    flex: 1, 
+    paddingRight: 12,
+  },
+  appName: { 
+    fontSize: 12, 
+    fontWeight: '900', 
+    color: logoGreen, 
+    textTransform: 'uppercase', 
+    letterSpacing: 2, 
+    marginBottom: 2,
+  },
+  greeting: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: theme?.textPrimary || '#0F172A', 
+    letterSpacing: -0.5,
+  },
+  subGreeting: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: theme?.textSecondary || '#64748B', 
+    marginTop: 2,
+  },
+  formCard: {
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 24, 
+    padding: 18, 
+    marginBottom: 16, 
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  cardTitle: { 
+    fontSize: 11, 
+    color: theme?.textPrimary || '#0F172A', 
+    textTransform: 'uppercase', 
+    letterSpacing: 1.2, 
+    marginBottom: 12, 
+    fontWeight: '800', 
+    marginLeft: 2,
+  },
+  filterButtonGroupRow: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap',
+  },
+  filterChipButton: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
+    borderRadius: 16, 
+    marginRight: 8, 
+    marginBottom: 8, 
+    backgroundColor: theme?.surface || baseColor,
+    borderWidth: 1.2, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  filterChipInactive: { 
+    backgroundColor: theme?.surface || baseColor,
+  },
+  filterChipActive: { 
+    backgroundColor: logoGreen, 
+    borderWidth: 1.5,
+    borderColor: logoGreen,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  filterChipText: { 
+    fontSize: 12, 
+    fontWeight: '800',
+  },
+  sectionLabelTitle: { 
+    fontSize: 14, 
+    fontWeight: '900', 
+    color: theme?.textPrimary || '#0F172A', 
+    marginBottom: 12, 
+    marginLeft: 4, 
+    letterSpacing: -0.2,
+  },
+  workoutFormCard: {
+    backgroundColor: theme?.surface || baseColor, 
+    borderRadius: 20, 
+    padding: 16, 
+    marginBottom: 14,
+    borderWidth: 1.2,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  workoutHeaderRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start',
+  },
+  workoutTitleContainer: { 
+    flex: 1,
+  },
+  workoutMainTitle: { 
+    fontSize: 16, 
+    fontWeight: '900', 
+    color: theme?.textPrimary || '#0F172A', 
+    marginBottom: 6, 
+    lineHeight: 20,
+  },
+  workoutDescriptionText: {
+    fontSize: 13,
+    color: theme?.textSecondary || '#64748B',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  glassDivider: { 
+    height: 1, 
+    backgroundColor: theme?.border || '#E2E8F0', 
+    marginVertical: 12,
+  },
+  workoutMetricsSummaryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  metricItemBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricIconSpacer: {
+    marginRight: 6,
+  },
+  metricTileLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme?.textSecondary || '#94A3B8',
+  },
+  metricTileValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    marginTop: 1,
+  },
+  startWorkoutActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: logoGreen,
+    paddingVertical: 12,
+    marginTop: 14,
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  startWorkoutButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  floatingChatbotContainer: { 
+    position: 'absolute', 
+    bottom: 104, 
+    right: 20, 
+    zIndex: 99,
+  },
+  chatbotFloatingButton: {
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
+  chatbotUnpressed: { 
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+  },
+  chatbotPressed: { 
+    backgroundColor: '#059669',
+    transform: [{ scale: 0.95 }],
+  },
+
+  playerWrapper: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 8,
+    paddingBottom: 0,
+    backgroundColor: theme?.background || baseColor,
+  },
+  playerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    width: '100%',
+  },
+  playerBackNeuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: theme?.surface || baseColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  playerHeaderCenterText: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  playerRoutineSubTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#94A3B8',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  playerStepIndicator: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: theme?.textPrimary || '#0F172A',
+    marginTop: 1,
+  },
+  playerMainCard: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 0,
+    borderWidth: 0, 
+    borderColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  animationPlaceholderFrame: {
+    height: '42%',
+    backgroundColor: theme?.cardBg || '#F1F5F9',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  placeholderAnimateIcon: {
+    transform: [{ scale: 1.1 }],
+  },
+  liveActivityBadge: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme?.surface || 'rgba(255, 255, 255, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+  },
+  liveBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#10B981',
+    letterSpacing: 0.5,
+  },
+  playerExerciseTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: theme?.textPrimary || '#0F172A',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  targetMetricChipBox: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: logoGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginTop: 8,
+  },
+  targetMetricChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  playerGlassDivider: {
+    height: 1,
+    backgroundColor: theme?.border || '#E2E8F0',
+    marginVertical: 14,
+  },
+  instructionsTextScroll: {
+    flex: 1,
+    paddingHorizontal: 2,
+  },
+  instructionSectionTitleLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme?.textPrimary || '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  instructionParagraphText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme?.textSecondary || '#64748B',
+    lineHeight: 19,
+  },
+  playerControlActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    backgroundColor: theme?.surface || baseColor,
+    borderTopWidth: 1,
+    borderTopColor: theme?.border || '#E2E8F0',
+  },
+  playerSecondaryNeuActionBtn: {
+    flex: 0.7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme?.surface || baseColor,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginRight: 10,
+    borderWidth: 1, 
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  playerSecondaryActionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+  },
+  playerPrimaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: logoGreen,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  playerPrimaryActionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  loaderOuterNeu: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: theme?.surface || baseColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: theme?.border || '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  loaderTextTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: theme?.textPrimary || '#0F172A',
+    marginBottom: 8,
+  },
+  loaderTextDesc: {
+    fontSize: 14,
+    color: theme?.textSecondary || '#94A3B8',
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 20,
+  },
+  aiBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    alignSelf: 'flex-start',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  aiBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme?.textSecondary || '#64748B',
+    letterSpacing: 0.5,
+  },
+});

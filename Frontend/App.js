@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { CustomAlertProvider } from './src/context/CustomAlertContext';
-import { LanguageProvider } from './src/context/LanguageContext';
-import { 
-  StyleSheet, 
+import React, { useState, useEffect, useRef } from "react";
+import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { CustomAlertProvider } from "./src/context/CustomAlertContext";
+import { LanguageProvider } from "./src/context/LanguageContext";
+import {
+  StyleSheet,
   View,
   Alert,
   Text,
@@ -11,16 +11,16 @@ import {
   LogBox,
   Platform,
   SafeAreaView,
-} from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 LogBox.ignoreLogs([
-  'Cannot connect to Expo CLI',
-  'ImagePicker.MediaTypeOptions',
-  'The <CameraView> component does not support children',
+  "Cannot connect to Expo CLI",
+  "ImagePicker.MediaTypeOptions",
+  "The <CameraView> component does not support children",
 ]);
-import NetInfo from '@react-native-community/netinfo';
-import * as WebBrowser from 'expo-web-browser';
+import NetInfo from "@react-native-community/netinfo";
+import * as WebBrowser from "expo-web-browser";
 import {
   cacheDashboardData,
   getCachedDashboardData,
@@ -31,62 +31,71 @@ import {
   isRememberMeEnabled,
   addToSyncQueue,
   syncQueueToBackend,
-} from './src/services/OfflineStorage';
+} from "./src/services/OfflineStorage";
 
 // Onboarding & Auth Screen Components
-import SplashScreen from "./src/screens/auth/SplashScreen"; // Cleanly imported matching your folder structure
-import LoginScreen from "./src/screens/auth/LoginScreen";
-import SignUpScreen from "./src/screens/auth/SignUpScreen";
-import VerifyEmailScreen from "./src/screens/auth/VerifyEmailScreen";
-import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
-import OtpScreen from "./src/screens/auth/OtpScreen";
-import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
+import SplashScreen from "./src/screens/auth/Splash"; // Cleanly imported matching your folder structure
+import LoginScreen from "./src/screens/auth/Login";
+import SignUpScreen from "./src/screens/auth/SignUp";
+import VerifyEmailScreen from "./src/screens/auth/VerifyEmail";
+import ForgotPasswordScreen from "./src/screens/auth/ForgotPassword";
+import OtpScreen from "./src/screens/auth/Otp";
+import ResetPasswordScreen from "./src/screens/auth/ResetPassword";
 
-import StepOneScreen from "./src/screens/onboarding/StepOneScreen";
-import StepTwoScreen from "./src/screens/onboarding/StepTwoScreen";
-import StepThreeScreen from "./src/screens/onboarding/StepThreeScreen";
-import GeneratingPlanScreen from "./src/screens/onboarding/GeneratingPlanScreen";
+import StepOneScreen from "./src/screens/onboarding/StepOne";
+import StepTwoScreen from "./src/screens/onboarding/StepTwo";
+import StepThreeScreen from "./src/screens/onboarding/StepThree";
+import GeneratingPlanScreen from "./src/screens/onboarding/GeneratingPlan";
 
 // Core Dashboard Main Screen Panels
-import DashboardScreen from "./src/screens/main/DashboardScreen";
-import DietRecipesScreen from "./src/screens/main/DietRecipesScreen";
-import WorkoutScreen from "./src/screens/main/WorkoutScreen";
-import ChatbotAIScreen from "./src/screens/main/ChatbotAIScreen";
-import SettingsScreen from "./src/screens/main/SettingsScreen";
-import NotificationsScreen from "./src/screens/main/NotificationsScreen";
-import FoodScannerScreen from "./src/screens/main/FoodScannerScreen";
+import DashboardScreen from "./src/screens/main/Dashboard";
+import DietRecipesScreen from "./src/screens/main/DietRecipes";
+import WorkoutScreen from "./src/screens/main/Workout";
+import ChatbotAIScreen from "./src/screens/main/ChatbotAI";
+import SettingsScreen from "./src/screens/main/Settings";
+import NotificationsScreen from "./src/screens/main/Notifications";
+import FoodScannerScreen from "./src/screens/main/FoodScanner";
 import BottomNavBar from "./src/components/BottomNavBar";
 import FadeTabView from "./src/components/FadeTabView";
 import DraggableChatbotButton from "./src/components/DraggableChatbotButton";
 import API_URL from "./src/screens/config/api";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NotificationService } from './src/services/NotificationService';
-import { Pedometer } from 'expo-sensors';
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NotificationService } from "./src/services/NotificationService";
+import { Pedometer } from "expo-sensors";
 
 const normalizeGoalKey = (goalStr) => {
-  if (!goalStr || typeof goalStr !== 'string') return 'maintain';
+  if (!goalStr || typeof goalStr !== "string") return "maintain";
   const g = goalStr.toLowerCase();
-  if (g.includes('fat') || g.includes('lose') || g.includes('loss') || g.includes('cut') || g.includes('slim')) {
-    return 'fatloss';
+  if (
+    g.includes("fat") ||
+    g.includes("lose") ||
+    g.includes("loss") ||
+    g.includes("cut") ||
+    g.includes("slim")
+  ) {
+    return "fatloss";
   }
-  if (g.includes('muscle') || g.includes('gain') || g.includes('bulk') || g.includes('build')) {
-    return 'muscle';
+  if (
+    g.includes("muscle") ||
+    g.includes("gain") ||
+    g.includes("bulk") ||
+    g.includes("build")
+  ) {
+    return "muscle";
   }
-  return 'maintain';
+  return "maintain";
 };
-
 
 function MainApp() {
   const { theme } = useTheme();
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
-  const [currentScreen, setCurrentScreen] = useState('SPLASH');
-  const [activeTab, setActiveTab] = useState('DASHBOARD');
+  const [currentScreen, setCurrentScreen] = useState("SPLASH");
+  const [activeTab, setActiveTab] = useState("DASHBOARD");
 
   const [userId, setUserId] = useState(null);
-  const [userProfile, setUserProfile] = useState({ name: 'User', email: '' });
-  const [resetEmail, setResetEmail] = useState('');
-  const [tempPassword, setTempPassword] = useState('');
+  const [userProfile, setUserProfile] = useState({ name: "User", email: "" });
+  const [resetEmail, setResetEmail] = useState("");
+  const [tempPassword, setTempPassword] = useState("");
   const [tempOnboardingData, setTempOnboardingData] = useState(null);
   const [googleIsLoginOtp, setGoogleIsLoginOtp] = useState(false);
 
@@ -97,17 +106,17 @@ function MainApp() {
 
   // Collected Onboarding State Metrics to sync downstream
   const [userBaseline, setUserBaseline] = useState({
-    age: '',
-    weight: '',
-    height: '',
-    startingWeight: '',
-    unit: 'kg',
+    age: "",
+    weight: "",
+    height: "",
+    startingWeight: "",
+    unit: "kg",
   });
   const [userGoals, setUserGoals] = useState({
-    activityLevel: 'moderate',
-    goal: 'muscle',
-    goalWeight: '',
-    targetDate: '',
+    activityLevel: "moderate",
+    goal: "muscle",
+    goalWeight: "",
+    targetDate: "",
   });
 
   // Module 5 Frontend State Sharing
@@ -116,7 +125,7 @@ function MainApp() {
     consumedCalories: 0,
     protein: { current: 0, target: 150 },
     carbs: { current: 0, target: 250 },
-    fats: { current: 0, target: 70 }
+    fats: { current: 0, target: 70 },
   });
 
   const [dailyExercise, setDailyExercise] = useState({
@@ -124,7 +133,7 @@ function MainApp() {
     activeMinutes: 0,
     steps: 0,
     targetSteps: 10000,
-    recentExercise: 'None'
+    recentExercise: "None",
   });
 
   // ── Real Pedometer Step Tracking ─────────────────────────────────────────
@@ -134,7 +143,7 @@ function MainApp() {
     const startPedometer = async () => {
       const isAvailable = await Pedometer.isAvailableAsync();
       if (!isAvailable) {
-        console.log('Pedometer not available on this device/emulator.');
+        console.log("Pedometer not available on this device/emulator.");
         return;
       }
 
@@ -144,36 +153,40 @@ function MainApp() {
       midnight.setHours(0, 0, 0, 0);
 
       // Get the total steps since midnight on mount (iOS supports historic date range queries)
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === "ios") {
         try {
           const result = await Pedometer.getStepCountAsync(midnight, now);
           if (result?.steps !== undefined) {
-            setDailyExercise(prev => ({ ...prev, steps: result.steps, _midnightBase: result.steps }));
+            setDailyExercise((prev) => ({
+              ...prev,
+              steps: result.steps,
+              _midnightBase: result.steps,
+            }));
           }
         } catch (e) {
-          if (__DEV__) console.log('Could not get historic step count:', e);
+          if (__DEV__) console.log("Could not get historic step count:", e);
         }
       }
 
       // Subscribe to live step updates (supported on both Android & iOS)
       try {
-        subscription = Pedometer.watchStepCount(result => {
+        subscription = Pedometer.watchStepCount((result) => {
           if (result?.steps !== undefined) {
-            setDailyExercise(prev => {
+            setDailyExercise((prev) => {
               const baseSteps = prev._midnightBase || 0;
               return { ...prev, steps: baseSteps + result.steps };
             });
           }
         });
       } catch (err) {
-        if (__DEV__) console.log('Pedometer watch error:', err);
+        if (__DEV__) console.log("Pedometer watch error:", err);
       }
     };
 
     startPedometer();
 
     return () => {
-      if (subscription && typeof subscription.remove === 'function') {
+      if (subscription && typeof subscription.remove === "function") {
         subscription.remove();
       }
     };
@@ -197,7 +210,6 @@ function MainApp() {
   // Each entry is a kg value; index 6 = today (most recent)
   const [weightHistory, setWeightHistory] = useState(null);
 
-
   const [notifications, setNotifications] = useState([]);
 
   // ── Apply dashboard API response to all state variables ─────────────────
@@ -205,80 +217,123 @@ function MainApp() {
     if (!data || !data.profile) return;
     const goalNorm = normalizeGoalKey(data.profile.goal);
 
-    setUserBaseline(prev => ({
+    setUserBaseline((prev) => ({
       ...prev,
-      weight: data.profile.currentWeight !== undefined && data.profile.currentWeight !== null ? data.profile.currentWeight.toString() : (prev.weight || '70'),
-      height: data.profile.height ? data.profile.height.toString() : (prev.height || '170'),
-      age: data.profile.age ? data.profile.age.toString() : (prev.age || '25'),
-      startingWeight: data.profile.startingWeight !== undefined && data.profile.startingWeight !== null ? data.profile.startingWeight.toString() : (data.profile.currentWeight ? data.profile.currentWeight.toString() : (prev.startingWeight || '70')),
-      unit: data.profile.unit || prev.unit || 'kg'
+      weight:
+        data.profile.currentWeight !== undefined &&
+        data.profile.currentWeight !== null
+          ? data.profile.currentWeight.toString()
+          : prev.weight || "70",
+      height: data.profile.height
+        ? data.profile.height.toString()
+        : prev.height || "170",
+      age: data.profile.age ? data.profile.age.toString() : prev.age || "25",
+      startingWeight:
+        data.profile.startingWeight !== undefined &&
+        data.profile.startingWeight !== null
+          ? data.profile.startingWeight.toString()
+          : data.profile.currentWeight
+            ? data.profile.currentWeight.toString()
+            : prev.startingWeight || "70",
+      unit: data.profile.unit || prev.unit || "kg",
     }));
-    setUserGoals(prev => ({
+    setUserGoals((prev) => ({
       ...prev,
       goal: goalNorm,
-      goalWeight: data.profile.targetWeight !== undefined && data.profile.targetWeight !== null ? data.profile.targetWeight.toString() : (prev.goalWeight || '70'),
-      targetDate: data.profile.targetDate || prev.targetDate || '',
-      activityLevel: data.profile.activityLevel || prev.activityLevel || 'moderate'
+      goalWeight:
+        data.profile.targetWeight !== undefined &&
+        data.profile.targetWeight !== null
+          ? data.profile.targetWeight.toString()
+          : prev.goalWeight || "70",
+      targetDate: data.profile.targetDate || prev.targetDate || "",
+      activityLevel:
+        data.profile.activityLevel || prev.activityLevel || "moderate",
     }));
     setDailyNutrition({
       targetCalories: data.nutrition.targetCalories,
       consumedCalories: data.nutrition.consumedCalories,
-      protein: { current: data.nutrition.protein.current, target: data.nutrition.protein.target },
-      carbs: { current: data.nutrition.carbs.current, target: data.nutrition.carbs.target },
-      fats: { current: data.nutrition.fats.current, target: data.nutrition.fats.target }
+      protein: {
+        current: data.nutrition.protein.current,
+        target: data.nutrition.protein.target,
+      },
+      carbs: {
+        current: data.nutrition.carbs.current,
+        target: data.nutrition.carbs.target,
+      },
+      fats: {
+        current: data.nutrition.fats.current,
+        target: data.nutrition.fats.target,
+      },
     });
     if (data.exercise) {
       setDailyExercise({
         caloriesBurned: data.exercise.caloriesBurned,
         activeMinutes: data.exercise.activeMinutes,
-        recentExercise: data.exercise.recentExercise || 'None'
+        recentExercise: data.exercise.recentExercise || "None",
       });
     }
     if (data.water) setGlobalConsumedGlasses(data.water.glasses || 0);
-    if (data.profile.currentWeight !== undefined && data.profile.currentWeight !== null) {
+    if (
+      data.profile.currentWeight !== undefined &&
+      data.profile.currentWeight !== null
+    ) {
       const w = data.profile.currentWeight;
       setGlobalLoggedWeight(w);
-      if (data.profile.weightHistory && Array.isArray(data.profile.weightHistory) && data.profile.weightHistory.length === 7) {
+      if (
+        data.profile.weightHistory &&
+        Array.isArray(data.profile.weightHistory) &&
+        data.profile.weightHistory.length === 7
+      ) {
         setWeightHistory(data.profile.weightHistory);
       } else {
-        setWeightHistory(prev => {
+        setWeightHistory((prev) => {
           if (prev !== null) return prev;
           const sw = data.profile.startingWeight || w;
           const step = (w - sw) / 6;
           return Array.from({ length: 7 }, (_, i) =>
-            parseFloat((sw + step * i).toFixed(1))
+            parseFloat((sw + step * i).toFixed(1)),
           );
         });
       }
     }
-    if (data.loggedMealIds) setGlobalLoggedMeals(data.loggedMealIds);
-    setUserProfile(prev => ({
+    if (data.loggedMealIds) {
+      setGlobalLoggedMeals((prev) => {
+        if (Array.isArray(prev) && prev.length > 0 && Array.isArray(data.loggedMealIds)) {
+          return Array.from(new Set([...prev, ...data.loggedMealIds]));
+        }
+        return data.loggedMealIds;
+      });
+    }
+    setUserProfile((prev) => ({
       ...prev,
-      name: data.profile.name || 'User',
-      email: data.profile.email || prev.email || '',
+      name: data.profile.name || "User",
+      email: data.profile.email || prev.email || "",
       profileImage: data.profile.profileImage || null,
       isPremium: !!data.nutrition.isPremium,
       streakDays: data.streakDays || 0,
-      address: data.profile.address || prev.address || '',
-      structuredLocation: data.profile.structuredLocation || prev.structuredLocation || null,
-      city: data.profile.city || prev.city || '',
-      allergies: data.profile.allergies || prev.allergies || []
+      address: data.profile.address || prev.address || "",
+      structuredLocation:
+        data.profile.structuredLocation || prev.structuredLocation || null,
+      city: data.profile.city || prev.city || "",
+      allergies: data.profile.allergies || prev.allergies || [],
     }));
   };
 
-  const fetchDashboardData = async (currentUserId) => {
+  const fetchDashboardData = async (currentUserId, forceCache = false) => {
     const uid = currentUserId || userId;
     if (!uid) return;
 
-    // 1. Instantly apply cached dashboard data if available so UI doesn't hang on slow WiFi
-    try {
-      const cached = await getCachedDashboardData(uid);
-      if (cached && cached.data) {
-        applyDashboardData(cached.data);
-        setIsLoadedFromCache(true);
+    // 1. Only apply cached dashboard data if cold start/empty state or forced, avoiding downgrading live state
+    if (forceCache || globalLoggedWeight === null) {
+      try {
+        const cached = await getCachedDashboardData(uid);
+        if (cached && cached.data) {
+          applyDashboardData(cached.data);
+          setIsLoadedFromCache(true);
+        }
+      } catch (e) {
+        /* ignore cache read error */
       }
-    } catch (e) {
-      /* ignore cache read error */
     }
 
     // 2. Fetch fresh data from network with a 5-second timeout signal
@@ -296,11 +351,11 @@ function MainApp() {
         await cacheDashboardData(uid, data);
         setIsLoadedFromCache(false);
       } else {
-        console.log('Failed to fetch dashboard data:', data.detail);
+        console.log("Failed to fetch dashboard data:", data.detail);
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      console.log('Error fetching dashboard (trying cache fallback):', error);
+      console.log("Error fetching dashboard (trying cache fallback):", error);
       const cached = await getCachedDashboardData(uid);
       if (cached && cached.data) {
         applyDashboardData(cached.data);
@@ -316,9 +371,9 @@ function MainApp() {
       const response = await fetch(`${API_URL}/auth/google-signin`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, name })
+        body: JSON.stringify({ email, name }),
       });
       const data = await response.json();
       console.log("Google Deep link Sign-In response:", data);
@@ -331,7 +386,7 @@ function MainApp() {
         }
         if (data.is_new_user) {
           setResetEmail(email);
-          setTempPassword(data.temp_password || '');
+          setTempPassword(data.temp_password || "");
           setGoogleIsLoginOtp(false);
           setCurrentScreen("VERIFY_SIGNUP");
         } else if (data.is_onboarded === true) {
@@ -341,7 +396,10 @@ function MainApp() {
           setCurrentScreen("STEP_ONE");
         }
       } else {
-        Alert.alert("Authentication Failed", data.detail || "Google sign-in failed.");
+        Alert.alert(
+          "Authentication Failed",
+          data.detail || "Google sign-in failed.",
+        );
       }
     } catch (err) {
       console.log("Deep link auth error:", err);
@@ -352,7 +410,7 @@ function MainApp() {
   const handleDeepLink = async (url) => {
     console.log("App Deep Link parsed:", url);
     if (!url) return;
-    
+
     // Format: sync://google-auth?email=xxx&name=xxx
     if (url.startsWith("sync://google-auth")) {
       try {
@@ -363,13 +421,13 @@ function MainApp() {
       const queryString = url.split("?")[1];
       if (queryString) {
         const params = {};
-        queryString.split("&").forEach(pair => {
+        queryString.split("&").forEach((pair) => {
           const [key, val] = pair.split("=");
           if (key && val) {
             params[key] = decodeURIComponent(val);
           }
         });
-        
+
         if (params.email && params.name) {
           await handleGoogleLoginSuccess(params.email, params.name);
         }
@@ -385,12 +443,12 @@ function MainApp() {
 
       if (online && wasOfflineRef.current && userId) {
         // Just came back online — sync queued actions then refresh dashboard
-        console.log('Back online! Syncing queue...');
+        console.log("Back online! Syncing queue...");
         const result = await syncQueueToBackend(API_URL);
         if (result.synced > 0) {
           Alert.alert(
-            '✅ Back Online',
-            `Synced ${result.synced} offline action${result.synced > 1 ? 's' : ''} to the server.`
+            "✅ Back Online",
+            `Synced ${result.synced} offline action${result.synced > 1 ? "s" : ""} to the server.`,
           );
         }
         await fetchDashboardData();
@@ -410,7 +468,7 @@ function MainApp() {
     });
 
     // Listen for incoming deep links while the app is active
-    const subscription = Linking.addEventListener('url', (event) => {
+    const subscription = Linking.addEventListener("url", (event) => {
       if (event.url) {
         handleDeepLink(event.url);
       }
@@ -427,10 +485,19 @@ function MainApp() {
       try {
         const granted = await NotificationService.requestPermissions();
         if (granted) {
-          if (__DEV__) console.log("Native notifications permission granted. Scheduling daily reminders...");
-          let prefs = { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
+          if (__DEV__)
+            console.log(
+              "Native notifications permission granted. Scheduling daily reminders...",
+            );
+          let prefs = {
+            habitReminders: true,
+            motivationalUpdates: true,
+            personalizedAlerts: true,
+          };
           try {
-            const stored = await AsyncStorage.getItem('@ms_notification_preferences');
+            const stored = await AsyncStorage.getItem(
+              "@ms_notification_preferences",
+            );
             if (stored) prefs = JSON.parse(stored);
           } catch (e) {}
           await NotificationService.scheduleDailyReminders(prefs);
@@ -438,7 +505,8 @@ function MainApp() {
           if (__DEV__) console.log("Native notifications permission denied.");
         }
       } catch (err) {
-        if (__DEV__) console.log("Failed to initialize native notifications:", err);
+        if (__DEV__)
+          console.log("Failed to initialize native notifications:", err);
       }
     };
     initNotifications();
@@ -470,7 +538,10 @@ function MainApp() {
     const saveNotifications = async () => {
       if (userId && notifications) {
         try {
-          await AsyncStorage.setItem(`notifications_${userId}`, JSON.stringify(notifications));
+          await AsyncStorage.setItem(
+            `notifications_${userId}`,
+            JSON.stringify(notifications),
+          );
         } catch (err) {
           console.log("Error saving notifications:", err);
         }
@@ -484,8 +555,10 @@ function MainApp() {
     const loadChatHistory = async () => {
       if (userId) {
         try {
-          const todayStr = new Date().toISOString().split('T')[0];
-          const cached = await AsyncStorage.getItem(`ms_chat_history_${userId}_${todayStr}`);
+          const todayStr = new Date().toISOString().split("T")[0];
+          const cached = await AsyncStorage.getItem(
+            `ms_chat_history_${userId}_${todayStr}`,
+          );
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -509,8 +582,11 @@ function MainApp() {
     const saveChatHistory = async () => {
       if (userId && Array.isArray(chatMessages)) {
         try {
-          const todayStr = new Date().toISOString().split('T')[0];
-          await AsyncStorage.setItem(`ms_chat_history_${userId}_${todayStr}`, JSON.stringify(chatMessages));
+          const todayStr = new Date().toISOString().split("T")[0];
+          await AsyncStorage.setItem(
+            `ms_chat_history_${userId}_${todayStr}`,
+            JSON.stringify(chatMessages),
+          );
         } catch (err) {
           console.log("Error saving chat history:", err);
         }
@@ -524,7 +600,9 @@ function MainApp() {
     const loadWeightHistory = async () => {
       if (userId) {
         try {
-          const stored = await AsyncStorage.getItem(`ms_weight_history_${userId}`);
+          const stored = await AsyncStorage.getItem(
+            `ms_weight_history_${userId}`,
+          );
           if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length === 7) {
@@ -541,9 +619,16 @@ function MainApp() {
 
   useEffect(() => {
     const saveWeightHistory = async () => {
-      if (userId && Array.isArray(weightHistory) && weightHistory.length === 7) {
+      if (
+        userId &&
+        Array.isArray(weightHistory) &&
+        weightHistory.length === 7
+      ) {
         try {
-          await AsyncStorage.setItem(`ms_weight_history_${userId}`, JSON.stringify(weightHistory));
+          await AsyncStorage.setItem(
+            `ms_weight_history_${userId}`,
+            JSON.stringify(weightHistory),
+          );
         } catch (err) {
           console.log("Error saving weight history:", err);
         }
@@ -556,26 +641,36 @@ function MainApp() {
   const prevIsPremiumRef = useRef(null);
   useEffect(() => {
     if (userProfile && prevIsPremiumRef.current !== null) {
-      const isPremium = userProfile.tier === 'Premium' || userProfile.isPremium || userProfile.is_premium;
+      const isPremium =
+        userProfile.tier === "Premium" ||
+        userProfile.isPremium ||
+        userProfile.is_premium;
       if (isPremium && !prevIsPremiumRef.current) {
-        setNotifications(prev => [{
-          id: `premium-upgrade-${Date.now()}`,
-          title: 'Welcome to Premium! 🌟',
-          category: 'achievement',
-          time: 'Just Now',
-          read: false,
-          message: 'Thank you for upgrading! You now have unlimited access to recipes, food scanner scans, and AI chatbot support.'
-        }, ...prev]);
+        setNotifications((prev) => [
+          {
+            id: `premium-upgrade-${Date.now()}`,
+            title: "Welcome to Premium! 🌟",
+            category: "achievement",
+            time: "Just Now",
+            read: false,
+            message:
+              "Thank you for upgrading! You now have unlimited access to recipes, food scanner scans, and AI chatbot support.",
+          },
+          ...prev,
+        ]);
       }
     }
     if (userProfile) {
-      const isPremium = userProfile.tier === 'Premium' || userProfile.isPremium || userProfile.is_premium;
+      const isPremium =
+        userProfile.tier === "Premium" ||
+        userProfile.isPremium ||
+        userProfile.is_premium;
       prevIsPremiumRef.current = isPremium;
     }
   }, [userProfile]);
 
   useEffect(() => {
-    if (userId && currentScreen === 'DASHBOARD' && activeTab === 'DASHBOARD') {
+    if (userId && currentScreen === "DASHBOARD" && activeTab === "DASHBOARD") {
       fetchDashboardData();
     }
   }, [userId, currentScreen, activeTab]);
@@ -584,17 +679,21 @@ function MainApp() {
     const fetchRecommendedMeals = async () => {
       if (!userId) return;
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split("T")[0];
       const CACHE_KEY = `ms_meals_cache_${userId}_${todayStr}`;
 
       // 1. Load from cache instantly first for 0ms load speed
       try {
-        const cached = (await AsyncStorage.getItem(CACHE_KEY)) || (await AsyncStorage.getItem(`ms_meals_cache_${userId}`));
+        const cached =
+          (await AsyncStorage.getItem(CACHE_KEY)) ||
+          (await AsyncStorage.getItem(`ms_meals_cache_${userId}`));
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
             setSessionRecipes(parsed.meals);
-            setSessionDailyPlan(prev => (prev && prev.length > 0) ? prev : parsed.meals);
+            setSessionDailyPlan((prev) =>
+              prev && prev.length > 0 ? prev : parsed.meals,
+            );
           }
         }
       } catch (e) {}
@@ -606,12 +705,21 @@ function MainApp() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             setSessionRecipes(data);
-            setSessionDailyPlan(prev => (prev && prev.length > 0) ? prev : data);
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ userId, date: todayStr, meals: data }));
+            setSessionDailyPlan((prev) =>
+              prev && prev.length > 0 ? prev : data,
+            );
+            await AsyncStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({ userId, date: todayStr, meals: data }),
+            );
           }
         }
       } catch (err) {
-        if (__DEV__) console.log("AI recommended meals fetch notice (offline/network):", err?.message || err);
+        if (__DEV__)
+          console.log(
+            "AI recommended meals fetch notice (offline/network):",
+            err?.message || err,
+          );
       }
     };
 
@@ -624,30 +732,26 @@ function MainApp() {
   const handleAppReady = async () => {
     try {
       const savedId = await getSavedUserId();
-      if (savedId && typeof savedId === 'string' && savedId.trim() !== '') {
+      if (savedId && typeof savedId === "string" && savedId.trim() !== "") {
         setUserId(savedId);
         await fetchDashboardData(savedId);
-        setCurrentScreen('DASHBOARD');
+        setCurrentScreen("DASHBOARD");
         return;
       }
     } catch (e) {
-      console.log('Error during auto-login check:', e);
+      console.log("Error during auto-login check:", e);
     }
-    setCurrentScreen('LOGIN');
+    setCurrentScreen("LOGIN");
   };
 
-  if (currentScreen === 'SPLASH') {
-    return (
-      <SplashScreen 
-        onAppReady={handleAppReady} 
-      />
-    );
+  if (currentScreen === "SPLASH") {
+    return <SplashScreen onAppReady={handleAppReady} />;
   }
 
   // ----------------------------------------------------
   // SECTION 1: AUTHENTICATION ROUTING STATE MACHINE
   // ----------------------------------------------------
-  if (currentScreen === 'LOGIN') {
+  if (currentScreen === "LOGIN") {
     return (
       <LoginScreen
         onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
@@ -656,7 +760,7 @@ function MainApp() {
             setUserId(loggedInUserId);
             saveUserId(loggedInUserId);
             if (userObj && (userObj.name || userObj.email)) {
-              setUserProfile(prev => ({
+              setUserProfile((prev) => ({
                 ...prev,
                 name: userObj.name || prev.name,
                 email: userObj.email || prev.email,
@@ -664,7 +768,7 @@ function MainApp() {
             }
             // Non-blocking background cache hydration for instant 0ms screen switch
             getCachedDashboardData(loggedInUserId)
-              .then(cached => {
+              .then((cached) => {
                 if (cached && cached.data) applyDashboardData(cached.data);
               })
               .catch(() => {});
@@ -677,33 +781,45 @@ function MainApp() {
           }
         }}
         onForgotPassword={() => setCurrentScreen("FORGOT_PASS")}
-        setCurrentUserId={(id) => setUserId(id)} 
-        onGoogleOtpSent={(isNewUser, email, name, dummyPassword, isLoginOtp) => {
+        setCurrentUserId={(id) => setUserId(id)}
+        onGoogleOtpSent={(
+          isNewUser,
+          email,
+          name,
+          dummyPassword,
+          isLoginOtp,
+        ) => {
           setGoogleIsLoginOtp(!!isLoginOtp);
           if (isNewUser) {
-            setUserProfile({ name: name || 'User', email: email || '' });
-            setResetEmail(email || '');
-            setTempPassword(dummyPassword || '');
+            setUserProfile({ name: name || "User", email: email || "" });
+            setResetEmail(email || "");
+            setTempPassword(dummyPassword || "");
             setCurrentScreen("VERIFY_SIGNUP");
           } else {
-            setResetEmail(email || '');
+            setResetEmail(email || "");
             setCurrentScreen("VERIFY_LOGIN");
           }
         }}
       />
     );
   }
-  
+
   if (currentScreen === "SIGNUP") {
     return (
       <SignUpScreen
         onNavigateToLogin={() => setCurrentScreen("LOGIN")}
-        onSignUpSuccess={(newUserId, newName, newEmail, newPassword, isOnboarded) => {
+        onSignUpSuccess={(
+          newUserId,
+          newName,
+          newEmail,
+          newPassword,
+          isOnboarded,
+        ) => {
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
           if (newUserId) {
             setUserId(newUserId);
             saveUserId(newUserId);
-            setUserProfile({ name: newName || 'User', email: newEmail || '' });
+            setUserProfile({ name: newName || "User", email: newEmail || "" });
           }
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
@@ -711,8 +827,8 @@ function MainApp() {
             setCurrentScreen("STEP_ONE");
           } else {
             // First time signup / Google OTP signup -> goes to Verify
-            setResetEmail(newEmail || '');
-            setTempPassword(newPassword || '');
+            setResetEmail(newEmail || "");
+            setTempPassword(newPassword || "");
             setCurrentScreen("VERIFY_SIGNUP");
           }
         }}
@@ -723,9 +839,9 @@ function MainApp() {
   if (currentScreen === "VERIFY_SIGNUP") {
     return (
       <VerifyEmailScreen
-        email={resetEmail || userProfile?.email || ''}
-        name={userProfile?.name || 'User'}
-        password={tempPassword || ''}
+        email={resetEmail || userProfile?.email || ""}
+        name={userProfile?.name || "User"}
+        password={tempPassword || ""}
         isLogin={googleIsLoginOtp}
         onVerified={(newUserId, isOnboarded) => {
           if (!newUserId) return;
@@ -733,7 +849,7 @@ function MainApp() {
           saveUserId(newUserId);
           if (isOnboarded === true) {
             getCachedDashboardData(newUserId)
-              .then(cached => {
+              .then((cached) => {
                 if (cached && cached.data) applyDashboardData(cached.data);
               })
               .catch(() => {});
@@ -760,7 +876,7 @@ function MainApp() {
           saveUserId(newUserId);
           if (isOnboarded === true) {
             getCachedDashboardData(newUserId)
-              .then(cached => {
+              .then((cached) => {
                 if (cached && cached.data) applyDashboardData(cached.data);
               })
               .catch(() => {});
@@ -781,13 +897,13 @@ function MainApp() {
       <ForgotPasswordScreen
         onNavigateBack={() => setCurrentScreen("LOGIN")}
         onOtpSent={(email) => {
-          setResetEmail(email); 
+          setResetEmail(email);
           setCurrentScreen("OTP_ENTRY");
         }}
       />
     );
   }
-  
+
   if (currentScreen === "RESET_PASS") {
     return (
       <ResetPasswordScreen
@@ -796,7 +912,7 @@ function MainApp() {
       />
     );
   }
-  
+
   if (currentScreen === "OTP_ENTRY") {
     return (
       <OtpScreen
@@ -806,83 +922,109 @@ function MainApp() {
       />
     );
   }
-  
+
   // ----------------------------------------------------
   // SECTION 2: DYNAMIC ONBOARDING PROCESS STEPS
   // ----------------------------------------------------
-  if (currentScreen === 'STEP_ONE') {
+  if (currentScreen === "STEP_ONE") {
     return (
-      <StepOneScreen 
+      <StepOneScreen
         onNext={(baselineMetrics) => {
           if (baselineMetrics) {
             setUserBaseline(baselineMetrics);
           }
-          setCurrentScreen('STEP_TWO');
-        }} 
+          setCurrentScreen("STEP_TWO");
+        }}
       />
     );
   }
-  if (currentScreen === 'STEP_TWO') {
+  if (currentScreen === "STEP_TWO") {
     return (
-      <StepTwoScreen 
+      <StepTwoScreen
         currentWeight={userBaseline.weight}
         height={userBaseline.height}
-        weightUnit={userBaseline.unit || userBaseline.weightUnit || 'kg'}
+        weightUnit={userBaseline.unit || userBaseline.weightUnit || "kg"}
         onNext={(goalMetrics) => {
           if (goalMetrics) {
             setUserGoals(goalMetrics);
           }
-          setCurrentScreen('STEP_THREE');
-        }} 
+          setCurrentScreen("STEP_THREE");
+        }}
       />
     );
   }
-  if (currentScreen === 'STEP_THREE') {
+  if (currentScreen === "STEP_THREE") {
     return (
-      <StepThreeScreen 
+      <StepThreeScreen
         onSubmit={(finalPersonalizationData) => {
           // Unifies all compiled metrics for data payload synchronization
           const onboardingPayload = {
             userId: userId,
             ...userBaseline,
             ...userGoals,
-            ...finalPersonalizationData
+            ...finalPersonalizationData,
           };
-          console.log("Complete Integrated Onboarding Payload Matrix:", onboardingPayload);
-          setUserProfile(prev => ({
+          console.log(
+            "Complete Integrated Onboarding Payload Matrix:",
+            onboardingPayload,
+          );
+          setUserProfile((prev) => ({
             ...prev,
-            address: finalPersonalizationData?.address || prev.address || '',
-            structuredLocation: finalPersonalizationData?.structuredLocation || prev.structuredLocation || null,
-            city: finalPersonalizationData?.city || prev.city || '',
-            allergies: finalPersonalizationData?.allergies || prev.allergies || []
+            address: finalPersonalizationData?.address || prev.address || "",
+            structuredLocation:
+              finalPersonalizationData?.structuredLocation ||
+              prev.structuredLocation ||
+              null,
+            city: finalPersonalizationData?.city || prev.city || "",
+            allergies:
+              finalPersonalizationData?.allergies || prev.allergies || [],
           }));
           setTempOnboardingData(onboardingPayload);
-          setCurrentScreen('GENERATING_PLAN');
-        }} 
+          setCurrentScreen("GENERATING_PLAN");
+        }}
       />
     );
   }
 
-  if (currentScreen === 'GENERATING_PLAN') {
+  if (currentScreen === "GENERATING_PLAN") {
     return (
       <GeneratingPlanScreen
         profileData={tempOnboardingData}
         onComplete={(finalData) => {
           if (finalData) {
             const goalNormKey = normalizeGoalKey(finalData.goal);
-            setUserBaseline(prev => ({
+            setUserBaseline((prev) => ({
               ...prev,
-              age: finalData.age !== undefined && finalData.age !== null ? finalData.age.toString() : prev.age,
-              weight: finalData.weight !== undefined && finalData.weight !== null ? finalData.weight.toString() : prev.weight,
-              height: finalData.height !== undefined && finalData.height !== null ? finalData.height.toString() : prev.height,
-              startingWeight: finalData.startingWeight !== undefined && finalData.startingWeight !== null ? finalData.startingWeight.toString() : (finalData.weight ? finalData.weight.toString() : prev.startingWeight),
-              unit: finalData.weightUnit || prev.unit || 'kg',
+              age:
+                finalData.age !== undefined && finalData.age !== null
+                  ? finalData.age.toString()
+                  : prev.age,
+              weight:
+                finalData.weight !== undefined && finalData.weight !== null
+                  ? finalData.weight.toString()
+                  : prev.weight,
+              height:
+                finalData.height !== undefined && finalData.height !== null
+                  ? finalData.height.toString()
+                  : prev.height,
+              startingWeight:
+                finalData.startingWeight !== undefined &&
+                finalData.startingWeight !== null
+                  ? finalData.startingWeight.toString()
+                  : finalData.weight
+                    ? finalData.weight.toString()
+                    : prev.startingWeight,
+              unit: finalData.weightUnit || prev.unit || "kg",
             }));
-            setUserGoals(prev => ({
+            setUserGoals((prev) => ({
               ...prev,
               activityLevel: finalData.activityLevel || prev.activityLevel,
               goal: goalNormKey,
-              goalWeight: finalData.goalWeight !== undefined && finalData.goalWeight !== null ? finalData.goalWeight.toString() : prev.goalWeight,
+              goalWeight:
+                finalData.goalWeight !== undefined &&
+                finalData.goalWeight !== null
+                  ? finalData.goalWeight.toString()
+                  : prev.goalWeight,
               targetDate: finalData.targetDate || prev.targetDate,
             }));
           }
@@ -890,7 +1032,7 @@ function MainApp() {
           clearDashboardCache().then(() => {
             fetchDashboardData(userId);
           });
-          setCurrentScreen('DASHBOARD');
+          setCurrentScreen("DASHBOARD");
         }}
       />
     );
@@ -906,7 +1048,7 @@ function MainApp() {
       console.warn("Logout error clearing storage:", e);
     }
     setUserId(null);
-    setUserProfile({ name: 'User', email: '', profileImage: null });
+    setUserProfile({ name: "User", email: "", profileImage: null });
     setGlobalLoggedWeight(null);
     setGlobalLoggedMeals([]);
     setGlobalConsumedGlasses(0);
@@ -918,16 +1060,16 @@ function MainApp() {
       consumedCalories: 0,
       protein: { current: 0, target: 150 },
       carbs: { current: 0, target: 250 },
-      fats: { current: 0, target: 70 }
+      fats: { current: 0, target: 70 },
     });
     setDailyExercise({
       caloriesBurned: 0,
       activeMinutes: 0,
-      recentExercise: 'None'
+      recentExercise: "None",
     });
     setChatMessages([]);
-    setCurrentScreen('LOGIN');
-    setActiveTab('DASHBOARD');
+    setCurrentScreen("LOGIN");
+    setActiveTab("DASHBOARD");
   };
 
   // ── Sleek Floating Offline Banner ────────────────────────────────────────
@@ -946,12 +1088,14 @@ function MainApp() {
   };
 
   return (
-    <View style={[styles.appContainerRoot, { backgroundColor: theme.background }]}>
+    <View
+      style={[styles.appContainerRoot, { backgroundColor: theme.background }]}
+    >
       <OfflineBanner />
-      {activeTab === 'DASHBOARD' && (
+      {activeTab === "DASHBOARD" && (
         <FadeTabView tabKey="DASHBOARD">
-          <DashboardScreen 
-            onTabChange={(tab) => setActiveTab(tab)} 
+          <DashboardScreen
+            onTabChange={(tab) => setActiveTab(tab)}
             userBaseline={userBaseline}
             userGoals={userGoals}
             dailyNutrition={dailyNutrition}
@@ -980,10 +1124,10 @@ function MainApp() {
           />
         </FadeTabView>
       )}
-      {activeTab === 'DIET' && (
+      {activeTab === "DIET" && (
         <FadeTabView tabKey="DIET">
-          <DietRecipesScreen 
-            onTabChange={(tab) => setActiveTab(tab)} 
+          <DietRecipesScreen
+            onTabChange={(tab) => setActiveTab(tab)}
             dailyNutrition={dailyNutrition}
             setDailyNutrition={setDailyNutrition}
             dailyExercise={dailyExercise}
@@ -1001,9 +1145,9 @@ function MainApp() {
           />
         </FadeTabView>
       )}
-      {activeTab === 'CHATBOT' && (
-        <ChatbotAIScreen 
-          onTabChange={(tab) => setActiveTab(tab)} 
+      {activeTab === "CHATBOT" && (
+        <ChatbotAIScreen
+          onTabChange={(tab) => setActiveTab(tab)}
           userId={userId}
           userProfile={userProfile}
           messages={chatMessages}
@@ -1011,93 +1155,131 @@ function MainApp() {
           onRefreshDashboard={fetchDashboardData}
         />
       )}
-      {activeTab === 'SCANNER' && (
+      {activeTab === "SCANNER" && (
         <FadeTabView tabKey="SCANNER">
-          <FoodScannerScreen 
-            onTabChange={(tab) => setActiveTab(tab)} 
+          <FoodScannerScreen
+            onTabChange={(tab) => setActiveTab(tab)}
             userId={userId}
             userProfile={userProfile}
             dailyNutrition={dailyNutrition}
             onLogMeal={async (macros) => {
               if (!userId) {
-                Alert.alert('Authentication Error', 'You must be logged in to log meals.');
+                Alert.alert(
+                  "Authentication Error",
+                  "You must be logged in to log meals.",
+                );
                 return;
               }
               const mealId = `meal-${Date.now()}`;
               const mealPayload = {
                 id: mealId,
                 user_id: userId,
-                name: macros.name || 'Scanned Food',
+                name: macros.name || "Scanned Food",
                 calories: macros.calories || 0,
                 protein: macros.protein || 0,
                 carbs: macros.carbs || 0,
-                fats: macros.fats || 0
+                fats: macros.fats || 0,
               };
 
               if (!isOnline) {
                 // Offline: queue it and update UI optimistically
-                await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-                setDailyNutrition(prev => ({
+                await addToSyncQueue({
+                  type: "LOG_MEAL",
+                  payload: mealPayload,
+                });
+                setDailyNutrition((prev) => ({
                   ...prev,
-                  consumedCalories: prev.consumedCalories + mealPayload.calories,
-                  protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                  carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                  fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+                  consumedCalories:
+                    prev.consumedCalories + mealPayload.calories,
+                  protein: {
+                    ...prev.protein,
+                    current: prev.protein.current + mealPayload.protein,
+                  },
+                  carbs: {
+                    ...prev.carbs,
+                    current: prev.carbs.current + mealPayload.carbs,
+                  },
+                  fats: {
+                    ...prev.fats,
+                    current: prev.fats.current + mealPayload.fats,
+                  },
                 }));
-                setGlobalLoggedMeals(prev => [...prev, mealId]);
-                
-                setNotifications(prev => [{
-                  id: `n-${Date.now()}`,
-                  title: 'Food Scanned & Logged! 🔍',
-                  category: 'meal',
-                  time: 'Just Now',
-                  read: false,
-                  message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`
-                }, ...prev]);
+                setGlobalLoggedMeals((prev) => [...prev, mealId]);
 
-                Alert.alert('📴 Saved Offline', 'Meal saved locally. Will sync when back online.');
+                setNotifications((prev) => [
+                  {
+                    id: `n-${Date.now()}`,
+                    title: "Food Scanned & Logged! 🔍",
+                    category: "meal",
+                    time: "Just Now",
+                    read: false,
+                    message: `Logged ${macros.name || "scanned food"} (${macros.calories || 0} Kcal) locally via AI Food Scanner.`,
+                  },
+                  ...prev,
+                ]);
+
+                Alert.alert(
+                  "📴 Saved Offline",
+                  "Meal saved locally. Will sync when back online.",
+                );
                 return;
               }
 
               try {
                 const response = await fetch(`${API_URL}/meals`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(mealPayload),
                 });
                 if (!response.ok) {
                   const errData = await response.json().catch(() => ({}));
-                  throw new Error(errData.detail || 'Failed to log meal');
+                  throw new Error(errData.detail || "Failed to log meal");
                 }
-                setDailyNutrition(prev => ({
+                setDailyNutrition((prev) => ({
                   ...prev,
-                  consumedCalories: prev.consumedCalories + mealPayload.calories,
-                  protein: { ...prev.protein, current: prev.protein.current + mealPayload.protein },
-                  carbs: { ...prev.carbs, current: prev.carbs.current + mealPayload.carbs },
-                  fats: { ...prev.fats, current: prev.fats.current + mealPayload.fats }
+                  consumedCalories:
+                    prev.consumedCalories + mealPayload.calories,
+                  protein: {
+                    ...prev.protein,
+                    current: prev.protein.current + mealPayload.protein,
+                  },
+                  carbs: {
+                    ...prev.carbs,
+                    current: prev.carbs.current + mealPayload.carbs,
+                  },
+                  fats: {
+                    ...prev.fats,
+                    current: prev.fats.current + mealPayload.fats,
+                  },
                 }));
-                setGlobalLoggedMeals(prev => [...prev, mealId]);
+                setGlobalLoggedMeals((prev) => [...prev, mealId]);
 
-                setNotifications(prev => [{
-                  id: `n-${Date.now()}`,
-                  title: 'Food Scanned & Logged! 🔍',
-                  category: 'meal',
-                  time: 'Just Now',
-                  read: false,
-                  message: `Logged ${macros.name || 'scanned food'} (${macros.calories || 0} Kcal) via AI Food Scanner.`
-                }, ...prev]);
+                setNotifications((prev) => [
+                  {
+                    id: `n-${Date.now()}`,
+                    title: "Food Scanned & Logged! 🔍",
+                    category: "meal",
+                    time: "Just Now",
+                    read: false,
+                    message: `Logged ${macros.name || "scanned food"} (${macros.calories || 0} Kcal) via AI Food Scanner.`,
+                  },
+                  ...prev,
+                ]);
               } catch (error) {
-                console.error('Error logging scanned food:', error);
-                Alert.alert('Error', error.message || 'Failed to log meal to server.');
+                console.error("Error logging scanned food:", error);
+                Alert.alert(
+                  "Error",
+                  error.message || "Failed to log meal to server.",
+                );
               }
             }}
           />
         </FadeTabView>
       )}
-      {activeTab === 'WORKOUT' && (
+      {activeTab === "WORKOUT" && (
         <FadeTabView tabKey="WORKOUT">
-          <WorkoutScreen 
-            onTabChange={(tab) => setActiveTab(tab)} 
+          <WorkoutScreen
+            onTabChange={(tab) => setActiveTab(tab)}
             userId={userId}
             onRefreshDashboard={fetchDashboardData}
             isOnline={isOnline}
@@ -1109,84 +1291,84 @@ function MainApp() {
           />
         </FadeTabView>
       )}
-      {activeTab === 'SETTINGS' && (
+      {activeTab === "SETTINGS" && (
         <FadeTabView tabKey="SETTINGS">
-          <SettingsScreen 
+          <SettingsScreen
             onTabChange={(tab) => {
-              if (tab === 'AUTH') {
+              if (tab === "AUTH") {
                 handleLogoutRoutine();
               } else {
                 setActiveTab(tab);
               }
-            }} 
-            onLogout={handleLogoutRoutine} 
+            }}
+            onLogout={handleLogoutRoutine}
             userProfile={userProfile}
             setUserProfile={setUserProfile}
             userId={userId}
           />
         </FadeTabView>
       )}
-      {activeTab === 'NOTIFICATIONS' && (
+      {activeTab === "NOTIFICATIONS" && (
         <FadeTabView tabKey="NOTIFICATIONS">
-          <NotificationsScreen 
-            onTabChange={(tab) => setActiveTab(tab)} 
+          <NotificationsScreen
+            onTabChange={(tab) => setActiveTab(tab)}
             notifications={notifications}
             setNotifications={setNotifications}
           />
         </FadeTabView>
       )}
-      {['DASHBOARD', 'DIET', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
-        <DraggableChatbotButton onPress={() => setActiveTab('CHATBOT')} />
+      {["DASHBOARD", "DIET", "WORKOUT", "SETTINGS"].includes(activeTab) && (
+        <DraggableChatbotButton onPress={() => setActiveTab("CHATBOT")} />
       )}
-      {['DASHBOARD', 'DIET', 'CHATBOT', 'WORKOUT', 'SETTINGS'].includes(activeTab) && (
-        <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} />
-      )}
+      {["DASHBOARD", "DIET", "CHATBOT", "WORKOUT", "SETTINGS"].includes(
+        activeTab,
+      ) && <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} />}
     </View>
   );
 }
 
 // Uniform High-Contrast System Theme Setup Tokens
-const baseColor = '#F0F4F2';
+const baseColor = "#F0F4F2";
 
 const styles = StyleSheet.create({
   appContainerRoot: {
     flex: 1,
-    backgroundColor: baseColor
+    backgroundColor: baseColor,
   },
   offlineBannerContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 32,
+    position: "absolute",
+    top: Platform.OS === "ios" ? 44 : 32,
     left: 0,
     right: 0,
     zIndex: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   offlineBannerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#92400E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#92400E",
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#F59E0B',
-    maxWidth: '90%',
+    borderColor: "#F59E0B",
+    maxWidth: "90%",
   },
   offlineBannerIcon: {
     marginRight: 6,
     fontSize: 12,
   },
   offlineBannerText: {
-    color: '#FEF3C7',
+    color: "#FEF3C7",
     fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
 });
 

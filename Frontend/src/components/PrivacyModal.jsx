@@ -18,7 +18,6 @@ import {
   HeartPulse,
   Lock,
   Scale,
-  CheckCircle2,
   AlertTriangle
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -26,7 +25,7 @@ import { useTheme } from '../context/ThemeContext';
 const { width, height } = Dimensions.get('window');
 const logoGreen = '#10B981';
 
-export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'medical' }) {
+export default function PrivacyModal({ visible, onClose, onAgree, initialTab = 'medical' }) {
   const { theme, isDarkMode } = useTheme();
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -168,45 +167,39 @@ export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'med
                 <View style={styles.alertNoticeBox}>
                   <AlertTriangle size={18} color="#D97706" style={{ marginTop: 2, marginRight: 8 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.alertNoticeTitle}>Important Clinical Notice</Text>
+                    <Text style={styles.alertNoticeTitle}>General Wellness Notice</Text>
                     <Text style={styles.alertNoticeText}>
-                      MacroSync is a wellness and nutritional tracking platform, NOT a certified medical device or clinical diagnostic tool.
+                      MacroSync is a wellness and nutrition tracker, not a clinical diagnostic tool or medical device.
                     </Text>
                   </View>
                 </View>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  1. Non-Medical Purpose & Educational Scope
+                  1. Educational & Wellness Scope
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  All macro calculations, calorie targets, workout routines, and conversational responses provided by Vita AI are generated for general wellness and educational purposes only. They do not constitute personalized medical diagnosis, clinical nutrition prescriptions, or treatment advice.
+                  All macro targets, calorie estimations, and Vita AI recommendations are generated for educational and general wellness purposes. They do not constitute personalized medical advice, clinical nutrition therapy, or prescription diets.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. High-Risk Medical Conditions & Screening
+                  2. Pre-Existing Medical Conditions
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  If you have been diagnosed with, suspect, or are undergoing treatment for:
-                  {'\n'}• <Text style={styles.boldSpan}>Diabetes (Type 1 or Type 2)</Text> or pre-diabetes
-                  {'\n'}• <Text style={styles.boldSpan}>Eating Disorders</Text> (e.g., Anorexia, Bulimia, Binge Eating)
-                  {'\n'}• <Text style={styles.boldSpan}>Chronic Kidney / Renal Disease</Text> or liver impairment
-                  {'\n'}• <Text style={styles.boldSpan}>Cardiovascular Disease</Text> or severe hypertension
-                  {'\n'}• <Text style={styles.boldSpan}>Pregnancy or Lactation</Text>
-                  {'\n\n'}You MUST consult your primary physician, licensed endocrinologist, or Registered Dietitian Nutritionist (RDN) before implementing diet changes, calorie deficits, or intense physical training.
+                  If you have diagnosed health conditions—such as <Text style={styles.boldSpan}>diabetes, chronic kidney or liver disease, heart conditions, eating disorders, or are pregnant/nursing</Text>—you should consult your physician or Registered Dietitian before adopting new diet plans, calorie deficits, or intense exercise.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. Chatbot (Vita AI) Limitations
+                  3. Allergen & Food Scanner Notice
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Vita AI uses Google Gemini artificial intelligence to assist with recipe discovery and macro tracking. While safety guardrails are active, AI models can produce imperfect recommendations. Never substitute AI output for the judgment of a licensed healthcare professional.
+                  AI food image scanning and recipe suggestions cannot guarantee 100% allergen detection. Hidden cooking fats, cross-contamination, and restaurant ingredients may not be visible. Always verify foods independently if you have severe allergies.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  4. Acute Medical Emergencies
+                  4. Medical Emergencies
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  If you experience chest pain, severe shortness of breath, dizziness, sudden allergic reactions, or acute hypoglycemic distress, cease using the app immediately and call emergency services (911 in the Philippines) or proceed to the nearest hospital.
+                  In case of acute symptoms (e.g., chest tightness, dizziness, severe allergic reactions, or diabetic hypoglycemia), stop using the app immediately and contact emergency medical services (911) or proceed to the nearest emergency clinic.
                 </Text>
               </View>
             )}
@@ -216,9 +209,9 @@ export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'med
                 <View style={[styles.alertNoticeBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.25)' }]}>
                   <ShieldCheck size={18} color="#10B981" style={{ marginTop: 2, marginRight: 8 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.alertNoticeTitle, { color: '#065F46' }]}>Philippine Data Privacy Act (RA 10173)</Text>
+                    <Text style={[styles.alertNoticeTitle, { color: '#065F46' }]}>Philippine Data Privacy (RA 10173)</Text>
                     <Text style={[styles.alertNoticeText, { color: '#047857' }]}>
-                      MacroSync complies strictly with Republic Act No. 10173 to safeguard your personal health and dietary information.
+                      MacroSync strictly complies with RA 10173 to safeguard your personal health and nutrition metrics.
                     </Text>
                   </View>
                 </View>
@@ -227,32 +220,21 @@ export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'med
                   1. Information We Collect
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  To personalize your nutritional targets and local food recommendations, MacroSync collects:
-                  {'\n'}• <Text style={styles.boldSpan}>Account Identifiers:</Text> Username, email address.
-                  {'\n'}• <Text style={styles.boldSpan}>Physical Metrics:</Text> Age, height, current weight, target goal weight.
-                  {'\n'}• <Text style={styles.boldSpan}>Dietary & Health Profile:</Text> Known food allergens, dietary preferences, and optional self-declared medical conditions (e.g., Diabetes, Hypertension).
-                  {'\n'}• <Text style={styles.boldSpan}>Geographic Location:</Text> Selected Philippine province & municipality to calibrate regional food pricing and recipe availability.
+                  We collect account identifiers (username, email), physical metrics (height, weight, fitness goals), declared food allergies, and your Philippine province/city to calibrate regional food availability and pricing.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. Data Security & Storage
+                  2. Security & AI Privacy
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  All communication between the MacroSync mobile application and our backend server is encrypted using Transport Layer Security (TLS/HTTPS). User profiles and meal logs are stored in a secure Supabase PostgreSQL database protected by Row Level Security (RLS) policies.
+                  Data transmission is encrypted via HTTPS/TLS, and user records are protected by database row-level security. We do not sell, rent, or monetize your health data with third-party advertisers or insurance companies.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. AI Processing Guardrails
+                  3. Your Rights & Account Deletion
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Chat messages and recipe queries processed through Google Gemini AI are utilized solely to answer your immediate prompt. We do NOT sell, rent, or trade your personal health data to third-party advertisers or insurance providers.
-                </Text>
-
-                <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  4. Your Privacy Rights
-                </Text>
-                <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Under RA 10173, you have the right to access your stored data, rectify inaccurate records, or request complete account and data deletion at any time via App Settings or by contacting our team.
+                  Under RA 10173, you have the right to access, update, or permanently delete your account and all stored health history at any time through <Text style={styles.boldSpan}>Settings → Delete Account</Text>.
                 </Text>
               </View>
             )}
@@ -260,31 +242,31 @@ export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'med
             {activeTab === 'terms' && (
               <View>
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  1. Acceptance & Eligibility
+                  1. Acceptance & Age Requirement
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  By creating an account, accessing, or continuing to use MacroSync, you agree to abide by these Terms of Service. You affirm that you are at least 18 years of age or possess legal parental/guardian consent.
+                  By creating an account, you agree to these Terms. You confirm that you are at least 18 years of age or possess legal parental or guardian consent to use MacroSync.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. Voluntary Assumption of Risk
+                  2. Personal Responsibility & Risk
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Nutrition, dieting, and physical workouts carry inherent physical risks. You voluntarily assume full responsibility for any physical activities or dietary alterations undertaken based on app metrics or suggestions.
+                  Physical training and nutritional changes involve inherent health risks. You voluntarily assume full responsibility for your wellness decisions and workout routines undertaken while using this app.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. Limitation of Liability
+                  3. Estimation Variance
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  To the maximum extent permitted by applicable law, MacroSync, its founders, and contributors shall not be liable for any direct, indirect, incidental, or consequential damages resulting from your use of or inability to use the platform.
+                  Nutritional breakdowns and regional food prices are approximations based on standard nutritional databases and market averages. Actual values may vary depending on local food preparation and vendors.
                 </Text>
 
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  4. Acceptable Conduct & Fair Use
+                  4. Acceptable Fair Use
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  You agree to use MacroSync solely for lawful, personal wellness tracking. Automated scraping, reverse-engineering, or abusive misuse of AI chatbot services is strictly prohibited.
+                  MacroSync is for personal, lawful wellness tracking. Automated data scraping, reverse-engineering, or abusive activity on AI chatbot services is strictly prohibited.
                 </Text>
               </View>
             )}
@@ -292,13 +274,20 @@ export default function PrivacyPolicyModal({ visible, onClose, initialTab = 'med
 
           {/* Footer Action */}
           <View style={[styles.modalFooter, isDarkMode && styles.modalFooterDark]}>
+            <Text style={[styles.footerNotice, isDarkMode && styles.textMutedDark]}>
+              By continuing, you agree to MacroSync policies.
+            </Text>
             <TouchableOpacity
               style={styles.doneButton}
-              onPress={onClose}
+              onPress={() => {
+                if (typeof onAgree === 'function') {
+                  onAgree();
+                }
+                onClose();
+              }}
               activeOpacity={0.8}
             >
-              <CheckCircle2 color="#FFFFFF" size={18} style={{ marginRight: 6 }} />
-              <Text style={styles.doneButtonText}>I Understand & Agree</Text>
+              <Text style={styles.doneButtonText}>Agree & Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -468,6 +457,15 @@ const styles = StyleSheet.create({
   },
   modalFooterDark: {
     borderTopColor: '#334155',
+  },
+  footerNotice: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontWeight: '500',
+    lineHeight: 16,
+    paddingHorizontal: 8,
   },
   doneButton: {
     flexDirection: 'row',

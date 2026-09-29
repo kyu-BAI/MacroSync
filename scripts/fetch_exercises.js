@@ -29,7 +29,7 @@ https.get(url, (res) => {
         }));
 
       console.log('Processed ' + bodyweight.length + ' exercises.');
-      const outPath = path.join(__dirname, '..', 'src', 'data', 'bodyweight_exercises.json');
+      const outPath = path.join(__dirname, '..', 'Frontend', 'src', 'data', 'bodyweight_exercises.json');
       fs.writeFileSync(outPath, JSON.stringify(bodyweight, null, 2), 'utf8');
       console.log('Saved to ' + outPath + ' (' + fs.statSync(outPath).size + ' bytes)');
     } catch (err) {

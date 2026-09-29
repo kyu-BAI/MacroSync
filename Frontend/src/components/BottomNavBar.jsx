@@ -1,31 +1,38 @@
 import React, { useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Platform, Dimensions, Animated,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Animated,
 } from 'react-native';
 import { Home, UtensilsCrossed, Camera, Dumbbell, Settings } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { useLanguage } from '../context/LanguageContext';
 
-const { width: screenWidth } = Dimensions.get('window');
+// --- 1. COLORS ---
+export const DEFAULT_ACTIVE_COLOR = '#10B981';
+const INACTIVE_LIGHT = '#94A3B8';
+const INACTIVE_DARK = '#64748B';
 
-// ── Design Tokens ──
-const logoGreen = '#10B981';
+// --- 2. CAMERA BUTTON SETTINGS ---
+const FAB_SIZE = 56;
+const FAB_ELEVATION = Platform.OS === 'ios' ? 28 : 22; 
 
-const TABS = [
-  { id: 'DASHBOARD', label: 'Home',    Icon: Home            },
-  { id: 'DIET',      label: 'Diet',    Icon: UtensilsCrossed },
-  { id: 'SCANNER',   label: null,      Icon: Camera          }, // center FAB
-  { id: 'WORKOUT',   label: 'Workout', Icon: Dumbbell        },
-  { id: 'SETTINGS',  label: 'Settings',Icon: Settings        },
+// --- 3. TABS ---
+export const TABS = [
+  { id: 'DASHBOARD', label: 'Home', Icon: Home },
+  { id: 'DIET',      label: 'Diet',     Icon: UtensilsCrossed },
+  { id: 'SCANNER',   label: null,       Icon: Camera }, // Center Camera Button
+  { id: 'WORKOUT',   label: 'Workout',  Icon: Dumbbell },
+  { id: 'SETTINGS',  label: 'Settings', Icon: Settings },
 ];
 
 export default function BottomNavBar({ activeTab, onTabChange }) {
   const { theme, isDarkMode } = useTheme();
-  const { t } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
 
-  // ── Each tab gets its own independent Animated.Value ──
+  // --- 4. ANIMATIONS ---
   const scaleRefs = useRef(
     TABS.reduce((acc, tab) => {
       acc[tab.id] = new Animated.Value(1);
@@ -33,62 +40,70 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
     }, {})
   ).current;
 
-  // FAB scale ref
   const fabScale = useRef(new Animated.Value(1)).current;
 
-  const springBounce = useCallback((anim) => {
+  const triggerSpringBounce = useCallback((anim) => {
     if (!anim) return;
-    try {
-      anim.setValue(0.72);
-      Animated.spring(anim, {
-        toValue: 1,
-        friction: 5,       // lower = bouncier
-        tension: 160,      // higher = snappier
-        useNativeDriver: false,
-      }).start();
-    } catch (e) {
-      console.warn('springBounce error:', e);
-    }
+    anim.setValue(0.75);
+    Animated.spring(anim, {
+      toValue: 1,
+      friction: 5,
+      tension: 160,
+      useNativeDriver: false,
+    }).start();
   }, []);
 
-  const handlePress = useCallback((tabId) => {
-    const anim = tabId === 'SCANNER' ? fabScale : (scaleRefs && scaleRefs[tabId]);
-    if (anim) springBounce(anim);
-    if (onTabChange) onTabChange(tabId);
-  }, [onTabChange, springBounce, scaleRefs, fabScale]);
+  const handleTabPress = useCallback(
+    (tabId) => {
+      const anim = tabId === 'SCANNER' ? fabScale : scaleRefs[tabId];
+      if (anim) triggerSpringBounce(anim);
+      if (onTabChange) onTabChange(tabId);
+    },
+    [onTabChange, triggerSpringBounce, scaleRefs, fabScale]
+  );
 
+  // --- 5. RENDER TAB ---
   const renderTab = (tab) => {
-    const isActive = activeTab === tab.id;
-    const inactiveColor = isDarkMode ? '#64748B' : '#94A3B8';
-
-    // Center FAB slot — placeholder only, FAB rendered separately
+    // Empty spacer in the bar row so tabs do not collide with center button
     if (tab.id === 'SCANNER') {
       return <View key={tab.id} style={styles.centerSlot} />;
     }
+
+    const isActive = activeTab === tab.id;
+    const tabActiveColor = tab.activeColor || DEFAULT_ACTIVE_COLOR;
+    const inactiveColor = isDarkMode ? INACTIVE_DARK : INACTIVE_LIGHT;
+    const currentTabColor = isActive ? tabActiveColor : inactiveColor;
 
     return (
       <TouchableOpacity
         key={tab.id}
         style={styles.tabItem}
-        onPress={() => handlePress(tab.id)}
-        activeOpacity={1}          // disable built-in fade; we handle feedback
+        onPress={() => handleTabPress(tab.id)}
+        activeOpacity={1}
       >
-        {/* Active indicator bar — slides in from top */}
-        {isActive && <View style={styles.topAccentBar} />}
+        {/* Top Active Indicator Line */}
+        {isActive && (
+          <View style={[styles.topAccentBar, { backgroundColor: tabActiveColor }]} />
+        )}
 
-        {/* ✅ Icon + label wrapped in Animated.View — bounce now renders */}
         <Animated.View
           style={[
             styles.pillContainer,
-            { transform: [{ scale: (scaleRefs && scaleRefs[tab.id]) ? scaleRefs[tab.id] : 1 }] },
+            { transform: [{ scale: scaleRefs[tab.id] || 1 }] },
           ]}
         >
           <tab.Icon
-            color={isActive ? logoGreen : inactiveColor}
+            color={currentTabColor}
             size={22}
             strokeWidth={isActive ? 2.5 : 2}
           />
-          <Text style={[styles.label, isActive && styles.labelActive]}>
+          <Text
+            style={[
+              styles.label,
+              { color: currentTabColor },
+              isActive && styles.labelActive,
+            ]}
+          >
             {tab.label}
           </Text>
         </Animated.View>
@@ -98,23 +113,18 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
 
   const isIos = Platform.OS === 'ios';
   const barHeight = isIos ? 76 : 68;
-  const fabBottom = isIos ? 30 : 24;
 
   return (
     <View style={[styles.outerWrapper, { height: isIos ? 96 : 84 }]}>
-      {/* Edge-to-Edge Tab Bar */}
+      {/* Tab Row Container */}
       <View style={[styles.container, { height: barHeight }]}>
-        {renderTab(TABS[0])}
-        {renderTab(TABS[1])}
-        {renderTab(TABS[2])}
-        {renderTab(TABS[3])}
-        {renderTab(TABS[4])}
+        {TABS.map(renderTab)}
       </View>
 
-      {/* Center Camera FAB — with its own bounce */}
-      <View style={[styles.fabWrapper, { bottom: fabBottom }]}>
+      {/* Center Floating Camera FAB (Auto-Centered with alignSelf) */}
+      <View style={styles.fabWrapper}>
         <TouchableOpacity
-          onPress={() => handlePress('SCANNER')}
+          onPress={() => handleTabPress('SCANNER')}
           activeOpacity={1}
         >
           <Animated.View
@@ -132,88 +142,82 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
     </View>
   );
 }
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  outerWrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 99,
-  },
 
-  // Edge-to-Edge Container
-  container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme?.surface || '#FFFFFF',
-    borderTopWidth: 1.2,
-    borderTopColor: theme?.border || '#E2E8F0',
-    paddingBottom: Platform.OS === 'ios' ? 14 : 0,
-    zIndex: 3,
-  },
-
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    position: 'relative',
-  },
-
-  topAccentBar: {
-    position: 'absolute',
-    top: -1,
-    width: 28,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: logoGreen,
-  },
-
-  pillContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-
-  label: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: isDarkMode ? '#64748B' : '#94A3B8',
-    marginTop: 2,
-  },
-  labelActive: {
-    color: logoGreen,
-    fontWeight: '900',
-  },
-
-  // Placeholder for center slot spacing
-  centerSlot: {
-    width: 60,
-  },
-
-  // FAB — with ring accent
-  fabWrapper: {
-    position: 'absolute',
-    left: screenWidth / 2 - 29, // center (58/2 = 29)
-    zIndex: 5,
-  },
-  fab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: logoGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3.5,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  fabActive: {
-    backgroundColor: '#059669',
-  },
-});
+// --- 6. STYLES ---
+const getStyles = (theme, isDarkMode) =>
+  StyleSheet.create({
+    outerWrapper: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 99,
+    },
+    // Main navigation bar background and top border
+    container: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme?.surface || '#FFFFFF',
+      paddingBottom: Platform.OS === 'ios' ? 14 : 0,
+      zIndex: 3,
+    },
+    tabItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      position: 'relative',
+    },
+    topAccentBar: {
+      position: 'absolute',
+      top: -1,
+      width: 28,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: DEFAULT_ACTIVE_COLOR,
+    },
+    pillContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+    },
+    label: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: isDarkMode ? INACTIVE_DARK : INACTIVE_LIGHT,
+      marginTop: 2,
+    },
+    labelActive: {
+      fontWeight: '900',
+    },
+    centerSlot: {
+      width: FAB_SIZE + 4,
+    },
+    // Auto-centers the camera button horizontally on any screen
+    fabWrapper: {
+      position: 'absolute',
+      alignSelf: 'center',
+      bottom: FAB_ELEVATION,
+      zIndex: 5,
+    },
+    // Circular camera button
+    fab: {
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+      borderRadius: FAB_SIZE / 2,
+      backgroundColor: DEFAULT_ACTIVE_COLOR,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 3.5,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    fabActive: {
+      backgroundColor: '#059669ff',
+    },
+  });

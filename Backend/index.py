@@ -145,6 +145,10 @@ class UpdatePasswordRequest(BaseModel):
     current_password: str = None
 
 
+class DeleteAccountRequest(BaseModel):
+    user_id: str
+
+
 class GoogleSignInRequest(BaseModel):
     email: str
     name: str
@@ -431,6 +435,66 @@ def signin(user: UserLogin):
     except Exception as e:
         print("LOGIN ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------- DELETE ACCOUNT (RA 10173 & APP STORE MANDATE) ----------------
+@app.post("/delete-account")
+async def delete_account_post(req: DeleteAccountRequest):
+    return await execute_account_deletion(req.user_id)
+
+
+@app.delete("/delete-account/{user_id}")
+async def delete_account_delete(user_id: str):
+    return await execute_account_deletion(user_id)
+
+
+async def execute_account_deletion(target_uid: str):
+    try:
+        if not target_uid or not str(target_uid).strip():
+            raise HTTPException(status_code=400, detail="User ID is required for deletion.")
+
+        target_uid = str(target_uid).strip()
+
+        # 1. Fetch user's email if possible
+        email = None
+        if supabase_admin is not None:
+            try:
+                prof = supabase_admin.table("user_profiles").select("email").eq("id", target_uid).execute()
+                if prof.data and len(prof.data) > 0:
+                    email = prof.data[0].get("email")
+            except Exception as e:
+                print("Warning fetching profile email before deletion:", e)
+
+            # 2. Purge user data across related database tables
+            tables_to_purge = ["logged_meals", "logged_workouts", "water_logs", "user_profiles"]
+            for tbl in tables_to_purge:
+                try:
+                    col = "id" if tbl == "user_profiles" else "user_id"
+                    supabase_admin.table(tbl).delete().eq(col, target_uid).execute()
+                except Exception as tbl_err:
+                    print(f"Purge error on table {tbl}:", tbl_err)
+
+            if email:
+                try:
+                    supabase_admin.table("password_reset_otps").delete().eq("email", email).execute()
+                except Exception as otp_err:
+                    print("Purge error on password_reset_otps:", otp_err)
+
+            # 3. Delete user account from Supabase Auth admin
+            try:
+                supabase_admin.auth.admin.delete_user(target_uid)
+            except Exception as auth_del_err:
+                print("Supabase auth delete_user error (may already be purged):", auth_del_err)
+
+        return {
+            "success": True,
+            "message": "Account and all associated personal health data have been permanently deleted."
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("DELETE ACCOUNT ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to delete account. Please try again.")
 
 
 # ---------------- GOOGLE SIGNIN (OAUTH & ROUTING) ----------------

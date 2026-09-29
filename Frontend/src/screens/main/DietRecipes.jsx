@@ -1,198 +1,132 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
-  TextInput,
+// Imports
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Platform,
   Dimensions,
   ActivityIndicator,
-  Alert,
-  Modal,
-  Linking,
   RefreshControl,
 } from "react-native";
-import {
-  Search,
-  MapPin,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  ChefHat,
-  CheckCircle2,
-  PlusCircle,
-  Coffee,
-  Sun,
-  Moon,
-  Flame,
-  Sparkles,
-  Compass,
-  Navigation,
-  LocateFixed,
-  ShoppingBag,
-  Maximize2,
-  X,
-  RotateCcw,
-  Home,
-} from "lucide-react-native";
-import API_URL from "../config/api";
-import { getCityFoodProfile, getAllCityMarkers } from "../../services/cityFoodService";
-import * as Location from 'expo-location';
+import { ChefHat, CheckCircle2, PlusCircle, Sparkles, Navigation, LocateFixed, ShoppingBag, Maximize2, Home } from "lucide-react-native";
+import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Config & Services
+import API_URL from "../config/api";
+import { getCityFoodProfile } from "../../services/cityFoodService";
+import { addToSyncQueue, updateCachedDashboardField } from "../../services/OfflineStorage";
 import {
-  addToSyncQueue,
-  updateCachedDashboardField,
-} from "../../services/OfflineStorage";
+  calculateTargetMacros,
+  ensurePlanWithinTargetCalories,
+  getMealAccentColor,
+  getMealIconComponent,
+  pushNotificationIfAllowed,
+} from "../../services/nutritionCalculator";
+import { normalizeToCebuLGU, getDynamicPalengkePlan } from "../../data/cebuPalengkeMeals";
+import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from "../../data/cebu_locations";
+
+// Contexts & Reusable UI Components
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
-import AILoadingModal from "../../components/AILoadingModal";
+import LoadingModal from "../../components/LoadingModal";
+import RecipeModal from "../../components/RecipeModal";
+import CebuMapModal from "../../components/CebuMapModal";
 import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
 import MapcnMap from "../../components/MapcnMap";
-import { WebView } from "react-native-webview";
-import { getStyles } from "./DietRecipesScreen.styles";
+
+// Re-export normalizeToCebuLGU for backward compatibility
+export { normalizeToCebuLGU };
+
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
-const logoGreen = "#10B981";
-
-const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
-  if (!setNotifications) return;
-  try {
-    const stored = await AsyncStorage.getItem('@ms_notification_preferences');
-    const prefs = stored ? JSON.parse(stored) : { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true };
-    const category = newNotif.category;
-    if ((category === 'hydration' || category === 'meal') && prefs.habitReminders === false) return;
-    if ((category === 'workout' || category === 'achievement') && prefs.motivationalUpdates === false) return;
-    if (category === 'smart' && prefs.personalizedAlerts === false) return;
-    setNotifications(prev => [newNotif, ...prev]);
-  } catch (e) {
-    setNotifications(prev => [newNotif, ...prev]);
-  }
-};
-
+const logoGreen = "#10b981";
 const memoryDailyPlanCache = {};
 
-// All 53 Cebu LGUs: 9 cities + 44 municipalities
-const CEBU_LOCATIONS = [
-  // === CITIES ===
-  'Cebu City',
-  'Lapu-Lapu City',
-  'Mandaue City',
-  'Talisay City',
-  'Carcar City',
-  'Bogo City',
-  'Danao City',
-  'Naga City',
-  'Toledo City',
-  // === MUNICIPALITIES (Cebu mainland) ===
-  'Alcantara',
-  'Alcoy',
-  'Alegria',
-  'Aloguinsan',
-  'Argao',
-  'Asturias',
-  'Badian',
-  'Balamban',
-  'Barili',
-  'Boljoon',
-  'Borbon',
-  'Carmen',
-  'Catmon',
-  'Compostela',
-  'Consolacion',
-  'Cordova',
-  'Daanbantayan',
-  'Dalaguete',
-  'Dumanjug',
-  'Ginatilan',
-  'Liloan',
-  'Malabuyoc',
-  'Medellin',
-  'Minglanilla',
-  'Moalboal',
-  'Oslob',
-  'Pinamungajan',
-  'Ronda',
-  'Samboan',
-  'San Fernando',
-  'San Remigio',
-  'Santander',
-  'Sibonga',
-  'Sogod',
-  'Tabogon',
-  'Tabuelan',
-  'Tuburan',
-  // === BANTAYAN ISLAND GROUP ===
-  'Bantayan',
-  'Madridejos',
-  'Santa Fe',
-  // === CAMOTES ISLANDS GROUP ===
-  'San Francisco (Camotes)',
-  'Pilar (Camotes)',
-  'Poro (Camotes)',
-  'Tudela (Camotes)',
-];
+// Reusable Meal Item Card Component (Deduplicated across Daily Plan & Food Radar)
+function MealItemCard({
+  mealId,
+  isLogged,
+  categoryLabel,
+  timeLabel,
+  mealTitle,
+  calories,
+  proteinText,
+  accentColor,
+  IconComponent,
+  onViewRecipe,
+  onLogMeal,
+  styles,
+}) {
+  return (
+    <View style={styles.timelineItem}>
+      <PressableCard style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
+        <View style={styles.timelineHeader}>
+          <View
+            style={[
+              styles.mealTypeBadge,
+              isLogged
+                ? { backgroundColor: "#64748B" }
+                : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 },
+            ]}
+          >
+            <IconComponent color={isLogged ? "#FFFFFF" : accentColor} size={12} strokeWidth={2.5} />
+            <Text style={[styles.mealTypeBadgeText, isLogged ? { color: "#FFFFFF" } : { color: accentColor }]}>{categoryLabel}</Text>
+          </View>
+          <Text style={styles.timelineTime}>{timeLabel}</Text>
+        </View>
 
-/**
- * Normalizes any town/city string from onboarding or reverse geocoding to the canonical CEBU_LOCATIONS name.
- * Handles prefixes ("City of", "Municipality of"), suffixes ("City"), subregions, and island groupings.
- */
-export const normalizeToCebuLGU = (rawName) => {
-  if (!rawName || typeof rawName !== 'string') return null;
-  const clean = rawName
-    .replace(/^city of\s+/i, '')
-    .replace(/\s+city$/i, '')
-    .replace(/^municipality of\s+/i, '')
-    .replace(/,\s*cebu.*$/i, '')
-    .trim()
-    .toLowerCase();
+        <Text style={[styles.timelineTitle, isLogged && { color: "#64748B" }]}>{mealTitle}</Text>
 
-  if (!clean) return null;
+        <View style={styles.timelineFooter}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.timelineMacroText}>
+              {calories} kcal • {proteinText}
+            </Text>
+            <TouchableOpacity style={styles.viewRecipeTextBtn} onPress={onViewRecipe} activeOpacity={0.6}>
+              <ChefHat color={isLogged ? "#64748B" : accentColor} size={14} style={{ marginRight: 4 }} />
+              <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
+            </TouchableOpacity>
+          </View>
 
-  // 1. Direct match against canonical CEBU_LOCATIONS
-  for (const loc of CEBU_LOCATIONS) {
-    const locClean = loc
-      .replace(/\s*\(camotes\)/i, '')
-      .replace(/\s+city$/i, '')
-      .trim()
-      .toLowerCase();
+          <TouchableOpacity
+            style={[styles.logMealMiniBtn, isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }]}
+            onPress={onLogMeal}
+            activeOpacity={0.7}
+          >
+            {isLogged ? (
+              <>
+                <CheckCircle2 color="#FFFFFF" size={12} />
+                <Text style={styles.logMealMiniBtnTextLogged}>Logged </Text>
+              </>
+            ) : (
+              <>
+                <PlusCircle color="#FFFFFF" size={12} />
+                <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </PressableCard>
+    </View>
+  );
+}
 
-    if (clean === locClean || clean === loc.toLowerCase()) {
-      return loc;
-    }
-  }
-
-  // 2. Special aliases & colloquial variants
-  if (clean === 'lapu lapu' || clean === 'lapulapu') return 'Lapu-Lapu City';
-  if (clean === 'sta fe' || clean === 'sta. fe') return 'Santa Fe';
-  if (clean === 'cebu') return 'Cebu City';
-  if (clean === 'san francisco') return 'San Francisco (Camotes)';
-  if (clean === 'pilar') return 'Pilar (Camotes)';
-  if (clean === 'poro') return 'Poro (Camotes)';
-  if (clean === 'tudela') return 'Tudela (Camotes)';
-
-  // 3. Substring / fuzzy match
-  const found = CEBU_LOCATIONS.find((loc) => {
-    const l = loc.toLowerCase();
-    const lClean = l.replace(/\s*\(camotes\)/i, '').replace(/\s+city$/i, '').trim();
-    return l.includes(clean) || clean.includes(lClean);
-  });
-
-  return found || null;
-};
-
-export default function DietRecipesScreen({ 
-  onTabChange, 
-  dailyNutrition, 
-  setDailyNutrition, 
+// Main Component
+export default function DietRecipesScreen({
+  onTabChange,
+  dailyNutrition,
+  setDailyNutrition,
   dailyExercise,
-  guestGoals, 
-  guestBaseline, 
-  globalLoggedMeals = [], 
+  guestGoals,
+  guestBaseline,
+  globalLoggedMeals = [],
   setGlobalLoggedMeals,
   sessionRecipes,
   sessionDailyPlan,
@@ -200,189 +134,105 @@ export default function DietRecipesScreen({
   userId,
   isOnline = true,
   setNotifications,
-  userProfile
+  userProfile,
 }) {
+  // Hooks & Context
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
   const { language, t, translateMealTitle, translateMealCategory } = useLanguage();
-  const styles = getStyles(theme);
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const styles = useMemo(() => getStyles(theme), [theme]);
 
-  // Derive initial hometown synchronously from userProfile prop if already loaded
-  const initialHometown = React.useMemo(() => {
-    const raw = 
-      userProfile?.structuredLocation?.city || 
-      userProfile?.city || 
-      userProfile?.address ||
-      userProfile?.structured_location?.city;
+  // Navigation tabs ('PLAN' or 'EXPLORE')
+  const [activeDietTab, setActiveDietTab] = useState("PLAN");
+
+  // Modal states
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
+  const [showFullMapModal, setShowFullMapModal] = useState(false);
+
+  // Recipe cache
+  const recipeCacheRef = useRef({});
+
+  // User profile & location
+  const initialHometown = useMemo(() => {
+    const raw =
+      userProfile?.structuredLocation?.city || userProfile?.city || userProfile?.address || userProfile?.structured_location?.city;
     return normalizeToCebuLGU(raw);
   }, [userProfile]);
 
   const [userHometown, setUserHometown] = useState(initialHometown || null);
   const [selectedLocation, setSelectedLocation] = useState(initialHometown || null);
   const [userAllergies, setUserAllergies] = useState(userProfile?.allergies || []);
-  const [activeDietTab, setActiveDietTab] = useState('PLAN'); // 'PLAN' or 'EXPLORE'
+  const [isLocating, setIsLocating] = useState(false);
 
-  const recipeCacheRef = React.useRef({});
+  // Dynamic city food profile state
+  const [cityProfilesCache, setCityProfilesCache] = useState({});
+  const [currentCityProfile, setCurrentCityProfile] = useState(null);
+  const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
 
-  const handleViewRecipe = useCallback(async (meal) => {
-    // 1. Check if recipe already attached to meal
-    if (meal.instructions && meal.ingredients) {
-      setSelectedRecipe(meal);
-      setShowRecipeModal(true);
-      return;
-    }
-
-    // 2. Check local client cache for instant 0ms load
-    const cacheKey = `${meal.title.trim().toLowerCase()}_${selectedLocation || 'San Remigio'}`;
-    if (recipeCacheRef.current[cacheKey]) {
-      setSelectedRecipe(recipeCacheRef.current[cacheKey]);
-      setShowRecipeModal(true);
-      return;
-    }
-
-    setIsFetchingRecipe(true);
-    try {
-      const response = await fetch(`${API_URL}/generate-recipe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          ingredients: meal.title,
-          budget: 'All',
-          location: selectedLocation || 'San Remigio'
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate recipe');
-      }
-
-      const data = await response.json();
-      recipeCacheRef.current[cacheKey] = data;
-      setSelectedRecipe(data);
-      setShowRecipeModal(true);
-    } catch (error) {
-      if (__DEV__) console.error("VIEW RECIPE ERROR:", error);
-      showAlert('Unable to load recipe', 'Failed to retrieve recipe from AI. Please check your network connection.');
-    } finally {
-      setIsFetchingRecipe(false);
-    }
-  }, [selectedLocation]);
-
-  // Use global persisted state so logged meals survive tab switches
+  // Global meal log synchronization
   const loggedMeals = globalLoggedMeals;
   const setLoggedMeals = setGlobalLoggedMeals || (() => {});
-  const [recipes, setRecipes] = useState(sessionRecipes || []);
 
-  useEffect(() => {
-    if (sessionRecipes && sessionRecipes.length > 0) {
-      setRecipes(sessionRecipes);
-    } else if (userId) {
-      // Defer heavy fetch until after tab animation completes
-      const timer = setTimeout(() => {
-        fetch(`${API_URL}/meals/recommend/${userId}`)
-          .then(res => res.ok ? res.json() : [])
-          .then(data => {
-            if (Array.isArray(data) && data.length > 0) {
-              setRecipes(data);
-            }
-          })
-          .catch(err => __DEV__ && console.log("AI meals fetch notice in DietRecipesScreen:", err?.message || err));
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [sessionRecipes, userId]);
+  // Nutrition & target macros
+  const { targetCalories, targetProtein, targetCarbs, targetFats } = useMemo(() => {
+    return calculateTargetMacros(guestBaseline, guestGoals, dailyNutrition);
+  }, [guestBaseline, guestGoals, dailyNutrition]);
 
+  // Calorie calculations
+  const consumedCalories = dailyNutrition?.consumedCalories || 0;
+  const burnedCalories = dailyExercise?.caloriesBurned || 0;
+  const netCalories = Math.max(0, consumedCalories - burnedCalories);
+  const isOverGross = consumedCalories > targetCalories;
+  const isOverCalories = netCalories > targetCalories;
+  const isSavedByWorkout = isOverGross && !isOverCalories;
+
+  // Load preferences & location
   useEffect(() => {
     const loadUserDataAndLocation = async () => {
       try {
-        let parsedProfile = null;
-        let parsedOnb = null;
-        let parsedCache = null;
+        const storedProfile = (await AsyncStorage.getItem("ms_user_profile")) || (await AsyncStorage.getItem("@ms_user_profile"));
+        const onboardingData = await AsyncStorage.getItem("@ms_onboarding_data");
+        const dashboardCache = await AsyncStorage.getItem("ms_dashboard_cache");
 
-        const storedProfile = (await AsyncStorage.getItem('ms_user_profile')) || (await AsyncStorage.getItem('@ms_user_profile'));
-        if (storedProfile) {
-          try { parsedProfile = JSON.parse(storedProfile); } catch (_) {}
-        }
-        const onboardingData = await AsyncStorage.getItem('@ms_onboarding_data');
-        if (onboardingData) {
-          try { parsedOnb = JSON.parse(onboardingData); } catch (_) {}
-        }
-        const dashboardCache = await AsyncStorage.getItem('ms_dashboard_cache');
-        if (dashboardCache) {
-          try { parsedCache = JSON.parse(dashboardCache)?.data; } catch (_) {}
-        }
+        const parsedProfile = storedProfile ? JSON.parse(storedProfile) : null;
+        const parsedOnb = onboardingData ? JSON.parse(onboardingData) : null;
+        const parsedCache = dashboardCache ? JSON.parse(dashboardCache)?.data : null;
 
-        // 1. Allergies
-        const allergies = 
-          userProfile?.allergies || 
-          parsedProfile?.allergies || 
-          parsedOnb?.allergies || 
-          parsedCache?.profile?.allergies;
-        if (Array.isArray(allergies) && allergies.length > 0) {
-          setUserAllergies(allergies);
-        }
+        const allergies = [userProfile, parsedProfile, parsedOnb, parsedCache?.profile].find(
+          (p) => Array.isArray(p?.allergies) && p.allergies.length > 0
+        )?.allergies;
+        if (allergies) setUserAllergies(allergies);
 
-        // 2. Hometown from Onboarding Step 3
-        const candidateTown = 
-          userProfile?.structuredLocation?.city || 
-          userProfile?.city || 
-          userProfile?.address ||
-          userProfile?.structured_location?.city ||
-          parsedOnb?.structuredLocation?.city || 
-          parsedOnb?.structured_location?.city || 
-          parsedOnb?.city || 
-          parsedOnb?.address ||
-          parsedCache?.profile?.structuredLocation?.city ||
-          parsedCache?.profile?.city ||
-          parsedCache?.profile?.address ||
-          parsedProfile?.structuredLocation?.city || 
-          parsedProfile?.structured_location?.city || 
-          parsedProfile?.city || 
-          parsedProfile?.address;
+        const candidateTown = [userProfile, parsedOnb, parsedCache?.profile, parsedProfile]
+          .map((p) => p?.structuredLocation?.city || p?.structured_location?.city || p?.city || p?.address)
+          .find(Boolean);
 
         if (candidateTown) {
           const chosenTown = normalizeToCebuLGU(candidateTown) || candidateTown;
           setUserHometown(chosenTown);
-          // Set as active location for Explore tab
           setSelectedLocation(chosenTown);
+          if (__DEV__) console.log("[DietRecipes] 📍 Resolved user hometown:", chosenTown);
         }
       } catch (err) {
-        if (__DEV__) console.log("Error loading user preferences & location:", err);
+        if (__DEV__) console.warn("[DietRecipes] Error loading preferences & location:", err);
       }
     };
     loadUserDataAndLocation();
   }, [userProfile]);
 
-  // Whenever the user opens/switches to the Explore Recipes tab, automatically default the map directly to their onboarding location
   useEffect(() => {
-    if (activeDietTab === 'EXPLORE' && userHometown) {
+    if (activeDietTab === "EXPLORE" && userHometown) {
       setSelectedLocation(userHometown);
     }
   }, [activeDietTab, userHometown]);
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFullMapModal, setShowFullMapModal] = useState(false);
-  const [showCityPickerModal, setShowCityPickerModal] = useState(false);
-  const [isPressedBtn, setIsPressedBtn] = useState(null);
-
-  // Dynamic city food data
-  const [cityProfilesCache, setCityProfilesCache] = useState({});
-  const [currentCityProfile, setCurrentCityProfile] = useState(null);
-  const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
-
-  // Fetch profile whenever selected city changes
+  // City food profile
   useEffect(() => {
     const cityName = selectedLocation;
     if (!cityName) return;
 
-    // Instant: use cached profile if we already fetched it
     if (cityProfilesCache[cityName]) {
       setCurrentCityProfile(cityProfilesCache[cityName]);
       return;
@@ -394,6 +244,7 @@ export default function DietRecipesScreen({
         if (profile) {
           setCityProfilesCache((prev) => ({ ...prev, [cityName]: profile }));
           setCurrentCityProfile(profile);
+          if (__DEV__) console.log("[DietRecipes] 🌾 City food profile loaded for:", cityName);
         } else {
           setCurrentCityProfile(null);
         }
@@ -401,607 +252,9 @@ export default function DietRecipesScreen({
       .catch(() => setCurrentCityProfile(null))
       .finally(() => setIsFetchingCityProfile(false));
   }, [selectedLocation]);
-  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
-  const [isLocating, setIsLocating] = useState(false);
 
-  // GPS: locate user and snap map to their municipality/city
-  const handleLocateMe = async () => {
-    setIsLocating(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert('Location Permission', 'Please enable location access to use Locate Me.');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [geo] = await Location.reverseGeocodeAsync({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-      });
-      const candidates = [geo.city, geo.subregion, geo.district, geo.name].filter(Boolean);
-      let matched = null;
-      for (const c of candidates) {
-        const norm = normalizeToCebuLGU(c);
-        if (norm) {
-          matched = norm;
-          break;
-        }
-      }
-      if (matched) {
-        setSelectedLocation(matched);
-      } else {
-        const rawCity = geo.city || geo.subregion || 'Cebu City';
-        setSelectedLocation(normalizeToCebuLGU(rawCity) || rawCity);
-      }
-    } catch (err) {
-      showAlert('Location Error', 'Could not determine your location. Please try again.');
-    } finally {
-      setIsLocating(false);
-    }
-  };
-
-  const locations = CEBU_LOCATIONS;
-
-  // CITY_PROFILES replaced by dynamic cityProfilesCache + currentCityProfile
-  // Legacy alias for any code that still references CITY_PROFILES[selectedLocation]
-  const CITY_PROFILES = cityProfilesCache;
-
-  const _LEGACY_CITY_PROFILES = {
-    'Cebu City': {
-      marketTitle: 'Carbon Market & Pasil Fish Port (Cebu City)',
-      palengkeItems: 'Pasil Fresh Fish, Singkamas, Pork Belly, Kangkong, Calamansi',
-      lat: 10.3157, lng: 123.8854,
-      famousDishes: [
-        { name: 'Pasil Tuslob Buwa', desc: 'Frothy pig brain & liver stew cooked with onions & chili, dipped with puso (hanging rice).' },
-        { name: 'Cebuano Ngohiong', desc: 'Crispy five-spice fried lumpia stuffed with ubod/singkamas, served with garlic brown dip.' },
-        { name: 'Lechon sa Sugbo', desc: 'World-famous herb & lemongrass stuffed charcoal roasted pork with super crispy skin.' },
-        { name: 'Ginabot (Chicharon Bulaklak)', desc: 'Deep-fried pork mesentery, a legendary Cebuano night market street food staple.' }
-      ]
-    },
-    'Lapu-Lapu City': {
-      marketTitle: 'Mactan Public Market & Saang Pier (Lapu-Lapu City)',
-      palengkeItems: 'Tangigue, Saang, Bakasi, Calamansi, Fresh Lato',
-      lat: 10.3103, lng: 123.9494,
-      famousDishes: [
-        { name: 'Sutukil Seafood Trilogy', desc: 'Iconic 3-way seafood meal: Sugba (Grilled), Tula (Fish Soup), and Kinilaw (Raw Cured).' },
-        { name: 'Linarang na Bakasi sa Cordova', desc: 'Cordova moray eel stew cooked with kamias souring broth, black beans, and chili.' },
-        { name: 'Presko nga Saang sa Mactan', desc: 'Steamed local sea snails dipped in spicy native tuba vinegar and ginger.' }
-      ]
-    },
-    'Mandaue City': {
-      marketTitle: 'Mandaue City Public Market',
-      palengkeItems: 'Native Chicken, Kangkong, Sayote, Eggplant, Sweet Rice',
-      lat: 10.3333, lng: 123.9333,
-      famousDishes: [
-        { name: 'Bibingka sa Mandaue', desc: 'Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves.' },
-        { name: 'Tagaktak sa Mandaue', desc: 'Crispy net-like sweet rice flour treat fried to golden perfection.' },
-        { name: 'Utan Bisaya sa Mandaue', desc: 'Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens.' }
-      ]
-    },
-    'Talisay City': {
-      marketTitle: 'Talisay City Public Market (Poblacion)',
-      palengkeItems: 'Pork Belly, Inun-unan Fish, Kangkong, Cucumber, Native Tomatoes',
-      lat: 10.2447, lng: 123.8494,
-      famousDishes: [
-        { name: 'Inasal nga Lechon sa Talisay', desc: 'Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork.' },
-        { name: 'Inun-unan nga Bisaya', desc: 'Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant.' }
-      ]
-    },
-    'Carcar City': {
-      marketTitle: 'Carcar City Public Market (Palengke sa Carcar)',
-      palengkeItems: 'Native Pork, Ampaw, Chicharon, Kangkong, Squash, Sitaw',
-      lat: 10.1044, lng: 123.6419,
-      famousDishes: [
-        { name: 'Chicharon sa Carcar', desc: 'Famous crunchy pork cracklings crafted with thick savory meat & fat layers.' },
-        { name: 'Ampaw sa Carcar', desc: 'Puffed rice crispy square treats bound with sweet native syrup and peanuts.' },
-        { name: 'Humba sa Carcar', desc: 'Tender pork belly braised with fermented black beans, banana blossoms, and tuba sugar.' }
-      ]
-    },
-    'Argao': {
-      marketTitle: 'Argao Public Market & Heritage District',
-      palengkeItems: 'Native Sikwate (Cacao), Torta, Native Pork, Alugbati, Eggplant',
-      lat: 9.8808, lng: 123.5975,
-      famousDishes: [
-        { name: 'Torta sa Argao', desc: 'Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese.' },
-        { name: 'Batirol nga Sikwate sa Argao', desc: 'Rich hot chocolate frothed with a batirol using 100% native cacao tablea.' },
-        { name: 'Chiu-Chiu nga Baboy sa Argao', desc: 'Traditional Argao braised pork belly stewed with spices and native herbs.' }
-      ]
-    },
-    'Bogo City': {
-      marketTitle: 'Bogo City Public Market (Palengke sa Bogo)',
-      palengkeItems: 'Tangigue, Sweet Corn, Native Tomatoes, Cucumber, Calamansi',
-      lat: 11.0517, lng: 124.0055,
-      famousDishes: [
-        { name: 'Pintos sa Bogo', desc: 'Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks.' },
-        { name: 'Kinilaw nga Tangigue sa Amihanan', desc: 'Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies.' }
-      ]
-    },
-    'San Remigio': {
-      marketTitle: 'San Remigio Municipal Public Market',
-      palengkeItems: 'Bangus, Tilapia, Fresh Lato, Kangkong, Squash, Gabi Leaves',
-      lat: 11.0772, lng: 123.9356,
-      famousDishes: [
-        { name: 'Presko nga Salada nga Lato', desc: 'Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions.' },
-        { name: 'Sinugbang Bangus sa Dahon sa Saging', desc: 'Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf.' }
-      ]
-    },
-    'Daanbantayan': {
-      marketTitle: 'Daanbantayan Public Market & Fish Landing',
-      palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger',
-      lat: 11.2589, lng: 124.0153,
-      famousDishes: [
-        { name: 'Inun-unan nga Bodboron', desc: 'Small ocean fish simmered gently in native vinegar, ginger, and green peppers.' },
-        { name: 'Linat-ang Tulingan sa Daanbantayan', desc: 'Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes.' }
-      ]
-    },
-    'Bantayan Island': {
-      marketTitle: 'Bantayan Island Fish Landing & Santa Fe Market',
-      palengkeItems: 'Dried Danggit, Blue Crab, Shellfish, Calamansi, Young Coconut',
-      lat: 11.1681, lng: 123.7222,
-      famousDishes: [
-        { name: 'Buwad nga Danggit sa Bantayan', desc: 'World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar.' },
-        { name: 'Nilung-ag nga Kasag sa Bantayan', desc: 'Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi.' },
-        { name: 'Buwad nga Pusit', desc: 'Crispy sun-dried squid toasted over coals until golden and fragrant.' }
-      ]
-    },
-    'Camotes Islands': {
-      marketTitle: 'San Francisco Public Market (Camotes)',
-      palengkeItems: 'Cassava, Buko, Native Chicken, Fresh Ocean Fish, Kangkong',
-      lat: 10.6558, lng: 124.3431,
-      famousDishes: [
-        { name: 'Cassava Cake sa Camotes', desc: 'Traditional baked cassava root cake enriched with fresh coconut milk and sugar.' },
-        { name: 'Halang-Halang nga Manok sa Gata', desc: 'Spicy chicken coconut milk soup infused with chili leaves, ginger, and lemongrass.' }
-      ]
-    },
-    'Toledo City': {
-      marketTitle: 'Toledo City Public Market',
-      palengkeItems: 'River Prawns, Tilapia, Corn Grit, Squash, Sitaw',
-      lat: 10.3772, lng: 123.6406,
-      famousDishes: [
-        { name: 'Gisadong Ulang sa Toledo', desc: 'Large freshwater river prawns sautéed in garlic, butter, and native tomatoes.' },
-        { name: 'Sinugbang Tilapia sa Kamayan', desc: 'Fresh river tilapia grilled over charcoal, served with calamansi soy dip.' }
-      ]
-    },
-    'Balamban': {
-      marketTitle: 'Balamban Public Market & Herb Port',
-      palengkeItems: 'Stuffed Liempo, Native Chicken, Malunggay, Sayote',
-      lat: 10.5042, lng: 123.7194,
-      famousDishes: [
-        { name: 'Sinugbang Liempo sa Balamban', desc: 'Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass.' },
-        { name: 'Tinolang Manok sa Balamban', desc: 'Free-range chicken stewed with green papaya, ginger, and fresh malunggay.' }
-      ]
-    },
-    'Moalboal': {
-      marketTitle: 'Moalboal Public Market & Beach Fish Landing',
-      palengkeItems: 'Tuna Steak, Mackerel, Buko Water, Calamansi, Cucumber',
-      lat: 9.9575, lng: 123.4000,
-      famousDishes: [
-        { name: 'Sinugbang Tangigue Steak sa Moalboal', desc: 'Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip.' },
-        { name: 'Kinilaw nga Mackerel sa Baybayon', desc: 'Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger.' }
-      ]
-    },
-    'Oslob': {
-      marketTitle: 'Oslob Municipal Market',
-      palengkeItems: 'Tangigue, Kamote Tops, Sinigang Greens, Calamansi, Mango',
-      lat: 9.5350, lng: 123.4319,
-      famousDishes: [
-        { name: 'Sinigang nga Tangigue sa Oslob', desc: 'Sour fish soup made with fresh king mackerel, native tomatoes, and greens.' },
-        { name: 'Salada nga Dahon sa Kamote', desc: 'Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes.' }
-      ]
-    },
-    'Danao City': {
-      marketTitle: 'Danao City Central Market',
-      palengkeItems: 'Kalamay, Bangus, Kangkong, Eggplant, Tomatoes',
-      lat: 10.5256, lng: 124.0264,
-      famousDishes: [
-        { name: 'Kalamay sa Danao', desc: 'Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells.' },
-        { name: 'Inasal nga Bangus sa Danao', desc: 'Whole milkfish deboned and stuffed with savory meat, raisins, and spices.' }
-      ]
-    },
-    'Liloan': {
-      marketTitle: 'Liloan Public Market',
-      palengkeItems: 'Lato, Fresh Fish, Native Chicken, Sayote, Masi',
-      lat: 10.4000, lng: 123.9833,
-      famousDishes: [
-        { name: 'Rosquillos sa Titay (Liloan)', desc: 'The original ring-shaped crisp biscuit created in Liloan back in 1907.' },
-        { name: 'Masi sa Liloan', desc: 'Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center.' }
-      ]
-    },
-    'Dalaguete': {
-      marketTitle: 'Dalaguete Vegetable Trading Post (Mantalongon)',
-      palengkeItems: 'Highland Sayote, Broccoli, Carrots, Cabbage, Pork Chops',
-      lat: 9.7619, lng: 123.5350,
-
-    
-      famousDishes: [
-        { name: 'Gisadong Utan sa Mantalongon', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
-        { name: 'Linat-ang Baboy ug Sayote', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' }
-      ]
-    },
-    'Barili': {
-      marketTitle: 'Barili Public Market & Dairy Farm Center',
-      palengkeItems: 'Carabao Milk, Pastillas, Native Eggs, Native Chicken, Squash',
-      lat: 10.1133, lng: 123.5083,
-      famousDishes: [
-        { name: 'Presko nga Gatas sa Kabaw ug Pastillas', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
-        { name: 'Kinalan nga Manok Bisaya sa Barili', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' }
-      ]
-    },
-    // --- All other Cebu municipalities (coordinates only; food data fetched from API) ---
-    'Naga City':             { lat: 10.2108, lng: 123.7564 },
-    'Alcantara':             { lat: 10.1333, lng: 123.5833 },
-    'Alcoy':                 { lat: 9.7333,  lng: 123.5333 },
-    'Alegria':               { lat: 9.7167,  lng: 123.4167 },
-    'Aloguinsan':            { lat: 10.2167, lng: 123.5500 },
-    'Asturias':              { lat: 10.5000, lng: 123.7167 },
-    'Badian':                { lat: 9.8667,  lng: 123.3833 },
-    'Boljoon':               { lat: 9.6333,  lng: 123.4333 },
-    'Borbon':                { lat: 10.8333, lng: 124.0167 },
-    'Carmen':                { lat: 10.5833, lng: 124.0167 },
-    'Catmon':                { lat: 10.7333, lng: 123.9833 },
-    'Compostela':            { lat: 10.4667, lng: 124.0000 },
-    'Consolacion':           { lat: 10.3667, lng: 123.9667 },
-    'Cordova':               { lat: 10.2500, lng: 123.9667 },
-    'Dumanjug':              { lat: 9.9833,  lng: 123.4167 },
-    'Ginatilan':             { lat: 9.6833,  lng: 123.4000 },
-    'Malabuyoc':             { lat: 9.6167,  lng: 123.3833 },
-    'Medellin':              { lat: 11.1333, lng: 123.9667 },
-    'Minglanilla':           { lat: 10.2500, lng: 123.8000 },
-    'Pinamungajan':          { lat: 10.2667, lng: 123.5667 },
-    'Ronda':                 { lat: 10.0167, lng: 123.4167 },
-    'Samboan':               { lat: 9.5500,  lng: 123.3667 },
-    'San Fernando':          { lat: 10.1667, lng: 123.7000 },
-    'Santander':             { lat: 9.5000,  lng: 123.3833 },
-    'Sibonga':               { lat: 10.0167, lng: 123.5667 },
-    'Sogod':                 { lat: 10.7500, lng: 123.9833 },
-    'Tabogon':               { lat: 10.9333, lng: 123.9833 },
-    'Tabuelan':              { lat: 10.7000, lng: 123.7833 },
-    'Tuburan':               { lat: 10.7333, lng: 123.6500 },
-    // Bantayan Island group
-    'Bantayan':              { lat: 11.1681, lng: 123.7222 },
-    'Madridejos':            { lat: 11.2667, lng: 123.7167 },
-    'Santa Fe':              { lat: 11.1500, lng: 123.8000 },
-    // Camotes Islands group
-    'San Francisco (Camotes)': { lat: 10.6558, lng: 124.3431 },
-    'Pilar (Camotes)':       { lat: 10.6667, lng: 124.3500 },
-    'Poro (Camotes)':        { lat: 10.6333, lng: 124.4000 },
-    'Tudela (Camotes)':      { lat: 10.6500, lng: 124.3333 },
-  };
-
-  // No automatic multi-city markers — MapcnMap only renders single active <MapPin />
-  const mapMarkers = React.useMemo(() => [], []);
-
-  // Map center: use currentCityProfile (dynamic), else fallback to static
-  const currentMapCenter = React.useMemo(() => {
-    if (currentCityProfile?.lat && currentCityProfile?.lng) {
-      return [currentCityProfile.lng, currentCityProfile.lat];
-    }
-    if (selectedLocation && _LEGACY_CITY_PROFILES[selectedLocation]) {
-      return [_LEGACY_CITY_PROFILES[selectedLocation].lng, _LEGACY_CITY_PROFILES[selectedLocation].lat];
-    }
-    return [123.8854, 10.3157]; // Default: Cebu City
-  }, [currentCityProfile, selectedLocation]);
-
-
-  const getDynamicPalengkePlan = (location, totalUserCalories = 2000) => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const userGoalStr = guestGoals?.goal || 'maintain';
-    const userKeyStr = userId || 'anon';
-    
-    let hash = 0;
-    const seedString = `${todayStr}_${location}_${userKeyStr}_${userGoalStr}`;
-    for (let i = 0; i < seedString.length; i++) {
-      hash = ((hash << 5) - hash) + seedString.charCodeAt(i);
-      hash |= 0;
-    }
-    const seed = Math.abs(hash);
-
-    const LOCATION_MEALS = {
-      'Cebu City': {
-        breakfast: ['Luto nga Itlog sa Subak nga Kangkong ug Calamansi Tea', 'Gisadong Singkamas ug Scrambled Itlog Bisaya', 'Sinugbang Tyan sa Bangus ug Binisaya nga Humay'],
-        lunch: ['Kinilaw nga Tangigue ug Sabaw sa Pasil Isda ug Bugas', 'Sinugbang Tilapia Fillet ug Salada nga Lato', 'Tinolang Manok Bisaya nga adunay Sayote ug Malunggay'],
-        snack: ['Hilaw nga Singkamas ug Tumparik nga Calamansi', 'Luto nga Mais ug Barato nga Tubig sa Buko', 'Giatas nga Pipino ug Calamansi Juice'],
-        dinner: ['Sinugbang Isda sa Palengke ug Salada nga Kamatis', 'Gisadong Kangkong ug Halang nga Halang Isda', 'Utan Bisaya nga Kalabasa, Malunggay ug Manok']
-      },
-      'Lapu-Lapu City': {
-        breakfast: ['Sinugbang Bangus ug Presko nga Lato sa Calamansi', 'Luto nga Itlog Bisaya sa Giatas nga Kangkong', 'Gisadong Kamatis sa Palengke ug Puti sa Itlog'],
-        lunch: ['Sutukil Seafood Plate (Sinugba, Tinola, ug Kinilaw)', 'Sinugbang Tangigue Steak ug Kamatis sa Mactan', 'Halang-Halang nga Manok Bisaya sa Gata'],
-        snack: ['Presko nga Buko Juice ug Luto nga Mais sa Karsada', 'Salada nga Lato ug Aslum nga Calamansi', 'Sinugbang Mais sa Mactan Market'],
-        dinner: ['Sinugbang Tanguigue Steak ug Relish sa Kamatis', 'Sinigang nga Isda sa Subak nga Utan Bisaya', 'Gisadong Talong ug Sinugbang Daghang Manok']
-      },
-      'Mandaue City': {
-        breakfast: ['Gisadong Kamatis ug Scrambled Itlog sa Calamansi', 'Luto nga Kamote Slices ug Luto nga Itlog', 'Gisadong Kangkong sa Ahos ug Itlog'],
-        lunch: ['Tinolang Manok Bisaya sa Sayote ug Malunggay', 'Pan-Seared Isda Fillet ug Salada nga Talong', 'Sinugbang Pork Chop ug Sabaw sa Utan'],
-        snack: ['Luto nga Kamote sa Mandaue ug Presko nga Buko', 'Sinugbang Yellow Mais sa Palengke', 'Mangga sa Cebu ug Salabat (Ginger Tea)'],
-        dinner: ['Gisadong Talong ug Sinugbang Tilapia', 'Sabaw sa Manok Bisaya, Kalabasa ug Sitaw', 'Sinugbang Bangus ug Presko nga Greens']
-      },
-      'Talisay City': {
-        breakfast: ['Luto nga Itlog ug Presko nga Pipino sa Calamansi', 'Luto nga Kamote ug Scrambled Itlog', 'Gisadong Kamatis sa Ahos ug Puti sa Itlog'],
-        lunch: ['Inun-unan na Isda sa Sukang Tuba ug Talong', 'Sinugbang Baboy nga Lean cut ug Sabaw sa Kangkong', 'Tinolang Manok Bisaya sa Malunggay'],
-        snack: ['Sinugbang Yellow Mais sa Talisay Market', 'Tuba nga Buko Water ug Pipino Slices', 'Inasal nga Kamote Chips sa Hurno'],
-        dinner: ['Sinugbang Baboy sa Binisaya nga Greens', 'Sinugbang Tilapia ug Relish sa Kamatis', 'Sabaw sa Kalabasa ug Sinugbang Manok']
-      },
-      'Carcar City': {
-        breakfast: ['Gisadong Itlog Bisaya, Kamatis ug Alugbati', 'Luto nga Kamote Slices ug Calamansi Tea', 'Gisadong Sitaw ug Luto nga Itlog'],
-        lunch: ['Binisayang Humba sa Carcar ug Utan Bisaya', 'Tinolang Manok Bisaya sa Sayote', 'Kinilaw nga Isda sa Sukang Tuba ug Greens'],
-        snack: ['Presko nga Juice sa Calamansi ug Sinugbang Mais', 'Giatas nga Pipino sa Sukang Tuba', 'Luto nga Yellow Mais sa Carcar'],
-        dinner: ['Sinugbang Pork Chop sa Sabaw sa Kalabasa', 'Gisadong Talong ug Sinugbang Isda', 'Utan Bisayanga Sabaw sa Kamatis ug Sitaw']
-      },
-      'Argao': {
-        breakfast: ['Batirol nga Sikwate ug Luto nga Itlog Bisaya', 'Luto nga Itlog sa Gisadong Kangkong', 'Luto nga Kamote Slices ug Puti sa Itlog'],
-        lunch: ['Chiu-Chiu nga Baboy sa Argao ug Sabaw sa Alugbati', 'Tinolang Manok Bisaya sa Malunggay', 'Sinugbang Isda Fillet ug Salada nga Kamatis'],
-        snack: ['Mangga sa Argao ug Binisayang Salabat', 'Tuba Buko Water ug Luto nga Mais', 'Salada nga Pipino sa Calamansi'],
-        dinner: ['Sinugbang Manok Bisaya ug Gisadong Talong', 'Sabaw sa Alugbati, Kalabasa ug Isda', 'Sinugbang Pork Chop ug Presko nga Greens']
-      },
-      'Bogo City': {
-        breakfast: ['Gisadong Kamatis ug Pipino sa Itlog Bisaya', 'Lugaw nga Mais sa Bogo ug Luto nga Itlog', 'Salada nga Pipino ug Gisadong Itlog'],
-        lunch: ['Kinilaw nga Tangigue sa Bogo ug Luto nga Mais', 'Sinugbang Tangigue Steak ug Relish sa Kamatis', 'Tinolang Manok Bisaya sa Sayote'],
-        snack: ['Sinugbang Sweet Corn sa Bogo Market', 'Luto nga Yellow Mais ug Tubig sa Calamansi', 'Giatas nga Kamatis sa Calamansi'],
-        dinner: ['Gisadong Utan Bisaya ug Sinugbang Daghang Manok', 'Gisadong Greens sa Palengke ug Steamed Tangigue', 'Sinugbang Tangigue ug Salada nga Pipino']
-      },
-      'San Remigio': {
-        breakfast: ['Presko nga Lato (Grapes Seaweed) Salad ug Luto nga Itlog', 'Sinugbang Tyan sa Bangus ug Ahos nga Humay', 'Luto nga Itlog sa Gisadong Kangkong ug Calamansi'],
-        lunch: ['Sinugbang Tilapia sa Kangkong Soup ug Mais', 'Sinugbang Lato Bowl ug Halang nga Calamansi Dip', 'Sinugbang Bangus sa Dahon sa Saging ug Sabaw sa Kalabasa'],
-        snack: ['Presko nga Juice sa Calamansi ug Luto nga Mais', 'Tugob nga Buko Water ug Mangga Slices', 'Luto nga Sweet Corn sa San Remigio'],
-        dinner: ['Laing nga Dahon sa Gabi sa Gata ug Sinugbang Bangus', 'Sabaw sa Kalabasa ug Kangkong sa Tilapia', 'Sinugbang Bangus ug Binisayang Utan Stew']
-      },
-      'Daanbantayan': {
-        breakfast: ['Luto nga Ube Kamote, Itlog Bisaya ug Kape', 'Gihurnong Kamote Bowl ug Binisayang Salabat', 'Luto nga Kamote Slices ug Scrambled Itlog'],
-        lunch: ['Inun-unan na Bodboron sa Sukang Tuba ug Talong', 'Sinugbang Tulingan ug Salada nga Talong', 'Halang-Halang nga Manok Bisaya sa Daanbantayan'],
-        snack: ['Gihurnong Kamote Slices sa Palengke', 'Luto nga Ube Kamote sa Daanbantayan', 'Kamote Chips (Walay Manteka) ug Salabat'],
-        dinner: ['Sabaw sa Tulingan sa Luya ug Kalabasa', 'Inun-unan nga Isda ug Luto nga Greens', 'Sinugbang Bodboron ug Sabaw sa Luya']
-      },
-      'Bantayan Island': {
-        breakfast: ['Luto nga Kasag (Blue Crab) ug Itlog sa Calamansi', 'Sinugbang Isda Fillet ug Presko nga Greens', 'Luto nga Itlog sa Gisadong Kangkong'],
-        lunch: ['Sinugbang Isda sa Santa Fe ug Salada nga Lato', 'Sinigang nga Isda sa Binisayang Utan', 'Tinolang Manok Bisaya sa Sayote'],
-        snack: ['Presko nga Buko Water ug Calamansi Spritz', 'Luto nga Sweet Corn sa Bantayan', 'Mangga Slices ug Salabat'],
-        dinner: ['Sinigang na Isda sa Binisayang Greens', 'Sinugbang Isda sa Dagat ug Kamatis', 'Sabaw sa Kalabasa ug Malunggay']
-      },
-      'Camotes Islands': {
-        breakfast: ['Luto nga Balanghoy (Cassava) ug Itlog Bisaya', 'Luto nga Kamote ug Gisadong Itlog', 'Presko nga Kamatis ug Pipino Salad'],
-        lunch: ['Halang-Halang nga Manok Bisaya sa Gata ug Luya', 'Sinugbang Isda sa Dagat ug Gisadong Kangkong', 'Sabaw sa Utan Bisaya ug Brown Rice'],
-        snack: ['Presko nga Buko Water ug Unod sa Buko', 'Gihurnong Balanghoy Slices', 'Presko nga Mangga sa Camotes'],
-        dinner: ['Sinugbang Isda sa Dagat ug Kangkong', 'Sabaw sa Manok Bisaya ug Kapaya', 'Gisadong Talong ug Luto nga Humay']
-      },
-      'Toledo City': {
-        breakfast: ['Scrambled Itlog sa Gisadong Sitaw ug Kamatis', 'Luto nga Kamote ug Luto nga Itlog', 'Luto nga Itlog sa Gisadong Kangkong'],
-        lunch: ['Gisadong Ulang (Fresh River Prawns) sa Ahos ug Kamatis', 'Sinugbang Tilapia sa Kamayan ug Sabaw sa Kalabasa', 'Tinolang Manok Bisaya sa Sayote'],
-        snack: ['Luto nga Yellow Mais ug Salabat', 'Presko nga Calamansi Juice ug Pipino', 'Tuba Buko Water'],
-        dinner: ['Sinugbang Pork Chop ug Binisayang Utan Stew', 'Pan-Seared Tilapia ug Sabaw sa Kalabasa', 'Sabaw sa Sitaw, Kalabasa ug Manok']
-      },
-      'Balamban': {
-        breakfast: ['Luto nga Itlog sa Gisadong Malunggay ug Kamatis', 'Luto nga Kamote Slices ug Scrambled Itlog', 'Omelette sa Itlog Bisaya sa Ahos ug Dahon'],
-        lunch: ['Balamban Sinugbang Liempo sa Tanglad ug Sabaw sa Sayote', 'Tinolang Manok Bisaya sa Kapaya ug Malunggay', 'Sinugbang Isda Fillet ug Binisayang Greens'],
-        snack: ['Sinugbang Kamote Slices ug Calamansi Juice', 'Tuba Buko Water sa Balamban', 'Luto nga Yellow Mais'],
-        dinner: ['Tinolang Manok Bisaya sa Kapaya ug Malunggay', 'Sinugbang Pork Tenderloin ug Utan', 'Sabaw sa Malunggay ug Kalabasa']
-      },
-      'Moalboal': {
-        breakfast: ['Salada nga Pipino ug Kamatis sa Luto nga Itlog', 'Luto nga Kamote ug Luto nga Itlog', 'Binisayang Calamansi Tea ug Scrambled Itlog'],
-        lunch: ['Sinugbang Tangigue Steak sa Calamansi Dip ug Humay', 'Kinilaw nga Mackerel sa Sukang Tuba ug Greens', 'Halang-Halang nga Manok Bisaya sa Moalboal'],
-        snack: ['Tuba Coconut Shake (Walay Asukal)', 'Presko nga Mangga Slices', 'Giatas nga Pipino Water'],
-        dinner: ['Kinilaw nga Mackerel sa Binisayang Greens', 'Sinugbang Tangigue Steak ug Gisadong Kangkong', 'Sabaw sa Utan Bisaya ug Brown Rice']
-      },
-      'Oslob': {
-        breakfast: ['Gisadong Dahon sa Kamote (Kamote Tops) ug Luto nga Itlog', 'Luto nga Itlog ug Presko nga Kamatis', 'Luto nga Ube Kamote ug Kape'],
-        lunch: ['Sinigang nga Tangigue sa Oslob ug Utan Bisaya', 'Sinugbang Isda Fillet ug Relish sa Kamatis', 'Tinolang Manok Bisaya sa Sayote'],
-        snack: ['Presko nga Mangga sa Oslob ug Buko Juice', 'Luto nga Sweet Corn', 'Calamansi Juice'],
-        dinner: ['Sinugbang Isda Fillet ug Sabaw sa Kalabasa', 'Sinigang na Tangigue sa Presko nga Greens', 'Gisadong Dahon sa Kamote ug Sinugbang Manok']
-      },
-      'Danao City': {
-        breakfast: ['Scrambled Itlog Bisaya sa Gisadong Kamatis', 'Luto nga Kamote Slices ug Calamansi Tea', 'Luto nga Itlog sa Kangkong'],
-        lunch: ['Inasal nga Bangus sa Danao ug Garlic Kangkong', 'Tinolang Manok Bisaya sa Sayote', 'Gisadong Talong ug Sinugbang Isda'],
-        snack: ['Presko nga Luto nga Sweet Corn ug Buko Water', 'Giatas nga Pipino Slices', 'Sinugbang Mais sa Danao'],
-        dinner: ['Gisadong Talong ug Sinugbang Tilapia', 'Inasal nga Bangus Fillet ug Sabaw sa Kalabasa', 'Utan Bisayanga Sabaw sa Danao']
-      },
-      'Liloan': {
-        breakfast: ['Presko nga Lato Salad sa Liloan ug Luto nga Itlog', 'Luto nga Kamote ug Luto nga Itlog', 'Gisadong Kamatis sa Puti sa Itlog'],
-        lunch: ['Sabaw sa Manok Bisaya, Sayote ug Malunggay', 'Sinugbang Isda Fillet ug Relish sa Kamatis', 'Bowl sa Lato Seaweed ug Brown Rice'],
-        snack: ['Tuba Buko Juice ug Presko nga Mangga', 'Luto nga Yellow Mais', 'Calamansi Water'],
-        dinner: ['Sinugbang Isda Fillet ug Relish sa Kamatis', 'Sabaw sa Manok Bisaya sa Malunggay', 'Gisadong Kangkong ug Luto nga Humay']
-      },
-      'Dalaguete': {
-        breakfast: ['Scrambled Itlog sa Presko nga Broccoli ug Karots', 'Luto nga Itlog sa Gisadong Sayote ug Kamatis', 'Luto nga Kamote sa Dalaguete ug Puti sa Itlog'],
-        lunch: ['Gisadong Utan sa Mantalongon (Sayote & Repolyo) ug Sinugbang Pork Chop', 'Tinolang Manok Bisaya sa Sayote ug Broccoli', 'Sabaw sa Sayote ug Gusok sa Baboy'],
-        snack: ['Presko nga Karots ug Sayote Sticks sa Calamansi Dip', 'Tuba Buko Water', 'Sinugbang Yellow Mais'],
-        dinner: ['Sabaw sa Sayote ug Gusok sa Baboy sa Brown Rice', 'Gisadong Utan sa Mantalongon ug Sinugbang Manok', 'Gisadong Repolyo ug Karots sa Pork Chop']
-      },
-      'Barili': {
-        breakfast: ['Luto nga Itlog Bisaya sa Gisadong Kamatis ug Calamansi', 'Luto nga Kamote ug Scrambled Itlog sa Barili', 'Luto nga Itlog sa Gisadong Greens'],
-        lunch: ['Kinalan nga Manok Bisaya sa Kalabasa ug Sitaw', 'Pan-Seared Tilapia Fillet ug Sabaw sa Utan', 'Sinugbang Pork Tenderloin ug Salada nga Talong'],
-        snack: ['Tuba Buko Water sa Barili ug Luto nga Mais', 'Presko nga Mangga Slices', 'Giatas nga Pipino Dip'],
-        dinner: ['Pan-Seared Tilapia Fillet ug Sabaw sa Utan', 'Kinalan nga Manok Bisaya sa Kalabasa', 'Gisadong Sitaw ug Kalabasa sa Manok']
-      }
-    };
-
-    const locData = LOCATION_MEALS[location] || LOCATION_MEALS['Cebu City'];
-    
-    // Select base daily item using date seed
-    let bTitle = locData.breakfast[(seed) % locData.breakfast.length];
-    let lTitle = locData.lunch[(seed + 1) % locData.lunch.length];
-    let sTitle = locData.snack[(seed + 2) % locData.snack.length];
-    let dTitle = locData.dinner[(seed + 3) % locData.dinner.length];
-
-    // ALLERGY SAFETY FILTER FUNCTION
-    const sanitizeMealForUserAllergies = (mealTitle, mealType) => {
-      if (!userAllergies || userAllergies.length === 0) return mealTitle;
-      
-      const lower = mealTitle.toLowerCase();
-      const allergiesLower = userAllergies.map(a => String(a).toLowerCase());
-
-      const hasSeafoodAllergy = allergiesLower.some(a => a.includes('seafood') || a.includes('fish') || a.includes('shellfish') || a.includes('shrimp') || a.includes('crab'));
-      const hasEggAllergy = allergiesLower.some(a => a.includes('egg'));
-      const hasPorkAllergy = allergiesLower.some(a => a.includes('pork'));
-
-      let safeTitle = mealTitle;
-
-      // 1. Seafood / Fish Allergy Filter
-      const isSeafoodMeal = ['fish', 'bangus', 'tilapia', 'tangigue', 'tanguigue', 'lato', 'seaweed', 'sutukil', 'kinilaw', 'inun-unan', 'bodboron', 'tulingan', 'crab', 'eel', 'bakasi', 'seafood'].some(kw => lower.includes(kw));
-      if (hasSeafoodAllergy && isSeafoodMeal) {
-        if (mealType === 'Breakfast') safeTitle = 'Sautéed Native Tomatoes & Malunggay with Steamed Kamote';
-        else if (mealType === 'Lunch') safeTitle = 'Grilled Native Chicken Breast with Highland Sayote & Rice';
-        else if (mealType === 'Snack') safeTitle = 'Steamed Sweet Corn & Cold Buko Water';
-        else safeTitle = 'Native Chicken Tinola with Squash & Kangkong Soup';
-      }
-
-      // 2. Egg Allergy Filter
-      const isEggMeal = ['egg', 'scramble', 'omelette', 'poached'].some(kw => lower.includes(kw));
-      if (hasEggAllergy && isEggMeal) {
-        if (mealType === 'Breakfast') safeTitle = 'Steamed Kamote Slices & Calamansi Tea with Native Greens';
-        else safeTitle = safeTitle.replace(/egg[s]?|omelette|scramble|poached/gi, 'Native Greens');
-      }
-
-      // 3. Pork Allergy Filter
-      const isPorkMeal = ['pork', 'humba', 'liempo', 'chicharon', 'tuslob buwa', 'chiu-chiu'].some(kw => lower.includes(kw));
-      if (hasPorkAllergy && isPorkMeal) {
-        safeTitle = safeTitle.replace(/pork|humba|liempo|chicharon|tuslob buwa|chiu-chiu/gi, 'Grilled Native Chicken');
-      }
-
-      return safeTitle;
-    };
-
-    bTitle = sanitizeMealForUserAllergies(bTitle, 'Breakfast');
-    lTitle = sanitizeMealForUserAllergies(lTitle, 'Lunch');
-    sTitle = sanitizeMealForUserAllergies(sTitle, 'Snack');
-    dTitle = sanitizeMealForUserAllergies(dTitle, 'Dinner');
-
-    // Dynamically scale calories & macros tailored to user target protein, carbs & fats
-    const bKcal = Math.round(totalUserCalories * 0.25);
-    const bProt = Math.round(targetProtein * 0.25);
-    const bCarb = Math.round(targetCarbs * 0.25);
-    const bFat = Math.round(targetFats * 0.25);
-
-    const lKcal = Math.round(totalUserCalories * 0.35);
-    const lProt = Math.round(targetProtein * 0.35);
-    const lCarb = Math.round(targetCarbs * 0.35);
-    const lFat = Math.round(targetFats * 0.35);
-
-    const sKcal = Math.round(totalUserCalories * 0.15);
-    const sProt = Math.round(targetProtein * 0.15);
-    const sCarb = Math.round(targetCarbs * 0.15);
-    const sFat = Math.round(targetFats * 0.15);
-
-    const dKcal = Math.max(1, totalUserCalories - (bKcal + lKcal + sKcal));
-    const dProt = Math.max(0, targetProtein - (bProt + lProt + sProt));
-    const dCarb = Math.max(0, targetCarbs - (bCarb + lCarb + sCarb));
-    const dFat = Math.max(0, targetFats - (bFat + lFat + sFat));
-
-    return [
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-breakfast`, mealType: 'Breakfast', time: '8:00 AM', title: bTitle, calories: bKcal, kcal: bKcal, proteinNum: bProt, carbsNum: bCarb, fatsNum: bFat, protein: `${bProt}g`, carbs: `${bCarb}g`, fats: `${bFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-lunch`, mealType: 'Lunch', time: '12:30 PM', title: lTitle, calories: lKcal, kcal: lKcal, proteinNum: lProt, carbsNum: lCarb, fatsNum: lFat, protein: `${lProt}g`, carbs: `${lCarb}g`, fats: `${lFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-snack`, mealType: 'Snack', time: '4:00 PM', title: sTitle, calories: sKcal, kcal: sKcal, proteinNum: sProt, carbsNum: sCarb, fatsNum: sFat, protein: `${sProt}g`, carbs: `${sCarb}g`, fats: `${sFat}g` },
-      { id: `palengke-${location.toLowerCase().replace(/\s+/g, '')}-dinner`, mealType: 'Dinner', time: '7:30 PM', title: dTitle, calories: dKcal, kcal: dKcal, proteinNum: dProt, carbsNum: dCarb, fatsNum: dFat, protein: `${dProt}g`, carbs: `${dCarb}g`, fats: `${dFat}g` }
-    ];
-  };
-
-
-  // --- DYNAMIC CALORIE & MACRO CALCULATOR ENGINE ---
-  let calculatedTargetCalories = 2000;
-  let targetProtein = 150;
-  let targetCarbs = 225;
-  let targetFats = 55;
-
-  if (guestBaseline?.weight && guestBaseline?.height && guestBaseline?.age && guestGoals?.activityLevel) {
-    const w = parseFloat(guestBaseline.weight);
-    const h = parseFloat(guestBaseline.height);
-    const a = parseInt(guestBaseline.age, 10);
-    
-    // Base BMR (Mifflin-St Jeor)
-    let bmr = (10 * w) + (6.25 * h) - (5 * a) + 5; 
-    
-    // Activity Multiplier
-    let multiplier = 1.2; // sedentary
-    if (guestGoals.activityLevel === 'moderate') multiplier = 1.55;
-    if (guestGoals.activityLevel === 'active') multiplier = 1.725;
-    
-    let tdee = bmr * multiplier;
-    
-    // Goal Adjustment & Macro Tailoring
-    const g = String(guestGoals?.goal || '').toLowerCase();
-    if (g.includes('fat') || g.includes('lose')) {
-      tdee -= 500;
-      calculatedTargetCalories = Math.max(1200, Math.round(tdee));
-      targetProtein = Math.round((calculatedTargetCalories * 0.35) / 4);
-      targetCarbs = Math.round((calculatedTargetCalories * 0.35) / 4);
-      targetFats = Math.round((calculatedTargetCalories * 0.30) / 9);
-    } else if (g.includes('muscle') || g.includes('gain')) {
-      tdee += 300;
-      calculatedTargetCalories = Math.max(2000, Math.round(tdee));
-      targetProtein = Math.round((calculatedTargetCalories * 0.30) / 4);
-      targetCarbs = Math.round((calculatedTargetCalories * 0.50) / 4);
-      targetFats = Math.round((calculatedTargetCalories * 0.20) / 9);
-    } else {
-      calculatedTargetCalories = Math.max(1500, Math.round(tdee));
-      targetProtein = Math.round((calculatedTargetCalories * 0.25) / 4);
-      targetCarbs = Math.round((calculatedTargetCalories * 0.50) / 4);
-      targetFats = Math.round((calculatedTargetCalories * 0.25) / 9);
-    }
-  }
-
-  const targetCalories = (dailyNutrition && dailyNutrition.targetCalories && dailyNutrition.targetCalories > 0)
-    ? dailyNutrition.targetCalories
-    : calculatedTargetCalories;
-
-  const getMealAccentColor = (typeOrTime) => {
-    const val = String(typeOrTime || '');
-    if (val.includes('Breakfast')) return '#F59E0B'; // Amber Gold 🌅
-    if (val.includes('Lunch'))     return '#10B981'; // Emerald Green ☀️
-    if (val.includes('Snack'))     return '#0EA5E9'; // Sky Blue ⚡
-    if (val.includes('Dinner'))    return '#8B5CF6'; // Royal Purple 🌙
-    return '#3B82F6'; // Vibrant Blue Default
-  };
-
-  // Mapping helper to resolve Lucide icon components from meal type names
-  const getMealIconComponent = (typeOrTime) => {
-    const val = String(typeOrTime || '');
-    if (val.includes('Breakfast')) return Coffee;
-    if (val.includes('Lunch'))     return Sun;
-    if (val.includes('Snack'))     return Flame;
-    if (val.includes('Dinner'))    return Moon;
-    return UtensilsCrossed;
-  };
-
-  // Helper function to scale meal plan calories so they never exceed the daily target
-  const ensurePlanWithinTargetCalories = useCallback((plan, maxTarget) => {
-    if (!Array.isArray(plan) || plan.length === 0 || !maxTarget || maxTarget <= 0) return plan;
-    const currentTotal = plan.reduce((sum, m) => sum + (parseInt(m.calories || m.kcal, 10) || 0), 0);
-    if (currentTotal <= 0) return plan;
-
-    if (currentTotal > maxTarget || Math.abs(currentTotal - maxTarget) > 10) {
-      const ratio = maxTarget / currentTotal;
-      let runningSum = 0;
-
-      return plan.map((m, idx) => {
-        const origCal = parseInt(m.calories || m.kcal, 10) || 0;
-        let newCal;
-        if (idx === plan.length - 1) {
-          newCal = Math.max(1, maxTarget - runningSum);
-        } else {
-          newCal = Math.max(1, Math.round(origCal * ratio));
-          runningSum += newCal;
-        }
-
-        const scaleMacro = (strVal) => {
-          if (!strVal) return strVal;
-          const num = parseInt(String(strVal).replace(/[^0-9]/g, ''), 10);
-          if (isNaN(num)) return strVal;
-          return `${Math.max(0, Math.round(num * ratio))}g`;
-        };
-
-        return {
-          ...m,
-          calories: newCal,
-          kcal: newCal,
-          protein: scaleMacro(m.protein),
-          carbs: scaleMacro(m.carbs),
-          fats: scaleMacro(m.fats),
-        };
-      });
-    }
-    return plan;
-  }, []);
-
-  // AI Daily Meal Recommendation State
-  const userKey = userId || 'default';
+  // Daily meal plan state & fetcher
+  const userKey = userId || "default";
   const [dailyPlan, setDailyPlanState] = useState(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) return sessionDailyPlan;
     if (Array.isArray(memoryDailyPlanCache[userKey]) && memoryDailyPlanCache[userKey].length > 0) return memoryDailyPlanCache[userKey];
@@ -1010,223 +263,211 @@ export default function DietRecipesScreen({
   const [loadingMeals, setLoadingMeals] = useState(false);
   const [isGeneratingAIPlan, setIsGeneratingAIPlan] = useState(false);
 
-  const setDailyPlan = useCallback((newPlan) => {
-    setDailyPlanState(prev => {
-      const rawResolved = typeof newPlan === 'function' ? newPlan(prev) : newPlan;
-      const resolved = ensurePlanWithinTargetCalories(rawResolved, targetCalories);
-      memoryDailyPlanCache[userId || 'default'] = resolved;
-      if (setSessionDailyPlan) {
-        setSessionDailyPlan(resolved);
-      }
-      return resolved;
-    });
-  }, [userId, setSessionDailyPlan, targetCalories, ensurePlanWithinTargetCalories]);
+  const setDailyPlan = useCallback(
+    (newPlan) => {
+      setDailyPlanState((prev) => {
+        const rawResolved = typeof newPlan === "function" ? newPlan(prev) : newPlan;
+        const resolved = ensurePlanWithinTargetCalories(rawResolved, targetCalories);
+        memoryDailyPlanCache[userId || "default"] = resolved;
+        if (setSessionDailyPlan) setSessionDailyPlan(resolved);
+        return resolved;
+      });
+    },
+    [userId, setSessionDailyPlan, targetCalories]
+  );
 
   useEffect(() => {
     if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) {
       setDailyPlanState(sessionDailyPlan);
-      memoryDailyPlanCache[userId || 'default'] = sessionDailyPlan;
+      memoryDailyPlanCache[userId || "default"] = sessionDailyPlan;
     }
   }, [sessionDailyPlan, userId]);
 
-  const goalWeight = guestGoals?.goalWeight || guestBaseline?.targetWeight || '';
-  const currentWeight = guestBaseline?.weight || '';
-  const userGoal = guestGoals?.goal || '';
+  const goalWeight = guestGoals?.goalWeight || guestBaseline?.targetWeight || "";
+  const currentWeight = guestBaseline?.weight || "";
+  const userGoal = guestGoals?.goal || "";
 
-  const handleFetchFreshMeals = useCallback(async (force = false, isManualAction = false) => {
-    if (isManualAction) {
-      setIsGeneratingAIPlan(true);
-    }
-    setLoadingMeals(true);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const targetId = userId || 'guest';
-    const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
+  // Helper for deterministic local Palengke plan
+  const getFallbackLocalPlan = useCallback(() => {
+    return getDynamicPalengkePlan({
+      location: selectedLocation || "Cebu City",
+      totalUserCalories: targetCalories,
+      targetProtein,
+      targetCarbs,
+      targetFats,
+      userAllergies,
+      guestGoals,
+      userId,
+    });
+  }, [selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats, userAllergies, guestGoals, userId]);
 
-    if (force && isManualAction) {
-      try { await AsyncStorage.removeItem(CACHE_KEY); } catch (_) {}
-    }
-
-    try {
-      const params = new URLSearchParams();
-      if (goalWeight) params.append('goal_weight', String(goalWeight));
-      if (userGoal) params.append('goal', String(userGoal));
-      if (currentWeight) params.append('current_weight', String(currentWeight));
-      params.append('date', todayStr);
-      params.append('_t', String(Date.now()));
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(`${API_URL}/meals/recommend/${targetId}?${params.toString()}`, { 
-        signal: controller.signal,
-        headers: { 'Cache-Control': 'no-cache' }
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const hasOldBuggyTitles = data.some(m =>
-            String(m.title || '').includes('Pinoy Garlic Chicken Breast & Kamote Hash') ||
-            String(m.title || '').includes('Pinoy Ahos Dughan sa Manok') ||
-            String(m.title || '').includes('Grilled Skinless Chicken Inasal & Kangkong') ||
-            String(m.title || '').includes('Sinugbang Skinless Manok Bisaya Inasal') ||
-            String(m.title || '').includes('Roasted Garlic Kamote & Toasted Sesame Dip') ||
-            String(m.title || '').includes('Roasted Ahos Kamote & Toasted Sesame Dip') ||
-            String(m.title || '').includes('Pan-Seared Lean Pork Tenderloin with Steamed Squash') ||
-            String(m.title || '').includes('Sinugbang Lean Baboy Tenderloin ug Luto nga Squash')
-          );
-
-          if (!hasOldBuggyTitles) {
-            setDailyPlan(data);
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-              userId: targetId,
-              date: todayStr,
-              goalWeight: String(goalWeight || ''),
-              goal: String(userGoal || ''),
-              meals: data
-            }));
-            // Clean up yesterday's cache to prevent storage bloat
-            try {
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yesterdayStr = yesterday.toISOString().split('T')[0];
-              await AsyncStorage.removeItem(`ms_meals_cache_${targetId}_${yesterdayStr}`);
-            } catch (_) {}
-            return;
-          }
-        }
-      }
-
-      // If network returns empty or non-200, fallback to dynamic daily plan
-      setDailyPlan(prev => {
-        if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
-        const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
-        if (localPlan && localPlan.length > 0) {
-          AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-            userId: targetId,
-            date: todayStr,
-            goalWeight: String(goalWeight || ''),
-            goal: String(userGoal || ''),
-            meals: localPlan
-          })).catch(() => {});
-          return localPlan;
-        }
-        return prev;
-      });
-    } catch (e) {
-      if (__DEV__) console.log("Notice: Using local rotating dynamic plan:", e?.message || e);
-      setDailyPlan(prev => {
-        if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
-        const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
-        return (localPlan && localPlan.length > 0) ? localPlan : prev;
-      });
-    } finally {
-      setLoadingMeals(false);
-      setIsGeneratingAIPlan(false);
-    }
-  }, [userId, goalWeight, userGoal, currentWeight, selectedLocation, targetCalories, setDailyPlan]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadCachedOrFetchMeals = async () => {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const targetId = userId || 'guest';
+  const handleFetchFreshMeals = useCallback(
+    async (force = false, isManualAction = false) => {
+      if (isManualAction) setIsGeneratingAIPlan(true);
+      setLoadingMeals(true);
+      const todayStr = new Date().toISOString().split("T")[0];
+      const targetId = userId || "guest";
       const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
 
-      // 1. If we already have meals in memory or session, keep them immediately (0ms load speed!)
-      if (Array.isArray(dailyPlan) && dailyPlan.length > 0) {
-        return;
+      if (force && isManualAction) {
+        try {
+          await AsyncStorage.removeItem(CACHE_KEY);
+        } catch (_) {}
       }
 
       try {
-        // 2. Check today's date-specific cache or undated cache
+        if (__DEV__) console.log("[DietRecipes] 🍽️ Requesting fresh meals for:", targetId);
+        const params = new URLSearchParams();
+        if (goalWeight) params.append("goal_weight", String(goalWeight));
+        if (userGoal) params.append("goal", String(userGoal));
+        if (currentWeight) params.append("current_weight", String(currentWeight));
+        params.append("date", todayStr);
+        params.append("_t", String(Date.now()));
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(`${API_URL}/meals/recommend/${targetId}?${params.toString()}`, {
+          signal: controller.signal,
+          headers: { "Cache-Control": "no-cache" },
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setDailyPlan(data);
+            await AsyncStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({
+                userId: targetId,
+                date: todayStr,
+                goalWeight: String(goalWeight || ""),
+                goal: String(userGoal || ""),
+                meals: data,
+              })
+            );
+            if (__DEV__) console.log("[DietRecipes] ✅ Fresh AI meals saved to cache for:", todayStr);
+            return;
+          }
+        }
+
+        // Fallback: local Palengke plan
+        setDailyPlan((prev) => {
+          if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
+          const localPlan = getFallbackLocalPlan();
+          if (localPlan && localPlan.length > 0) {
+            AsyncStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({
+                userId: targetId,
+                date: todayStr,
+                goalWeight: String(goalWeight || ""),
+                goal: String(userGoal || ""),
+                meals: localPlan,
+              })
+            ).catch(() => {});
+            return localPlan;
+          }
+          return prev;
+        });
+      } catch (e) {
+        if (__DEV__) console.log("[DietRecipes] ℹ️ Using local dynamic plan fallback:", e?.message || e);
+        setDailyPlan((prev) => {
+          if (Array.isArray(prev) && prev.length > 0 && !isManualAction) return prev;
+          const localPlan = getFallbackLocalPlan();
+          return localPlan && localPlan.length > 0 ? localPlan : prev;
+        });
+      } finally {
+        setLoadingMeals(false);
+        setIsGeneratingAIPlan(false);
+      }
+    },
+    [userId, goalWeight, userGoal, currentWeight, getFallbackLocalPlan, setDailyPlan]
+  );
+
+  // Initial meal plan load (cache check + silent background fetch if needed)
+  useEffect(() => {
+    let isMounted = true;
+    const loadCachedOrFetchMeals = async () => {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const targetId = userId || "guest";
+      const CACHE_KEY = `ms_meals_cache_${targetId}_${todayStr}`;
+
+      if (Array.isArray(sessionDailyPlan) && sessionDailyPlan.length > 0) return;
+
+      try {
         const cachedRaw = (await AsyncStorage.getItem(CACHE_KEY)) || (await AsyncStorage.getItem(`ms_meals_cache_${targetId}`));
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
-          if (Array.isArray(parsed.meals) && parsed.meals.length > 0) {
-            const hasGenericTitle = parsed.meals.some(m => String(m.title || '').includes('Allergen-Free Pinoy High-Protein'));
-            const hasOldBuggyTitles = parsed.meals.some(m =>
-              String(m.title || '').includes('Pinoy Garlic Chicken Breast & Kamote Hash') ||
-              String(m.title || '').includes('Pinoy Ahos Dughan sa Manok') ||
-              String(m.title || '').includes('Grilled Skinless Chicken Inasal & Kangkong') ||
-              String(m.title || '').includes('Sinugbang Skinless Manok Bisaya Inasal') ||
-              String(m.title || '').includes('Roasted Garlic Kamote & Toasted Sesame Dip') ||
-              String(m.title || '').includes('Roasted Ahos Kamote & Toasted Sesame Dip') ||
-              String(m.title || '').includes('Pan-Seared Lean Pork Tenderloin with Steamed Squash') ||
-              String(m.title || '').includes('Sinugbang Lean Baboy Tenderloin ug Luto nga Squash')
-            );
-
-            if (!hasGenericTitle && !hasOldBuggyTitles && isMounted) {
-              setDailyPlan(parsed.meals);
-              setLoadingMeals(false);
-              if (parsed.date === todayStr) {
-                return; // Cache is fresh for today
-              }
-            }
+          if (Array.isArray(parsed.meals) && parsed.meals.length > 0 && isMounted) {
+            setDailyPlan(parsed.meals);
+            setLoadingMeals(false);
+            if (parsed.date === todayStr) return;
           }
         }
-
-        // 3. No cache or older date: fetch fresh meals silently in the background
-        if (isMounted) {
-          handleFetchFreshMeals(false, false);
-        }
+        if (isMounted) handleFetchFreshMeals(false, false);
       } catch (err) {
-        if (__DEV__) console.log("MEAL CACHE VERIFICATION NOTICE:", err);
+        if (__DEV__) console.log("[DietRecipes] Meal cache verification notice:", err);
         if (isMounted) {
-          const localPlan = getDynamicPalengkePlan(selectedLocation, targetCalories);
-          if (localPlan && localPlan.length > 0) {
-            setDailyPlan(localPlan);
-          }
-          setLoadingMeals(false);
+          const localPlan = getFallbackLocalPlan();
+          if (localPlan && localPlan.length > 0) setDailyPlan(localPlan);
+          handleFetchFreshMeals(false, false);
         }
       }
     };
 
     loadCachedOrFetchMeals();
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, getFallbackLocalPlan, handleFetchFreshMeals, sessionDailyPlan, setDailyPlan]);
 
-    return () => { isMounted = false; };
-  }, [userId]);
-
-  const handlePressIn = (id) => setIsPressedBtn(id);
-  const handlePressOut = () => setIsPressedBtn(null);
-  const toggleExpandRecipe = (id) => setExpandedRecipeId(expandedRecipeId === id ? null : id);
-
-  const handleGenerateRecipe = async () => {
-    if (!searchQuery.trim()) {
-      showAlert('Ingredients Required', 'Please enter some ingredients in the search bar first.');
-      return;
-    }
-    setIsGenerating(true);
-    try {
-      const response = await fetch(`${API_URL}/generate-recipe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          ingredients: searchQuery.trim(),
-          budget: 'All',
-          location: selectedLocation,
-          allergy: 'None'
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRecipes(prev => [data, ...(Array.isArray(prev) ? prev : [])]);
-        setExpandedRecipeId(data.id);
-        showAlert('Success', 'AI generated a healthy recipe matching your preferences!');
-      } else {
-        showAlert('AI Recipe Error', 'Failed to generate recipe. Please check your network connection.');
+  // View recipe modal & caching
+  const handleViewRecipe = useCallback(
+    async (meal) => {
+      if (meal.instructions && meal.ingredients) {
+        setSelectedRecipe(meal);
+        setShowRecipeModal(true);
+        return;
       }
-    } catch (error) {
-      showAlert('AI Recipe Error', 'Failed to generate recipe. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-  
+
+      const cacheKey = `${meal.title.trim().toLowerCase()}_${selectedLocation || "San Remigio"}`;
+      if (recipeCacheRef.current[cacheKey]) {
+        setSelectedRecipe(recipeCacheRef.current[cacheKey]);
+        setShowRecipeModal(true);
+        return;
+      }
+
+      setIsFetchingRecipe(true);
+      try {
+        if (__DEV__) console.log("[DietRecipes] 🤖 Generating full recipe details for:", meal.title);
+        const response = await fetch(`${API_URL}/generate-recipe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: userId,
+            ingredients: meal.title,
+            budget: "All",
+            location: selectedLocation || "San Remigio",
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to generate recipe");
+        const data = await response.json();
+        recipeCacheRef.current[cacheKey] = data;
+        setSelectedRecipe(data);
+        setShowRecipeModal(true);
+      } catch (error) {
+        if (__DEV__) console.error("[DietRecipes] View Recipe Error:", error);
+        showAlert("Unable to load recipe", "Failed to retrieve recipe from AI. Please check your network connection.");
+      } finally {
+        setIsFetchingRecipe(false);
+      }
+    },
+    [selectedLocation, userId, showAlert]
+  );
+
+  // Meal logging & offline sync
   const handleLogMeal = async (id, macros) => {
     if (!userId) {
       showAlert("Authentication Error", "You must be logged in to log meals.");
@@ -1235,12 +476,11 @@ export default function DietRecipesScreen({
 
     const safeId = String(id || `meal-${Date.now()}`);
     const safeMacros = macros || {};
-    const isRecipe = safeId.startsWith('recipe-');
-    const mealName = safeMacros.name || (isRecipe ? (Array.isArray(recipes) ? recipes.find(r => `recipe-${r.id}` === safeId)?.title : null) : null) || 'Meal';
-    const addedCal = parseInt(safeMacros.calories) || 0;
-    const addedProt = parseInt(safeMacros.protein) || 0;
-    const addedCarb = parseInt(safeMacros.carbs) || 0;
-    const addedFat = parseInt(safeMacros.fats) || 0;
+    const mealName = safeMacros.name || "Meal";
+    const addedCal = parseInt(safeMacros.calories, 10) || 0;
+    const addedProt = parseInt(safeMacros.protein, 10) || 0;
+    const addedCarb = parseInt(safeMacros.carbs, 10) || 0;
+    const addedFat = parseInt(safeMacros.fats, 10) || 0;
 
     const mealPayload = {
       id: safeId,
@@ -1249,211 +489,215 @@ export default function DietRecipesScreen({
       calories: addedCal,
       protein: addedProt,
       carbs: addedCarb,
-      fats: addedFat
+      fats: addedFat,
+    };
+
+    const syncLocalDashboard = (ids, nut) => {
+      if (nut) {
+        updateCachedDashboardField(userId, {
+          loggedMealIds: ids,
+          nutrition: {
+            consumedCalories: nut.consumedCalories,
+            protein: { ...nut.protein },
+            carbs: { ...nut.carbs },
+            fats: { ...nut.fats },
+          },
+        }).catch(() => {});
+      }
     };
 
     if (!loggedMeals.includes(safeId)) {
+      // Log new meal
       const currentConsumed = dailyNutrition?.consumedCalories || 0;
-      const targetCalories = dailyNutrition?.targetCalories || 2500;
+      const targetMaxCalories = dailyNutrition?.targetCalories || 2500;
       const newTotal = currentConsumed + addedCal;
-      const excess = newTotal - targetCalories;
+      const excess = newTotal - targetMaxCalories;
 
       const executeMealLog = async () => {
-        // Optimistic UI updates
         const updatedLoggedMeals = [...loggedMeals, safeId];
         setLoggedMeals(updatedLoggedMeals);
-        
-        await pushNotificationIfAllowed({
-          id: `n-${Date.now()}`,
-          title: 'Meal Logged!',
-          category: 'meal',
-          time: 'Just Now',
-          read: false,
-          message: `Successfully logged your meal: ${mealName} (${addedCal} Kcal). Keep it up!`
-        }, setNotifications);
-        
-        const newNutrition = dailyNutrition ? {
-          consumedCalories: (dailyNutrition.consumedCalories || 0) + addedCal,
-          protein: { ...(dailyNutrition.protein || {}), current: ((dailyNutrition.protein?.current || 0) + addedProt) },
-          carbs: { ...(dailyNutrition.carbs || {}), current: ((dailyNutrition.carbs?.current || 0) + addedCarb) },
-          fats: { ...(dailyNutrition.fats || {}), current: ((dailyNutrition.fats?.current || 0) + addedFat) }
-        } : null;
 
-        if (setDailyNutrition && newNutrition) {
-          setDailyNutrition(prev => ({
-            ...prev,
-            ...newNutrition
-          }));
-        }
+        await pushNotificationIfAllowed(
+          {
+            id: `n-${Date.now()}`,
+            title: "Meal Logged!",
+            category: "meal",
+            time: "Just Now",
+            read: false,
+            message: `Successfully logged your meal: ${mealName} (${addedCal} Kcal). Keep it up!`,
+          },
+          setNotifications
+        );
 
-        // If offline
+        const newNutrition = dailyNutrition
+          ? {
+              consumedCalories: (dailyNutrition.consumedCalories || 0) + addedCal,
+              protein: { ...(dailyNutrition.protein || {}), current: (dailyNutrition.protein?.current || 0) + addedProt },
+              carbs: { ...(dailyNutrition.carbs || {}), current: (dailyNutrition.carbs?.current || 0) + addedCarb },
+              fats: { ...(dailyNutrition.fats || {}), current: (dailyNutrition.fats?.current || 0) + addedFat },
+            }
+          : null;
+
+        if (setDailyNutrition && newNutrition) setDailyNutrition((prev) => ({ ...prev, ...newNutrition }));
+
+        // Optimistically sync local dashboard cache immediately (zero-delay tab switching)
+        syncLocalDashboard(updatedLoggedMeals, newNutrition);
+
         if (!isOnline) {
-          await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-          if (newNutrition) {
-            await updateCachedDashboardField(userId, {
-              loggedMealIds: updatedLoggedMeals,
-              nutrition: {
-                consumedCalories: newNutrition.consumedCalories,
-                protein: { ...newNutrition.protein },
-                carbs: { ...newNutrition.carbs },
-                fats: { ...newNutrition.fats }
-              }
-            });
-          }
+          await addToSyncQueue({ type: "LOG_MEAL", payload: mealPayload });
           showAlert("Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
           return;
         }
 
         try {
           const res = await fetch(`${API_URL}/meals`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mealPayload)
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mealPayload),
           });
-          
           if (!res.ok) {
-            if (__DEV__) console.log("Failed to persist meal log upstream:", res.status);
-          } else {
-            if (newNutrition) {
-              await updateCachedDashboardField(userId, {
-                loggedMealIds: updatedLoggedMeals,
-                nutrition: {
-                  consumedCalories: newNutrition.consumedCalories,
-                  protein: { ...newNutrition.protein },
-                  carbs: { ...newNutrition.carbs },
-                  fats: { ...newNutrition.fats }
-                }
-              });
-            }
+            throw new Error("Server rejected meal log");
           }
         } catch (err) {
-          if (__DEV__) console.warn("Offline or network issue while logging meal:", err);
-          await addToSyncQueue({ type: 'LOG_MEAL', payload: mealPayload });
-          if (newNutrition) {
-            await updateCachedDashboardField(userId, {
-              loggedMealIds: updatedLoggedMeals,
-              nutrition: {
-                consumedCalories: newNutrition.consumedCalories,
-                protein: { ...newNutrition.protein },
-                carbs: { ...newNutrition.carbs },
-                fats: { ...newNutrition.fats }
-              }
-            });
-          }
+          if (__DEV__) console.warn("[DietRecipes] Network issue logging meal, enqueuing:", err);
+          await addToSyncQueue({ type: "LOG_MEAL", payload: mealPayload });
           showAlert("Saved Offline", `${mealName} logged locally. It will sync when connection returns.`);
         }
       };
 
-      if (excess > 0) {
+      if (excess > 0 && addedCal > 0) {
         showAlert(
-          "Calorie Target Exceeded",
+          "Target Calories Exceeded",
           `Logging this meal (${addedCal} kcal) will put you ${excess} kcal over your daily target of ${targetCalories} kcal.\n\nDo you still want to proceed?`,
           [
             { text: "Cancel", style: "cancel" },
-            { text: "Proceed & Log", style: "destructive", onPress: executeMealLog }
+            { text: "Proceed & Log", style: "destructive", onPress: executeMealLog },
           ]
         );
       } else {
         await executeMealLog();
       }
     } else {
-      // Optimistic UI updates
-      const updatedLoggedMeals = loggedMeals.filter(mealId => mealId !== id);
+      // Remove meal
+      const updatedLoggedMeals = loggedMeals.filter((mealId) => mealId !== id);
       setLoggedMeals(updatedLoggedMeals);
-      
+
       let newNutrition = null;
       if (setDailyNutrition && macros) {
-        setDailyNutrition(prev => {
+        setDailyNutrition((prev) => {
           const next = {
             ...prev,
             consumedCalories: Math.max(0, prev.consumedCalories - macros.calories),
-            protein: { ...prev.protein, current: Math.max(0, prev.protein.current - macros.protein) },
-            carbs: { ...prev.carbs, current: Math.max(0, prev.carbs.current - macros.carbs) },
-            fats: { ...prev.fats, current: Math.max(0, prev.fats.current - macros.fats) }
+            protein: { ...prev.protein, current: Math.max(0, (prev.protein?.current || 0) - macros.protein) },
+            carbs: { ...prev.carbs, current: Math.max(0, (prev.carbs?.current || 0) - macros.carbs) },
+            fats: { ...prev.fats, current: Math.max(0, (prev.fats?.current || 0) - macros.fats) },
           };
           newNutrition = next;
           return next;
         });
       }
 
-      // If offline
+      // Optimistically sync local dashboard cache immediately
+      syncLocalDashboard(updatedLoggedMeals, newNutrition);
+
       if (!isOnline) {
-        await addToSyncQueue({ type: 'DELETE_MEAL', payload: { user_id: userId, id } });
-        if (newNutrition) {
-          await updateCachedDashboardField(userId, {
-            loggedMealIds: updatedLoggedMeals,
-            nutrition: {
-              consumedCalories: newNutrition.consumedCalories,
-              protein: { ...newNutrition.protein },
-              carbs: { ...newNutrition.carbs },
-              fats: { ...newNutrition.fats }
-            }
-          });
-        }
-        showAlert('Saved Offline', 'Meal removed locally. Will sync when back online.');
+        await addToSyncQueue({ type: "DELETE_MEAL", payload: { user_id: userId, id } });
+        showAlert("Saved Offline", "Meal removed locally. Will sync when back online.");
         return;
       }
 
-      // Online: call API but handle failure gracefully
       try {
-        const response = await fetch(`${API_URL}/meals/${userId}/${id}`, {
-          method: 'DELETE',
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to delete meal on server');
-        }
+        const response = await fetch(`${API_URL}/meals/${userId}/${id}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("Failed to delete meal on server");
       } catch (error) {
-        if (__DEV__) console.warn("DELETE MEAL API ERROR (falling back to queue):", error);
-        await addToSyncQueue({ type: 'DELETE_MEAL', payload: { user_id: userId, id } });
-        if (newNutrition) {
-          await updateCachedDashboardField(userId, {
-            loggedMealIds: updatedLoggedMeals,
-            nutrition: {
-              consumedCalories: newNutrition.consumedCalories,
-              protein: { ...newNutrition.protein },
-              carbs: { ...newNutrition.carbs },
-              fats: { ...newNutrition.fats }
-            }
-          });
-        }
+        if (__DEV__) console.warn("[DietRecipes] Meal delete API error, enqueuing:", error);
+        await addToSyncQueue({ type: "DELETE_MEAL", payload: { user_id: userId, id } });
       }
     }
   };
 
-  // Deduplicate recipes by ID to ensure no duplicate cards are shown in the Explore tab
-  const uniqueRecipes = recipes.filter((recipe, index, self) =>
-    recipe && index === self.findIndex((r) => r && r.id === recipe.id)
+  // GPS location handler
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        showAlert("Location Permission", "Please enable location access to use Locate Me.");
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [geo] = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      const candidates = [geo.city, geo.subregion, geo.district, geo.name].filter(Boolean);
+      let matched = candidates.map(normalizeToCebuLGU).find(Boolean);
+
+      if (matched) {
+        setSelectedLocation(matched);
+        if (__DEV__) console.log("[DietRecipes] 🧭 GPS successfully matched Cebu LGU:", matched);
+      } else {
+        const rawCity = geo.city || geo.subregion || "Cebu City";
+        setSelectedLocation(normalizeToCebuLGU(rawCity) || rawCity);
+      }
+    } catch (err) {
+      showAlert("Location Error", "Could not determine your location. Please try again.");
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  // Map data & coordinates
+  const currentMapCenter = useMemo(() => {
+    if (currentCityProfile?.lat && currentCityProfile?.lng) return [currentCityProfile.lng, currentCityProfile.lat];
+    if (selectedLocation && CEBU_CITY_COORDINATES[selectedLocation]) {
+      return [CEBU_CITY_COORDINATES[selectedLocation].lng, CEBU_CITY_COORDINATES[selectedLocation].lat];
+    }
+    return [123.8854, 10.3157]; // Default: Cebu City
+  }, [currentCityProfile, selectedLocation]);
+
+  const mapMarkers = useMemo(() => [], []);
+
+  // Local palengke plan for selected city (memoized to eliminate inline IIFE in JSX)
+  const localPalengkePlan = useMemo(() => getFallbackLocalPlan(), [getFallbackLocalPlan]);
+  const localPalengkeTotalKcal = useMemo(() => (localPalengkePlan || []).reduce((acc, m) => acc + (m.kcal || 0), 0), [localPalengkePlan]);
+  const allergiesSummaryText = useMemo(
+    () => (userAllergies && userAllergies.length > 0 ? userAllergies.join(", ") : "None"),
+    [userAllergies]
   );
 
-  const filteredRecipes = uniqueRecipes.filter(recipe => {
-    const matchesLocation = !recipe.location || recipe.location === selectedLocation;
-    const ingredientsString = (recipe.ingredients || []).join(', ').toLowerCase();
-    const matchesSearch = !searchQuery.trim() ||
-                          (recipe.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          ingredientsString.includes(searchQuery.toLowerCase());
-    return matchesLocation && matchesSearch;
-  });
+  // Macro Summary Items Array
+  const macroStats = useMemo(
+    () => [
+      {
+        label: "Net Kcal",
+        val: `${Math.round(parseFloat(netCalories) || 0)}/${Math.round(parseFloat(targetCalories) || 0)}`,
+        color: isOverCalories ? "#EF4444" : isSavedByWorkout ? logoGreen : "#F97316",
+      },
+      {
+        label: "Protein",
+        val: `${Math.round(parseFloat(dailyNutrition?.protein?.current) || 0)}/${Math.round(parseFloat(targetProtein) || 0)}g`,
+        color: logoGreen,
+      },
+      {
+        label: "Carbs",
+        val: `${Math.round(parseFloat(dailyNutrition?.carbs?.current) || 0)}/${Math.round(parseFloat(targetCarbs) || 0)}g`,
+        color: "#F59E0B",
+      },
+      {
+        label: "Fats",
+        val: `${Math.round(parseFloat(dailyNutrition?.fats?.current) || 0)}/${Math.round(parseFloat(targetFats) || 0)}g`,
+        color: "#EC4899",
+      },
+    ],
+    [netCalories, targetCalories, isOverCalories, isSavedByWorkout, dailyNutrition, targetProtein, targetCarbs, targetFats]
+  );
 
-  const consumedCalories = dailyNutrition?.consumedCalories || 0;
-  const burnedCalories   = dailyExercise?.caloriesBurned || 0;
-  const netCalories      = Math.max(0, consumedCalories - burnedCalories);
-  const isOverGross      = consumedCalories > targetCalories;
-  const isOverCalories   = netCalories > targetCalories;
-  const isSavedByWorkout = isOverGross && !isOverCalories;
-  const planList = recipes || [];
-  const isGeneratingMealPlan = isGenerating;
-  const isCacheChecked = true;
-
-
-
+  // Render
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-      
-      <ScrollView 
-        style={styles.container} 
-        showsVerticalScrollIndicator={false} 
+
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -1464,6 +708,7 @@ export default function DietRecipesScreen({
           />
         }
       >
+        {/* HEADER SECTION */}
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
@@ -1472,559 +717,287 @@ export default function DietRecipesScreen({
           </View>
         </View>
 
-        {/* --- TAB SWITCHER --- */}
+        {/* TAB SWITCHER */}
         <View style={styles.tabSwitcherContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeDietTab === 'PLAN' ? styles.tabButtonActive : styles.tabButtonInactive]}
-            onPress={() => setActiveDietTab('PLAN')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.tabButtonText, activeDietTab === 'PLAN' ? styles.tabTextActive : styles.tabTextInactive]}>Daily Plan</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeDietTab === 'EXPLORE' ? styles.tabButtonActive : styles.tabButtonInactive]}
-            onPress={() => setActiveDietTab('EXPLORE')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.tabButtonText, activeDietTab === 'EXPLORE' ? styles.tabTextActive : styles.tabTextInactive]}>Explore Recipes</Text>
-          </TouchableOpacity>
+          {["PLAN", "EXPLORE"].map((tabKey) => (
+            <TouchableOpacity
+              key={tabKey}
+              style={[styles.tabButton, activeDietTab === tabKey ? styles.tabButtonActive : styles.tabButtonInactive]}
+              onPress={() => setActiveDietTab(tabKey)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.tabButtonText, activeDietTab === tabKey ? styles.tabTextActive : styles.tabTextInactive]}>
+                {tabKey === "PLAN" ? "Daily Plan" : "Explore Recipes"}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {activeDietTab === 'PLAN' ? (
-          /* --- TAB A: DAILY PLAN --- */
+        {/* Tab 1: Daily Plan */}
+        {activeDietTab === "PLAN" ? (
           <View style={styles.dailyPlanSection}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginLeft: 4 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, marginLeft: 4 }}>
               <Text style={[styles.sectionLabelTitle, { marginBottom: 0, marginLeft: 0 }]}>Today's Target Macros</Text>
             </View>
+
+            {/* TARGET MACROS SUMMARY CARD */}
             <View style={styles.dailyProgressCard}>
               <View style={styles.macroRowInline}>
-                <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: isOverCalories ? '#EF4444' : isSavedByWorkout ? '#10B981' : '#F97316' }]} numberOfLines={1} ellipsizeMode="tail">
-                    {Math.round(parseFloat(netCalories) || 0)}/{Math.round(parseFloat(targetCalories) || 0)}
-                  </Text>
-                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Net Kcal</Text>
-                </View>
-                <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#10B981' }]} numberOfLines={1} ellipsizeMode="tail">
-                    {Math.round(parseFloat(dailyNutrition?.protein?.current) || 0)}/{Math.round(parseFloat(targetProtein) || 0)}g
-                  </Text>
-                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Protein</Text>
-                </View>
-                <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#F59E0B' }]} numberOfLines={1} ellipsizeMode="tail">
-                    {Math.round(parseFloat(dailyNutrition?.carbs?.current) || 0)}/{Math.round(parseFloat(targetCarbs) || 0)}g
-                  </Text>
-                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Carbs</Text>
-                </View>
-                <View style={styles.macroMiniBox}>
-                  <Text style={[styles.macroMiniVal, { fontSize: 10, color: '#EC4899' }]} numberOfLines={1} ellipsizeMode="tail">
-                    {Math.round(parseFloat(dailyNutrition?.fats?.current) || 0)}/{Math.round(parseFloat(targetFats) || 0)}g
-                  </Text>
-                  <Text style={styles.macroMiniLabel} numberOfLines={1}>Fats</Text>
-                </View>
+                {macroStats.map((item, idx) => (
+                  <View key={idx} style={styles.macroMiniBox}>
+                    <Text style={[styles.macroMiniVal, { fontSize: 10, color: item.color }]} numberOfLines={1}>
+                      {item.val}
+                    </Text>
+                    <Text style={styles.macroMiniLabel} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 4 }}>
+            {/* AI SCHEDULED MEALS LIST */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
+                paddingHorizontal: 4,
+              }}
+            >
               <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>Your AI Scheduled Meals</Text>
             </View>
             <View style={styles.timelineContainer}>
-              {(loadingMeals && (!dailyPlan || dailyPlan.length === 0)) ? (
-                    <View style={{ gap: 12 }}>
-                      {[0, 1, 2, 3].map((i) => (
-                        <SkeletonCard
-                          key={i}
-                          height={110}
-                          borderRadius={20}
-                        />
-                      ))}
-                    </View>
-                  ) : (!dailyPlan || dailyPlan.length === 0) ? (
-                    <View
-                      style={{
-                        padding: 24,
-                        borderRadius: 18,
-                        backgroundColor: theme?.surface || "#FFFFFF",
-                        alignItems: "center",
-                        borderWidth: 1.5,
-                        borderColor: theme?.border || "#E2E8F0",
-                      }}
-                    >
-                      <ChefHat
-                        color="#10B981"
-                        size={36}
-                        style={{ marginBottom: 10 }}
-                      />
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontWeight: "800",
-                          color: theme?.textPrimary || "#0F172A",
-                          textAlign: "center",
-                          marginBottom: 4,
-                        }}
-                      >
-                        No AI Meals Generated Yet
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: theme?.textSecondary || "#64748B",
-                          textAlign: "center",
-                          marginBottom: 16,
-                        }}
-                      >
-                        Tap below to generate custom meal recommendations calculated for your exact daily macros.
-                      </Text>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: "#10B981",
-                          paddingHorizontal: 20,
-                          paddingVertical: 12,
-                          borderRadius: 14,
-                          flexDirection: "row",
-                          alignItems: "center",
-                        }}
-                        onPress={() => handleFetchFreshMeals(true, true)}
-                        activeOpacity={0.8}
-                      >
-                        <Sparkles
-                          color="#FFFFFF"
-                          size={16}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text
-                          style={{
-                            color: "#FFFFFF",
-                            fontWeight: "800",
-                            fontSize: 13,
-                          }}
-                        >
-                          Generate AI Meals
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    dailyPlan.map((meal, index) => {
-                      const mealCat = meal?.mealType || meal?.time || "";
-                      const IconComponent = getMealIconComponent(mealCat);
-                      const accentColor = getMealAccentColor(mealCat);
-                      const mealId = String(meal?.id || `meal-plan-${index}`);
-                      const isLogged = loggedMeals.some(
-                        (mId) => String(mId) === mealId,
-                      );
-                      return (
-                        <StaggerCard key={mealId} index={index}>
-                          <View style={styles.timelineItem}>
-                          <PressableCard
-                            style={[
-                              styles.timelineCard,
-                              isLogged && styles.timelineCardLogged,
-                            ]}
-                          >
-                            <View style={styles.timelineHeader}>
-                              <View
-                                style={[
-                                  styles.mealTypeBadge,
-                                  isLogged
-                                    ? { backgroundColor: "#64748B" }
-                                    : {
-                                        backgroundColor: `${accentColor}1A`,
-                                        borderColor: `${accentColor}40`,
-                                        borderWidth: 1,
-                                      },
-                                ]}
-                              >
-                                <IconComponent
-                                  color={isLogged ? "#FFFFFF" : accentColor}
-                                  size={12}
-                                  strokeWidth={2.5}
-                                />
-                                <Text
-                                  style={[
-                                    styles.mealTypeBadgeText,
-                                    isLogged
-                                      ? { color: "#FFFFFF" }
-                                      : { color: accentColor },
-                                  ]}
-                                >
-                                  {translateMealCategory(meal?.mealType) || t("Meal")}
-                                </Text>
-                              </View>
-                              <Text style={styles.timelineTime}>
-                                {t(meal?.time) || meal?.time || t("Today")}
-                              </Text>
-                            </View>
-                            <Text
-                              style={[
-                                styles.timelineTitle,
-                                isLogged && { color: "#64748B" },
-                              ]}
-                            >
-                              {translateMealTitle(meal?.title, language) || t("Healthy Meal")}
-                            </Text>
-                            <View style={styles.timelineFooter}>
-                              <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={styles.timelineMacroText}>
-                                  {meal?.calories || 0} kcal •{" "}
-                                  {meal?.protein || "0g"} {t("Protein")}
-                                </Text>
-                                <TouchableOpacity
-                                  style={styles.viewRecipeTextBtn}
-                                  onPress={() => handleViewRecipe(meal)}
-                                  activeOpacity={0.6}
-                                >
-                                  <ChefHat
-                                    color={isLogged ? "#64748B" : accentColor}
-                                    size={14}
-                                    style={{ marginRight: 4 }}
-                                  />
-                                  <Text
-                                    style={[
-                                      styles.viewRecipeTextBtnLabel,
-                                      !isLogged && { color: accentColor },
-                                    ]}
-                                  >
-                                    View Recipe
-                                  </Text>
-                                </TouchableOpacity>
-                              </View>
-                              <TouchableOpacity
-                                style={[
-                                  styles.logMealMiniBtn,
-                                  isLogged
-                                    ? styles.logMealMiniBtnLogged
-                                    : { backgroundColor: accentColor },
-                                ]}
-                                onPress={() =>
-                                  handleLogMeal(mealId, {
-                                    name: meal?.title || "Meal",
-                                    calories: meal?.calories || 0,
-                                    protein: parseInt(meal?.protein) || 0,
-                                    carbs: parseInt(meal?.carbs) || 0,
-                                    fats: parseInt(meal?.fats) || 0,
-                                  })
-                                }
-                                activeOpacity={0.7}
-                              >
-                                {isLogged ? (
-                                  <>
-                                    <CheckCircle2 color="#FFFFFF" size={12} />
-                                    <Text style={styles.logMealMiniBtnTextLogged}>
-                                      Logged ✓
-                                    </Text>
-                                  </>
-                                ) : (
-                                  <>
-                                    <PlusCircle color="#FFFFFF" size={12} />
-                                    <Text style={styles.logMealMiniBtnText}>
-                                      Log Meal
-                                    </Text>
-                                  </>
-                                )}
-                              </TouchableOpacity>
-                            </View>
-                          </PressableCard>
-                          </View>
-                        </StaggerCard>
-                      );
-                    })
-                  )}
+              {loadingMeals && (!dailyPlan || dailyPlan.length === 0) ? (
+                <View style={{ gap: 12 }}>
+                  {[0, 1, 2, 3].map((i) => (
+                    <SkeletonCard key={i} height={110} borderRadius={20} />
+                  ))}
                 </View>
+              ) : !dailyPlan || dailyPlan.length === 0 ? (
+                <View style={styles.emptyPlanCard}>
+                  <ChefHat color={logoGreen} size={36} style={{ marginBottom: 10 }} />
+                  <Text style={styles.emptyPlanTitle}>No AI Meals Generated Yet</Text>
+                  <Text style={styles.emptyPlanSubtitle}>
+                    Tap below to generate custom meal recommendations calculated for your exact daily macros.
+                  </Text>
+                  <TouchableOpacity style={styles.generatePlanButton} onPress={() => handleFetchFreshMeals(true, true)} activeOpacity={0.8}>
+                    <Sparkles color="#FFFFFF" size={16} style={{ marginRight: 6 }} />
+                    <Text style={styles.generatePlanButtonText}>Generate AI Meals</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                dailyPlan.map((meal, index) => {
+                  const mealCat = meal?.mealType || meal?.time || "";
+                  const IconComponent = getMealIconComponent(mealCat);
+                  const accentColor = getMealAccentColor(mealCat);
+                  const mealId = String(meal?.id || `meal-plan-${index}`);
+                  const isLogged = loggedMeals.some((mId) => String(mId) === mealId);
+
+                  return (
+                    <StaggerCard key={mealId} index={index}>
+                      <MealItemCard
+                        mealId={mealId}
+                        isLogged={isLogged}
+                        categoryLabel={translateMealCategory(meal?.mealType) || t("Meal")}
+                        timeLabel={t(meal?.time) || meal?.time || t("Today")}
+                        mealTitle={translateMealTitle(meal?.title, language) || t("Healthy Meal")}
+                        calories={meal?.calories || 0}
+                        proteinText={`${meal?.protein || "0g"} ${t("Protein")}`}
+                        accentColor={accentColor}
+                        IconComponent={IconComponent}
+                        onViewRecipe={() => handleViewRecipe(meal)}
+                        onLogMeal={() =>
+                          handleLogMeal(mealId, {
+                            name: meal?.title || "Meal",
+                            calories: meal?.calories || 0,
+                            protein: parseInt(meal?.protein, 10) || 0,
+                            carbs: parseInt(meal?.carbs, 10) || 0,
+                            fats: parseInt(meal?.fats, 10) || 0,
+                          })
+                        }
+                        styles={styles}
+                      />
+                    </StaggerCard>
+                  );
+                })
+              )}
+            </View>
           </View>
         ) : (
-          /* --- TAB B: EXPLORE RECIPES --- */
+          /* Tab 2: Explore Recipes */
           <View style={styles.exploreSection}>
-
-            {/* CARD 2: INTERACTIVE CITY FOOD RADAR */}
             <View style={styles.formCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <Text style={styles.cardTitle}>Interactive Cebu Food Radar</Text>
-                <TouchableOpacity 
-                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
-                  onPress={() => setShowFullMapModal(true)}
-                  activeOpacity={0.8}
-                >
-                  <Maximize2 size={12} color="#10B981" style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>Full Map</Text>
+                <TouchableOpacity style={styles.fullMapButton} onPress={() => setShowFullMapModal(true)} activeOpacity={0.8}>
+                  <Maximize2 size={12} color={logoGreen} style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Full Map</Text>
                 </TouchableOpacity>
               </View>
 
-
-              {/* mapcn MODERN MAP with Locate Me and My Town overlay */}
-              <View style={[styles.staticMapContainer, { position: 'relative' }]}>
+              {/* mapcn MAP CONTAINER */}
+              <View style={styles.staticMapContainer}>
                 <MapcnMap
                   center={currentMapCenter}
                   zoom={9}
                   markers={mapMarkers}
                   activeLocation={selectedLocation}
-                  onMarkerPress={(cityName) => {
-                    if (cityName) {
-                      setSelectedLocation(cityName);
-                    }
-                  }}
-                  onSelectLocation={(cityName) => {
-                    if (cityName) {
-                      setSelectedLocation(cityName);
-                    }
-                  }}
+                  onMarkerPress={(cityName) => cityName && setSelectedLocation(cityName)}
+                  onSelectLocation={(cityName) => cityName && setSelectedLocation(cityName)}
                   cardContainer={false}
                   height="100%"
-                  style={{ width: '100%', height: '100%' }}
+                  style={{ width: "100%", height: "100%" }}
                 />
 
-                {/* Floating Map Buttons Overlay — bottom-right of map */}
-                <View
-                  style={{
-                    position: 'absolute',
-                    bottom: 14,
-                    right: 14,
-                    flexDirection: 'row',
-                    gap: 8,
-                    zIndex: 100,
-                  }}
-                >
-                  {/* My Town quick return button if user is away from their onboarding hometown */}
+                {/* Floating Map Controls */}
+                <View style={styles.floatingMapControls}>
                   {userHometown && selectedLocation !== userHometown ? (
                     <TouchableOpacity
                       onPress={() => setSelectedLocation(userHometown)}
                       activeOpacity={0.85}
-                      style={{
-                        backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
-                        borderRadius: 50,
-                        paddingVertical: 9,
-                        paddingHorizontal: 12,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 6,
-                        elevation: 8,
-                        borderWidth: 1.5,
-                        borderColor: '#10B981',
-                      }}
+                      style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
                     >
-                      <Home size={13} color="#10B981" style={{ marginRight: 5 }} />
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>
-                        {userHometown}
-                      </Text>
+                      <Home size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                      <Text style={styles.floatingPillText}>{userHometown}</Text>
                     </TouchableOpacity>
                   ) : null}
 
-                  {/* Locate Me floating button */}
                   <TouchableOpacity
                     onPress={handleLocateMe}
                     activeOpacity={0.85}
-                    style={{
-                      backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
-                      borderRadius: 50,
-                      paddingVertical: 9,
-                      paddingHorizontal: 14,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 3 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 6,
-                      elevation: 8,
-                      borderWidth: 1.5,
-                      borderColor: '#10B981',
-                    }}
+                    style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
                   >
                     {isLocating ? (
-                      <ActivityIndicator size="small" color="#10B981" style={{ marginRight: 6 }} />
+                      <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
                     ) : (
-                      <LocateFixed size={14} color="#10B981" style={{ marginRight: 6 }} />
+                      <LocateFixed size={14} color={logoGreen} style={{ marginRight: 6 }} />
                     )}
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                      {isLocating ? 'Locating...' : 'Locate Me'}
-                    </Text>
+                    <Text style={styles.floatingPillText}>{isLocating ? "Locating..." : "Locate Me"}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* SELECTED CITY CULINARY PROFILE BANNER */}
+              {/* SELECTED CITY CULINARY BANNER */}
               {isFetchingCityProfile ? (
-                <View style={{ marginTop: 12, alignItems: 'center', paddingVertical: 14 }}>
+                <View style={{ marginTop: 12, alignItems: "center", paddingVertical: 14 }}>
                   <ActivityIndicator size="small" color={logoGreen} />
-                  <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 6 }}>
+                  <Text style={{ fontSize: 11, color: isDarkMode ? "#94A3B8" : "#64748B", marginTop: 6 }}>
                     Loading food profile for {selectedLocation}...
                   </Text>
                 </View>
-              ) : Boolean(currentCityProfile) && (
-                <View style={{ marginTop: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
-                      <Navigation size={14} color={logoGreen} style={{ marginRight: 6 }} />
-                      <Text style={styles.cityDetailTitle} numberOfLines={1}>
-                        {currentCityProfile.marketTitle || `${selectedLocation} Food Market`}
+              ) : (
+                Boolean(currentCityProfile) && (
+                  <View style={{ marginTop: 12 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
+                        <Navigation size={14} color={logoGreen} style={{ marginRight: 6 }} />
+                        <Text style={styles.cityDetailTitle} numberOfLines={1}>
+                          {currentCityProfile.marketTitle || `${selectedLocation} Food Market`}
+                        </Text>
+                        {userHometown && selectedLocation === userHometown ? (
+                          <View style={styles.hometownBadge}>
+                            <Text style={{ fontSize: 10, fontWeight: "800", color: logoGreen }}>Your Hometown</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+                      <ShoppingBag size={12} color={theme?.textSecondary || "#94A3B8"} style={{ marginRight: 5 }} />
+                      <Text style={[styles.cityPalengkeText, { flex: 1 }]}>
+                        <Text style={{ fontWeight: "700" }}>Local Supplies:</Text> {currentCityProfile.palengkeItems}
                       </Text>
-                      {userHometown && selectedLocation === userHometown ? (
-                        <View style={{ marginLeft: 8, backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981' }}>Your Hometown</Text>
-                        </View>
-                      ) : null}
                     </View>
                   </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <ShoppingBag size={12} color={theme?.textSecondary || '#94A3B8'} style={{ marginRight: 5 }} />
-                    <Text style={[styles.cityPalengkeText, { flex: 1 }]}>
-                      <Text style={{ fontWeight: '700' }}>Local Supplies:</Text> {currentCityProfile.palengkeItems}
-                    </Text>
-                  </View>
-                </View>
+                )
               )}
             </View>
 
-            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD & FAMOUS DELICACIES CARD */}
+            {/* 1-DAY PALENGKE MEAL RECOMMENDATION CARD */}
             {Boolean(currentCityProfile) && (
               <>
                 <View style={{ marginBottom: 16 }}>
-                  {(() => {
-                    const todayPlan = getDynamicPalengkePlan(selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats);
-                    const totalKcal = todayPlan.reduce((acc, m) => acc + m.kcal, 0);
-                    const allergiesText = userAllergies && userAllergies.length > 0 ? userAllergies.join(', ') : 'None';
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>1-Day Local Diet ({selectedLocation})</Text>
+                    <View style={styles.calorieBadge}>
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: logoGreen }}>~{localPalengkeTotalKcal} Kcal Total</Text>
+                    </View>
+                  </View>
 
-                    return (
-                      <>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <Text style={[styles.sectionLabelTitle, { marginBottom: 0 }]}>1-Day Local Diet ({selectedLocation})</Text>
-                          <View style={{ backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.10)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
-                              ~{totalKcal} Kcal Total
-                            </Text>
-                          </View>
-                        </View>
+                  <View style={styles.allergyBanner}>
+                    <CheckCircle2 size={14} color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text style={[styles.allergyBannerText, { color: isDarkMode ? "#A7F3D0" : "#047857" }]}>
+                      Allergy Safety Active: Filtered for your profile ({allergiesSummaryText})
+                    </Text>
+                  </View>
 
-                        {/* ALLERGY SAFETY STATUS BANNER */}
-                        <View style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
-                          borderWidth: 1,
-                          borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0',
-                          borderRadius: 12,
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          marginBottom: 12
-                        }}>
-                          <CheckCircle2 size={14} color="#10B981" style={{ marginRight: 6 }} />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#A7F3D0' : '#047857', flex: 1 }}>
-                            Allergy Safety Active: Filtered for your profile ({allergiesText})
-                          </Text>
-                        </View>
+                  <View style={styles.timelineList}>
+                    {localPalengkePlan.map((mealItem) => {
+                      const rawCat = mealItem.mealType || "Meal";
+                      const cebuanoCat =
+                        { Breakfast: "Pamahaw", Lunch: "Paniudto", Snack: "Pama-an", Dinner: "Panihapon" }[rawCat] || rawCat;
+                      const IconComponent = getMealIconComponent(rawCat);
+                      const accentColor = getMealAccentColor(rawCat);
+                      const mealId = String(mealItem.id);
+                      const isLogged = loggedMeals.some((mId) => String(mId) === mealId);
 
-                        <View style={styles.timelineList}>
-                          {todayPlan.map((mealItem, idx) => {
-                            const rawCat = mealItem.mealType || 'Meal';
-                            const cebuanoCat = rawCat === 'Breakfast' ? 'Pamahaw' : rawCat === 'Lunch' ? 'Paniudto' : rawCat === 'Snack' ? 'Pama-an' : rawCat === 'Dinner' ? 'Panihapon' : rawCat;
-                            const IconComponent = getMealIconComponent(rawCat);
-                            const accentColor = getMealAccentColor(rawCat);
-                            const mealId = String(mealItem.id);
-                            const isLogged = loggedMeals.some(mId => String(mId) === mealId);
-
-                            return (
-                              <View key={mealId} style={styles.timelineItem}>
-                                <View style={[styles.timelineCard, isLogged && styles.timelineCardLogged]}>
-                                  <View style={styles.timelineHeader}>
-                                    <View style={[
-                                      styles.mealTypeBadge, 
-                                      isLogged 
-                                        ? { backgroundColor: '#64748B' } 
-                                        : { backgroundColor: `${accentColor}1A`, borderColor: `${accentColor}40`, borderWidth: 1 }
-                                    ]}>
-                                      <IconComponent color={isLogged ? '#FFFFFF' : accentColor} size={12} strokeWidth={2.5} />
-                                      <Text style={[
-                                        styles.mealTypeBadgeText, 
-                                        isLogged ? { color: '#FFFFFF' } : { color: accentColor }
-                                      ]}>
-                                        {cebuanoCat}
-                                      </Text>
-                                    </View>
-                                    <Text style={styles.timelineTime}>{mealItem.time}</Text>
-                                  </View>
-
-                                  <Text style={[styles.timelineTitle, isLogged && { color: '#64748B' }]}>
-                                    {translateMealTitle(mealItem.title, language)}
-                                  </Text>
-
-                                  <View style={styles.timelineFooter}>
-                                    <View style={{ flex: 1, paddingRight: 8 }}>
-                                      <Text style={styles.timelineMacroText}>
-                                        {mealItem.kcal} kcal • {mealItem.proteinNum} protein
-                                      </Text>
-                                      <TouchableOpacity 
-                                        style={styles.viewRecipeTextBtn} 
-                                        onPress={() => handleViewRecipe(mealItem)}
-                                        activeOpacity={0.6}
-                                      >
-                                        <ChefHat color={isLogged ? '#64748B' : accentColor} size={14} style={{ marginRight: 4 }} />
-                                        <Text style={[styles.viewRecipeTextBtnLabel, !isLogged && { color: accentColor }]}>View Recipe</Text>
-                                      </TouchableOpacity>
-                                    </View>
-
-                                    <TouchableOpacity 
-                                      style={[
-                                        styles.logMealMiniBtn, 
-                                        isLogged ? styles.logMealMiniBtnLogged : { backgroundColor: accentColor }
-                                      ]}
-                                      onPress={() => handleLogMeal(mealId, { 
-                                        name: mealItem?.title || "Meal",
-                                        calories: mealItem?.kcal || 0,
-                                        protein: mealItem?.proteinNum || 0,
-                                        carbs: mealItem?.carbsNum || 0,
-                                        fats: mealItem?.fatsNum || 0,
-                                      })}
-                                      activeOpacity={0.7}
-                                    >
-                                      {isLogged ? (
-                                        <>
-                                          <CheckCircle2 color="#FFFFFF" size={12} />
-                                          <Text style={styles.logMealMiniBtnTextLogged}>Logged ✓</Text>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <PlusCircle color="#FFFFFF" size={12} />
-                                          <Text style={styles.logMealMiniBtnText}>Log Meal</Text>
-                                        </>
-                                      )}
-                                    </TouchableOpacity>
-                                  </View>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      </>
-                    );
-                  })()}
+                      return (
+                        <MealItemCard
+                          key={mealId}
+                          mealId={mealId}
+                          isLogged={isLogged}
+                          categoryLabel={cebuanoCat}
+                          timeLabel={mealItem.time}
+                          mealTitle={translateMealTitle(mealItem.title, language)}
+                          calories={mealItem.kcal}
+                          proteinText={`${mealItem.proteinNum}g protein`}
+                          accentColor={accentColor}
+                          IconComponent={IconComponent}
+                          onViewRecipe={() => handleViewRecipe(mealItem)}
+                          onLogMeal={() =>
+                            handleLogMeal(mealId, {
+                              name: mealItem?.title || "Meal",
+                              calories: mealItem?.kcal || 0,
+                              protein: mealItem?.proteinNum || 0,
+                              carbs: mealItem?.carbsNum || 0,
+                              fats: mealItem?.fatsNum || 0,
+                            })
+                          }
+                          styles={styles}
+                        />
+                      );
+                    })}
+                  </View>
                 </View>
 
-                {/* FAMOUS NATIVE DISHES & CULINARY HERITAGE CARD */}
+                {/* FAMOUS NATIVE DISHES CARD */}
                 {Boolean(currentCityProfile?.famousDishes) && (
                   <View style={[styles.formCard, { marginBottom: 24 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
                       <Text style={styles.cardTitle}>Famous Delicacies ({selectedLocation})</Text>
                     </View>
-                    <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 14, lineHeight: 18 }}>
+                    <Text style={{ fontSize: 12, color: isDarkMode ? "#94A3B8" : "#64748B", marginBottom: 14, lineHeight: 18 }}>
                       Iconic local dishes, traditional street food, and heritage delicacies famous in {selectedLocation}:
                     </Text>
 
                     <View style={{ gap: 10 }}>
                       {currentCityProfile.famousDishes.map((dish, idx) => (
-                        <View key={idx} style={{
-                          backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-                          padding: 14,
-                          borderRadius: 14,
-                          borderWidth: 1,
-                          borderColor: isDarkMode ? '#334155' : '#E2E8F0'
-                        }}>
-                          <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                        <View
+                          key={idx}
+                          style={{
+                            backgroundColor: isDarkMode ? "#1E293B" : "#F8FAFC",
+                            padding: 14,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: "800", color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
                             {translateMealTitle(dish.name, language)}
                           </Text>
-                          <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 4, lineHeight: 16 }}>
+                          <Text style={{ fontSize: 11, color: isDarkMode ? "#94A3B8" : "#64748B", marginTop: 4, lineHeight: 16 }}>
                             {dish.desc}
                           </Text>
                         </View>
@@ -2034,260 +1007,342 @@ export default function DietRecipesScreen({
                 )}
               </>
             )}
-        </View>
-      )}
+          </View>
+        )}
       </ScrollView>
 
-      {/* --- FLOATING AI CHATBOT SYSTEM (WIRED UP TOGGLE HUB) --- */}
+      {/* Modals */}
+      <RecipeModal
+        visible={showRecipeModal}
+        recipe={selectedRecipe}
+        onClose={() => setShowRecipeModal(false)}
+        theme={theme}
+        language={language}
+        translateMealTitle={translateMealTitle}
+      />
 
-      {/* ── RECIPE MODAL ── */}
-      <Modal visible={showRecipeModal} transparent={false} animationType="slide" onRequestClose={() => setShowRecipeModal(false)}>
-        <View style={styles.recipeModalContent}>
-          {Boolean(selectedRecipe) && (
-            <>
-              <Text style={styles.recipeModalTitle}>{translateMealTitle(selectedRecipe.title, language)}</Text>
-              
-              {/* Meta Row */}
-              <View style={styles.recipeModalMetaRow}>
-                <View style={styles.recipeModalMetaBadge}>
-                  <Clock color={logoGreen} size={12} />
-                  <Text style={styles.recipeModalMetaText}>{selectedRecipe.time || '15 mins'}</Text>
-                </View>
-                <View style={[styles.recipeModalMetaBadge, { marginLeft: 8 }]}>
-                  <Text style={{ color: logoGreen, fontSize: 13, fontWeight: '700', marginRight: 3 }}>₱</Text>
-                  <Text style={styles.recipeModalMetaText}>{selectedRecipe.budget || 'Under ₱100'}</Text>
-                </View>
-              </View>
-
-              {/* Macro Details Grid */}
-              <View style={styles.recipeModalMacrosGrid}>
-                <View style={styles.recipeModalMacroBox}>
-                  <Text style={[styles.recipeModalMacroVal, { color: '#F97316' }]}>{selectedRecipe.calories}</Text>
-                  <Text style={styles.recipeModalMacroLabel}>Kcal</Text>
-                </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                  <Text style={[styles.recipeModalMacroVal, { color: '#10B981' }]}>{selectedRecipe.protein}</Text>
-                  <Text style={styles.recipeModalMacroLabel}>Protein</Text>
-                </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                  <Text style={[styles.recipeModalMacroVal, { color: '#F59E0B' }]}>{selectedRecipe.carbs}</Text>
-                  <Text style={styles.recipeModalMacroLabel}>Carbs</Text>
-                </View>
-                <View style={[styles.recipeModalMacroBox, { borderLeftWidth: 1, borderLeftColor: theme?.border || '#E2E8F0' }]}>
-                  <Text style={[styles.recipeModalMacroVal, { color: '#EC4899' }]}>{selectedRecipe.fats}</Text>
-                  <Text style={styles.recipeModalMacroLabel}>Fats</Text>
-                </View>
-              </View>
-
-              {/* Ingredients & Instructions Scroll */}
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.recipeModalScroll}>
-                <View style={styles.recipeModalIngredientsBox}>
-                  <Text style={styles.recipeModalSecTitle}>Ingredients</Text>
-                  {(selectedRecipe.ingredients || []).map((ing, i) => (
-                    <Text key={i} style={styles.recipeModalListItem}>• {ing}</Text>
-                  ))}
-                </View>
-
-                <View style={styles.recipeModalInstructionsBox}>
-                  <Text style={styles.recipeModalSecTitle}>Instructions</Text>
-                  {(selectedRecipe.instructions || []).map((step, i) => (
-                    <View key={i} style={styles.recipeModalStepRow}>
-                      <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
-                      <Text style={styles.recipeModalStepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-
-              {/* Close Button */}
-              <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={() => setShowRecipeModal(false)}>
-                <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </Modal>
-
-      {/* ── FULL SCREEN INTERACTIVE MAP MODAL ── */}
-      <Modal
+      <CebuMapModal
         visible={showFullMapModal}
-        animationType="slide"
-        onRequestClose={() => setShowFullMapModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }}>
-          {/* Header Bar */}
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingTop: Platform.OS === 'ios' ? 60 : 40,
-            paddingHorizontal: 20,
-            paddingBottom: 16,
-            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-            borderBottomWidth: 1,
-            borderBottomColor: isDarkMode ? '#334155' : '#E2E8F0',
-            zIndex: 10
-          }}>
-            <View>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
-                Full Cebu Island Food Map
-              </Text>
-              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 }}>
-                Tap any municipality or marker to see borders & food ({locations.length} LGUs)
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowFullMapModal(false)}
-              style={{
-                padding: 8,
-                backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
-                borderRadius: 20
-              }}
-            >
-              <X color={isDarkMode ? '#F8FAFC' : '#0F172A'} size={20} />
-            </TouchableOpacity>
-          </View>
+        onClose={() => setShowFullMapModal(false)}
+        isDarkMode={isDarkMode}
+        currentMapCenter={currentMapCenter}
+        mapMarkers={mapMarkers}
+        selectedLocation={selectedLocation}
+        locations={CEBU_LOCATIONS}
+        onSelectLocation={setSelectedLocation}
+        userHometown={userHometown}
+        onLocateMe={handleLocateMe}
+        isLocating={isLocating}
+        currentCityProfile={currentCityProfile}
+      />
 
-          {/* FULLSCREEN mapcn MODERN MAP with Boundary Polygons */}
-          <View style={{ flex: 1 }}>
-            <MapcnMap
-              center={currentMapCenter}
-              zoom={9}
-              markers={mapMarkers}
-              activeLocation={selectedLocation}
-              onMarkerPress={(cityName) => {
-                if (cityName && locations.includes(cityName)) {
-                  setSelectedLocation(cityName);
-                }
-              }}
-              onSelectLocation={(cityName) => {
-                if (cityName && locations.includes(cityName)) {
-                  setSelectedLocation(cityName);
-                }
-              }}
-              cardContainer={false}
-              height="100%"
-              style={{ flex: 1, width: '100%' }}
-            />
-          </View>
-
-          {/* Floating Action Buttons Overlay in Fullscreen Modal (Locate Me & My Town) */}
-          <View
-            style={{
-              position: 'absolute',
-              bottom: Platform.OS === 'ios' ? 125 : 105,
-              right: 20,
-              flexDirection: 'row',
-              gap: 8,
-              zIndex: 100,
-            }}
-          >
-            {userHometown && selectedLocation !== userHometown ? (
-              <TouchableOpacity
-                onPress={() => setSelectedLocation(userHometown)}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
-                  borderRadius: 50,
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 6,
-                  elevation: 8,
-                  borderWidth: 1.5,
-                  borderColor: '#10B981',
-                }}
-              >
-                <Home size={13} color="#10B981" style={{ marginRight: 5 }} />
-                <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                  {userHometown}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
-            <TouchableOpacity
-              onPress={handleLocateMe}
-              activeOpacity={0.85}
-              style={{
-                backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
-                borderRadius: 50,
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.25,
-                shadowRadius: 6,
-                elevation: 8,
-                borderWidth: 1.5,
-                borderColor: '#10B981',
-              }}
-            >
-              {isLocating ? (
-                <ActivityIndicator size="small" color="#10B981" style={{ marginRight: 6 }} />
-              ) : (
-                <LocateFixed size={14} color="#10B981" style={{ marginRight: 6 }} />
-              )}
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                {isLocating ? 'Locating...' : 'Locate Me'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Bottom Floating City Bar */}
-          <View style={{
-            position: 'absolute',
-            bottom: Platform.OS === 'ios' ? 36 : 20,
-            left: 20,
-            right: 20,
-            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-            borderRadius: 20,
-            padding: 16,
-            elevation: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            borderWidth: 1.5,
-            borderColor: '#10B981'
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <Text style={{ fontSize: 15, fontWeight: '900', color: isDarkMode ? '#F8FAFC' : '#0F172A' }} numberOfLines={1}>
-                  {currentCityProfile?.marketTitle || selectedLocation}
-                </Text>
-                <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
-                  {currentCityProfile?.specialty}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowFullMapModal(false)}
-                style={{
-                  backgroundColor: '#10B981',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 14
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── UIVERSE INSPIRED AI LOADING MODAL ── */}
-      <AILoadingModal
-        visible={isGenerating || isFetchingRecipe || isGeneratingAIPlan}
-        type={isGenerating || isFetchingRecipe ? "recipe" : "meal"}
-        title={isGenerating || isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
-        subtitle={isGenerating || isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
+      <LoadingModal
+        visible={isFetchingRecipe || isGeneratingAIPlan}
+        type={isFetchingRecipe ? "recipe" : "meal"}
+        title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
+        subtitle={isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
       />
     </View>
   );
 }
+
+// Styles
+const baseColor = "#F8FAFC";
+
+const getStyles = (theme) =>
+  StyleSheet.create({
+    fullscreenOverlay: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: screenWidth,
+      height: screenHeight,
+      backgroundColor: theme?.background || baseColor,
+    },
+    container: { flex: 1 },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: Platform.OS === "ios" ? 54 : 48,
+      paddingBottom: 85,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+      paddingHorizontal: 4,
+      width: "100%",
+    },
+    headerTextGroup: { flex: 1 },
+    appName: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: logoGreen,
+      textTransform: "uppercase",
+      letterSpacing: 2,
+      marginBottom: 2,
+    },
+    greeting: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: theme?.textPrimary || "#0F172A",
+      letterSpacing: -0.5,
+    },
+    subGreeting: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme?.textSecondary || "#64748B",
+      marginTop: 2,
+    },
+    formCard: {
+      backgroundColor: theme?.surface || baseColor,
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 16,
+      borderWidth: 1.2,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    cardTitle: {
+      fontSize: 11,
+      color: theme?.textPrimary || "#64748B",
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+      marginBottom: 10,
+      fontWeight: "800",
+      marginLeft: 2,
+    },
+    sectionLabelTitle: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: theme?.textPrimary || "#0F172A",
+      marginBottom: 12,
+      marginLeft: 4,
+      letterSpacing: -0.2,
+    },
+    tabSwitcherContainer: {
+      flexDirection: "row",
+      backgroundColor: theme?.cardBg || "#EBEBEB",
+      borderRadius: 20,
+      padding: 4,
+      marginBottom: 20,
+      borderWidth: 1.2,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    tabButton: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: "center",
+      borderRadius: 16,
+    },
+    tabButtonActive: {
+      backgroundColor: theme?.surface || baseColor,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    tabButtonInactive: { backgroundColor: "transparent" },
+    tabButtonText: { fontSize: 13 },
+    tabTextActive: { fontSize: 13, fontWeight: "800", color: logoGreen },
+    tabTextInactive: { fontSize: 13, color: theme?.textSecondary || "#94A3B8" },
+    dailyProgressCard: {
+      backgroundColor: "transparent",
+      borderRadius: 24,
+      padding: 0,
+      marginBottom: 24,
+    },
+    macroRowInline: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      width: "100%",
+    },
+    macroMiniBox: {
+      width: "23.5%",
+      maxWidth: "24%",
+      height: 54,
+      backgroundColor: theme?.surface || baseColor,
+      paddingVertical: 6,
+      paddingHorizontal: 2,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+      overflow: "hidden",
+    },
+    macroMiniVal: {
+      width: "100%",
+      fontSize: 9.5,
+      fontWeight: "900",
+      color: theme?.textPrimary || "#0F172A",
+      textAlign: "center",
+    },
+    macroMiniLabel: {
+      width: "100%",
+      fontSize: 9.5,
+      fontWeight: "700",
+      color: theme?.textSecondary || "#94A3B8",
+      marginTop: 2,
+      textAlign: "center",
+    },
+    timelineContainer: { marginTop: 6 },
+    timelineItem: { flexDirection: "row", marginBottom: 16, width: "100%" },
+    timelineCard: {
+      flex: 1,
+      backgroundColor: theme?.surface || "#FFFFFF",
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    timelineCardLogged: {
+      backgroundColor: theme?.cardBg || "#F8FAFC",
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#CBD5E1",
+      opacity: 0.85,
+    },
+    timelineHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    mealTypeBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme?.cardBg || "#F1F5F9",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    mealTypeBadgeText: { fontSize: 10, fontWeight: "800", color: logoGreen, marginLeft: 4 },
+    timelineTime: { fontSize: 11, fontWeight: "700", color: theme?.textSecondary || "#94A3B8" },
+    timelineTitle: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: theme?.textPrimary || "#0F172A",
+      marginBottom: 10,
+    },
+    timelineFooter: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderTopWidth: 1,
+      borderTopColor: theme?.border || "#F8FAFC",
+      paddingTop: 10,
+    },
+    timelineMacroText: { fontSize: 11, fontWeight: "700", color: theme?.textSecondary || "#64748B" },
+    logMealMiniBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: logoGreen,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+    },
+    logMealMiniBtnLogged: { backgroundColor: "#94A3B8" },
+    logMealMiniBtnText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800", marginLeft: 4 },
+    logMealMiniBtnTextLogged: { color: "#FFFFFF", fontSize: 11, fontWeight: "800", marginLeft: 4 },
+    emptyPlanCard: {
+      padding: 24,
+      borderRadius: 18,
+      backgroundColor: theme?.surface || "#FFFFFF",
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    emptyPlanTitle: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: theme?.textPrimary || "#0F172A",
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    emptyPlanSubtitle: {
+      fontSize: 12,
+      color: theme?.textSecondary || "#64748B",
+      textAlign: "center",
+      marginBottom: 16,
+    },
+    generatePlanButton: {
+      backgroundColor: logoGreen,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 14,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    generatePlanButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 },
+    staticMapContainer: {
+      height: 235,
+      width: "100%",
+      backgroundColor: theme?.inputBg || "#F1F5F9",
+      borderRadius: 20,
+      borderWidth: 1.2,
+      borderColor: theme?.border || "#E2E8F0",
+      marginBottom: 12,
+      overflow: "hidden",
+      position: "relative",
+    },
+    floatingMapControls: {
+      position: "absolute",
+      bottom: 14,
+      right: 14,
+      flexDirection: "row",
+      gap: 8,
+      zIndex: 100,
+    },
+    floatingPillBtn: {
+      backgroundColor: theme?.surface || "#FFFFFF",
+      borderRadius: 50,
+      paddingVertical: 9,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 8,
+      borderWidth: 1.5,
+    },
+    floatingPillText: { fontSize: 12, fontWeight: "800", color: logoGreen },
+    fullMapButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(16, 185, 129, 0.10)",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+    },
+    cityDetailTitle: { fontSize: 14, fontWeight: "900", color: theme?.textPrimary || "#0F172A" },
+    cityPalengkeText: { fontSize: 11, color: theme?.textSecondary || "#64748B" },
+    viewRecipeTextBtn: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+    viewRecipeTextBtnLabel: { fontSize: 11, fontWeight: "800", color: logoGreen },
+    hometownBadge: {
+      marginLeft: 8,
+      backgroundColor: "rgba(16, 185, 129, 0.15)",
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 8,
+    },
+    calorieBadge: {
+      backgroundColor: "rgba(16, 185, 129, 0.10)",
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    allergyBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(16, 185, 129, 0.3)",
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginBottom: 12,
+    },
+    allergyBannerText: { fontSize: 11, fontWeight: "700", flex: 1 },
+    timelineList: { gap: 0 },
+  });

@@ -53,7 +53,7 @@ const TYPE_CONFIG = {
   },
 };
 
-export default function CustomAlertModal({
+export default function AlertModal({
   visible,
   title,
   message,
@@ -84,7 +84,7 @@ export default function CustomAlertModal({
       try {
         cancelBtn.onPress();
       } catch (e) {
-        console.error('CustomAlertModal cancel onPress error:', e);
+        console.error('AlertModal cancel onPress error:', e);
       }
     }
     onClose();
@@ -177,7 +177,7 @@ export default function CustomAlertModal({
                           try {
                             btn.onPress();
                           } catch (e) {
-                            console.error('CustomAlertModal button onPress error:', e);
+                            console.error('AlertModal button onPress error:', e);
                           }
                         }
                         onClose();

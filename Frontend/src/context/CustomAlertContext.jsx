@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import CustomAlertModal from '../components/CustomAlertModal';
+import AlertModal from '../components/AlertModal';
 
 const CustomAlertContext = createContext(null);
 
@@ -58,7 +58,7 @@ export function CustomAlertProvider({ children }) {
   return (
     <CustomAlertContext.Provider value={{ showAlert, hideAlert }}>
       {children}
-      <CustomAlertModal
+      <AlertModal
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
