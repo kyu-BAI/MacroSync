@@ -513,7 +513,9 @@ export const sanitizeMealForUserAllergies = (mealTitle, mealType, userAllergies 
   return safeTitle;
 };
 
-// Generate rotating daily 4-meal plan based on date seed
+import { generateGoalAlignedPhilippinePlan } from './philippineFoodEngine';
+
+// Generate rotating daily 4-meal plan based on date seed and target goals
 export const getDynamicPalengkePlan = ({
   location = 'Cebu City',
   totalUserCalories = 2000,
@@ -522,115 +524,18 @@ export const getDynamicPalengkePlan = ({
   targetFats = 55,
   userAllergies = [],
   guestGoals = {},
-  userId = 'anon'
+  userId = 'anon',
+  cityProfile = null,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const userGoalStr = guestGoals?.goal || 'maintain';
-  const userKeyStr = userId || 'anon';
-  
-  // Deterministic seed generation (changes daily, consistent within same day)
-  let hash = 0;
-  const seedString = `${todayStr}_${location}_${userKeyStr}_${userGoalStr}`;
-  for (let i = 0; i < seedString.length; i++) {
-    hash = ((hash << 5) - hash) + seedString.charCodeAt(i);
-    hash |= 0;
-  }
-  const seed = Math.abs(hash);
-
-  const locData = LOCATION_MEALS[location] || LOCATION_MEALS['Cebu City'];
-  
-  // Select meal items from location catalogue using daily seed offset
-  let bTitle = locData.breakfast[seed % locData.breakfast.length];
-  let lTitle = locData.lunch[(seed + 1) % locData.lunch.length];
-  let sTitle = locData.snack[(seed + 2) % locData.snack.length];
-  let dTitle = locData.dinner[(seed + 3) % locData.dinner.length];
-
-  // Apply allergy safety substitutions
-  bTitle = sanitizeMealForUserAllergies(bTitle, 'Breakfast', userAllergies);
-  lTitle = sanitizeMealForUserAllergies(lTitle, 'Lunch', userAllergies);
-  sTitle = sanitizeMealForUserAllergies(sTitle, 'Snack', userAllergies);
-  dTitle = sanitizeMealForUserAllergies(dTitle, 'Dinner', userAllergies);
-
-  // Calorie & macro distribution ratio:
-  // Breakfast: 25%, Lunch: 35%, Snack: 15%, Dinner: remaining (25%)
-  const bKcal = Math.round(totalUserCalories * 0.25);
-  const bProt = Math.round(targetProtein * 0.25);
-  const bCarb = Math.round(targetCarbs * 0.25);
-  const bFat  = Math.round(targetFats * 0.25);
-
-  const lKcal = Math.round(totalUserCalories * 0.35);
-  const lProt = Math.round(targetProtein * 0.35);
-  const lCarb = Math.round(targetCarbs * 0.35);
-  const lFat  = Math.round(targetFats * 0.35);
-
-  const sKcal = Math.round(totalUserCalories * 0.15);
-  const sProt = Math.round(targetProtein * 0.15);
-  const sCarb = Math.round(targetCarbs * 0.15);
-  const sFat  = Math.round(targetFats * 0.15);
-
-  const dKcal = Math.max(1, totalUserCalories - (bKcal + lKcal + sKcal));
-  const dProt = Math.max(0, targetProtein - (bProt + lProt + sProt));
-  const dCarb = Math.max(0, targetCarbs - (bCarb + lCarb + sCarb));
-  const dFat  = Math.max(0, targetFats - (bFat + lFat + sFat));
-
-  const safeLocationSlug = location.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-  return [
-    {
-      id: `palengke-${safeLocationSlug}-breakfast`,
-      mealType: 'Breakfast',
-      time: '8:00 AM',
-      title: bTitle,
-      calories: bKcal,
-      kcal: bKcal,
-      proteinNum: bProt,
-      carbsNum: bCarb,
-      fatsNum: bFat,
-      protein: `${bProt}g`,
-      carbs: `${bCarb}g`,
-      fats: `${bFat}g`
-    },
-    {
-      id: `palengke-${safeLocationSlug}-lunch`,
-      mealType: 'Lunch',
-      time: '12:30 PM',
-      title: lTitle,
-      calories: lKcal,
-      kcal: lKcal,
-      proteinNum: lProt,
-      carbsNum: lCarb,
-      fatsNum: lFat,
-      protein: `${lProt}g`,
-      carbs: `${lCarb}g`,
-      fats: `${lFat}g`
-    },
-    {
-      id: `palengke-${safeLocationSlug}-snack`,
-      mealType: 'Snack',
-      time: '4:00 PM',
-      title: sTitle,
-      calories: sKcal,
-      kcal: sKcal,
-      proteinNum: sProt,
-      carbsNum: sCarb,
-      fatsNum: sFat,
-      protein: `${sProt}g`,
-      carbs: `${sCarb}g`,
-      fats: `${sFat}g`
-    },
-    {
-      id: `palengke-${safeLocationSlug}-dinner`,
-      mealType: 'Dinner',
-      time: '7:30 PM',
-      title: dTitle,
-      calories: dKcal,
-      kcal: dKcal,
-      proteinNum: dProt,
-      carbsNum: dCarb,
-      fatsNum: dFat,
-      protein: `${dProt}g`,
-      carbs: `${dCarb}g`,
-      fats: `${dFat}g`
-    }
-  ];
+  return generateGoalAlignedPhilippinePlan({
+    location,
+    totalUserCalories,
+    targetProtein,
+    targetCarbs,
+    targetFats,
+    userAllergies,
+    guestGoals,
+    userId,
+    cityProfile,
+  });
 };

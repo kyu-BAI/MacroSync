@@ -3454,9 +3454,6 @@ def _call_gemini_for_city(city_name: str) -> dict | None:
     Calls Gemini AI to generate a local food profile for a Philippine city/municipality.
     Returns a dict matching the city_food_profiles schema, or None on failure.
     """
-    if not genai_client:
-        return None
-
     prompt = f"""You are an expert on Philippine culinary heritage and local food markets.
 Generate an accurate local food profile for the Philippine city or municipality: "{city_name}".
 
@@ -3485,16 +3482,12 @@ Rules:
 """
 
     try:
-        response = genai_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-        raw = response.text.strip() if hasattr(response, 'text') else ""
+        response = generate_gemini_content(prompt)
+        raw = response.text.strip() if hasattr(response, 'text') else str(response).strip()
         # Strip markdown code fences if present
         if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+            raw = re.sub(r'^```(?:json)?\s*', '', raw)
+            raw = re.sub(r'\s*```$', '', raw)
         raw = raw.strip()
         data = json.loads(raw)
         return data

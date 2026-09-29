@@ -12,7 +12,20 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { ChefHat, CheckCircle2, PlusCircle, Sparkles, Navigation, LocateFixed, ShoppingBag, Maximize2, Home } from "lucide-react-native";
+import {
+  ChefHat,
+  CheckCircle2,
+  PlusCircle,
+  Sparkles,
+  Navigation,
+  LocateFixed,
+  ShoppingBag,
+  Maximize2,
+  Home,
+  MapPin,
+  Search,
+  Compass,
+} from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -29,6 +42,12 @@ import {
 } from "../../services/nutritionCalculator";
 import { normalizeToCebuLGU, getDynamicPalengkePlan } from "../../data/cebuPalengkeMeals";
 import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from "../../data/cebu_locations";
+import {
+  PHILIPPINE_REGIONS,
+  POPULAR_CULINARY_HUBS,
+  PHILIPPINE_CITY_COORDINATES,
+  normalizeToPhilippineLocation,
+} from "../../data/philippine_locations";
 
 // Contexts & Reusable UI Components
 import { useCustomAlert } from "../../context/CustomAlertContext";
@@ -37,6 +56,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import LoadingModal from "../../components/LoadingModal";
 import RecipeModal from "../../components/RecipeModal";
 import CebuMapModal from "../../components/CebuMapModal";
+import PhilippineLocationModal from "../../components/PhilippineLocationModal";
 import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
@@ -60,6 +80,8 @@ function MealItemCard({
   proteinText,
   accentColor,
   IconComponent,
+  goalTag,
+  goalBadgeDesc,
   onViewRecipe,
   onLogMeal,
   styles,
@@ -83,6 +105,19 @@ function MealItemCard({
         </View>
 
         <Text style={[styles.timelineTitle, isLogged && { color: "#64748B" }]}>{mealTitle}</Text>
+
+        {Boolean(goalTag) && (
+          <View style={[styles.goalTagBadge, { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}35` }]}>
+            <Sparkles size={10} color={accentColor} style={{ marginRight: 4 }} />
+            <Text style={[styles.goalTagBadgeText, { color: accentColor }]}>{goalTag}</Text>
+          </View>
+        )}
+
+        {Boolean(goalBadgeDesc) && (
+          <Text style={styles.goalBadgeDescText} numberOfLines={2}>
+            {goalBadgeDesc}
+          </Text>
+        )}
 
         <View style={styles.timelineFooter}>
           <View style={{ flex: 1, paddingRight: 8 }}>
@@ -158,7 +193,7 @@ export default function DietRecipesScreen({
   const initialHometown = useMemo(() => {
     const raw =
       userProfile?.structuredLocation?.city || userProfile?.city || userProfile?.address || userProfile?.structured_location?.city;
-    return normalizeToCebuLGU(raw);
+    return normalizeToPhilippineLocation(raw) || normalizeToCebuLGU(raw) || raw || "Cebu City";
   }, [userProfile]);
 
   const [userHometown, setUserHometown] = useState(initialHometown || null);
@@ -210,7 +245,7 @@ export default function DietRecipesScreen({
           .find(Boolean);
 
         if (candidateTown) {
-          const chosenTown = normalizeToCebuLGU(candidateTown) || candidateTown;
+          const chosenTown = normalizeToPhilippineLocation(candidateTown) || normalizeToCebuLGU(candidateTown) || candidateTown;
           setUserHometown(chosenTown);
           setSelectedLocation(chosenTown);
           if (__DEV__) console.log("[DietRecipes] 📍 Resolved user hometown:", chosenTown);
@@ -298,8 +333,9 @@ export default function DietRecipesScreen({
       userAllergies,
       guestGoals,
       userId,
+      cityProfile: currentCityProfile,
     });
-  }, [selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats, userAllergies, guestGoals, userId]);
+  }, [selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats, userAllergies, guestGoals, userId, currentCityProfile]);
 
   const handleFetchFreshMeals = useCallback(
     async (force = false, isManualAction = false) => {
@@ -627,15 +663,15 @@ export default function DietRecipesScreen({
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const [geo] = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-      const candidates = [geo.city, geo.subregion, geo.district, geo.name].filter(Boolean);
-      let matched = candidates.map(normalizeToCebuLGU).find(Boolean);
+      const candidates = [geo.city, geo.subregion, geo.district, geo.region, geo.name].filter(Boolean);
+      let matched = candidates.map(normalizeToPhilippineLocation).find(Boolean) || candidates.map(normalizeToCebuLGU).find(Boolean);
 
       if (matched) {
         setSelectedLocation(matched);
-        if (__DEV__) console.log("[DietRecipes] 🧭 GPS successfully matched Cebu LGU:", matched);
+        if (__DEV__) console.log("[DietRecipes] 🧭 GPS successfully matched Philippine location:", matched);
       } else {
         const rawCity = geo.city || geo.subregion || "Cebu City";
-        setSelectedLocation(normalizeToCebuLGU(rawCity) || rawCity);
+        setSelectedLocation(normalizeToPhilippineLocation(rawCity) || rawCity);
       }
     } catch (err) {
       showAlert("Location Error", "Could not determine your location. Please try again.");
@@ -647,6 +683,9 @@ export default function DietRecipesScreen({
   // Map data & coordinates
   const currentMapCenter = useMemo(() => {
     if (currentCityProfile?.lat && currentCityProfile?.lng) return [currentCityProfile.lng, currentCityProfile.lat];
+    if (selectedLocation && PHILIPPINE_CITY_COORDINATES[selectedLocation]) {
+      return [PHILIPPINE_CITY_COORDINATES[selectedLocation].lng, PHILIPPINE_CITY_COORDINATES[selectedLocation].lat];
+    }
     if (selectedLocation && CEBU_CITY_COORDINATES[selectedLocation]) {
       return [CEBU_CITY_COORDINATES[selectedLocation].lng, CEBU_CITY_COORDINATES[selectedLocation].lat];
     }
@@ -829,13 +868,45 @@ export default function DietRecipesScreen({
           /* Tab 2: Explore Recipes */
           <View style={styles.exploreSection}>
             <View style={styles.formCard}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Text style={styles.cardTitle}>Interactive Cebu Food Radar</Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Compass size={15} color={logoGreen} style={{ marginRight: 6 }} />
+                  <Text style={styles.cardTitle}>Philippine Food Radar</Text>
+                </View>
                 <TouchableOpacity style={styles.fullMapButton} onPress={() => setShowFullMapModal(true)} activeOpacity={0.8}>
-                  <Maximize2 size={12} color={logoGreen} style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Full Map</Text>
+                  <Search size={12} color={logoGreen} style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Choose Any City</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* QUICK POPULAR PHILIPPINE CULINARY HUBS */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.hubScrollContainer}
+                contentContainerStyle={styles.hubScrollContent}
+              >
+                {POPULAR_CULINARY_HUBS.map((hub) => {
+                  const isSelected = selectedLocation === hub.name;
+                  return (
+                    <TouchableOpacity
+                      key={hub.name}
+                      onPress={() => setSelectedLocation(hub.name)}
+                      style={[styles.hubPill, isSelected && styles.hubPillActive]}
+                      activeOpacity={0.75}
+                    >
+                      <MapPin
+                        size={11}
+                        color={isSelected ? "#FFFFFF" : logoGreen}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[styles.hubPillText, isSelected && styles.hubPillTextActive]}>
+                        {hub.name.split(" ")[0]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
               {/* mapcn MAP CONTAINER */}
               <View style={styles.staticMapContainer}>
@@ -884,7 +955,7 @@ export default function DietRecipesScreen({
                 <View style={{ marginTop: 12, alignItems: "center", paddingVertical: 14 }}>
                   <ActivityIndicator size="small" color={logoGreen} />
                   <Text style={{ fontSize: 11, color: isDarkMode ? "#94A3B8" : "#64748B", marginTop: 6 }}>
-                    Loading food profile for {selectedLocation}...
+                    Loading culinary profile for {selectedLocation}...
                   </Text>
                 </View>
               ) : (
@@ -926,6 +997,19 @@ export default function DietRecipesScreen({
                     </View>
                   </View>
 
+                  {/* GOAL PROGRESS GUARD BANNER */}
+                  <View style={styles.goalGuardBanner}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                      <Sparkles size={14} color={logoGreen} style={{ marginRight: 6 }} />
+                      <Text style={styles.goalGuardTitle}>
+                        Goal-Aligned Nutrition ({guestGoals?.goal || "Maintain Weight"})
+                      </Text>
+                    </View>
+                    <Text style={styles.goalGuardText}>
+                      These local meal recommendations utilize {selectedLocation}’s famous native delicacies with customized portioning, lean protein substitutions, and calorie-controlled macros (~{targetCalories} kcal) so your fitness progress does not become stagnant.
+                    </Text>
+                  </View>
+
                   <View style={styles.allergyBanner}>
                     <CheckCircle2 size={14} color={logoGreen} style={{ marginRight: 6 }} />
                     <Text style={[styles.allergyBannerText, { color: isDarkMode ? "#A7F3D0" : "#047857" }]}>
@@ -955,6 +1039,8 @@ export default function DietRecipesScreen({
                           proteinText={`${mealItem.proteinNum}g protein`}
                           accentColor={accentColor}
                           IconComponent={IconComponent}
+                          goalTag={mealItem.goalTag}
+                          goalBadgeDesc={mealItem.goalBadgeDesc}
                           onViewRecipe={() => handleViewRecipe(mealItem)}
                           onLogMeal={() =>
                             handleLogMeal(mealId, {
@@ -1021,14 +1107,13 @@ export default function DietRecipesScreen({
         translateMealTitle={translateMealTitle}
       />
 
-      <CebuMapModal
+      <PhilippineLocationModal
         visible={showFullMapModal}
         onClose={() => setShowFullMapModal(false)}
         isDarkMode={isDarkMode}
         currentMapCenter={currentMapCenter}
         mapMarkers={mapMarkers}
         selectedLocation={selectedLocation}
-        locations={CEBU_LOCATIONS}
         onSelectLocation={setSelectedLocation}
         userHometown={userHometown}
         onLocateMe={handleLocateMe}
@@ -1345,4 +1430,74 @@ const getStyles = (theme) =>
     },
     allergyBannerText: { fontSize: 11, fontWeight: "700", flex: 1 },
     timelineList: { gap: 0 },
+    hubScrollContainer: {
+      marginBottom: 12,
+    },
+    hubScrollContent: {
+      flexDirection: "row",
+      gap: 8,
+      paddingVertical: 2,
+    },
+    hubPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 14,
+      borderWidth: 1.2,
+      borderColor: theme?.border || "#E2E8F0",
+      backgroundColor: theme?.surface || "#FFFFFF",
+    },
+    hubPillActive: {
+      backgroundColor: logoGreen,
+      borderColor: logoGreen,
+    },
+    hubPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme?.textSecondary || "#64748B",
+    },
+    hubPillTextActive: {
+      color: "#FFFFFF",
+      fontWeight: "800",
+    },
+    goalGuardBanner: {
+      backgroundColor: "rgba(16, 185, 129, 0.08)",
+      borderWidth: 1,
+      borderColor: "rgba(16, 185, 129, 0.25)",
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 12,
+    },
+    goalGuardTitle: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: logoGreen,
+      marginBottom: 2,
+    },
+    goalGuardText: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: theme?.textSecondary || "#64748B",
+    },
+    goalTagBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      marginVertical: 4,
+      borderWidth: 1,
+    },
+    goalTagBadgeText: {
+      fontSize: 10,
+      fontWeight: "800",
+    },
+    goalBadgeDescText: {
+      fontSize: 10.5,
+      color: theme?.textSecondary || "#64748B",
+      marginBottom: 6,
+      lineHeight: 14,
+    },
   });
