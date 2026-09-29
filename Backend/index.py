@@ -1351,21 +1351,32 @@ async def get_dashboard_data(user_id: str):
         now_manila = datetime.now(manila_tz)
         today_start_manila = now_manila.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start_manila.astimezone(timezone.utc)
+        streak_lookback_utc = (now_manila - timedelta(days=60)).astimezone(timezone.utc)
 
-        # 1. Fetch meals logged today
-        meals_res = supabase.table("logged_meals") \
+        # 1. Fetch meals within lookback window (satisfies today, weekly, and streak with 1 query)
+        all_meals_res = supabase.table("logged_meals") \
             .select("*") \
             .eq("user_id", user_id) \
-            .gte("logged_at", today_start_utc.isoformat()) \
+            .gte("logged_at", streak_lookback_utc.isoformat()) \
             .execute()
-        
-        logged_meals_data = meals_res.data or []
+        all_meals_data = all_meals_res.data or []
+
+        logged_meals_data = []
+        for m in all_meals_data:
+            lat_str = m.get("logged_at")
+            if lat_str:
+                try:
+                    dt = datetime.fromisoformat(lat_str.replace("Z", "+00:00"))
+                    if dt >= today_start_utc:
+                        logged_meals_data.append(m)
+                except Exception:
+                    pass
+
         logged_meal_ids = [m["id"] for m in logged_meals_data]
-        
-        consumed_calories = sum(m["calories"] for m in logged_meals_data)
-        consumed_protein = sum(m["protein"] for m in logged_meals_data)
-        consumed_carbs = sum(m["carbs"] for m in logged_meals_data)
-        consumed_fats = sum(m["fats"] for m in logged_meals_data)
+        consumed_calories = sum(m.get("calories", 0) for m in logged_meals_data)
+        consumed_protein = sum(m.get("protein", 0) for m in logged_meals_data)
+        consumed_carbs = sum(m.get("carbs", 0) for m in logged_meals_data)
+        consumed_fats = sum(m.get("fats", 0) for m in logged_meals_data)
 
         # 2. Fetch water logs
         water_res = supabase.table("water_logs") \
@@ -1388,83 +1399,67 @@ async def get_dashboard_data(user_id: str):
             else:
                 glasses = record.get("glasses", 0)
 
-        # 3. Fetch workouts logged today
-        workouts_res = supabase.table("logged_workouts") \
+        # 3. Fetch workouts within lookback window (satisfies today and streak with 1 query)
+        all_workouts_res = supabase.table("logged_workouts") \
             .select("*") \
             .eq("user_id", user_id) \
-            .gte("logged_at", today_start_utc.isoformat()) \
+            .gte("logged_at", streak_lookback_utc.isoformat()) \
             .execute()
-            
-        workouts_data = workouts_res.data or []
-        calories_burned = sum(w["calories_burned"] for w in workouts_data)
-        active_minutes = sum(w["active_minutes"] for w in workouts_data)
+        all_workouts_data = all_workouts_res.data or []
+
+        workouts_data = []
+        for w in all_workouts_data:
+            lat_str = w.get("logged_at")
+            if lat_str:
+                try:
+                    dt = datetime.fromisoformat(lat_str.replace("Z", "+00:00"))
+                    if dt >= today_start_utc:
+                        workouts_data.append(w)
+                except Exception:
+                    pass
+
+        calories_burned = sum(w.get("calories_burned", 0) for w in workouts_data)
+        active_minutes = sum(w.get("active_minutes", 0) for w in workouts_data)
         recent_exercise = workouts_data[-1]["name"] if workouts_data else "None"
 
         # Premium status from user preferences JSON
         is_premium = prefs.get("is_premium", False)
         
-        # Calculate real weekly activity from logged_meals for the past 7 days (Monday to Sunday)
+        # Calculate weekly activity from all_meals_data
         today_date = now_manila.date()
         start_of_week = today_date - timedelta(days=today_date.weekday())
         start_of_week_utc = datetime(start_of_week.year, start_of_week.month, start_of_week.day, tzinfo=manila_tz).astimezone(timezone.utc)
 
-        weekly_meals_res = supabase.table("logged_meals") \
-            .select("calories, logged_at") \
-            .eq("user_id", user_id) \
-            .gte("logged_at", start_of_week_utc.isoformat()) \
-            .execute()
-
-        weekly_logs = weekly_meals_res.data or []
         days_map = {0: "M", 1: "T", 2: "W", 3: "Th", 4: "F", 5: "S", 6: "Su"}
         daily_totals = {i: 0 for i in range(7)}
 
-        for log in weekly_logs:
-            logged_at_str = log.get("logged_at")
-            if logged_at_str:
+        streak_dates = set()
+
+        for m in all_meals_data:
+            lat_str = m.get("logged_at")
+            if lat_str:
                 try:
-                    dt = datetime.fromisoformat(logged_at_str.replace("Z", "+00:00")).astimezone(manila_tz)
-                    log_date = dt.date()
-                    day_idx = log_date.weekday()
-                    if 0 <= day_idx < 7:
-                        daily_totals[day_idx] += log.get("calories", 0)
+                    dt_utc = datetime.fromisoformat(lat_str.replace("Z", "+00:00"))
+                    dt_manila = dt_utc.astimezone(manila_tz)
+                    streak_dates.add(dt_manila.date())
+                    if dt_utc >= start_of_week_utc:
+                        day_idx = dt_manila.date().weekday()
+                        if 0 <= day_idx < 7:
+                            daily_totals[day_idx] += m.get("calories", 0)
                 except Exception:
                     pass
 
         weekly_activity = [{"day": days_map[i], "value": daily_totals[i]} for i in range(7)]
 
-        # ── Real Streak Calculation ──────────────────────────────────────
-        # Collect all distinct dates (in Manila TZ) where the user logged
-        # any activity: meals, workouts, or water.
-        streak_dates = set()
+        for w in all_workouts_data:
+            lat_str = w.get("logged_at")
+            if lat_str:
+                try:
+                    dt = datetime.fromisoformat(lat_str.replace("Z", "+00:00")).astimezone(manila_tz)
+                    streak_dates.add(dt.date())
+                except Exception:
+                    pass
 
-        # Dates from logged meals (look back up to 90 days for streak)
-        streak_lookback_utc = (now_manila - timedelta(days=90)).astimezone(timezone.utc)
-        streak_meals_res = supabase.table("logged_meals") \
-            .select("logged_at") \
-            .eq("user_id", user_id) \
-            .gte("logged_at", streak_lookback_utc.isoformat()) \
-            .execute()
-        for m in (streak_meals_res.data or []):
-            try:
-                dt = datetime.fromisoformat(m["logged_at"].replace("Z", "+00:00")).astimezone(manila_tz)
-                streak_dates.add(dt.date())
-            except Exception:
-                pass
-
-        # Dates from logged workouts
-        streak_workouts_res = supabase.table("logged_workouts") \
-            .select("logged_at") \
-            .eq("user_id", user_id) \
-            .gte("logged_at", streak_lookback_utc.isoformat()) \
-            .execute()
-        for w in (streak_workouts_res.data or []):
-            try:
-                dt = datetime.fromisoformat(w["logged_at"].replace("Z", "+00:00")).astimezone(manila_tz)
-                streak_dates.add(dt.date())
-            except Exception:
-                pass
-
-        # Dates from water logs (water_logs uses updated_at)
         if water_res.data:
             for wr in water_res.data:
                 updated_str = wr.get("updated_at")

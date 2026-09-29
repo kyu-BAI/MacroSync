@@ -319,49 +319,71 @@ function MainApp() {
     }));
   };
 
+  const inFlightDashboardFetchRef = useRef(null);
+
   const fetchDashboardData = async (currentUserId, forceCache = false) => {
     const uid = currentUserId || userId;
     if (!uid) return;
 
-    // 1. Only apply cached dashboard data if cold start/empty state or forced, avoiding downgrading live state
-    if (forceCache || globalLoggedWeight === null) {
+    // Deduplicate concurrent in-flight calls for the same user
+    if (inFlightDashboardFetchRef.current) {
+      return inFlightDashboardFetchRef.current;
+    }
+
+    const task = (async () => {
+      // 1. Only apply cached dashboard data if cold start/empty state or forced, avoiding downgrading live state
+      if (forceCache || globalLoggedWeight === null) {
+        try {
+          const cached = await getCachedDashboardData(uid);
+          if (cached && cached.data) {
+            applyDashboardData(cached.data);
+            setIsLoadedFromCache(true);
+          }
+        } catch (e) {
+          /* ignore cache read error */
+        }
+      }
+
+      // 2. Fetch fresh data from network with a 20-second timeout signal
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
       try {
+        const response = await fetch(`${API_URL}/dashboard/${uid}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const data = await response.json();
+        if (response.ok) {
+          applyDashboardData(data);
+          await cacheDashboardData(uid, data);
+          setIsLoadedFromCache(false);
+        } else {
+          console.log("Failed to fetch dashboard data:", data.detail);
+        }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        const isCanceled =
+          error.name === "AbortError" ||
+          error.message?.includes("canceled") ||
+          error.message?.includes("cancelled") ||
+          error.message?.includes("aborted");
+
+        if (!isCanceled) {
+          console.log("Error fetching dashboard (trying cache fallback):", error.message || error);
+        }
         const cached = await getCachedDashboardData(uid);
         if (cached && cached.data) {
           applyDashboardData(cached.data);
           setIsLoadedFromCache(true);
         }
-      } catch (e) {
-        /* ignore cache read error */
+      } finally {
+        inFlightDashboardFetchRef.current = null;
       }
-    }
+    })();
 
-    // 2. Fetch fresh data from network with a 5-second timeout signal
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(`${API_URL}/dashboard/${uid}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      const data = await response.json();
-      if (response.ok) {
-        applyDashboardData(data);
-        await cacheDashboardData(uid, data);
-        setIsLoadedFromCache(false);
-      } else {
-        console.log("Failed to fetch dashboard data:", data.detail);
-      }
-    } catch (error) {
-      clearTimeout(timeoutId);
-      console.log("Error fetching dashboard (trying cache fallback):", error);
-      const cached = await getCachedDashboardData(uid);
-      if (cached && cached.data) {
-        applyDashboardData(cached.data);
-        setIsLoadedFromCache(true);
-      }
-    }
+    inFlightDashboardFetchRef.current = task;
+    return task;
   };
 
   // ── DEEP LINK HANDLING FOR BROWSER-BASED GOOGLE OAUTH ────────────────────
