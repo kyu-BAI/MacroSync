@@ -315,6 +315,7 @@ export default function DietRecipesScreen({
 
   // City food profile
   useEffect(() => {
+    let isMounted = true;
     const cityName = selectedLocation;
     if (!cityName) return;
 
@@ -326,6 +327,7 @@ export default function DietRecipesScreen({
     setIsFetchingCityProfile(true);
     getCityFoodProfile(cityName)
       .then((profile) => {
+        if (!isMounted) return;
         if (profile) {
           setCityProfilesCache((prev) => ({ ...prev, [cityName]: profile }));
           setCurrentCityProfile(profile);
@@ -334,8 +336,16 @@ export default function DietRecipesScreen({
           setCurrentCityProfile(null);
         }
       })
-      .catch(() => setCurrentCityProfile(null))
-      .finally(() => setIsFetchingCityProfile(false));
+      .catch(() => {
+        if (isMounted) setCurrentCityProfile(null);
+      })
+      .finally(() => {
+        if (isMounted) setIsFetchingCityProfile(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedLocation]);
 
   // Daily meal plan state & fetcher

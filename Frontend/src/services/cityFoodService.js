@@ -130,11 +130,164 @@ const STATIC_FALLBACK = {
       { name: 'Sinigang na Baboy sa Sampalok', desc: 'Classic Manila comfort soup of tender pork in tart, aromatic tamarind broth with kangkong and radish.' },
     ],
   },
+  'Daanbantayan': {
+    marketTitle: 'Daanbantayan Public Market & Fish Landing',
+    palengkeItems: 'Bodboron, Tulingan, Purple Kamote, Eggplant, Native Ginger',
+    lat: 11.2589, lng: 124.0153,
+    specialty: 'Inun-unan nga Bodboron',
+    famousDishes: [
+      { name: 'Inun-unan nga Bodboron', desc: 'Small ocean fish simmered gently in native vinegar, ginger, and green peppers.' },
+      { name: 'Linat-ang Tulingan sa Daanbantayan', desc: 'Rich tuna-like fish stewed with native ginger, dried kamias, and tomatoes.' },
+    ],
+  },
+  'San Remigio': {
+    marketTitle: 'San Remigio Municipal Public Market',
+    palengkeItems: 'Bangus, Tilapia, Fresh Lato, Kangkong, Squash, Gabi Leaves',
+    lat: 11.0772, lng: 123.9356,
+    specialty: 'Presko nga Salada nga Lato',
+    famousDishes: [
+      { name: 'Presko nga Salada nga Lato', desc: 'Crunchy grape seaweed tossed with native tomatoes, calamansi juice, and onions.' },
+      { name: 'Sinugbang Bangus sa Dahon sa Saging', desc: 'Charcoal-grilled milkfish stuffed with tomatoes and onions, wrapped in banana leaf.' },
+    ],
+  },
+  'Bogo City': {
+    marketTitle: 'Bogo City Public Market (Palengke sa Bogo)',
+    palengkeItems: 'Tangigue, Sweet Corn, Native Tomatoes, Cucumber, Calamansi',
+    lat: 11.0517, lng: 124.0055,
+    specialty: 'Pintos sa Bogo',
+    famousDishes: [
+      { name: 'Pintos sa Bogo', desc: 'Famous sweet corn tamales mixed with coconut milk, steamed inside fresh corn husks.' },
+      { name: 'Kinilaw nga Tangigue sa Amihanan', desc: 'Fresh Spanish mackerel cured in native coconut vinegar, ginger, and chilies.' },
+    ],
+  },
+  'Bantayan Island': {
+    marketTitle: 'Bantayan Island Fish Landing & Santa Fe Market',
+    palengkeItems: 'Dried Danggit, Blue Crab, Shellfish, Calamansi, Young Coconut',
+    lat: 11.1681, lng: 123.7222,
+    specialty: 'Buwad nga Danggit sa Bantayan',
+    famousDishes: [
+      { name: 'Buwad nga Danggit sa Bantayan', desc: 'World-renowned crispy rabbitfish dried under the island sun, dipped in vinegar.' },
+      { name: 'Nilung-ag nga Kasag sa Bantayan', desc: 'Freshly caught ocean blue swimmer crabs steamed with ginger and calamansi.' },
+      { name: 'Buwad nga Pusit', desc: 'Crispy sun-dried squid toasted over coals until golden and fragrant.' },
+    ],
+  },
+  'Mandaue City': {
+    marketTitle: 'Mandaue City Public Market',
+    palengkeItems: 'Native Chicken, Kangkong, Sayote, Eggplant, Sweet Rice',
+    lat: 10.3333, lng: 123.9333,
+    specialty: 'Bibingka sa Mandaue',
+    famousDishes: [
+      { name: 'Bibingka sa Mandaue', desc: 'Heritage baked rice cake made with tuba yeast, coconut milk, and banana leaves.' },
+      { name: 'Tagaktak sa Mandaue', desc: 'Crispy net-like sweet rice flour treat fried to golden perfection.' },
+      { name: 'Utan Bisaya sa Mandaue', desc: 'Clear vegetable soup seasoned with fried tuyô/danggit and fresh local greens.' },
+    ],
+  },
+  'Talisay City': {
+    marketTitle: 'Talisay City Public Market (Poblacion)',
+    palengkeItems: 'Pork Belly, Inun-unan Fish, Kangkong, Cucumber, Native Tomatoes',
+    lat: 10.2447, lng: 123.8494,
+    specialty: 'Inasal nga Lechon sa Talisay',
+    famousDishes: [
+      { name: 'Inasal nga Lechon sa Talisay', desc: 'Home of the original Cebu Lechon Festival, famed for rich savory herb-infused pork.' },
+      { name: 'Inun-unan nga Bisaya', desc: 'Fish braised in native tuba vinegar, garlic, ginger, finger chilies, and eggplant.' },
+    ],
+  },
+  'Argao': {
+    marketTitle: 'Argao Public Market & Heritage District',
+    palengkeItems: 'Native Sikwate (Cacao), Torta, Native Pork, Alugbati, Eggplant',
+    lat: 9.8808, lng: 123.5975,
+    specialty: 'Torta sa Argao',
+    famousDishes: [
+      { name: 'Torta sa Argao', desc: 'Heritage Spanish-era cake baked with tuba yeast, lard, egg yolks, and grated cheese.' },
+      { name: 'Batirol nga Sikwate sa Argao', desc: 'Rich hot chocolate frothed with a batirol using 100% native cacao tablea.' },
+      { name: 'Chiu-Chiu nga Baboy sa Argao', desc: 'Traditional Argao braised pork belly stewed with spices and native herbs.' },
+    ],
+  },
+  'Balamban': {
+    marketTitle: 'Balamban Public Market & Herb Port',
+    palengkeItems: 'Stuffed Liempo, Native Chicken, Malunggay, Sayote',
+    lat: 10.5042, lng: 123.7194,
+    specialty: 'Sinugbang Liempo sa Balamban',
+    famousDishes: [
+      { name: 'Sinugbang Liempo sa Balamban', desc: 'Famous pork belly rolled and stuffed with secret herbs, scallions, and lemongrass.' },
+      { name: 'Tinolang Manok sa Balamban', desc: 'Free-range chicken stewed with green papaya, ginger, and fresh malunggay.' },
+    ],
+  },
+  'Toledo City': {
+    marketTitle: 'Toledo City Public Market',
+    palengkeItems: 'River Prawns, Tilapia, Corn Grit, Squash, Sitaw',
+    lat: 10.3772, lng: 123.6406,
+    specialty: 'Gisadong Ulang sa Toledo',
+    famousDishes: [
+      { name: 'Gisadong Ulang sa Toledo', desc: 'Large freshwater river prawns sautéed in garlic, butter, and native tomatoes.' },
+      { name: 'Sinugbang Tilapia sa Kamayan', desc: 'Fresh river tilapia grilled over charcoal, served with calamansi soy dip.' },
+    ],
+  },
+  'Moalboal': {
+    marketTitle: 'Moalboal Public Market & Beach Fish Landing',
+    palengkeItems: 'Tuna Steak, Mackerel, Buko Water, Calamansi, Cucumber',
+    lat: 9.9575, lng: 123.4,
+    specialty: 'Sinugbang Tangigue Steak sa Moalboal',
+    famousDishes: [
+      { name: 'Sinugbang Tangigue Steak sa Moalboal', desc: 'Thick yellowfin tuna steak seared over high heat, drizzled with calamansi dip.' },
+      { name: 'Kinilaw nga Mackerel sa Baybayon', desc: 'Freshly caught mackerel cured in coconut vinegar, cucumber, and ginger.' },
+    ],
+  },
+  'Oslob': {
+    marketTitle: 'Oslob Municipal Market',
+    palengkeItems: 'Tangigue, Kamote Tops, Sinigang Greens, Calamansi, Mango',
+    lat: 9.535, lng: 123.4319,
+    specialty: 'Sinigang nga Tangigue sa Oslob',
+    famousDishes: [
+      { name: 'Sinigang nga Tangigue sa Oslob', desc: 'Sour fish soup made with fresh king mackerel, native tomatoes, and greens.' },
+      { name: 'Salada nga Dahon sa Kamote', desc: 'Blanched sweet potato leaves tossed with calamansi, onions, and native tomatoes.' },
+    ],
+  },
+  'Danao City': {
+    marketTitle: 'Danao City Central Market',
+    palengkeItems: 'Kalamay, Bangus, Kangkong, Eggplant, Tomatoes',
+    lat: 10.5256, lng: 124.0264,
+    specialty: 'Kalamay sa Danao',
+    famousDishes: [
+      { name: 'Kalamay sa Danao', desc: 'Famous sticky sweet coconut & glutinous rice delicacy packaged in coconut shells.' },
+      { name: 'Inasal nga Bangus sa Danao', desc: 'Whole milkfish deboned and stuffed with savory meat, raisins, and spices.' },
+    ],
+  },
+  'Liloan': {
+    marketTitle: 'Liloan Public Market',
+    palengkeItems: 'Lato, Fresh Fish, Native Chicken, Sayote, Masi',
+    lat: 10.4, lng: 123.9833,
+    specialty: 'Rosquillos sa Titay (Liloan)',
+    famousDishes: [
+      { name: 'Rosquillos sa Titay (Liloan)', desc: 'The original ring-shaped crisp biscuit created in Liloan back in 1907.' },
+      { name: 'Masi sa Liloan', desc: 'Soft glutinous rice balls filled with a sweet molten peanut and brown sugar center.' },
+    ],
+  },
+  'Dalaguete': {
+    marketTitle: 'Dalaguete Vegetable Trading Post (Mantalongon)',
+    palengkeItems: 'Highland Sayote, Broccoli, Carrots, Cabbage, Pork Chops',
+    lat: 9.7619, lng: 123.535,
+    specialty: 'Gisadong Utan sa Mantalongon',
+    famousDishes: [
+      { name: 'Gisadong Utan sa Mantalongon', desc: 'Crispy stir-fried Sayote, Broccoli, Carrots & Cabbage from the Vegetable Basket of Cebu.' },
+      { name: 'Linat-ang Baboy ug Sayote', desc: 'Hearty highland pork soup simmered with freshly harvested sayote and ginger.' },
+    ],
+  },
+  'Barili': {
+    marketTitle: 'Barili Public Market & Dairy Farm Center',
+    palengkeItems: 'Carabao Milk, Pastillas, Native Eggs, Native Chicken, Squash',
+    lat: 10.1133, lng: 123.5083,
+    specialty: 'Presko nga Gatas sa Kabaw ug Pastillas',
+    famousDishes: [
+      { name: 'Presko nga Gatas sa Kabaw ug Pastillas', desc: 'Creamy fresh water-buffalo milk and handcrafted sweet milk candies.' },
+      { name: 'Kinalan nga Manok Bisaya sa Barili', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' },
+    ],
+  },
 };
 
 /**
  * Fetches a city food profile.
- * Tries the backend API first (Supabase cache → Gemini AI).
+ * Tries the backend API first (Supabase cache → pre-seeded data → Gemini AI).
  * Falls back to static data if city is in the static list.
  * Returns null if nothing found.
  *
@@ -146,7 +299,7 @@ export async function getCityFoodProfile(cityName) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch(
       `${API_URL}/api/city-food?city=${encodeURIComponent(cityName)}`,
@@ -164,14 +317,19 @@ export async function getCityFoodProfile(cityName) {
       if (data?.profile) return data.profile;
     }
   } catch (err) {
-    if (err.name !== 'AbortError') {
+    const isCanceled =
+      err.name === 'AbortError' ||
+      err.message?.includes('canceled') ||
+      err.message?.includes('cancelled') ||
+      err.message?.includes('aborted');
+
+    if (!isCanceled) {
       console.warn(`[CityFoodService] API error for "${cityName}":`, err.message);
     }
   }
 
   // Offline fallback: return static data if available
   if (STATIC_FALLBACK[cityName]) {
-    console.log(`[CityFoodService] Using static fallback for "${cityName}"`);
     return STATIC_FALLBACK[cityName];
   }
   const cleanKey = Object.keys(STATIC_FALLBACK).find(
@@ -181,7 +339,6 @@ export async function getCityFoodProfile(cityName) {
       k.toLowerCase().includes(cityName.toLowerCase())
   );
   if (cleanKey && STATIC_FALLBACK[cleanKey]) {
-    console.log(`[CityFoodService] Using fuzzy static fallback "${cleanKey}" for "${cityName}"`);
     return STATIC_FALLBACK[cleanKey];
   }
 
@@ -212,9 +369,22 @@ export async function getAllCityMarkers() {
       return data?.markers || [];
     }
   } catch (err) {
-    console.warn('[CityFoodService] Failed to load markers:', err.message);
+    const isCanceled =
+      err.name === 'AbortError' ||
+      err.message?.includes('canceled') ||
+      err.message?.includes('cancelled') ||
+      err.message?.includes('aborted');
+
+    if (!isCanceled) {
+      console.warn('[CityFoodService] Failed to load markers:', err.message);
+    }
   }
 
-  // Fallback: return empty array so no default city markers pop up
-  return [];
+  // Fallback: return static fallback keys as markers if needed
+  return Object.entries(STATIC_FALLBACK).map(([city_name, data]) => ({
+    city_name,
+    lat: data.lat,
+    lng: data.lng,
+    specialty: data.specialty || '',
+  }));
 }

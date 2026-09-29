@@ -3514,7 +3514,7 @@ async def get_city_food_profile(city: str):
         try:
             result = supabase.table("city_food_profiles") \
                 .select("*") \
-                .eq("city_name", city_name) \
+                .ilike("city_name", f"%{city_name}%") \
                 .limit(1) \
                 .execute()
             if result.data and len(result.data) > 0:
@@ -3531,7 +3531,42 @@ async def get_city_food_profile(city: str):
         except Exception as db_err:
             print(f"[CityFood] Supabase read error for '{city_name}':", repr(db_err))
 
-    # 2. Generate via Gemini AI
+    # 2. Check pre-seeded built-in profiles (_SEED_PROFILES)
+    clean_search = city_name.strip().lower()
+    seed_match = None
+    for sp in _SEED_PROFILES:
+        sp_name = sp.get("city_name", "").strip().lower()
+        if sp_name == clean_search or clean_search in sp_name or sp_name in clean_search:
+            seed_match = sp
+            break
+
+    if seed_match:
+        profile = {
+            "marketTitle": seed_match.get("market_title", ""),
+            "palengkeItems": seed_match.get("palengke_items", ""),
+            "lat": seed_match.get("lat"),
+            "lng": seed_match.get("lng"),
+            "specialty": seed_match.get("specialty", ""),
+            "famousDishes": seed_match.get("famous_dishes") or [],
+        }
+        # Opportunistically cache to Supabase
+        if supabase:
+            try:
+                supabase.table("city_food_profiles").upsert({
+                    "city_name": seed_match["city_name"],
+                    "market_title": seed_match.get("market_title", ""),
+                    "palengke_items": seed_match.get("palengke_items", ""),
+                    "lat": seed_match.get("lat"),
+                    "lng": seed_match.get("lng"),
+                    "specialty": seed_match.get("specialty", ""),
+                    "famous_dishes": seed_match.get("famous_dishes", []),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }, on_conflict="city_name").execute()
+            except Exception:
+                pass
+        return {"profile": profile, "source": "pre_seeded"}
+
+    # 3. Generate via Gemini AI
     print(f"[CityFood] Cache miss for '{city_name}' — generating via Gemini...")
     generated = _call_gemini_for_city(city_name)
 
@@ -3541,7 +3576,7 @@ async def get_city_food_profile(city: str):
             detail=f"No food profile found for '{city_name}' and AI generation failed."
         )
 
-    # 3. Save to Supabase for future requests
+    # 4. Save to Supabase for future requests
     if supabase:
         try:
             supabase.table("city_food_profiles").upsert({
@@ -3572,21 +3607,31 @@ async def get_city_food_profile(city: str):
 @app.get("/api/city-food/markers")
 async def get_city_food_markers():
     """
-    Returns lightweight marker data for all cached cities (for the map).
+    Returns lightweight marker data for all cached or pre-seeded cities (for the map).
     Returns: [{ city_name, lat, lng, specialty }]
     """
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Database unavailable")
+    markers = []
+    if supabase:
+        try:
+            result = supabase.table("city_food_profiles") \
+                .select("city_name, lat, lng, specialty") \
+                .execute()
+            markers = result.data or []
+        except Exception as e:
+            print("[CityFood] markers fetch error:", repr(e))
 
-    try:
-        result = supabase.table("city_food_profiles") \
-            .select("city_name, lat, lng, specialty") \
-            .execute()
-        markers = result.data or []
-        return {"markers": markers, "count": len(markers)}
-    except Exception as e:
-        print("[CityFood] markers fetch error:", repr(e))
-        raise HTTPException(status_code=500, detail="Failed to fetch markers")
+    if not markers:
+        markers = [
+            {
+                "city_name": sp["city_name"],
+                "lat": sp.get("lat"),
+                "lng": sp.get("lng"),
+                "specialty": sp.get("specialty", ""),
+            }
+            for sp in _SEED_PROFILES
+        ]
+
+    return {"markers": markers, "count": len(markers)}
 
 
 @app.post("/api/city-food/seed")
