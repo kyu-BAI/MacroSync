@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,7 +9,7 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyRound, ChevronLeft } from 'lucide-react-native';
@@ -22,9 +22,8 @@ const logoGreen = '#10B981';
 
 export default function VerifyEmailScreen({ email, name, password, isLogin, onVerified, onNavigateBack }) {
   const { showAlert } = useCustomAlert();
-  const { theme } = useTheme();
-  const isDarkMode = false;
-  const styles = getStyles(theme, false);
+  const { theme, isDarkMode } = useTheme();
+  const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
   const [otp, setOtp] = useState("");
   const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,14 +58,19 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
         ? { email: cleanEmail }
         : { email: cleanEmail, name: cleanName, password: cleanPassword };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
-        showAlert("OTP Resent", "A new verification OTP code has been sent to your email.");
+        showAlert("OTP Resent", "A new verification code has been sent to your email.");
         setResendCooldown(30);
       } else {
         const data = await response.json().catch(() => ({}));
@@ -81,9 +85,10 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
   };
 
   // --- OTP VERIFICATION LIFE CYCLES ---
-  const handleVerifyOTP = async () => {
-    if (!otp.trim()) {
-      showAlert("Missing OTP", "Please enter the OTP code.");
+  const handleVerifyOTP = async (codeToVerify) => {
+    const targetOtp = (typeof codeToVerify === "string" ? codeToVerify : otp).trim();
+    if (!targetOtp) {
+      showAlert("Missing OTP", "Please enter the 6-digit OTP code.");
       return;
     }
 
@@ -92,7 +97,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
 
     try {
       const cleanEmail = (email || "").trim();
-      const cleanOtp = (otp || "").trim();
+      const cleanOtp = targetOtp;
       const cleanName = (name || "").trim();
       const cleanPassword = (password || "").trim();
 
@@ -106,13 +111,18 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
             password: cleanPassword
           };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       let data = null;
       try {
@@ -126,14 +136,14 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
         onVerified(data.user_id, data.is_onboarded);
       } else {
         setIsLoading(false);
-        showAlert("Error", data?.detail || "Invalid or expired OTP code. Please try again.");
+        showAlert("Verification Error", data?.detail || "Invalid or expired OTP code. Please check your email.");
       }
     } catch (error) {
       setIsLoading(false);
       console.log("VERIFY OTP ERROR:", error);
       showAlert(
         "Network Error",
-        "Cannot connect to backend server. Make sure it is running and your IP is correct."
+        "Connection timed out or failed to reach the server. Please check your internet connection."
       );
     }
   };
@@ -195,18 +205,23 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
 
             {/* Action Trigger Verification Button */}
             <TouchableOpacity
-              activeOpacity={1}
+              activeOpacity={0.85}
               disabled={isLoading}
               onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
-              onPress={handleVerifyOTP}
+              onPress={() => handleVerifyOTP()}
               style={[
                 styles.buttonBase,
                 isPressed ? styles.buttonPressed : styles.buttonUnpressed
               ]}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <View style={styles.buttonLoadingRow}>
+                  <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+                  <Text style={[styles.buttonText, styles.buttonLoadingText]}>
+                    Verifying OTP...
+                  </Text>
+                </View>
               ) : (
                 <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
                   Verify OTP
@@ -377,6 +392,17 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
   },
   buttonTextPressed: {
     color: '#E2E8F0',
+  },
+  buttonLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonSpinner: {
+    marginRight: 8,
+  },
+  buttonLoadingText: {
+    opacity: 0.95,
   },
   resendContainer: {
     flexDirection: 'row',

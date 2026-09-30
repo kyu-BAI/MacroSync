@@ -12,6 +12,7 @@ import secrets
 import uuid
 import json
 import time
+import asyncio
 from datetime import datetime, timedelta, timezone
 import base64
 import re
@@ -674,81 +675,80 @@ async def verify_reset_otp(data: VerifyOTPRequest):
 
 # ---------------- VERIFY SIGNUP (OTP VERIFICATION & ACCOUNT CREATION) ----------------
 @app.post("/verify-signup")
-async def verify_signup(data: VerifySignupRequest):
+async def verify_signup(data: VerifySignupRequest, background_tasks: BackgroundTasks):
     try:
         clean_email = data.email.strip().lower()
         clean_otp = data.otp.strip()
+
+        # Run OTP verification and profile lookup in parallel (1 single network round-trip!)
+        def get_otp():
+            return supabase_admin.table("password_reset_otps").select("otp, expires_at").eq("email", clean_email).execute()
+
+        def get_profile():
+            return supabase_admin.table("user_profiles").select("id, weight_kg, height_cm").eq("email", clean_email).execute()
+
+        otp_res, p_res = await asyncio.gather(
+            asyncio.to_thread(get_otp),
+            asyncio.to_thread(get_profile)
+        )
+
+        if not otp_res.data:
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP code. Please request a new one.")
+
+        record = otp_res.data[0]
+        db_otp = str(record.get("otp") or "").strip()
+        if db_otp != clean_otp:
+            raise HTTPException(status_code=400, detail="Invalid OTP code. Please check your email and try again.")
+
+        expires_at_str = record.get("expires_at")
+        if expires_at_str:
+            try:
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+                current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
+                if current_time > expires_at:
+                    raise HTTPException(status_code=400, detail="OTP code has expired. Please tap Resend Code.")
+            except Exception:
+                pass
+
         user_id = None
-
-        # 1. Check password_reset_otps table (Strict OTP Code & Expiration Check)
-        otp_res = supabase_admin.table("password_reset_otps").select("*").eq("email", clean_email).execute()
-        if otp_res.data:
-            record = otp_res.data[0]
-            db_otp = str(record.get("otp") or "").strip()
-            if db_otp == clean_otp:
-                expires_at_str = record.get("expires_at")
-                is_valid = True
-                if expires_at_str:
-                    try:
-                        expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-                        current_time = datetime.now(timezone.utc) if expires_at.tzinfo is not None else datetime.utcnow()
-                        if current_time > expires_at:
-                            is_valid = False
-                    except Exception:
-                        pass
-                
-                if is_valid:
-                    # Check if profile already exists
-                    p_res = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
-                    if p_res.data:
-                        user_id = p_res.data[0]["id"]
-                    else:
-                        # CREATE ACCOUNT IN SUPABASE AUTH & USER_PROFILES ONLY UPON VALID OTP VERIFICATION
-                        name_val = (data.name or "").strip() or clean_email.split("@")[0]
-                        pass_val = (data.password or "").strip() or f"GAuth_{secrets.token_hex(8)}!"
-                        try:
-                            new_user = supabase_admin.auth.admin.create_user({
-                                "email": clean_email,
-                                "password": pass_val,
-                                "email_confirm": True,
-                                "user_metadata": {"full_name": name_val}
-                            })
-                            user_id = new_user.user.id
-                        except Exception as create_err:
-                            # Fast lookup in user_profiles table instead of slow list_users() pagination scan
-                            try:
-                                p_check = supabase_admin.table("user_profiles").select("id").eq("email", clean_email).execute()
-                                if p_check.data:
-                                    user_id = p_check.data[0]["id"]
-                            except Exception:
-                                pass
-
-                        if not user_id:
-                            user_id = str(uuid.uuid4())
-
-                        supabase_admin.table("user_profiles").upsert({
-                            "id": user_id,
-                            "email": clean_email,
-                            "name": name_val,
-                            "created_at": datetime.utcnow().isoformat()
-                        }).execute()
-
-                    # Clean up used OTP so it cannot be reused
-                    try:
-                        supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
-                    except Exception:
-                        pass
-
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid or expired OTP code. Please enter the 6-digit code sent to your email.")
-
-        # Check if user already completed onboarding
-        profile_res = supabase.table("user_profiles").select("weight_kg, height_cm").eq("id", user_id).execute()
         is_onboarded = False
-        if profile_res.data:
-            p = profile_res.data[0]
-            if p.get("weight_kg") is not None and p.get("height_cm") is not None:
+
+        if p_res.data and len(p_res.data) > 0:
+            user_id = p_res.data[0]["id"]
+            if p_res.data[0].get("weight_kg") is not None and p_res.data[0].get("height_cm") is not None:
                 is_onboarded = True
+        else:
+            name_val = (data.name or "").strip() or clean_email.split("@")[0]
+            pass_val = (data.password or "").strip() or f"GAuth_{secrets.token_hex(8)}!"
+            try:
+                new_user = supabase_admin.auth.admin.create_user({
+                    "email": clean_email,
+                    "password": pass_val,
+                    "email_confirm": True,
+                    "user_metadata": {"full_name": name_val}
+                })
+                user_id = new_user.user.id
+            except Exception as create_err:
+                print("Create user fallback info:", create_err)
+
+            if not user_id:
+                user_id = str(uuid.uuid4())
+
+            supabase_admin.table("user_profiles").upsert({
+                "id": user_id,
+                "email": clean_email,
+                "name": name_val,
+                "created_at": datetime.utcnow().isoformat()
+            }).execute()
+
+        # Delete used OTP in background task (0ms delay to user!)
+        def cleanup_otp():
+            try:
+                supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
+            except Exception:
+                pass
+
+        background_tasks.add_task(cleanup_otp)
 
         return {"success": True, "user_id": user_id, "is_onboarded": is_onboarded}
 
@@ -758,21 +758,60 @@ async def verify_signup(data: VerifySignupRequest):
         print("VERIFY SIGNUP ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
 
+
 # ---------------- VERIFY LOGIN (EMAIL OTP) ----------------
 @app.post("/verify-login")
-async def verify_login(data: VerifySignupRequest):
+async def verify_login(data: VerifySignupRequest, background_tasks: BackgroundTasks):
     try:
+        clean_email = data.email.strip().lower()
+        clean_otp = data.otp.strip()
+
+        # 1. Parallel lookup in password_reset_otps and user_profiles
+        def get_otp():
+            return supabase_admin.table("password_reset_otps").select("otp, expires_at").eq("email", clean_email).execute()
+
+        def get_profile():
+            return supabase_admin.table("user_profiles").select("id, weight_kg, height_cm").eq("email", clean_email).execute()
+
+        otp_res, p_res = await asyncio.gather(
+            asyncio.to_thread(get_otp),
+            asyncio.to_thread(get_profile)
+        )
+
+        if otp_res.data:
+            record = otp_res.data[0]
+            db_otp = str(record.get("otp") or "").strip()
+            if db_otp == clean_otp:
+                user_id = p_res.data[0]["id"] if (p_res.data and len(p_res.data) > 0) else None
+                is_onboarded = False
+                if p_res.data and len(p_res.data) > 0:
+                    if p_res.data[0].get("weight_kg") is not None and p_res.data[0].get("height_cm") is not None:
+                        is_onboarded = True
+
+                def cleanup_otp():
+                    try:
+                        supabase_admin.table("password_reset_otps").delete().eq("email", clean_email).execute()
+                    except Exception:
+                        pass
+
+                background_tasks.add_task(cleanup_otp)
+                if user_id:
+                    return {"success": True, "user_id": user_id, "is_onboarded": is_onboarded}
+
+        # 2. Fallback to Supabase magiclink OTP if applicable
         response = anon_supabase.auth.verify_otp({
-            "email": data.email,
-            "token": data.otp,
+            "email": clean_email,
+            "token": clean_otp,
             "type": "magiclink"
         })
         
         if not response.user:
             raise HTTPException(status_code=400, detail="Invalid OTP")
             
-        return {"success": True, "user_id": response.user.id}
+        return {"success": True, "user_id": response.user.id, "is_onboarded": False}
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print("VERIFY LOGIN ERROR:", repr(e))
         raise HTTPException(status_code=400, detail=str(e))
