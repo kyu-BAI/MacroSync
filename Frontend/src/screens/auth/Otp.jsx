@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { KeyRound, ChevronLeft } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import API_URL from "../config/api";
 import { useCustomAlert } from "../../context/CustomAlertContext";
@@ -28,7 +28,9 @@ const COLORS = {
   textGrey: "#64748B",
   textMuted: "#94A3B8",
   borderLight: "#E2E8F0",
-  cardBgLight: "#F1F5F9",
+  cardBgLight: "#EBEBEB",
+  bgPill: "#F1F5F9",
+  dangerRed: "#EF4444",
   white: "#FFFFFF",
 };
 
@@ -63,18 +65,13 @@ function ResendRow({ isResending, resendCooldown, onResend, styles }) {
 }
 
 // 2. Primary Verify Action Button
-function VerifyButton({ isLoading, isPressed, onPress, onPressIn, onPressOut, styles }) {
+function VerifyButton({ isLoading, onPress, styles }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       disabled={isLoading}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
       onPress={onPress}
-      style={[
-        styles.buttonBase,
-        isPressed ? styles.buttonPressed : styles.buttonUnpressed,
-      ]}
+      style={[styles.buttonBase, styles.buttonUnpressed]}
     >
       {isLoading ? (
         <View style={styles.buttonLoadingRow}>
@@ -82,9 +79,15 @@ function VerifyButton({ isLoading, isPressed, onPress, onPressIn, onPressOut, st
           <Text style={[styles.buttonText, styles.buttonLoadingText]}>Verifying OTP...</Text>
         </View>
       ) : (
-        <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-          Verify OTP
-        </Text>
+        <View style={styles.buttonLoadingRow}>
+          <Text style={styles.buttonText}>Verify OTP</Text>
+          <Ionicons
+            name="checkmark-circle"
+            size={18}
+            color={COLORS.white}
+            style={{ marginLeft: 8 }}
+          />
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -97,7 +100,6 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
 
   const [otp, setOtp] = useState("");
-  const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Resend OTP Cooldown State
@@ -212,66 +214,71 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
         backgroundColor={theme?.background || COLORS.base}
       />
 
-      {/* Top Navigation Row */}
-      <View style={styles.topNavigationRow}>
-        <TouchableOpacity
-          style={styles.backArrowButton}
-          onPress={onNavigateBack}
-          activeOpacity={0.7}
-        >
-          <ChevronLeft color={COLORS.logoGreen} size={24} strokeWidth={2.5} />
-        </TouchableOpacity>
-      </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.flexContainer}
+        style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Section */}
+          {/* Header Sector (Consistent with Step 1 - 4) */}
           <View style={styles.headerSection}>
+            {Boolean(onNavigateBack) && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={onNavigateBack}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color={theme?.textPrimary || COLORS.textDark}
+                />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.stepIndicator}>SECURITY VERIFICATION</Text>
             <Text style={styles.brandTitle}>Verify OTP</Text>
-            <Text style={styles.brandSubtitle}>We sent a verification code to:</Text>
-            <View style={styles.emailBadgeContainer}>
-              <Text style={styles.emailText}>{email}</Text>
-            </View>
+            <Text style={styles.brandSubtitle}>
+              We sent a 6-digit verification code to{" "}
+              <Text style={styles.emailHighlight}>{email}</Text>. Enter the code below to proceed.
+            </Text>
           </View>
 
-          {/* Form Card Group */}
+          {/* Form Card (Consistent with Step 1 - 4) */}
           <View style={styles.formCard}>
-            <Text style={styles.inputLabel}>OTP Code</Text>
+            <View style={styles.inputGroup}>
+              <View style={styles.rowLabelWrapper}>
+                <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
+              </View>
 
-            {/* Input Row with Vector Badge Icon */}
-            <View style={[styles.flatInputField, styles.fieldRow]}>
-              <KeyRound
-                color={theme?.textSecondary || COLORS.textMuted}
-                size={20}
-                style={styles.leadingIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit OTP"
-                placeholderTextColor={theme?.placeholderText || COLORS.textMuted}
-                value={otp}
-                onChangeText={handleOtpChange}
-                keyboardType="numeric"
-                maxLength={6}
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+              {/* Input Row with Vector Badge Icon */}
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Ionicons
+                  name="key-outline"
+                  size={20}
+                  color={COLORS.logoGreen}
+                  style={styles.leadingIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="------"
+                  placeholderTextColor={theme?.placeholderText || COLORS.textMuted}
+                  value={otp}
+                  onChangeText={handleOtpChange}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
             </View>
 
             {/* Action Trigger Verification Button */}
             <VerifyButton
               isLoading={isLoading}
-              isPressed={isPressed}
               onPress={() => handleVerifyOTP()}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
               styles={styles}
             />
 
@@ -289,79 +296,64 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
   );
 }
 
-// --- COMPONENT STYLES ---
+// --- COMPONENT STYLES (CONSISTENT WITH STEP 1 - 4 DESIGN LANGUAGE) ---
 const getStyles = (theme, isDarkMode) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme?.background || COLORS.base,
     },
-    flexContainer: {
-      flex: 1,
-    },
-    topNavigationRow: {
-      width: "100%",
-      paddingHorizontal: 24,
-      paddingTop: Platform.OS === "ios" ? 8 : 12,
-      paddingBottom: 4,
-      flexDirection: "row",
-      justifyContent: "flex-start",
-    },
-    backArrowButton: {
-      padding: 10,
-      backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 16,
-      borderWidth: 1.5,
-      borderColor: theme?.border || COLORS.borderLight,
-    },
     scrollContainer: {
       flexGrow: 1,
       justifyContent: "center",
-      paddingHorizontal: 24,
-      paddingTop: 10,
-      paddingBottom: 40,
+      paddingHorizontal: 20,
+      paddingBottom: 30,
+      paddingTop: Platform.OS === "ios" ? 30 : 20,
     },
     headerSection: {
-      marginBottom: 32,
-      alignItems: "center",
+      marginBottom: 24,
+      alignItems: "flex-start",
       width: "100%",
     },
-    brandTitle: {
-      fontSize: 36,
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    stepIndicator: {
+      fontSize: 11,
       fontWeight: "900",
       color: COLORS.logoGreen,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    brandTitle: {
+      fontSize: 34,
+      fontWeight: "900",
+      color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
-      textAlign: "center",
+      marginTop: 2,
     },
     brandSubtitle: {
-      fontSize: 14,
+      fontSize: 13.5,
       color: theme?.textSecondary || COLORS.textGrey,
       marginTop: 8,
-      textAlign: "center",
       lineHeight: 20,
-      fontWeight: "700",
+      fontWeight: "600",
     },
-    emailBadgeContainer: {
-      marginTop: 10,
-      alignSelf: "center",
-    },
-    emailText: {
-      fontSize: 14.5,
+    emailHighlight: {
+      color: COLORS.logoGreen,
       fontWeight: "800",
-      color: theme?.textPrimary || COLORS.textDark,
-      backgroundColor: theme?.cardBg || COLORS.cardBgLight,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: theme?.border || COLORS.borderLight,
-      overflow: "hidden",
-      textAlign: "center",
     },
     formCard: {
       backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 24,
-      padding: 24,
+      borderRadius: 18,
+      padding: 20,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
       shadowColor: "#000",
@@ -370,21 +362,30 @@ const getStyles = (theme, isDarkMode) =>
       shadowRadius: 8,
       elevation: 1,
     },
+    inputGroup: {
+      marginBottom: 10,
+    },
+    rowLabelWrapper: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
     inputLabel: {
       color: theme?.textPrimary || COLORS.textGrey,
       fontSize: 11,
       fontWeight: "800",
-      marginBottom: 8,
       textTransform: "uppercase",
       letterSpacing: 1.2,
-      marginLeft: 6,
     },
     flatInputField: {
       backgroundColor: theme?.inputBg || COLORS.base,
-      borderRadius: 14,
+      borderRadius: 12,
       borderWidth: 1.5,
       borderColor: theme?.inputBorder || COLORS.borderLight,
-      marginBottom: 24,
+      height: 52,
+      justifyContent: "center",
     },
     fieldRow: {
       flexDirection: "row",
@@ -392,40 +393,33 @@ const getStyles = (theme, isDarkMode) =>
       paddingHorizontal: 16,
     },
     leadingIcon: {
-      marginRight: 8,
+      marginRight: 10,
     },
     input: {
       flex: 1,
       color: theme?.textPrimary || COLORS.textDark,
-      paddingVertical: 14,
-      paddingHorizontal: 8,
-      fontSize: 20,
+      height: "100%",
+      fontSize: 22,
       fontWeight: "800",
+      letterSpacing: 8,
       textAlign: "center",
-      letterSpacing: 6,
     },
     buttonBase: {
       height: 52,
-      borderRadius: 16,
+      borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
       width: "100%",
+      marginTop: 10,
     },
     buttonUnpressed: {
       backgroundColor: COLORS.logoGreen,
-    },
-    buttonPressed: {
-      backgroundColor: COLORS.logoGreenPressed,
-      opacity: 0.9,
     },
     buttonText: {
       color: COLORS.white,
       fontSize: 16,
       fontWeight: "800",
       letterSpacing: 0.5,
-    },
-    buttonTextPressed: {
-      color: COLORS.borderLight,
     },
     buttonLoadingRow: {
       flexDirection: "row",
@@ -442,7 +436,7 @@ const getStyles = (theme, isDarkMode) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 20,
+      marginTop: 18,
     },
     resendText: {
       fontSize: 13,
@@ -463,4 +457,5 @@ const getStyles = (theme, isDarkMode) =>
       opacity: 0.7,
     },
   });
+
 
