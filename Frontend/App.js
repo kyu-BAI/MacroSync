@@ -88,6 +88,28 @@ const normalizeGoalKey = (goalStr) => {
   return "maintain";
 };
 
+const INITIAL_BASELINE = {
+  age: "",
+  weight: "",
+  height: "",
+  startingWeight: "",
+  unit: "kg",
+};
+
+const INITIAL_GOALS = {
+  activityLevel: "moderate",
+  goal: "muscle",
+  goalWeight: "",
+  targetDate: "",
+};
+
+const INITIAL_LOCATION = {
+  address: "",
+  structuredLocation: null,
+  city: "",
+  province: "",
+};
+
 function MainApp() {
   const { theme } = useTheme();
   // Navigation Routing States: 'SPLASH', 'LOGIN', 'SIGNUP', 'VERIFY_SIGNUP', 'FORGOT_PASS', 'OTP_ENTRY', 'RESET_PASS', 'STEP_ONE', 'STEP_TWO', 'STEP_THREE', 'DASHBOARD'
@@ -107,25 +129,16 @@ function MainApp() {
   const wasOfflineRef = useRef(false);
 
   // Collected Onboarding State Metrics to sync downstream
-  const [userBaseline, setUserBaseline] = useState({
-    age: "",
-    weight: "",
-    height: "",
-    startingWeight: "",
-    unit: "kg",
-  });
-  const [userGoals, setUserGoals] = useState({
-    activityLevel: "moderate",
-    goal: "muscle",
-    goalWeight: "",
-    targetDate: "",
-  });
-  const [userLocation, setUserLocation] = useState({
-    address: "",
-    structuredLocation: null,
-    city: "",
-    province: "",
-  });
+  const [userBaseline, setUserBaseline] = useState(INITIAL_BASELINE);
+  const [userGoals, setUserGoals] = useState(INITIAL_GOALS);
+  const [userLocation, setUserLocation] = useState(INITIAL_LOCATION);
+
+  const resetOnboardingState = () => {
+    setUserBaseline(INITIAL_BASELINE);
+    setUserGoals(INITIAL_GOALS);
+    setUserLocation(INITIAL_LOCATION);
+    setTempOnboardingData(null);
+  };
 
   // Module 5 Frontend State Sharing
   const [dailyNutrition, setDailyNutrition] = useState({
@@ -830,7 +843,10 @@ function MainApp() {
   if (currentScreen === "LOGIN") {
     return (
       <LoginScreen
-        onNavigateToSignUp={() => setCurrentScreen("SIGNUP")}
+        onNavigateToSignUp={() => {
+          resetOnboardingState();
+          setCurrentScreen("SIGNUP");
+        }}
         onLoginSuccess={(loggedInUserId, isOnboarded, userObj) => {
           if (loggedInUserId) {
             setUserId(loggedInUserId);
@@ -855,6 +871,7 @@ function MainApp() {
           if (isOnboarded === true) {
             setCurrentScreen("DASHBOARD");
           } else {
+            resetOnboardingState();
             setCurrentScreen("STEP_ONE");
           }
         }}
@@ -869,6 +886,7 @@ function MainApp() {
         ) => {
           setGoogleIsLoginOtp(!!isLoginOtp);
           if (isNewUser) {
+            resetOnboardingState();
             setUserProfile({ name: name || "User", email: email || "" });
             setResetEmail(email || "");
             setTempPassword(dummyPassword || "");
@@ -893,6 +911,7 @@ function MainApp() {
           newPassword,
           isOnboarded,
         ) => {
+          resetOnboardingState();
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
           if (newUserId) {
             setUserId(newUserId);
@@ -935,6 +954,7 @@ function MainApp() {
             setCurrentScreen("DASHBOARD");
           } else {
             clearDashboardCache();
+            resetOnboardingState();
             setCurrentScreen("STEP_ONE");
           }
         }}
@@ -1155,6 +1175,7 @@ function MainApp() {
     } catch (e) {
       console.warn("Logout error clearing storage:", e);
     }
+    resetOnboardingState();
     setUserId(null);
     setUserProfile({ name: "User", email: "", profileImage: null });
     setGlobalLoggedWeight(null);

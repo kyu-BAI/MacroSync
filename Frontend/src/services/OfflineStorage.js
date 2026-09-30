@@ -10,6 +10,8 @@ const KEYS = {
   REMEMBERED_EMAIL: 'ms_remembered_email',
   REMEMBERED_PASSWORD: 'ms_remembered_password',
   REMEMBERED_GOOGLE_EMAIL: 'ms_remembered_google_email',
+  ONBOARDING_DATA: '@ms_onboarding_data',
+  PINNED_BARANGAY: 'ms_pinned_barangay',
 };
 
 // ─── Save dashboard data to local cache ─────────────────────────────────────
@@ -77,6 +79,8 @@ export async function clearSavedUserId() {
       KEYS.DASHBOARD_CACHE,
       KEYS.SYNC_QUEUE,
       KEYS.REMEMBERED_GOOGLE_EMAIL,
+      KEYS.ONBOARDING_DATA,
+      KEYS.PINNED_BARANGAY,
     ]);
   } catch (e) {
     console.warn('OfflineStorage: Failed to clear saved user session', e);
