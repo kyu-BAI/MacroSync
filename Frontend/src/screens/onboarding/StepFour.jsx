@@ -23,9 +23,27 @@ import useStepFourHealth, {
   PRESET_MEDICAL_CONDITIONS,
 } from "../../hooks/useStepFourHealth";
 
-// --- LIGHTWEIGHT SUBCOMPONENTS ---
+// --- CONFIG & THEME TOKENS ---
+const COLORS = {
+  base: "#F8FAFC",
+  card: "#FFFFFF",
+  white: "#FFFFFF",
+  logoGreen: "#10B981",
+  textDark: "#0F172A",
+  textPrimary: "#1E293B",
+  textSecondary: "#64748B",
+  textMuted: "#9CA3AF",
+  borderLight: "#E2E8F0",
+  amberBorder: "#FDE68A",
+  amberText: "#D97706",
+  amberBg: "rgba(245, 158, 11, 0.08)",
+  amberTag: "#B45309",
+  overlayBg: "rgba(0, 0, 0, 0.5)",
+};
 
-// Allergies and dietary restrictions selector
+// --- SUBCOMPONENTS ---
+
+// 1. Allergies and dietary restrictions selector
 function AllergensSection({
   selectedAllergies,
   customAllergy,
@@ -36,9 +54,7 @@ function AllergensSection({
 }) {
   return (
     <>
-      <Text style={styles.sectionInputLabel}>
-        Allergies & Intolerances
-      </Text>
+      <Text style={styles.sectionInputLabel}>Allergies & Intolerances</Text>
       <Text style={styles.inputLabel}>Select Known Allergens</Text>
 
       {/* Preset Allergen Chips Grid */}
@@ -61,19 +77,14 @@ function AllergensSection({
                   : styles.chipInactive,
               ]}
             >
-              <Text
-                style={[
-                  styles.chipText,
-                  isSelected && styles.chipTextActive,
-                ]}
-              >
+              <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
                 {allergen.title}
               </Text>
               {isSelected && (
                 <Ionicons
                   name={isNone ? "checkmark-circle" : "close-circle"}
                   size={14}
-                  color={COLORS.whiteHighlight}
+                  color={COLORS.white}
                   style={styles.chipIconMargin}
                 />
               )}
@@ -92,7 +103,7 @@ function AllergensSection({
             placeholderTextColor={COLORS.textMuted}
             value={customAllergy}
             onChangeText={onCustomAllergyChange}
-            autoCorrect={true}
+            autoCorrect
             editable={!disabled}
           />
         </View>
@@ -101,7 +112,7 @@ function AllergensSection({
   );
 }
 
-// Pre-existing health screening & condition selector
+// 2. Pre-existing health screening & condition selector
 function MedicalScreeningSection({
   selectedConditions,
   customCondition,
@@ -111,7 +122,7 @@ function MedicalScreeningSection({
   styles,
 }) {
   const hasActiveConditions =
-    selectedConditions.some((c) => c !== "none") || !!customCondition.trim();
+    selectedConditions.some((c) => c !== "none") || Boolean(customCondition.trim());
 
   return (
     <>
@@ -123,9 +134,7 @@ function MedicalScreeningSection({
       <View style={styles.medicalNoticeBox}>
         <View style={styles.medicalNoticeHeader}>
           <Ionicons name="medical-outline" size={16} color={COLORS.amberText} />
-          <Text style={styles.medicalNoticeTitle}>
-            Pre-Existing Health Screening
-          </Text>
+          <Text style={styles.medicalNoticeTitle}>Pre-Existing Health Screening</Text>
         </View>
         <Text style={styles.medicalNoticeSubtitle}>
           MacroSync is an educational wellness tool. Users with diabetes, eating
@@ -156,19 +165,14 @@ function MedicalScreeningSection({
                   : styles.medicalChipInactive,
               ]}
             >
-              <Text
-                style={[
-                  styles.chipText,
-                  isSelected && styles.chipTextActive,
-                ]}
-              >
+              <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
                 {condition.title}
               </Text>
               {isSelected && (
                 <Ionicons
                   name={isNone ? "checkmark-circle" : "close-circle"}
                   size={14}
-                  color={COLORS.whiteHighlight}
+                  color={COLORS.white}
                   style={styles.chipIconMargin}
                 />
               )}
@@ -197,7 +201,7 @@ function MedicalScreeningSection({
             placeholderTextColor={COLORS.textMuted}
             value={customCondition}
             onChangeText={onCustomConditionChange}
-            autoCorrect={true}
+            autoCorrect
             editable={!disabled}
           />
         </View>
@@ -206,10 +210,9 @@ function MedicalScreeningSection({
   );
 }
 
-// Medical disclaimer checkbox & privacy policy trigger
+// 3. Medical disclaimer checkbox & privacy policy trigger
 function DisclaimerAgreement({
   disclaimerAccepted,
-  hasReviewedPolicy,
   onToggleDisclaimer,
   onOpenPrivacyModal,
   styles,
@@ -221,18 +224,9 @@ function DisclaimerAgreement({
         activeOpacity={0.7}
         onPress={onToggleDisclaimer}
       >
-        <View
-          style={[
-            styles.disclaimerCheckbox,
-            disclaimerAccepted && styles.disclaimerCheckboxActive,
-          ]}
-        >
+        <View style={[styles.disclaimerCheckbox, disclaimerAccepted && styles.disclaimerCheckboxActive]}>
           {disclaimerAccepted && (
-            <Ionicons
-              name="checkmark"
-              size={13}
-              color={COLORS.whiteHighlight}
-            />
+            <Ionicons name="checkmark" size={13} color={COLORS.white} />
           )}
         </View>
         <Text style={styles.disclaimerAgreementText}>
@@ -245,15 +239,13 @@ function DisclaimerAgreement({
         style={styles.disclaimerLinkButton}
         activeOpacity={0.7}
       >
-        <Text style={styles.disclaimerLinkText}>
-          Medical Disclaimer & Privacy Policy
-        </Text>
+        <Text style={styles.disclaimerLinkText}>Medical Disclaimer & Privacy Policy</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-// Pre-submission review summary confirmation sheet
+// 4. Pre-submission review summary confirmation sheet
 function ReviewMetricsModal({
   visible,
   compiledAllergiesText,
@@ -263,20 +255,11 @@ function ReviewMetricsModal({
   styles,
 }) {
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.confirmOverlay}>
         <View style={styles.confirmModalCard}>
           <View style={styles.confirmIconContainer}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={32}
-              color={COLORS.logoGreen}
-            />
+            <Ionicons name="shield-checkmark-outline" size={32} color={COLORS.logoGreen} />
           </View>
 
           <Text style={styles.confirmTitle}>Review Clinical Parameters</Text>
@@ -285,9 +268,7 @@ function ReviewMetricsModal({
           </Text>
 
           <View style={styles.confirmDataBlock}>
-            <Text style={styles.confirmDataLabel}>
-              Profile Exclusions & Allergies
-            </Text>
+            <Text style={styles.confirmDataLabel}>Profile Exclusions & Allergies</Text>
             <Text
               style={[
                 styles.confirmDataValue,
@@ -301,9 +282,7 @@ function ReviewMetricsModal({
 
             <View style={styles.confirmDivider} />
 
-            <Text style={styles.confirmDataLabel}>
-              Pre-Existing Medical Conditions
-            </Text>
+            <Text style={styles.confirmDataLabel}>Pre-Existing Medical Conditions</Text>
             <Text
               style={[
                 styles.confirmDataValue,
@@ -317,19 +296,11 @@ function ReviewMetricsModal({
           </View>
 
           <View style={styles.confirmButtonRow}>
-            <TouchableOpacity
-              style={styles.confirmCancelBtn}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.confirmCancelBtn} onPress={onClose} activeOpacity={0.7}>
               <Text style={styles.confirmCancelText}>Edit</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.confirmSubmitBtn}
-              onPress={onConfirm}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.confirmSubmitBtn} onPress={onConfirm} activeOpacity={0.8}>
               <Text style={styles.confirmSubmitText}>Confirm & Build Plan</Text>
             </TouchableOpacity>
           </View>
@@ -339,7 +310,7 @@ function ReviewMetricsModal({
   );
 }
 
-// Primary submit button
+// 5. Primary submit button
 function PrimaryButton({ onPress, isLoading, styles }) {
   return (
     <TouchableOpacity
@@ -350,18 +321,13 @@ function PrimaryButton({ onPress, isLoading, styles }) {
     >
       {isLoading ? (
         <View style={styles.buttonLoadingRow}>
-          <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+          <ActivityIndicator size="small" color={COLORS.white} style={styles.buttonSpinner} />
           <Text style={[styles.buttonText, styles.buttonLoadingText]}>Calibrating Profile...</Text>
         </View>
       ) : (
         <View style={styles.buttonLoadingRow}>
           <Text style={styles.buttonText}>Complete Setup</Text>
-          <Ionicons
-            name="checkmark-circle"
-            size={18}
-            color="#FFFFFF"
-            style={{ marginLeft: 8 }}
-          />
+          <Ionicons name="checkmark-circle" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
         </View>
       )}
     </TouchableOpacity>
@@ -369,8 +335,12 @@ function PrimaryButton({ onPress, isLoading, styles }) {
 }
 
 // --- MAIN STEP FOUR SCREEN ---
-
-export default function StepFourScreen({ locationData, onBack, onSubmit, isLoadingExternal }) {
+export default function StepFourScreen({
+  locationData,
+  onBack,
+  onSubmit,
+  isLoadingExternal,
+}) {
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
 
@@ -380,7 +350,6 @@ export default function StepFourScreen({ locationData, onBack, onSubmit, isLoadi
     selectedConditions,
     customCondition,
     disclaimerAccepted,
-    hasReviewedPolicy,
     privacyModalVisible,
     privacyInitialTab,
     confirmVisible,
@@ -420,16 +389,8 @@ export default function StepFourScreen({ locationData, onBack, onSubmit, isLoadi
           {/* Header Sector */}
           <View style={styles.headerSection}>
             {Boolean(onBack) && (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={onBack}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="chevron-back"
-                  size={22}
-                  color={theme?.text || COLORS.textPrimary}
-                />
+              <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+                <Ionicons name="chevron-back" size={22} color={theme?.text || COLORS.textPrimary} />
               </TouchableOpacity>
             )}
             <Text style={styles.stepIndicator}>STEP 4 OF 4</Text>
@@ -464,7 +425,6 @@ export default function StepFourScreen({ locationData, onBack, onSubmit, isLoadi
             {/* Disclaimer & Policy Agreement */}
             <DisclaimerAgreement
               disclaimerAccepted={disclaimerAccepted}
-              hasReviewedPolicy={hasReviewedPolicy}
               onToggleDisclaimer={handleToggleDisclaimer}
               onOpenPrivacyModal={handleOpenPrivacyModal}
               styles={styles}
@@ -501,35 +461,9 @@ export default function StepFourScreen({ locationData, onBack, onSubmit, isLoadi
   );
 }
 
-// ============================================================================
-// --- COMPONENT STYLES & COLOR CONFIGURATION ---
-// ============================================================================
-const COLORS = {
-  base: "#F8FAFC",
-  card: "#FFFFFF",
-  whiteHighlight: "#FFFFFF",
-  logoGreen: "#10B981",
-  textDark: "#0F172A",
-  textPrimary: "#1E293B",
-  textSecondary: "#64748B",
-  textDisabled: "#94A3B8",
-  textMuted: "#9CA3AF",
-  borderLight: "#E2E8F0",
-  inputBg: "#F8FAFC",
-  buttonLabel: "#FFFFFF",
-  amberBorder: "#FDE68A",
-  amberText: "#D97706",
-  amberBg: "rgba(245, 158, 11, 0.08)",
-  amberTag: "#B45309",
-  dangerRed: "#EF4444",
-  modalOverlayBg: "rgba(0,0,0,0.5)",
-  disabledBg: "#E2E8F0",
-};
-
-// Dynamic stylesheet factory
+// --- COMPONENT STYLES ---
 function getStyles(theme, isDarkMode) {
   return StyleSheet.create({
-    // --- MAIN SCREEN LAYOUT ---
     container: {
       flex: 1,
       backgroundColor: theme?.background || COLORS.base,
@@ -539,8 +473,6 @@ function getStyles(theme, isDarkMode) {
       paddingTop: 12,
       paddingBottom: 30,
     },
-
-    // --- HEADER / BRAND SECTION ---
     headerSection: {
       marginBottom: 24,
       alignItems: "flex-start",
@@ -554,7 +486,6 @@ function getStyles(theme, isDarkMode) {
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 16,
-      alignSelf: "flex-start",
     },
     stepIndicator: {
       fontSize: 11,
@@ -563,7 +494,6 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: 2,
       marginBottom: 4,
       textTransform: "uppercase",
-      textAlign: "left",
     },
     brandTitle: {
       fontSize: 28,
@@ -572,17 +502,13 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: -0.5,
       marginTop: 2,
       marginBottom: 8,
-      textAlign: "left",
     },
     brandSubtitle: {
       fontSize: 13.5,
       fontWeight: "600",
       color: theme?.textSecondary || COLORS.textSecondary,
-      textAlign: "left",
       lineHeight: 20,
     },
-
-    // --- FORM CONFIGURATION CARD ---
     formCard: {
       backgroundColor: theme?.cardBg || COLORS.card,
       borderRadius: 18,
@@ -617,7 +543,7 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: 0.5,
     },
     flatInputField: {
-      backgroundColor: theme?.inputBg || COLORS.inputBg,
+      backgroundColor: theme?.inputBg || COLORS.base,
       borderRadius: 12,
       borderWidth: 1.5,
       borderColor: theme?.cardBorder || COLORS.borderLight,
@@ -630,8 +556,7 @@ function getStyles(theme, isDarkMode) {
       fontWeight: "600",
       color: theme?.text || COLORS.textPrimary,
     },
-
-    // --- CHIP SELECTOR GRID ---
+    // Chips Grid
     chipGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -647,7 +572,7 @@ function getStyles(theme, isDarkMode) {
       borderWidth: 1,
     },
     chipInactive: {
-      backgroundColor: theme?.inputBg || COLORS.inputBg,
+      backgroundColor: theme?.inputBg || COLORS.base,
       borderColor: theme?.cardBorder || COLORS.borderLight,
     },
     chipActive: {
@@ -664,16 +589,14 @@ function getStyles(theme, isDarkMode) {
       color: theme?.textSecondary || COLORS.textSecondary,
     },
     chipTextActive: {
-      color: COLORS.whiteHighlight,
+      color: COLORS.white,
       fontWeight: "700",
     },
     chipIconMargin: {
       marginLeft: 4,
     },
-
-    // Medical Conditions Variants
     medicalChipInactive: {
-      backgroundColor: theme?.inputBg || COLORS.inputBg,
+      backgroundColor: theme?.inputBg || COLORS.base,
       borderColor: theme?.cardBorder || COLORS.borderLight,
     },
     medicalChipActive: {
@@ -684,16 +607,11 @@ function getStyles(theme, isDarkMode) {
       backgroundColor: isDarkMode ? "#334155" : "#475569",
       borderColor: isDarkMode ? "#475569" : "#334155",
     },
-
-    // --- CLINICAL NOTICE BOX ---
+    // Notices
     medicalNoticeBox: {
-      backgroundColor: isDarkMode
-        ? "rgba(245, 158, 11, 0.12)"
-        : COLORS.amberBg,
+      backgroundColor: isDarkMode ? "rgba(245, 158, 11, 0.12)" : COLORS.amberBg,
       borderWidth: 1,
-      borderColor: isDarkMode
-        ? "rgba(245, 158, 11, 0.3)"
-        : COLORS.amberBorder,
+      borderColor: isDarkMode ? "rgba(245, 158, 11, 0.3)" : COLORS.amberBorder,
       borderRadius: 12,
       padding: 12,
       marginBottom: 14,
@@ -717,8 +635,6 @@ function getStyles(theme, isDarkMode) {
       color: isDarkMode ? "#FDE68A" : "#92400E",
       lineHeight: 16,
     },
-
-    // Contextual guardrail notice
     guardrailNotice: {
       flexDirection: "row",
       alignItems: "center",
@@ -737,8 +653,7 @@ function getStyles(theme, isDarkMode) {
       flex: 1,
       lineHeight: 16,
     },
-
-    // --- DISCLAIMER AGREEMENT BOX ---
+    // Disclaimer
     disclaimerAgreementBox: {
       marginTop: 18,
       paddingTop: 16,
@@ -759,15 +674,10 @@ function getStyles(theme, isDarkMode) {
       justifyContent: "center",
       marginTop: 2,
       marginRight: 10,
-      backgroundColor: "transparent",
     },
     disclaimerCheckboxActive: {
       backgroundColor: COLORS.logoGreen,
       borderColor: COLORS.logoGreen,
-    },
-    disclaimerCheckboxPending: {
-      borderColor: isDarkMode ? "#64748B" : "#CBD5E1",
-      backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "#F1F5F9",
     },
     disclaimerAgreementText: {
       flex: 1,
@@ -786,8 +696,7 @@ function getStyles(theme, isDarkMode) {
       color: COLORS.logoGreen,
       textDecorationLine: "underline",
     },
-
-    // --- PRIMARY SUBMIT BUTTON ---
+    // Button
     buttonBase: {
       height: 52,
       borderRadius: 14,
@@ -800,7 +709,7 @@ function getStyles(theme, isDarkMode) {
       backgroundColor: COLORS.logoGreen,
     },
     buttonText: {
-      color: COLORS.whiteHighlight,
+      color: COLORS.white,
       fontSize: 16,
       fontWeight: "800",
       letterSpacing: 0.5,
@@ -816,11 +725,10 @@ function getStyles(theme, isDarkMode) {
     buttonLoadingText: {
       opacity: 0.95,
     },
-
-    // --- CONFIRMATION MODAL OVERLAY ---
+    // Confirmation Modal
     confirmOverlay: {
       flex: 1,
-      backgroundColor: COLORS.modalOverlayBg,
+      backgroundColor: COLORS.overlayBg,
       justifyContent: "center",
       alignItems: "center",
       padding: 24,
@@ -863,7 +771,7 @@ function getStyles(theme, isDarkMode) {
       lineHeight: 18,
     },
     confirmDataBlock: {
-      backgroundColor: theme?.inputBg || COLORS.inputBg,
+      backgroundColor: theme?.inputBg || COLORS.base,
       borderRadius: 12,
       padding: 14,
       width: "100%",
@@ -929,7 +837,8 @@ function getStyles(theme, isDarkMode) {
     confirmSubmitText: {
       fontSize: 14,
       fontWeight: "800",
-      color: COLORS.buttonLabel,
+      color: COLORS.white,
     },
   });
 }
+
