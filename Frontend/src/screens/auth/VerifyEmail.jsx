@@ -265,8 +265,7 @@ export default function VerifyEmailScreen({
             <Text style={styles.stepIndicator}>SECURITY VERIFICATION</Text>
             <Text style={styles.brandTitle}>Verify Email</Text>
             <Text style={styles.brandSubtitle}>
-              We sent a 6-digit verification code to{" "}
-              <Text style={styles.emailHighlight}>{email}</Text>. Enter the code below to complete registration.
+              Code sent to <Text style={styles.emailHighlight}>{email}</Text>
             </Text>
           </View>
 
@@ -342,7 +341,7 @@ const getStyles = (theme, isDarkMode) =>
     },
     headerSection: {
       marginBottom: 24,
-      alignItems: "flex-start",
+      alignItems: "center",
       width: "100%",
     },
     backButton: {
@@ -353,6 +352,7 @@ const getStyles = (theme, isDarkMode) =>
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 16,
+      alignSelf: "flex-start",
     },
     stepIndicator: {
       fontSize: 11,
@@ -360,6 +360,7 @@ const getStyles = (theme, isDarkMode) =>
       color: COLORS.logoGreen,
       letterSpacing: 2,
       textTransform: "uppercase",
+      textAlign: "center",
       marginBottom: 4,
     },
     brandTitle: {
@@ -367,14 +368,16 @@ const getStyles = (theme, isDarkMode) =>
       fontWeight: "900",
       color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
+      textAlign: "center",
       marginTop: 2,
     },
     brandSubtitle: {
       fontSize: 13.5,
       color: theme?.textSecondary || COLORS.textGrey,
-      marginTop: 8,
+      marginTop: 6,
       lineHeight: 20,
       fontWeight: "600",
+      textAlign: "center",
     },
     emailHighlight: {
       color: COLORS.logoGreen,
