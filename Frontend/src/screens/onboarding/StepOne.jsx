@@ -228,7 +228,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Header wrapper holding step indicator, title and subtitle
     headerSection: {
       marginBottom: 28,
-      alignItems: "flex-start",
+      alignItems: "center",
       width: "100%",
     },
     // "STEP 1 OF 4" tracking indicator text
@@ -238,7 +238,7 @@ const getStyles = (theme, isDarkMode = false) =>
       color: COLORS.logoGreen,
       letterSpacing: 2,
       textTransform: "uppercase",
-      textAlign: "left",
+      textAlign: "center",
       marginBottom: 4,
     },
     // Main "Your Baseline" screen title
@@ -248,14 +248,14 @@ const getStyles = (theme, isDarkMode = false) =>
       color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
       marginTop: 2,
-      textAlign: "left",
+      textAlign: "center",
     },
     // Subtitle description below the title
     brandSubtitle: {
       fontSize: 13.5,
       color: theme?.textSecondary || COLORS.textMuted,
       marginTop: 8,
-      textAlign: "left",
+      textAlign: "center",
       lineHeight: 20,
       fontWeight: "600",
     },

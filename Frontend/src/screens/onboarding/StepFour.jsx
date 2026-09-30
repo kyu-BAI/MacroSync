@@ -475,7 +475,7 @@ function getStyles(theme, isDarkMode) {
     },
     headerSection: {
       marginBottom: 24,
-      alignItems: "flex-start",
+      alignItems: "center",
       width: "100%",
     },
     backButton: {
@@ -486,6 +486,7 @@ function getStyles(theme, isDarkMode) {
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 16,
+      alignSelf: "flex-start",
     },
     stepIndicator: {
       fontSize: 11,
@@ -494,6 +495,7 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: 2,
       marginBottom: 4,
       textTransform: "uppercase",
+      textAlign: "center",
     },
     brandTitle: {
       fontSize: 28,
@@ -502,12 +504,14 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: -0.5,
       marginTop: 2,
       marginBottom: 8,
+      textAlign: "center",
     },
     brandSubtitle: {
       fontSize: 13.5,
       fontWeight: "600",
       color: theme?.textSecondary || COLORS.textSecondary,
       lineHeight: 20,
+      textAlign: "center",
     },
     formCard: {
       backgroundColor: theme?.cardBg || COLORS.card,

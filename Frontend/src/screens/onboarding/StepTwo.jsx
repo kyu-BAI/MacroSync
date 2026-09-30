@@ -407,7 +407,7 @@ const getStyles = (theme, isDarkMode = false) =>
     },
     headerSection: {
       marginBottom: 24,
-      alignItems: "flex-start",
+      alignItems: "center",
       width: "100%",
     },
     backButton: {
@@ -418,6 +418,7 @@ const getStyles = (theme, isDarkMode = false) =>
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 16,
+      alignSelf: "flex-start",
     },
     stepIndicator: {
       fontSize: 11,
@@ -425,6 +426,7 @@ const getStyles = (theme, isDarkMode = false) =>
       color: COLORS.logoGreen,
       letterSpacing: 2,
       textTransform: "uppercase",
+      textAlign: "center",
       marginBottom: 4,
     },
     brandTitle: {
@@ -432,6 +434,7 @@ const getStyles = (theme, isDarkMode = false) =>
       fontWeight: "900",
       color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
+      textAlign: "center",
       marginTop: 2,
     },
     brandSubtitle: {
@@ -440,6 +443,7 @@ const getStyles = (theme, isDarkMode = false) =>
       marginTop: 8,
       lineHeight: 20,
       fontWeight: "600",
+      textAlign: "center",
     },
     formCard: {
       backgroundColor: theme?.surface || COLORS.base,

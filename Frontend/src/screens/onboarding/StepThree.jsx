@@ -341,7 +341,7 @@ function getStyles(theme, isDarkMode) {
     // --- HEADER / BRAND SECTION ---
     headerSection: {
       marginBottom: 24,
-      alignItems: "flex-start",
+      alignItems: "center",
       width: "100%",
     },
     backButton: {
@@ -361,7 +361,7 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: 2,
       marginBottom: 4,
       textTransform: "uppercase",
-      textAlign: "left",
+      textAlign: "center",
     },
     brandTitle: {
       fontSize: 32,
@@ -370,13 +370,13 @@ function getStyles(theme, isDarkMode) {
       letterSpacing: -0.5,
       marginTop: 2,
       marginBottom: 8,
-      textAlign: "left",
+      textAlign: "center",
     },
     brandSubtitle: {
       fontSize: 13.5,
       fontWeight: "600",
       color: theme?.textSecondary || COLORS.textSecondary,
-      textAlign: "left",
+      textAlign: "center",
       lineHeight: 20,
     },
 
