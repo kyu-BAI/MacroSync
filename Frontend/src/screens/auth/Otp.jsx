@@ -52,11 +52,16 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
     try {
       const cleanEmail = (email || "").trim();
 
-      const response = await fetch(`${API_URL}/forgot-password`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const response = await fetch(`${API_URL}/resend-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail })
+        body: JSON.stringify({ email: cleanEmail }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         showAlert("OTP Resent", "A new OTP code has been sent to your email.");

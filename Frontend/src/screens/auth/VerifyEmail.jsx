@@ -50,21 +50,14 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
 
     try {
       const cleanEmail = (email || "").trim();
-      const cleanName = (name || "").trim();
-      const cleanPassword = (password || "").trim();
-
-      const endpoint = isLogin ? "/forgot-password" : "/signup";
-      const payload = isLogin 
-        ? { email: cleanEmail }
-        : { email: cleanEmail, name: cleanName, password: cleanPassword };
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetch(`${API_URL}/resend-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ email: cleanEmail }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);

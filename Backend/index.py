@@ -638,6 +638,36 @@ async def forgot_password(data: ForgotPasswordRequest, background_tasks: Backgro
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------- RESEND OTP (SIGNUP / LOGIN / RESET) ----------------
+@app.post("/resend-otp")
+async def resend_otp(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    try:
+        clean_email = data.email.strip().lower()
+        if not clean_email:
+            raise HTTPException(status_code=400, detail="Email is required")
+
+        # Generate a fresh 6-digit numeric OTP code
+        otp_code = str(random.randint(100000, 999999))
+        expiry = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+
+        # Save/update in database
+        supabase_admin.table("password_reset_otps").upsert({
+            "email": clean_email,
+            "otp": otp_code,
+            "expires_at": expiry
+        }).execute()
+
+        # Send in background (0ms latency to mobile client)
+        background_tasks.add_task(send_otp_via_email, clean_email, otp_code, "MacroSync Verification OTP")
+
+        return {"message": "A new verification OTP has been sent to your email."}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print("RESEND OTP ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail="Failed to resend verification OTP")
+
+
 # ---------------- VERIFY RESET OTP ----------------
 @app.post("/verify-reset-otp")
 async def verify_reset_otp(data: VerifyOTPRequest):
