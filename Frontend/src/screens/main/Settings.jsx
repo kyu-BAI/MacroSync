@@ -57,7 +57,7 @@ import { NotificationService } from "../../services/NotificationService";
 import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { clearSavedUserId, clearRememberedCredentials } from "../../services/OfflineStorage";
+import { clearSavedUserId, clearRememberedCredentials, clearRememberedPassword } from "../../services/OfflineStorage";
 import PressableCard from "../../components/PressableCard";
 import PrivacyModal from "../../components/PrivacyModal";
 
@@ -649,6 +649,7 @@ export default function SettingsScreen({
           onPress: async () => {
             try {
               await clearSavedUserId();
+              await clearRememberedPassword();
             } catch (e) {
               console.warn("Logout clearSavedUserId warning:", e);
             }

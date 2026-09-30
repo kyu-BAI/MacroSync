@@ -45,10 +45,10 @@ export default function useAuthLogin({
         if (enabled) {
           const creds = await getRememberedCredentials();
           if (!isMounted) return;
-          if (creds?.email || creds?.password) {
+          if (creds?.email) {
             setForm({
               email: creds.email || "",
-              password: creds.password || "",
+              password: "",
             });
           }
         }
@@ -121,7 +121,7 @@ export default function useAuthLogin({
           userId ? saveUserId(userId) : Promise.resolve(),
           setRememberMe(rememberMe),
           rememberMe
-            ? saveRememberedCredentials(trimmedEmail, form.password)
+            ? saveRememberedCredentials(trimmedEmail)
             : clearRememberedCredentials(),
         ]).catch((err) => {
           if (__DEV__) console.log("Storage persistence error:", err);

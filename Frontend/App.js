@@ -29,6 +29,7 @@ import {
   saveUserId,
   getSavedUserId,
   clearSavedUserId,
+  clearRememberedPassword,
   isRememberMeEnabled,
   addToSyncQueue,
   syncQueueToBackend,
@@ -1172,6 +1173,7 @@ function MainApp() {
   const handleLogoutRoutine = async () => {
     try {
       await clearSavedUserId();
+      await clearRememberedPassword();
     } catch (e) {
       console.warn("Logout error clearing storage:", e);
     }
