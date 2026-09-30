@@ -1,5 +1,5 @@
 // --- IMPORTS ---
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -15,9 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import API_URL from "../config/api";
-import { useCustomAlert } from "../../context/CustomAlertContext";
 import { useTheme } from "../../context/ThemeContext";
+import useVerifyEmail from "../../hooks/useVerifyEmail";
 
 // --- CONFIG & THEME TOKENS ---
 const COLORS = {
@@ -100,136 +99,24 @@ export default function VerifyEmailScreen({
   onVerified,
   onNavigateBack,
 }) {
-  const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
 
-  const [otp, setOtp] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Resend OTP Cooldown State
-  const [isResending, setIsResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  useEffect(() => {
-    let interval = null;
-    if (resendCooldown > 0) {
-      interval = setInterval(() => {
-        setResendCooldown((prev) => prev - 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [resendCooldown]);
-
-  // Resend OTP Handler with 15s Timeout
-  const handleResendOTP = async () => {
-    if (isResending || resendCooldown > 0) return;
-    setIsResending(true);
-
-    try {
-      const cleanEmail = (email || "").trim();
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const response = await fetch(`${API_URL}/resend-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        showAlert("OTP Resent", "A new verification code has been sent to your email.");
-        setResendCooldown(30);
-      } else {
-        const data = await response.json().catch(() => ({}));
-        showAlert("Resend Error", data.detail || "Failed to resend OTP code. Please try again.");
-      }
-    } catch (err) {
-      console.log("RESEND OTP ERROR:", err);
-      showAlert("Network Error", "Cannot connect to backend server. Make sure it is running.");
-    } finally {
-      setIsResending(false);
-    }
-  };
-
-  // OTP Verification Lifecycle with 15s Timeout
-  const handleVerifyOTP = async (codeToVerify) => {
-    const targetOtp = (typeof codeToVerify === "string" ? codeToVerify : otp).trim();
-    if (!targetOtp) {
-      showAlert("Missing OTP", "Please enter the 6-digit OTP code.");
-      return;
-    }
-
-    if (isLoading) return;
-    setIsLoading(true);
-
-    try {
-      const cleanEmail = (email || "").trim();
-      const cleanOtp = targetOtp;
-      const cleanName = (name || "").trim();
-      const cleanPassword = (password || "").trim();
-
-      const endpoint = isLogin ? "/verify-login" : "/verify-signup";
-      const payload = isLogin
-        ? { email: cleanEmail, otp: cleanOtp }
-        : {
-            email: cleanEmail,
-            otp: cleanOtp,
-            name: cleanName,
-            password: cleanPassword,
-          };
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      let data = null;
-      try {
-        data = await response.json();
-      } catch (jsonErr) {
-        data = null;
-      }
-
-      if (response.ok && data && data.user_id) {
-        setIsLoading(false);
-        onVerified(data.user_id, data.is_onboarded);
-      } else {
-        setIsLoading(false);
-        showAlert(
-          "Verification Error",
-          data?.detail || "Invalid or expired OTP code. Please check your email."
-        );
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.log("VERIFY OTP ERROR:", error);
-      showAlert(
-        "Network Error",
-        "Connection timed out or failed to reach the server. Please check your internet connection."
-      );
-    }
-  };
-
-  // Auto-submit on 6th digit
-  const handleOtpChange = (text) => {
-    const numericText = text.replace(/[^0-9]/g, "").slice(0, 6);
-    setOtp(numericText);
-    if (numericText.length === 6) {
-      handleVerifyOTP(numericText);
-    }
-  };
+  const {
+    otp,
+    isLoading,
+    isResending,
+    resendCooldown,
+    handleResendOTP,
+    handleVerifyOTP,
+    handleOtpChange,
+  } = useVerifyEmail({
+    email,
+    name,
+    password,
+    isLogin,
+    onVerified,
+  });
 
   return (
     <SafeAreaView style={styles.container}>
