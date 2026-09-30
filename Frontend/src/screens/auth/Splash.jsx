@@ -1,5 +1,5 @@
 // --- IMPORTS ---
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,25 +10,22 @@ import {
   Easing,
   Image,
 } from "react-native";
-import { useTheme } from "../../context/ThemeContext";
 
 const { width: screenWidth } = Dimensions.get("window");
 
 // Assets
 const LOGO_IMAGE = require("../../images/macrosync_logo.png");
 
-// Theme tokens matching Login.jsx
+// Option A: Signature clean light brand tokens
 const baseColor = "#F8FAFC";
 const logoGreen = "#10B981";
+const textSecondary = "#64748B";
 
 // Spinner configurations
 const TOTAL_SPINNER_DOTS = 8;
 const BASE_SPEED_MS = 900;
 
 export default function SplashScreen({ onAppReady }) {
-  const { theme, isDarkMode } = useTheme();
-  const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
-
   // Entrance animations for branding (GPU driven)
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.92)).current;
@@ -102,8 +99,8 @@ export default function SplashScreen({ onAppReady }) {
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor={theme?.background || baseColor}
+        barStyle="dark-content"
+        backgroundColor={baseColor}
         translucent={true}
       />
 
@@ -170,65 +167,64 @@ export default function SplashScreen({ onAppReady }) {
   );
 }
 
-// --- COMPONENT STYLES ---
-const getStyles = (theme, isDarkMode) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme?.background || baseColor,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    imagePresenterFrame: {
-      width: Math.min(screenWidth * 0.65, 240),
-      aspectRatio: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      marginTop: -60,
-    },
-    logoImageLarge: {
-      width: "100%",
-      height: "100%",
-    },
-    brandSubtitleGroup: {
-      alignItems: "center",
-      marginTop: 8,
-    },
-    brandTitle: {
-      fontSize: 28,
-      fontWeight: "900",
-      color: logoGreen,
-      letterSpacing: -0.5,
-    },
-    brandTagline: {
-      fontSize: 10,
-      fontWeight: "800",
-      color: theme?.textSecondary || (isDarkMode ? "#94A3B8" : "#64748B"),
-      letterSpacing: 1.5,
-      marginTop: 4,
-      textTransform: "uppercase",
-    },
-    spinnerContainerHub: {
-      position: "absolute",
-      bottom: 80,
-      width: 32,
-      height: 32,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    dotSpokeWrapperAnchor: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      justifyContent: "flex-start",
-      alignItems: "center",
-    },
-    pulsingCoreBead: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: logoGreen,
-    },
-  });
+// --- COMPONENT STYLES (OPTION A: FIXED SIGNATURE LIGHT PALETTE) ---
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: baseColor,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePresenterFrame: {
+    width: Math.min(screenWidth * 0.65, 240),
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: -60,
+  },
+  logoImageLarge: {
+    width: "100%",
+    height: "100%",
+  },
+  brandSubtitleGroup: {
+    alignItems: "center",
+    marginTop: 8,
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: logoGreen,
+    letterSpacing: -0.5,
+  },
+  brandTagline: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: textSecondary,
+    letterSpacing: 1.5,
+    marginTop: 4,
+    textTransform: "uppercase",
+  },
+  spinnerContainerHub: {
+    position: "absolute",
+    bottom: 80,
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dotSpokeWrapperAnchor: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  pulsingCoreBead: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: logoGreen,
+  },
+});
