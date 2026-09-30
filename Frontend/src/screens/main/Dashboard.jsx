@@ -663,23 +663,32 @@ export default function DashboardScreen({
         ? "maintain"
         : "fatloss");
 
+  // Goal Completion Check:
+  // A goal is only achieved when:
+  // 1. Goal is NOT "maintain" (maintenance is an ongoing habit, not a modal popup trigger)
+  // 2. A real difference exists between goal weight and starting weight (>= 0.5 units)
+  // 3. User has actually progressed away from starting baseline (not still at day-1 weight)
+  // 4. Current weight has reached or surpassed target goal weight in the goal direction
   const isGoalAchieved = useMemo(() => {
+    if (activeGoalType === "maintain") return false;
     if (globalLoggedWeight === null) return false;
-    if (
-      Math.abs(currentWeight - goalWeight) <= 0.1 ||
-      currentWeight === goalWeight
-    )
-      return true;
-    if (activeGoalType === "muscle" && currentWeight >= goalWeight) return true;
-    if (activeGoalType === "fatloss" && currentWeight <= goalWeight)
-      return true;
-    if (
-      activeGoalType === "maintain" &&
-      Math.abs(currentWeight - goalWeight) <= 0.2
-    )
-      return true;
+
+    const totalDiff = Math.abs(goalWeight - startingWeight);
+    if (totalDiff < 0.5) return false;
+
+    // Must not be identical to starting weight (user must have made real progress)
+    if (Math.abs(currentWeight - startingWeight) < 0.2) return false;
+
+    if (activeGoalType === "muscle") {
+      return goalWeight > startingWeight && currentWeight >= goalWeight && currentWeight > startingWeight;
+    }
+
+    if (activeGoalType === "fatloss") {
+      return goalWeight < startingWeight && currentWeight <= goalWeight && currentWeight < startingWeight;
+    }
+
     return false;
-  }, [globalLoggedWeight, currentWeight, goalWeight, activeGoalType]);
+  }, [globalLoggedWeight, currentWeight, goalWeight, startingWeight, activeGoalType]);
 
   useEffect(() => {
     if (isGoalAchieved && !goalReachedAlertShown) {
@@ -1046,11 +1055,18 @@ export default function DashboardScreen({
 
   const executeWeightSave = async (parsed) => {
     if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
+    const totalDiff = Math.abs(goalWeight - startingWeight);
     const isNewWeightAchieved =
-      Math.abs(parsed - goalWeight) <= 0.1 ||
-      (activeGoalType === "muscle" && parsed >= goalWeight) ||
-      (activeGoalType === "fatloss" && parsed <= goalWeight);
-    if (!isNewWeightAchieved && setGoalReachedAlertShown) {
+      activeGoalType !== "maintain" &&
+      totalDiff >= 0.5 &&
+      Math.abs(parsed - startingWeight) >= 0.2 &&
+      ((activeGoalType === "muscle" && goalWeight > startingWeight && parsed >= goalWeight) ||
+       (activeGoalType === "fatloss" && goalWeight < startingWeight && parsed <= goalWeight));
+
+    if (isNewWeightAchieved) {
+      if (setGoalReachedAlertShown) setGoalReachedAlertShown(false);
+      setShowNewGoalModal(true);
+    } else if (setGoalReachedAlertShown) {
       setGoalReachedAlertShown(false);
     }
     if (setWeightHistory) {

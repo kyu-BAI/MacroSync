@@ -1136,6 +1136,7 @@ function MainApp() {
             }));
           }
           if (userId) saveUserId(userId);
+          setGoalReachedAlertShown(true);
           clearDashboardCache().then(() => {
             fetchDashboardData(userId);
           });
