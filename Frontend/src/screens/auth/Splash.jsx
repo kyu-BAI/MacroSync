@@ -1,87 +1,148 @@
-import React, { useEffect, useRef } from 'react';
-import { Image, View, StatusBar, Dimensions, Animated, Easing,
-  StyleSheet
-} from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+// --- IMPORTS ---
+import React, { useEffect, useRef, useMemo } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  StatusBar,
+  Dimensions,
+  Animated,
+  Easing,
+  Image,
+} from "react-native";
+import { useTheme } from "../../context/ThemeContext";
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get("window");
 
-// The spinner consists of exactly 8 dots spaced out at 45-degree rotations
+// Assets
+const LOGO_IMAGE = require("../../images/macrosync_logo.png");
+
+// Theme tokens matching Login.jsx
+const baseColor = "#F8FAFC";
+const logoGreen = "#10B981";
+
+// Spinner configurations
 const TOTAL_SPINNER_DOTS = 8;
-const BASE_SPEED_MS = 900; // Derived directly from --uib-speed: .9s
+const BASE_SPEED_MS = 900;
 
 export default function SplashScreen({ onAppReady }) {
-  const { theme } = useTheme();
-  const isDarkMode = false;
-  const styles = getStyles(theme, false);
-  // Generates 8 independent animation reference tracking timelines
+  const { theme, isDarkMode } = useTheme();
+  const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
+
+  // Entrance animations for branding (GPU driven)
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.92)).current;
+  const contentFade = useRef(new Animated.Value(0)).current;
+
+  // Generates 8 independent animation timelines for the spinner
   const dotTimelines = useRef(
     Array.from({ length: TOTAL_SPINNER_DOTS }, () => new Animated.Value(0))
   ).current;
 
   useEffect(() => {
-    // Replicates the CSS @keyframes pulse0112 calculation curve
-    const executePulseLoop = (timelineNode, dotIndex) => {
-      // Replicates the specific CSS negative animation-delay multipliers
+    // 1. Logo & Content Entrance Animation (60 FPS Native GPU)
+    Animated.parallel([
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 30,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentFade, {
+        toValue: 1,
+        duration: 600,
+        delay: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // 2. Pulse animation loop for 8 spinner dots (GPU Native Driver)
+    const activeAnimations = dotTimelines.map((timelineNode, dotIndex) => {
       const delayOffset = dotIndex * (BASE_SPEED_MS / TOTAL_SPINNER_DOTS);
 
-      Animated.loop(
+      const anim = Animated.loop(
         Animated.sequence([
           Animated.delay(delayOffset),
           Animated.timing(timelineNode, {
-            toValue: 1, // Progressing to 50% marker (Scale: 1, Opacity: 1)
+            toValue: 1,
             duration: (BASE_SPEED_MS * 1.111) / 2,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
           Animated.timing(timelineNode, {
-            toValue: 0, // Returning to 100% marker (Scale: 0, Opacity: 0.3)
+            toValue: 0,
             duration: (BASE_SPEED_MS * 1.111) / 2,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ])
-      ).start();
-    };
+      );
+      anim.start();
+      return anim;
+    });
 
-    // Spin up all 8 animated tracking nodes concurrently
-    dotTimelines.forEach((node, index) => executePulseLoop(node, index));
-
-    // Automated session transition routing trigger
+    // 3. Smooth transition to main app flow
     const bootTimer = setTimeout(() => {
-      onAppReady();
-    }, 2500);
+      if (onAppReady) onAppReady();
+    }, 1800);
 
-    return () => clearTimeout(bootTimer);
-  }, [onAppReady, dotTimelines]);
+    return () => {
+      clearTimeout(bootTimer);
+      activeAnimations.forEach((anim) => anim.stop());
+    };
+  }, [onAppReady, dotTimelines, logoOpacity, logoScale, contentFade]);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme?.background || baseColor} translucent={true} />
-      
-      {/* Central Brand Canvas Viewport */}
-      <View style={styles.imagePresenterFrame}>
-        <Image 
-          source={require('../../images/macrosync_logo.png')} 
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={theme?.background || baseColor}
+        translucent={true}
+      />
+
+      {/* Central Brand Frame */}
+      <Animated.View
+        style={[
+          styles.imagePresenterFrame,
+          {
+            opacity: logoOpacity,
+            transform: [{ scale: logoScale }],
+          },
+        ]}
+      >
+        <Image
+          source={LOGO_IMAGE}
           style={styles.logoImageLarge}
           resizeMode="contain"
         />
-      </View>
+      </Animated.View>
 
-      {/* --- TRANSLATED COMPACT UIVERSE DOT SPINNER ENGINE --- */}
+      {/* Brand Subtitle Tagline */}
+      <Animated.View style={[styles.brandSubtitleGroup, { opacity: contentFade }]}>
+        <Text style={styles.brandTitle}>MacroSync</Text>
+        <Text style={styles.brandTagline}>SMART NUTRITION & MACRO TRACKING</Text>
+      </Animated.View>
+
+      {/* Modern Compact Dot Spinner Hub */}
       <View style={styles.spinnerContainerHub}>
         {dotTimelines.map((timelineNode, index) => {
-          const rotationAngle = index * 45; // 0deg, 45deg, 90deg, 135deg, etc.
+          const rotationAngle = index * 45;
 
-          // Map linear progress node configurations straight to CSS properties
           const scaleMatrix = timelineNode.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.2, 1], // scale(0) to scale(1)
+            outputRange: [0.25, 1],
           });
 
           const opacityMatrix = timelineNode.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.3, 1], // opacity: 0.3 fallback to 1
+            outputRange: [0.25, 1],
           });
 
           return (
@@ -92,7 +153,6 @@ export default function SplashScreen({ onAppReady }) {
                 { transform: [{ rotate: `${rotationAngle}deg` }] },
               ]}
             >
-              {/* Pulsing Core Vector Dot */}
               <Animated.View
                 style={[
                   styles.pulsingCoreBead,
@@ -111,51 +171,64 @@ export default function SplashScreen({ onAppReady }) {
 }
 
 // --- COMPONENT STYLES ---
-// Flat Design Tokens
-const baseColor = '#F8FAFC';
-const logoGreen = '#10B981';
-
-const getStyles = (theme, isDarkMode = false) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme?.background || baseColor,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imagePresenterFrame: {
-    width: screenWidth * 0.75,
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -40, // Pulled up slightly to balance out the lower viewport spacing
-  },
-  logoImageLarge: {
-    width: '100%',
-    height: '100%',
-  },
-  
-  // --- SPINNER ENGINE SPECIFICATION LAYOUTS ---
-  spinnerContainerHub: {
-    position: 'absolute',
-    bottom: 100,
-    width: 34, // Optimized from 45 down to 34 for a subtle, professional fit
-    height: 34,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dotSpokeWrapperAnchor: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'flex-start', // Anchors the nested dot straight to the outer edge vector
-    alignItems: 'center',
-  },
-  pulsingCoreBead: {
-    width: 6.5,
-    height: 6.5,
-    borderRadius: 3.25,
-    backgroundColor: logoGreen,
-  },
-});
+const getStyles = (theme, isDarkMode) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme?.background || baseColor,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    imagePresenterFrame: {
+      width: Math.min(screenWidth * 0.65, 240),
+      aspectRatio: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: -60,
+    },
+    logoImageLarge: {
+      width: "100%",
+      height: "100%",
+    },
+    brandSubtitleGroup: {
+      alignItems: "center",
+      marginTop: 8,
+    },
+    brandTitle: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: logoGreen,
+      letterSpacing: -0.5,
+    },
+    brandTagline: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: theme?.textSecondary || (isDarkMode ? "#94A3B8" : "#64748B"),
+      letterSpacing: 1.5,
+      marginTop: 4,
+      textTransform: "uppercase",
+    },
+    spinnerContainerHub: {
+      position: "absolute",
+      bottom: 80,
+      width: 32,
+      height: 32,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    dotSpokeWrapperAnchor: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      justifyContent: "flex-start",
+      alignItems: "center",
+    },
+    pulsingCoreBead: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: logoGreen,
+    },
+  });
