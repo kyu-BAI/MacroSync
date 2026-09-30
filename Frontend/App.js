@@ -756,9 +756,30 @@ function MainApp() {
       const savedId = await getSavedUserId();
       if (savedId && typeof savedId === "string" && savedId.trim() !== "") {
         setUserId(savedId);
-        await fetchDashboardData(savedId);
-        setCurrentScreen("DASHBOARD");
-        return;
+        let dashboardData = null;
+        try {
+          dashboardData = await fetchDashboardData(savedId);
+        } catch (fetchErr) {
+          console.log("Error fetching dashboard during ready check:", fetchErr);
+        }
+
+        // Verify if user has completed onboarding before directing to DASHBOARD
+        const isUserOnboarded =
+          dashboardData?.is_onboarded === true ||
+          (dashboardData?.profile?.currentWeight !== undefined &&
+            dashboardData?.profile?.currentWeight !== null &&
+            dashboardData?.profile?.height !== undefined &&
+            dashboardData?.profile?.height !== null);
+
+        if (isUserOnboarded) {
+          setCurrentScreen("DASHBOARD");
+          return;
+        } else {
+          // Incomplete onboarding metrics -> must fill out onboarding process first
+          clearDashboardCache().catch(() => {});
+          setCurrentScreen("STEP_ONE");
+          return;
+        }
       }
     } catch (e) {
       console.log("Error during auto-login check:", e);
@@ -780,7 +801,9 @@ function MainApp() {
         onLoginSuccess={(loggedInUserId, isOnboarded, userObj) => {
           if (loggedInUserId) {
             setUserId(loggedInUserId);
-            saveUserId(loggedInUserId);
+            if (isOnboarded === true) {
+              saveUserId(loggedInUserId);
+            }
             if (userObj && (userObj.name || userObj.email)) {
               setUserProfile((prev) => ({
                 ...prev,
@@ -840,10 +863,10 @@ function MainApp() {
           setGoogleIsLoginOtp(false); // Normal sign up uses signup verification
           if (newUserId) {
             setUserId(newUserId);
-            saveUserId(newUserId);
             setUserProfile({ name: newName || "User", email: newEmail || "" });
           }
           if (isOnboarded === true) {
+            if (newUserId) saveUserId(newUserId);
             setCurrentScreen("DASHBOARD");
           } else if (newPassword === null) {
             setCurrentScreen("STEP_ONE");
@@ -868,8 +891,8 @@ function MainApp() {
         onVerified={(newUserId, isOnboarded) => {
           if (!newUserId) return;
           setUserId(newUserId);
-          saveUserId(newUserId);
           if (isOnboarded === true) {
+            saveUserId(newUserId);
             getCachedDashboardData(newUserId)
               .then((cached) => {
                 if (cached && cached.data) applyDashboardData(cached.data);

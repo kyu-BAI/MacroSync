@@ -1491,7 +1491,10 @@ async def get_dashboard_data(user_id: str):
         else:
             weight_history = [round(float(w), 1) for w in raw_history]
 
+        is_onboarded = bool(user.get("weight_kg") is not None and user.get("height_cm") is not None)
+
         return {
+            "is_onboarded": is_onboarded,
             "profile": {
                 "name": user.get("name", "User"),
                 "email": user.get("email", ""),

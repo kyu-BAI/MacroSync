@@ -1,273 +1,242 @@
-import React, { useState } from "react";
+// --- IMPORTS ---
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   Text,
   View,
-  TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator,
   Image,
-  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Eye,
-  EyeOff,
-  User,
-  Mail,
-  Lock,
-  AlertCircle,
-  Check,
-  X,
-} from "lucide-react-native";
-import API_URL from "../config/api";
-import { useCustomAlert } from "../../context/CustomAlertContext";
+import { User, Mail, Lock, Check, X, AlertCircle } from "lucide-react-native";
+
 import { useTheme } from "../../context/ThemeContext";
-import { saveUserId, setRememberMe, saveRememberedGoogleEmail } from "../../services/OfflineStorage";
+import useAuthSignUp from "../../hooks/useAuthSignUp";
+import InputField from "../../components/InputField";
 import GoogleAccountModal from "../../components/GoogleAccountModal";
 import PrivacyModal from "../../components/PrivacyModal";
 
+// Assets
+const GOOGLE_ICON = require("../../images/google.png");
+
+// --- LIGHTWEIGHT SUBCOMPONENTS ---
+
+// Primary registration submit button
+function PrimaryButton({ onPress, isLoading, disabled, styles }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={disabled || isLoading}
+      onPress={onPress}
+      style={[
+        styles.buttonBase,
+        styles.buttonUnpressed,
+        styles.signupButtonSpacing,
+      ]}
+    >
+      {isLoading ? (
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>
+            Creating Account...
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.buttonText}>Get Started</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// Google OAuth trigger button
+function GoogleSignUpButton({ onPress, isLoading, disabled, styles }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={disabled || isLoading}
+      onPress={onPress}
+      style={[styles.buttonBase, styles.googleButtonBase, styles.googleButtonUnpressed]}
+    >
+      {isLoading ? (
+        <ActivityIndicator size="small" color="#64748B" />
+      ) : (
+        <View style={styles.googleContentRow}>
+          <Image
+            source={GOOGLE_ICON}
+            style={styles.googleIconImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.googleButtonText}>Sign up with Google</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// Live password criteria checklist
+function PasswordCriteriaList({ password, showWarning, criteria, styles }) {
+  const isAllValid = criteria.every((item) => item.valid);
+
+  // Auto-remove all text warnings once confirmed valid (or if field is empty and not in error)
+  if (isAllValid || (!password.length && !showWarning)) return null;
+
+  return (
+    <View style={styles.criteriaContainer}>
+      {showWarning ? (
+        <View style={styles.warningHeaderRow}>
+          <AlertCircle color="#EF4444" size={14} style={styles.warningHeaderIcon} />
+          <Text style={styles.criteriaHeaderWarning}>Password must contain:</Text>
+        </View>
+      ) : null}
+      {criteria.map((item, index) => {
+        const isSuccess = item.valid;
+        const isUnmet = !item.valid;
+        return (
+          <View key={index} style={styles.criteriaRow}>
+            {isSuccess ? (
+              <Check color="#10B981" size={16} style={styles.criteriaIcon} />
+            ) : (
+              <X
+                color={isUnmet ? "#EF4444" : "#CBD5E1"}
+                size={16}
+                style={styles.criteriaIcon}
+              />
+            )}
+            <Text
+              style={[
+                styles.criteriaText,
+                isSuccess && styles.criteriaTextSuccess,
+                isUnmet && styles.criteriaTextError,
+              ]}
+            >
+              {item.label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Mandatory policy agreement checkbox row
+function PolicyAgreementCheckbox({
+  agreeToTerms,
+  showTermsWarning,
+  isLoading,
+  onToggle,
+  onOpenTerms,
+  onOpenPrivacy,
+  onOpenMedical,
+  styles,
+}) {
+  return (
+    <View style={styles.checkboxContainer}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        disabled={isLoading}
+        onPress={onToggle}
+        style={styles.checkboxRow}
+      >
+        <View
+          style={[
+            styles.checkboxBox,
+            agreeToTerms && styles.checkboxBoxChecked,
+            showTermsWarning && styles.checkboxBoxError,
+          ]}
+        >
+          {agreeToTerms ? (
+            <Check color="#FFFFFF" size={13} strokeWidth={3} />
+          ) : null}
+        </View>
+        <Text style={styles.checkboxLabel}>
+          I have read and agree to MacroSync's{" "}
+          <Text style={styles.policyLink} onPress={onOpenTerms}>
+            Terms of Service
+          </Text>
+          {", "}
+          <Text style={styles.policyLink} onPress={onOpenPrivacy}>
+            Privacy Policy (RA 10173)
+          </Text>
+          {", & "}
+          <Text style={styles.policyLink} onPress={onOpenMedical}>
+            Medical Disclaimer
+          </Text>
+          .
+        </Text>
+      </TouchableOpacity>
+
+      {showTermsWarning ? (
+        <View style={styles.inlineWarningRow}>
+          <AlertCircle color="#EF4444" size={13} style={styles.warningIcon} />
+          <Text style={styles.inlineWarningText}>
+            Please read and agree to the policies to continue
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// --- MAIN SIGNUP SCREEN ---
+
 export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
-  const { showAlert: triggerCustomAlert } = useCustomAlert();
-  const { theme } = useTheme();
-  const isDarkMode = false;
-  const styles = getStyles(theme, false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Theme & screen styling
+  const { theme, isDarkMode } = useTheme();
+  const styles = useMemo(() => getStyles(theme), [theme]);
   const [secureTextEntry, setSecureTextEntry] = useState(true);
-  const [isPressed, setIsPressed] = useState(false);
-  const [nameTouched, setNameTouched] = useState(false);
-  const [emailTouched, setEmailTouched] = useState(false);
-  const [passwordTouched, setPasswordTouched] = useState(false);
-  const [termsTouched, setTermsTouched] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasReadPolicies, setHasReadPolicies] = useState(false);
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
-  const [privacyInitialTab, setPrivacyInitialTab] = useState('terms');
 
-  // Google Sign In States
-  const [isGooglePressed, setIsGooglePressed] = useState(false);
-  const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
+  // Authentication hook: form state, validations, policy modals & submit handlers
+  const {
+    form,
+    agreeToTerms,
+    isLoading,
+    isSignupLoading,
+    isGoogleLoading,
+    isGoogleModalVisible,
+    privacyModalVisible,
+    privacyInitialTab,
+    showNameWarning,
+    showEmailWarning,
+    showPasswordWarning,
+    showTermsWarning,
+    passwordCriteria,
+    getNameErrorMessage,
+    getEmailErrorMessage,
+    handleNameChange,
+    handleNameBlur,
+    handleEmailChange,
+    handleEmailBlur,
+    handlePasswordChange,
+    handlePasswordBlur,
+    handleToggleAgreeTerms,
+    handleOpenTerms,
+    handleOpenPrivacy,
+    handleOpenMedical,
+    handleClosePrivacyModal,
+    handleAgreePolicies,
+    handleOpenGoogleModal,
+    handleCloseGoogleModal,
+    handleSignup,
+    handleGoogleAccountSelect,
+  } = useAuthSignUp({ onSignUpSuccess });
 
-  const showAlert = (title, message, buttons = []) => {
-    triggerCustomAlert(title, message, buttons);
-  };
-
-  // Username validation rules
-  const isNameEmpty = !name.trim();
-  const hasMinNameLength = name.trim().length >= 3;
-  const hasValidNameChars = /^[a-zA-Z0-9_\s]+$/.test(name.trim());
-  const isNameValid = !isNameEmpty && hasMinNameLength && hasValidNameChars;
-  const showNameWarning = nameTouched && !isNameValid;
-
-  const getNameErrorMessage = () => {
-    if (isNameEmpty) return "Username is required";
-    if (!hasMinNameLength) return "Username must be at least 3 characters";
-    if (!hasValidNameChars) return "Only letters, numbers, spaces, or underscores allowed";
-    return "";
-  };
-
-  // Email / Gmail validation rules
-  const isEmailEmpty = !email.trim();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isEmailValid = !isEmailEmpty && emailRegex.test(email.trim());
-  const showEmailWarning = emailTouched && !isEmailValid;
-
-  const getEmailErrorMessage = () => {
-    if (isEmailEmpty) return "Email address is required";
-    if (!email.includes("@")) return "Email must contain '@' (e.g. name@gmail.com)";
-    if (!isEmailValid) return "Please enter a valid email address (e.g. name@gmail.com)";
-    return "";
-  };
-
-  // Password validation rules
-  const hasLowercase = /[a-z]/.test(password);
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  const hasMinLength = password.length >= 8;
-
-  const isPasswordValid =
-    hasLowercase &&
-    hasUppercase &&
-    hasNumber &&
-    hasSpecialChar &&
-    hasMinLength;
-
-  const showPasswordWarning = passwordTouched && !isPasswordValid;
-
-  const passwordCriteria = [
-    {
-      label: "Lowercase & uppercase letters",
-      valid: hasLowercase && hasUppercase,
-    },
-    { label: "At least 1 number", valid: hasNumber },
-    { label: "At least 1 special character", valid: hasSpecialChar },
-    { label: "Minimum 8 characters", valid: hasMinLength },
-  ];
-
-  // Policy agreement validation rules
-  const isTermsValid = hasReadPolicies && agreeToTerms;
-  const showTermsWarning = termsTouched && !isTermsValid;
-
-  const handleSignup = async () => {
-    setNameTouched(true);
-    setEmailTouched(true);
-    setPasswordTouched(true);
-    setTermsTouched(true);
-
-    if (!isNameValid || !isEmailValid || !isPasswordValid || !isTermsValid) {
-      return;
-    }
-
-    if (isLoading) return;
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          password: password.trim(),
-        }),
-      });
-
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (parseErr) {
-        data = {};
-      }
-
-      if (response.ok) {
-        await saveUserId(data.user_id);
-        await setRememberMe(true);
-        onSignUpSuccess(
-          data.user_id,
-          name.trim(),
-          email.trim(),
-          password.trim(),
-        );
-      } else {
-        setIsLoading(false);
-        showAlert(
-          "Registration Error",
-          data.detail || "Failed to create account. Please try again.",
-        );
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.log("SIGNUP ERROR:", error);
-      showAlert(
-        "Registration Error",
-        "Cannot connect to backend server. Make sure it is running and your IP is correct.",
-      );
-    }
-  };
-
-  const handleGoogleSignIn = () => {
-    if (isLoading) return;
-    if (!isTermsValid) {
-      setTermsTouched(true);
-      setPrivacyInitialTab('terms');
-      setPrivacyModalVisible(true);
-      return;
-    }
-    setIsGoogleModalVisible(true);
-  };
-
-  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
-    setIsLoading(true);
-    setIsGooglePressed(true);
-
-    try {
-      const response = await fetch(`${API_URL}/auth/google-signin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: selectedEmail,
-          name: selectedName,
-        }),
-      });
-
-      const data = await response.json();
-      console.log("Google Sign Up response:", data);
-
-      setIsLoading(false);
-      setIsGooglePressed(false);
-      setIsGoogleModalVisible(false);
-
-      if (response.ok && data.success) {
-        const uid = data.user_id || data.user?.id;
-        if (uid) {
-          await saveUserId(uid);
-          await setRememberMe(rememberMe);
-          if (rememberMe && selectedEmail) {
-            await saveRememberedGoogleEmail(selectedEmail);
-          }
-        }
-        if (data.is_new_user) {
-          // First time Google account -> follow verification and onboarding process
-          onSignUpSuccess(
-            uid,
-            selectedName,
-            selectedEmail,
-            data.temp_password,
-            false
-          );
-        } else if (data.is_onboarded === true) {
-          // Registered & onboarded -> redirect directly to main dashboard
-          onSignUpSuccess(
-            uid,
-            selectedName,
-            selectedEmail,
-            null,
-            true
-          );
-        } else {
-          // Registered but incomplete onboarding -> redirect to onboarding STEP_ONE
-          onSignUpSuccess(
-            uid,
-            selectedName,
-            selectedEmail,
-            null,
-            false
-          );
-        }
-      } else {
-        showAlert(
-          "Registration Error",
-          data.detail || "Google authentication failed. Please try again.",
-        );
-      }
-    } catch (error) {
-      setIsLoading(false);
-      setIsGooglePressed(false);
-      setIsGoogleModalVisible(false);
-      console.log("GOOGLE SIGNUP ERROR:", error);
-      showAlert(
-        "Registration Error",
-        "Cannot connect to backend server. Check your network.",
-      );
-    }
-  };
+  // Toggle password visibility
+  const handleToggleSecureTextEntry = useCallback(() => {
+    setSecureTextEntry((prev) => !prev);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme?.background || baseColor} />
+      {/* Top Status Bar */}
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={theme?.background || baseColor}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -277,7 +246,7 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Section */}
+          {/* Header: Logo & Tagline */}
           <View style={styles.headerSection}>
             <Text style={styles.brandTitle}>Create Account</Text>
             <Text style={styles.brandSubtitle}>
@@ -288,325 +257,105 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
 
           {/* Form Card Group */}
           <View style={styles.formCard}>
-            {/* Username Field Group */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <View
-                style={[
-                  styles.flatInputField,
-                  styles.fieldRow,
-                  showNameWarning && styles.inputWarningBorder,
-                ]}
-              >
-                <User
-                  color={showNameWarning ? "#EF4444" : "#94A3B8"}
-                  size={20}
-                  style={styles.leadingIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your username"
-                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    if (!nameTouched) setNameTouched(true);
-                  }}
-                  onBlur={() => setNameTouched(true)}
-                  autoCorrect={false}
-                />
-              </View>
+            {/* Username Field */}
+            <InputField
+              label="Username"
+              Icon={User}
+              value={form.name}
+              onChangeText={handleNameChange}
+              onBlur={handleNameBlur}
+              placeholder="Enter your username"
+              placeholderTextColor={theme?.placeholderText || "#94A3B8"}
+              editable={!isLoading}
+              showWarning={showNameWarning}
+              errorMessage={getNameErrorMessage()}
+              styles={styles}
+            />
 
-              {/* Inline Username Warning */}
-              {showNameWarning && (
-                <View style={styles.inlineWarningRow}>
-                  <AlertCircle color="#EF4444" size={13} style={{ marginRight: 6 }} />
-                  <Text style={styles.inlineWarningText}>{getNameErrorMessage()}</Text>
-                </View>
-              )}
-            </View>
+            {/* Email Field */}
+            <InputField
+              label="Email Address"
+              Icon={Mail}
+              value={form.email}
+              onChangeText={handleEmailChange}
+              onBlur={handleEmailBlur}
+              placeholder="Enter your email"
+              placeholderTextColor={theme?.placeholderText || "#94A3B8"}
+              keyboardType="email-address"
+              editable={!isLoading}
+              showWarning={showEmailWarning}
+              errorMessage={getEmailErrorMessage()}
+              styles={styles}
+            />
 
-            {/* Email Field Group */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View
-                style={[
-                  styles.flatInputField,
-                  styles.fieldRow,
-                  showEmailWarning && styles.inputWarningBorder,
-                ]}
-              >
-                <Mail
-                  color={showEmailWarning ? "#EF4444" : "#94A3B8"}
-                  size={20}
-                  style={styles.leadingIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (!emailTouched) setEmailTouched(true);
-                  }}
-                  onBlur={() => setEmailTouched(true)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
+            {/* Password Field */}
+            <InputField
+              label="Password"
+              Icon={Lock}
+              value={form.password}
+              onChangeText={handlePasswordChange}
+              onBlur={handlePasswordBlur}
+              placeholder="Create a password"
+              placeholderTextColor={theme?.placeholderText || "#94A3B8"}
+              isPassword
+              isSecure={secureTextEntry}
+              onToggleSecure={handleToggleSecureTextEntry}
+              editable={!isLoading}
+              showWarning={showPasswordWarning}
+              styles={styles}
+            />
 
-              {/* Inline Email Warning */}
-              {showEmailWarning && (
-                <View style={styles.inlineWarningRow}>
-                  <AlertCircle color="#EF4444" size={13} style={{ marginRight: 6 }} />
-                  <Text style={styles.inlineWarningText}>{getEmailErrorMessage()}</Text>
-                </View>
-              )}
-            </View>
+            {/* Live Password Criteria Checklist */}
+            <PasswordCriteriaList
+              password={form.password}
+              showWarning={showPasswordWarning}
+              criteria={passwordCriteria}
+              styles={styles}
+            />
 
-            {/* Password Field Group */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View
-                style={[
-                  styles.flatInputField,
-                  styles.fieldRow,
-                  showPasswordWarning && styles.inputWarningBorder,
-                ]}
-              >
-                <Lock
-                  color={showPasswordWarning ? "#EF4444" : "#94A3B8"}
-                  size={20}
-                  style={styles.leadingIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Create a password"
-                  placeholderTextColor={theme?.placeholderText || "#94A3B8"}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (!passwordTouched) setPasswordTouched(true);
-                  }}
-                  onBlur={() => setPasswordTouched(true)}
-                  secureTextEntry={secureTextEntry}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  style={styles.toggleButton}
-                  onPress={() => setSecureTextEntry(!secureTextEntry)}
-                  activeOpacity={0.6}
-                >
-                  {secureTextEntry ? (
-                    <EyeOff
-                      color={showPasswordWarning ? "#EF4444" : "#94A3B8"}
-                      size={22}
-                    />
-                  ) : (
-                    <Eye
-                      color={showPasswordWarning ? "#EF4444" : "#10B981"}
-                      size={22}
-                    />
-                  )}
-                </TouchableOpacity>
-              </View>
+            {/* Policy Agreement Checkbox */}
+            <PolicyAgreementCheckbox
+              agreeToTerms={agreeToTerms}
+              showTermsWarning={showTermsWarning}
+              isLoading={isLoading}
+              onToggle={handleToggleAgreeTerms}
+              onOpenTerms={handleOpenTerms}
+              onOpenPrivacy={handleOpenPrivacy}
+              onOpenMedical={handleOpenMedical}
+              styles={styles}
+            />
 
-              {/* Live Password Criteria Checklist (only shown when user types or on error) */}
-              {(password.length > 0 || showPasswordWarning) && (
-                <View style={styles.criteriaContainer}>
-                  {showPasswordWarning && (
-                    <View style={styles.warningHeaderRow}>
-                      <AlertCircle color="#EF4444" size={14} />
-                      <Text style={styles.criteriaHeaderWarning}>
-                        Password must contain:
-                      </Text>
-                    </View>
-                  )}
-                  {passwordCriteria.map((item, index) => {
-                    const isSuccess = item.valid;
-                    const isUnmet = !item.valid;
-                    return (
-                      <View key={index} style={styles.criteriaRow}>
-                        {isSuccess ? (
-                          <Check
-                            color="#10B981"
-                            size={16}
-                            style={styles.criteriaIcon}
-                          />
-                        ) : (
-                          <X
-                            color={isUnmet ? "#EF4444" : "#CBD5E1"}
-                            size={16}
-                            style={styles.criteriaIcon}
-                          />
-                        )}
-                        <Text
-                          style={[
-                            styles.criteriaText,
-                            isSuccess && styles.criteriaTextSuccess,
-                            isUnmet && styles.criteriaTextError,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {/* MANDATORY AGREEMENT CHECKBOX */}
-            <View style={styles.checkboxContainer}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  if (!hasReadPolicies) {
-                    setPrivacyInitialTab('terms');
-                    setPrivacyModalVisible(true);
-                  } else {
-                    setAgreeToTerms(!agreeToTerms);
-                  }
-                }}
-                style={styles.checkboxRow}
-              >
-                <View
-                  style={[
-                    styles.checkboxBox,
-                    agreeToTerms && styles.checkboxBoxChecked,
-                    showTermsWarning && styles.checkboxBoxError,
-                  ]}
-                >
-                  {agreeToTerms && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
-                </View>
-                <Text style={styles.checkboxLabel}>
-                  I have read and agree to MacroSync's{' '}
-                  <Text
-                    style={styles.policyLink}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setPrivacyInitialTab('terms');
-                      setPrivacyModalVisible(true);
-                    }}
-                  >
-                    Terms of Service
-                  </Text>
-                  {', '}
-                  <Text
-                    style={styles.policyLink}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setPrivacyInitialTab('privacy');
-                      setPrivacyModalVisible(true);
-                    }}
-                  >
-                    Privacy Policy (RA 10173)
-                  </Text>
-                  {', & '}
-                  <Text
-                    style={styles.policyLink}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setPrivacyInitialTab('medical');
-                      setPrivacyModalVisible(true);
-                    }}
-                  >
-                    Medical Disclaimer
-                  </Text>
-                  .
-                </Text>
-              </TouchableOpacity>
-
-              {showTermsWarning && (
-                <View style={styles.inlineWarningRow}>
-                  <AlertCircle color="#EF4444" size={13} style={{ marginRight: 6 }} />
-                  <Text style={styles.inlineWarningText}>
-                    Please read and agree to the policies to continue
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Get Started Button */}
-            <TouchableOpacity
-              activeOpacity={1}
-              disabled={isLoading}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
+            {/* Get Started Submit Button */}
+            <PrimaryButton
               onPress={handleSignup}
-              style={[
-                styles.buttonBase,
-                isPressed ? styles.buttonPressed : styles.buttonUnpressed,
-                { marginTop: 10 },
-              ]}
-            >
-              {isLoading ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={[styles.buttonText, { opacity: 0.95 }]}>Creating Account...</Text>
-                </View>
-              ) : (
-                <Text
-                  style={[
-                    styles.buttonText,
-                    isPressed && styles.buttonTextPressed,
-                  ]}
-                >
-                  Get Started
-                </Text>
-              )}
-            </TouchableOpacity>
+              isLoading={isSignupLoading}
+              disabled={isLoading}
+              styles={styles}
+            />
 
-            {/* INTER-STAGE VISUAL DIVIDER */}
+            {/* Inter-stage "Or" Divider */}
             <View style={styles.dividerContainer}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>Or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* PREMIUM GOOGLE TRIGGER COMPONENT BUTTON */}
-            <TouchableOpacity
-              activeOpacity={1}
+            {/* Google Sign Up Button */}
+            <GoogleSignUpButton
+              onPress={handleOpenGoogleModal}
+              isLoading={isGoogleLoading}
               disabled={isLoading}
-              onPressIn={() => setIsGooglePressed(true)}
-              onPressOut={() => setIsGooglePressed(false)}
-              onPress={handleGoogleSignIn}
-              style={[
-                styles.buttonBase,
-                styles.googleButtonBase,
-                isGooglePressed
-                  ? styles.googleButtonPressed
-                  : styles.googleButtonUnpressed,
-              ]}
-            >
-              {isLoading && isGooglePressed ? (
-                <ActivityIndicator size="small" color="#64748B" />
-              ) : (
-                <View style={styles.googleContentRow}>
-                  <Image
-                    source={require("../../images/google.png")}
-                    style={{ width: 20, height: 20, marginRight: 10 }}
-                    resizeMode="contain"
-                  />
-                  <Text
-                    style={[
-                      styles.googleButtonText,
-                      isGooglePressed && styles.googleButtonTextPressed,
-                    ]}
-                  >
-                    Sign up with Google
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+              styles={styles}
+            />
 
-            {/* Footer Row */}
+            {/* Footer Navigation: Sign In Link */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Already have an account? </Text>
-              <TouchableOpacity onPress={onNavigateToLogin} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={onNavigateToLogin}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
                 <Text style={styles.linkText}>Sign In</Text>
               </TouchableOpacity>
             </View>
@@ -614,379 +363,385 @@ export default function SignUpScreen({ onNavigateToLogin, onSignUpSuccess }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* GOOGLE ACCOUNTS SELECTOR MODAL */}
+      {/* Google Account Selector Modal */}
       <GoogleAccountModal
         visible={isGoogleModalVisible}
-        onClose={() => setIsGoogleModalVisible(false)}
+        onClose={handleCloseGoogleModal}
         onSelectAccount={handleGoogleAccountSelect}
-        isLoading={isLoading && isGooglePressed}
+        isLoading={isGoogleLoading}
       />
 
-      {/* PRIVACY POLICY & TERMS MODAL */}
+      {/* Privacy Policy & Terms Modal */}
       <PrivacyModal
         visible={privacyModalVisible}
-        onClose={() => setPrivacyModalVisible(false)}
-        onAgree={() => {
-          setHasReadPolicies(true);
-          setAgreeToTerms(true);
-          setTermsTouched(false);
-        }}
+        onClose={handleClosePrivacyModal}
+        onAgree={handleAgreePolicies}
         initialTab={privacyInitialTab}
       />
     </SafeAreaView>
   );
 }
 
-// --- COMPONENT STYLES ---
-// Flat Design Tokens
-const baseColor = "#F8FAFC";
-const logoGreen = "#10B981";
+// ============================================================================
+// --- COMPONENT STYLES & COLOR CONFIGURATION ---
+// ============================================================================
+const baseColor = "#F8FAFC"; // Fallback screen background color
+const logoGreen = "#10B981"; // Primary brand accent color (buttons, titles, links)
 
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme?.background || baseColor,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  headerSection: {
-    marginBottom: 35,
-    alignItems: "center",
-    width: "100%",
-  },
-  brandTitle: {
-    fontSize: 42,
-    fontWeight: "900",
-    color: logoGreen,
-    letterSpacing: -0.5,
-    textAlign: "center",
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: theme?.textSecondary || "#64748B",
-    marginTop: 10,
-    textAlign: "center",
-    lineHeight: 22,
-    fontWeight: "700",
-  },
-  formCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 28,
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  inputGroup: {
-    marginBottom: 22,
-  },
-  inputLabel: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 11,
-    fontWeight: "800",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginLeft: 6,
-  },
-  flatInputField: {
-    backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: theme?.inputBorder || "#E2E8F0",
-  },
-  inputWarningBorder: {
-    borderColor: "#EF4444",
-  },
-  inlineWarningRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-    marginLeft: 6,
-  },
-  inlineWarningText: {
-    color: "#EF4444",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  criteriaContainer: {
-    marginTop: 10,
-    marginLeft: 6,
-  },
-  warningHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  criteriaHeaderWarning: {
-    color: "#EF4444",
-    fontSize: 12,
-    fontWeight: "800",
-    marginLeft: 5,
-  },
-  criteriaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  criteriaIcon: {
-    marginRight: 8,
-  },
-  criteriaText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: theme?.textSecondary || "#CBD5E1",
-  },
-  criteriaTextSuccess: {
-    color: "#10B981",
-    fontWeight: "700",
-  },
-  criteriaTextError: {
-    color: "#EF4444",
-    fontWeight: "700",
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  leadingIcon: {
-    marginRight: 4,
-  },
-  input: {
-    flex: 1,
-    color: theme?.textPrimary || "#0F172A",
-    paddingVertical: 15,
-    paddingHorizontal: 8,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  toggleButton: {
-    paddingLeft: 10,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  buttonBase: {
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-  },
-  buttonUnpressed: {
-    backgroundColor: logoGreen,
-    borderRadius: 20,
-  },
-  buttonPressed: {
-    backgroundColor: "#059669",
-    opacity: 0.85,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  buttonTextPressed: {
-    color: "#E2E8F0",
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 32,
-  },
-  footerText: {
-    color: theme?.textSecondary || "#64748B",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  linkText: {
-    color: logoGreen,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 20,
-    paddingHorizontal: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1.5,
-    backgroundColor: theme?.border || "#E2E8F0",
-  },
-  dividerText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: theme?.textSecondary || "#94A3B8",
-    paddingHorizontal: 12,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  googleButtonBase: {
-    marginTop: 0,
-  },
-  googleButtonUnpressed: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  googleButtonPressed: {
-    backgroundColor: theme?.cardBg || "#F1F5F9",
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-    opacity: 0.85,
-  },
-  googleContentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  googleIconImage: {
-    width: 18,
-    height: 18,
-    marginRight: 10,
-  },
-  googleButtonText: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-  googleButtonTextPressed: {
-    color: theme?.textPrimary || "#0F172A",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(26, 43, 35, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalContentCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 24,
-    width: "100%",
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: theme?.textPrimary || "#0F172A",
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: theme?.textSecondary || "#64748B",
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 20,
-    fontWeight: "600",
-  },
-  customInputArea: {
-    marginTop: 8,
-  },
-  modalInputGroup: {
-    marginBottom: 16,
-  },
-  modalInputLabel: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 10,
-    fontWeight: "800",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  modalTextInput: {
-    backgroundColor: theme?.inputBg || "#F1F5F9",
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: theme?.textPrimary || "#0F172A",
-    fontWeight: "700",
-    borderWidth: 1,
-    borderColor: theme?.inputBorder || "#E2E8F0",
-  },
-  modalActionButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  modalButton: {
-    flex: 0.48,
-    paddingVertical: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalButtonCancel: {
-    backgroundColor: theme?.cardBg || "#F1F5F9",
-    borderWidth: 1,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  modalButtonCancelText: {
-    color: theme?.textSecondary || "#64748B",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  modalButtonSubmit: {
-    backgroundColor: "#64748B",
-  },
-  modalButtonSubmitText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  // Policy Agreement Styles
-  checkboxContainer: {
-    marginTop: 14,
-    marginBottom: 6,
-  },
-  checkboxRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingHorizontal: 2,
-  },
-  checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.8,
-    borderColor: theme?.border || "#CBD5E1",
-    backgroundColor: theme?.surface || "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-    marginRight: 10,
-  },
-  checkboxBoxChecked: {
-    borderColor: "#10B981",
-    backgroundColor: "#10B981",
-  },
-  checkboxBoxError: {
-    borderColor: "#EF4444",
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: 12,
-    color: theme?.textSecondary || "#64748B",
-    lineHeight: 18,
-    fontWeight: "500",
-  },
-  policyLink: {
-    color: "#10B981",
-    fontWeight: "800",
-    textDecorationLine: "underline",
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    // --- MAIN SCREEN LAYOUT ---
+    // Entire full-screen background
+    container: {
+      flex: 1,
+      backgroundColor: theme?.background || baseColor,
+    },
+    // ScrollView inner padding & vertical centering
+    scrollContainer: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+    },
+
+    // --- HEADER / BRAND SECTION ---
+    // Header wrapper holding title and subtitle
+    headerSection: {
+      marginBottom: 35,
+      alignItems: "center",
+      width: "100%",
+    },
+    // Main "Create Account" title text
+    brandTitle: {
+      fontSize: 42,
+      fontWeight: "900",
+      color: logoGreen,
+      letterSpacing: -0.5,
+      textAlign: "center",
+    },
+    // Subtitle description below the title
+    brandSubtitle: {
+      fontSize: 14,
+      color: theme?.textSecondary || "#64748B",
+      marginTop: 10,
+      textAlign: "center",
+      lineHeight: 22,
+      fontWeight: "700",
+    },
+
+    // --- FORM CONTAINER CARD ---
+    // The rounded card containing all input fields and buttons
+    formCard: {
+      backgroundColor: theme?.surface || baseColor,
+      borderRadius: 28,
+      padding: 24,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+
+    // --- INPUT FIELDS (USERNAME, EMAIL & PASSWORD) ---
+    // Wrapper spacing around each input field
+    inputGroup: {
+      marginBottom: 22,
+    },
+    // Uppercase label above input ("USERNAME", "EMAIL ADDRESS", "PASSWORD")
+    inputLabel: {
+      color: theme?.textPrimary || "#64748B",
+      fontSize: 11,
+      fontWeight: "800",
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+      marginLeft: 6,
+    },
+    // Input box container (background color and border outline)
+    flatInputField: {
+      backgroundColor: theme?.inputBg || baseColor,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme?.inputBorder || "#E2E8F0",
+    },
+    // Red border highlighting invalid input fields
+    inputWarningBorder: {
+      borderColor: "#EF4444",
+    },
+    // Horizontal row layout for leading icon + text input + eye toggle
+    fieldRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+    },
+    // Spacing for leading icon (user/mail/lock)
+    leadingIcon: {
+      marginRight: 4,
+    },
+    // The actual text typed by user inside the input field
+    input: {
+      flex: 1,
+      color: theme?.textPrimary || "#0F172A",
+      paddingVertical: 15,
+      paddingHorizontal: 8,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    // Password show/hide eye icon touchable wrapper
+    toggleButton: {
+      paddingLeft: 10,
+      paddingVertical: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // Inline warning row below invalid field
+    inlineWarningRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 6,
+      marginLeft: 6,
+    },
+    // Warning icon spacing
+    warningIcon: {
+      marginRight: 6,
+    },
+    // Warning error text color & font
+    inlineWarningText: {
+      color: "#EF4444",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+
+    // --- PASSWORD CRITERIA CHECKLIST ---
+    // Checklist container
+    criteriaContainer: {
+      marginTop: 10,
+      marginLeft: 6,
+    },
+    // Header row above checklist when invalid
+    warningHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    // Warning icon in criteria header
+    warningHeaderIcon: {
+      marginRight: 5,
+    },
+    // "Password must contain:" warning title text
+    criteriaHeaderWarning: {
+      color: "#EF4444",
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    // Each individual checklist item row
+    criteriaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 4,
+    },
+    // Checkmark/X icon spacing
+    criteriaIcon: {
+      marginRight: 8,
+    },
+    // Default unmet checklist item text
+    criteriaText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme?.textSecondary || "#CBD5E1",
+    },
+    // Valid/satisfied checklist item text
+    criteriaTextSuccess: {
+      color: "#10B981",
+      fontWeight: "700",
+    },
+    // Unmet checklist item text during error state
+    criteriaTextError: {
+      color: "#EF4444",
+      fontWeight: "700",
+    },
+
+    // --- POLICY AGREEMENT CHECKBOX ---
+    // Checkbox container wrapper
+    checkboxContainer: {
+      marginTop: 14,
+      marginBottom: 6,
+    },
+    // Horizontal row holding checkbox box + label
+    checkboxRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      paddingHorizontal: 2,
+    },
+    // Unchecked checkbox box (border and background)
+    checkboxBox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 1.8,
+      borderColor: theme?.border || "#CBD5E1",
+      backgroundColor: theme?.surface || "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 2,
+      marginRight: 10,
+    },
+    // Checked checkbox box (filled background and border)
+    checkboxBoxChecked: {
+      borderColor: "#10B981",
+      backgroundColor: "#10B981",
+    },
+    // Checkbox box highlighted red on validation failure
+    checkboxBoxError: {
+      borderColor: "#EF4444",
+    },
+    // Policy agreement description label
+    checkboxLabel: {
+      flex: 1,
+      fontSize: 12,
+      color: theme?.textSecondary || "#64748B",
+      lineHeight: 18,
+      fontWeight: "500",
+    },
+    // Underlined clickable policy link text ("Terms of Service", etc.)
+    policyLink: {
+      color: "#10B981",
+      fontWeight: "800",
+      textDecorationLine: "underline",
+    },
+
+    // --- PRIMARY BUTTON ("GET STARTED") ---
+    // Common dimensions and centering for buttons
+    buttonBase: {
+      paddingVertical: 16,
+      borderRadius: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      height: 54,
+    },
+    // Top margin spacing specifically for Get Started button
+    signupButtonSpacing: {
+      marginTop: 10,
+    },
+    // Default "Get Started" button background color
+    buttonUnpressed: {
+      backgroundColor: logoGreen,
+      borderRadius: 20,
+    },
+    // "Get Started" button pressed state color
+    buttonPressed: {
+      backgroundColor: "#059669",
+      opacity: 0.85,
+    },
+    // "Get Started" button text color & font
+    buttonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    // "Get Started" button text color when pressed
+    buttonTextPressed: {
+      color: "#E2E8F0",
+    },
+    // Row holding spinner and "Creating Account..." text
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Spinner spacing next to "Creating Account..."
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    // "Creating Account..." loading text style
+    buttonLoadingText: {
+      opacity: 0.95,
+    },
+
+    // --- DIVIDER ("OR") ---
+    // Horizontal row wrapping left line, "Or" text, and right line
+    dividerContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginVertical: 20,
+      paddingHorizontal: 10,
+    },
+    // Thin horizontal divider line color
+    dividerLine: {
+      flex: 1,
+      height: 1.5,
+      backgroundColor: theme?.border || "#E2E8F0",
+    },
+    // "Or" text between the divider lines
+    dividerText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: theme?.textSecondary || "#94A3B8",
+      paddingHorizontal: 12,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+
+    // --- GOOGLE SIGN UP BUTTON ---
+    // Google button container positioning
+    googleButtonBase: {
+      marginTop: 0,
+    },
+    // Default Google button background & border
+    googleButtonUnpressed: {
+      backgroundColor: theme?.surface || baseColor,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    // Google button background & border when tapped
+    googleButtonPressed: {
+      backgroundColor: theme?.cardBg || "#F1F5F9",
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+      opacity: 0.85,
+    },
+    // Row holding Google logo icon + text
+    googleContentRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Google logo image dimensions
+    googleIconImage: {
+      width: 20,
+      height: 20,
+      marginRight: 10,
+    },
+    // "Sign up with Google" text color & font
+    googleButtonText: {
+      color: theme?.textPrimary || "#64748B",
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    // "Sign up with Google" text color when pressed
+    googleButtonTextPressed: {
+      color: theme?.textPrimary || "#0F172A",
+    },
+
+    // --- FOOTER ("ALREADY HAVE AN ACCOUNT? SIGN IN") ---
+    // Bottom row layout
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 32,
+    },
+    // "Already have an account?" text color
+    footerText: {
+      color: theme?.textSecondary || "#64748B",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    // "Sign In" clickable link text color
+    linkText: {
+      color: logoGreen,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+  });

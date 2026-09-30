@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+// --- IMPORTS ---
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   Text,
   View,
-  TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -11,30 +11,71 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,
-  Alert,
-  Modal,
-  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Eye, EyeOff, Mail, Lock, Check } from "lucide-react-native";
-import API_URL from "../config/api";
+import { Mail, Lock, Check } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
-import { useCustomAlert } from "../../context/CustomAlertContext";
-import { useTheme } from "../../context/ThemeContext";
-import { 
-  saveUserId, 
-  clearSavedUserId,
-  setRememberMe, 
-  isRememberMeEnabled,
-  saveRememberedGoogleEmail,
-  saveRememberedCredentials,
-  getRememberedCredentials,
-  clearRememberedCredentials
-} from "../../services/OfflineStorage";
 
+import { useTheme } from "../../context/ThemeContext";
+import useAuthLogin from "../../hooks/useAuthLogin";
+import InputField from "../../components/InputField";
 import GoogleAccountModal from "../../components/GoogleAccountModal";
 
+// Complete any pending OAuth redirect sessions
 WebBrowser.maybeCompleteAuthSession();
+
+// Assets
+const GOOGLE_ICON = require("../../images/google.png");
+
+// --- LIGHTWEIGHT BUTTON SUBCOMPONENTS ---
+
+// Email/password submit button
+function PrimaryButton({ onPress, isLoading, disabled, styles }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={disabled || isLoading}
+      onPress={onPress}
+      style={[styles.buttonBase, styles.buttonUnpressed]}
+    >
+      {isLoading ? (
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>Signing in...</Text>
+        </View>
+      ) : (
+        <Text style={styles.buttonText}>Sign In</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// Google OAuth trigger button
+function GoogleSignInButton({ onPress, isLoading, disabled, styles }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={disabled || isLoading}
+      onPress={onPress}
+      style={[styles.buttonBase, styles.googleButtonBase, styles.googleButtonUnpressed]}
+    >
+      {isLoading ? (
+        <ActivityIndicator size="small" color="#64748B" />
+      ) : (
+        <View style={styles.googleContentRow}>
+          <Image
+            source={GOOGLE_ICON}
+            style={styles.googleIconImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.googleButtonText}>Sign in with Google</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// --- MAIN LOGIN SCREEN ---
 
 export default function LoginScreen({
   onNavigateToSignUp,
@@ -43,175 +84,44 @@ export default function LoginScreen({
   setCurrentUserId,
   onGoogleOtpSent,
 }) {
-  const { showAlert: triggerCustomAlert } = useCustomAlert();
-  const { theme } = useTheme();
-  const isDarkMode = false;
-  const styles = getStyles(theme, false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Theme & screen styling
+  const { theme, isDarkMode } = useTheme();
+  const styles = useMemo(() => getStyles(theme), [theme]);
   const [secureTextEntry, setSecureTextEntry] = useState(true);
-  const [rememberMe, setRememberMeState] = useState(true);
 
-  // Interaction & Loading State Tracking
-  const [isPressed, setIsPressed] = useState(false);
-  const [isGooglePressed, setIsGooglePressed] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Authentication hook: form state, handlers & modal visibility
+  const {
+    form,
+    rememberMe,
+    isLoading,
+    isEmailLoading,
+    isGoogleLoading,
+    isGoogleModalVisible,
+    handleEmailChange,
+    handlePasswordChange,
+    handleToggleRememberMe,
+    handleOpenGoogleModal,
+    handleCloseGoogleModal,
+    handleLogin,
+    handleGoogleAccountSelect,
+  } = useAuthLogin({
+    setCurrentUserId,
+    onLoginSuccess,
+    onGoogleOtpSent,
+  });
 
-  // Google Account Selector Modal State
-  const [isGoogleModalVisible, setIsGoogleModalVisible] = useState(false);
-
-  // Auto-restore Remembered Credentials & Toggle State on Mount
-  useEffect(() => {
-    async function loadSavedRememberedState() {
-      try {
-        const enabled = await isRememberMeEnabled();
-        setRememberMeState(enabled);
-        if (enabled) {
-          const creds = await getRememberedCredentials();
-          if (creds?.email) setEmail(creds.email);
-          if (creds?.password) setPassword(creds.password);
-        }
-      } catch (err) {
-        console.log("Error loading remembered credentials:", err);
-      }
-    }
-    loadSavedRememberedState();
+  // Toggle password visibility
+  const handleToggleSecureTextEntry = useCallback(() => {
+    setSecureTextEntry((prev) => !prev);
   }, []);
-
-  const showAlert = (message, title = "Login Error", buttons = []) => {
-    triggerCustomAlert(title, message, buttons);
-  };
-
-  // STANDARD EMAIL/PASSWORD AUTHENTICATION FLOW
-  const handleLogin = async () => {
-    if (isLoading) return;
-    if (!email || !password) {
-      showAlert("Please enter both your email and password.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/signin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-      console.log("Response:", data);
-
-      if (response.ok) {
-        const userId = data.user?.id || data.user_id;
-        if (setCurrentUserId && userId) {
-          setCurrentUserId(userId);
-        }
-
-        // Call onLoginSuccess INSTANTLY for 0ms screen switch
-        onLoginSuccess(userId, data.is_onboarded, data.user);
-
-        // Perform storage persistence non-blockingly in background
-        Promise.all([
-          userId ? saveUserId(userId) : Promise.resolve(),
-          setRememberMe(rememberMe),
-          rememberMe
-            ? saveRememberedCredentials(email, password)
-            : clearRememberedCredentials(),
-        ]).catch((err) => console.log("Storage persistence error:", err));
-      } else {
-        setIsLoading(false);
-        showAlert(
-          data.detail || "Incorrect email or password. Please try again.",
-        );
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.log("LOGIN ERROR:", error);
-      showAlert("Cannot connect to backend server. Check your network.");
-    }
-  };
-
-  // GOOGLE OAUTH POPUP TRIGGER
-  const handleGoogleSignIn = () => {
-    if (isLoading) return;
-    setIsGoogleModalVisible(true);
-  };
-
-  // GOOGLE ACCOUNT SELECTION HANDLER
-  const handleGoogleAccountSelect = async (selectedEmail, selectedName, rememberMe = true) => {
-    try {
-      setIsLoading(true);
-      setIsGooglePressed(true);
-      console.log("Initiating Google Sign-In backend verification for:", selectedEmail, selectedName);
-
-      const response = await fetch(`${API_URL}/auth/google-signin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email: selectedEmail, name: selectedName })
-      });
-
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (jsonErr) {
-        console.log("JSON Parse Error on Google Signin:", jsonErr);
-        data = { detail: "Backend server error. Please try again in a moment." };
-      }
-      console.log("Google Sign-In response:", data);
-
-      setIsLoading(false);
-      setIsGooglePressed(false);
-      setIsGoogleModalVisible(false);
-
-      if (response.ok && data.success) {
-        const uid = data.user_id || data.user?.id;
-        if (setCurrentUserId && uid) {
-          setCurrentUserId(uid);
-        }
-
-        // Save session & Remember Me state
-        if (uid) {
-          await saveUserId(uid);
-          await setRememberMe(rememberMe);
-          if (rememberMe && selectedEmail) {
-            await saveRememberedGoogleEmail(selectedEmail);
-          }
-        }
-
-        if (data.is_new_user) {
-          // First time Google user -> follow verification & onboarding process
-          if (onGoogleOtpSent) {
-            onGoogleOtpSent(true, selectedEmail, selectedName, data.temp_password, false);
-          }
-        } else if (data.is_onboarded === true) {
-          // Existing registered & onboarded user -> redirect directly to dashboard
-          onLoginSuccess(uid, true, data.user);
-        } else {
-          // Existing user but not onboarded -> redirect to onboarding STEP_ONE
-          onLoginSuccess(uid, false, data.user);
-        }
-      } else {
-        showAlert(
-          data.detail || "Google authentication failed. Please try again.",
-          "Authentication Failed",
-        );
-      }
-    } catch (error) {
-      setIsLoading(false);
-      setIsGooglePressed(false);
-      setIsGoogleModalVisible(false);
-      console.log("GOOGLE LOGIN ERROR:", error);
-      showAlert("Cannot connect to backend server. Check your network.", "Connection Error");
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme?.background || baseColor} />
+      {/* Top Status Bar */}
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={theme?.background || baseColor}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -221,7 +131,7 @@ export default function LoginScreen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Section */}
+          {/* Header: Logo & Tagline */}
           <View style={styles.headerSection}>
             <Text style={styles.brandTitle}>MacroSync</Text>
             <Text style={styles.brandSubtitle}>
@@ -233,65 +143,41 @@ export default function LoginScreen({
           {/* Form Card Group */}
           <View style={styles.formCard}>
             {/* Email Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.flatInputField, styles.fieldRow]}>
-                <Mail color="#94A3B8" size={20} style={styles.leadingIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#94A3B8"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
-              </View>
-            </View>
+            <InputField
+              label="Email Address"
+              Icon={Mail}
+              value={form.email}
+              onChangeText={handleEmailChange}
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              editable={!isLoading}
+              styles={styles}
+            />
 
             {/* Password Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={[styles.flatInputField, styles.fieldRow]}>
-                <Lock color="#94A3B8" size={20} style={styles.leadingIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your password"
-                  placeholderTextColor="#94A3B8"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={secureTextEntry}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
-                <TouchableOpacity
-                  style={styles.toggleButton}
-                  onPress={() => setSecureTextEntry(!secureTextEntry)}
-                  activeOpacity={0.6}
-                  disabled={isLoading}
-                >
-                  {secureTextEntry ? (
-                    <EyeOff color="#94A3B8" size={22} />
-                  ) : (
-                    <Eye color="#10B981" size={22} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
+            <InputField
+              label="Password"
+              Icon={Lock}
+              value={form.password}
+              onChangeText={handlePasswordChange}
+              placeholder="Enter your password"
+              isPassword
+              isSecure={secureTextEntry}
+              onToggleSecure={handleToggleSecureTextEntry}
+              editable={!isLoading}
+              styles={styles}
+            />
 
-            {/* Remember Me & Forgot Password Row */}
+            {/* Remember Me Checkbox & Forgot Password Link */}
             <View style={styles.rememberForgotRow}>
               <TouchableOpacity
                 style={styles.rememberMeContainer}
-                onPress={() => setRememberMeState(!rememberMe)}
+                onPress={handleToggleRememberMe}
                 activeOpacity={0.7}
                 disabled={isLoading}
               >
                 <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                  {Boolean(rememberMe) && <Check color="#FFFFFF" size={13} strokeWidth={3} />}
+                  {rememberMe ? <Check color="#FFFFFF" size={13} strokeWidth={3} /> : null}
                 </View>
                 <Text style={styles.rememberMeText}>Remember me</Text>
               </TouchableOpacity>
@@ -307,79 +193,29 @@ export default function LoginScreen({
             </View>
 
             {/* Sign In Button */}
-            <TouchableOpacity
-              activeOpacity={1}
-              disabled={isLoading}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
+            <PrimaryButton
               onPress={handleLogin}
-              style={[
-                styles.buttonBase,
-                isPressed ? styles.buttonPressed : styles.buttonUnpressed,
-              ]}
-            >
-              {isLoading && !isGooglePressed ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={[styles.buttonText, { opacity: 0.95 }]}>Signing in...</Text>
-                </View>
-              ) : (
-                <Text
-                  style={[
-                    styles.buttonText,
-                    isPressed && styles.buttonTextPressed,
-                  ]}
-                >
-                  Sign In
-                </Text>
-              )}
-            </TouchableOpacity>
+              isLoading={isEmailLoading}
+              disabled={isLoading}
+              styles={styles}
+            />
 
-            {/* INTER-STAGE VISUAL DIVIDER */}
+            {/* Inter-stage "Or" Divider */}
             <View style={styles.dividerContainer}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>Or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* PREMIUM GOOGLE TRIGGER COMPONENT BUTTON */}
-            <TouchableOpacity
-              activeOpacity={1}
+            {/* Google Sign In Button */}
+            <GoogleSignInButton
+              onPress={handleOpenGoogleModal}
+              isLoading={isGoogleLoading}
               disabled={isLoading}
-              onPressIn={() => setIsGooglePressed(true)}
-              onPressOut={() => setIsGooglePressed(false)}
-              onPress={handleGoogleSignIn}
-              style={[
-                styles.buttonBase,
-                styles.googleButtonBase,
-                isGooglePressed
-                  ? styles.googleButtonPressed
-                  : styles.googleButtonUnpressed,
-              ]}
-            >
-              {isLoading && isGooglePressed ? (
-                <ActivityIndicator size="small" color="#64748B" />
-              ) : (
-                <View style={styles.googleContentRow}>
-                  {/* Fixed relative path jump parameter */}
-                  <Image
-                    source={require("../../images/google.png")}
-                    style={{ width: 20, height: 20, marginRight: 10 }}
-                    resizeMode="contain"
-                  />
-                  <Text
-                    style={[
-                      styles.googleButtonText,
-                      isGooglePressed && styles.googleButtonTextPressed,
-                    ]}
-                  >
-                    Sign in with Google
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+              styles={styles}
+            />
 
-            {/* Footer Navigation */}
+            {/* Footer Navigation: Sign Up Link */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account? </Text>
               <TouchableOpacity
@@ -394,371 +230,302 @@ export default function LoginScreen({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* GOOGLE ACCOUNT SELECTOR MODAL */}
+      {/* Google Account Selector Modal */}
       <GoogleAccountModal
         visible={isGoogleModalVisible}
-        onClose={() => setIsGoogleModalVisible(false)}
+        onClose={handleCloseGoogleModal}
         onSelectAccount={handleGoogleAccountSelect}
-        isLoading={isLoading && isGooglePressed}
+        isLoading={isGoogleLoading}
       />
     </SafeAreaView>
   );
 }
 
-// --- COMPONENT STYLES ---
-// --- Flat Design Tokens ---
-const baseColor = "#F8FAFC";
-const logoGreen = "#10B981";
+// ============================================================================
+// --- COMPONENT STYLES & COLOR CONFIGURATION ---
+// ============================================================================
+const baseColor = "#F8FAFC"; // Fallback screen background color
+const logoGreen = "#10B981"; // Primary brand accent color (buttons, titles, links)
 
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme?.background || baseColor,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  headerSection: {
-    marginBottom: 35,
-    alignItems: "center",
-    width: "100%",
-  },
-  brandTitle: {
-    fontSize: 42,
-    fontWeight: "900",
-    color: logoGreen,
-    letterSpacing: -0.5,
-    textAlign: "center",
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: theme?.textSecondary || "#64748B",
-    marginTop: 10,
-    textAlign: "center",
-    lineHeight: 22,
-    fontWeight: "700",
-  },
-  formCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 28,
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  inputGroup: {
-    marginBottom: 22,
-  },
-  inputLabel: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 11,
-    fontWeight: "800",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    marginLeft: 6,
-  },
-  flatInputField: {
-    backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: theme?.inputBorder || "#E2E8F0",
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  leadingIcon: {
-    marginRight: 4,
-  },
-  input: {
-    flex: 1,
-    color: theme?.textPrimary || "#0F172A",
-    paddingVertical: 15,
-    paddingHorizontal: 8,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  toggleButton: {
-    paddingLeft: 10,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  rememberForgotRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-    marginTop: 4,
-  },
-  rememberMeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: theme?.inputBorder || "#94A3B8",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-    backgroundColor: "transparent",
-  },
-  checkboxChecked: {
-    backgroundColor: logoGreen,
-    borderColor: logoGreen,
-  },
-  rememberMeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: theme?.textSecondary || "#64748B",
-  },
-  forgotPassword: {
-    alignSelf: "center",
-  },
-  forgotText: {
-    color: logoGreen,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  buttonBase: {
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    height: 54,
-  },
-  buttonUnpressed: {
-    backgroundColor: logoGreen,
-    borderRadius: 20,
-  },
-  buttonPressed: {
-    backgroundColor: "#059669",
-    opacity: 0.85,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  buttonTextPressed: {
-    color: "#E2E8F0",
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 20,
-    paddingHorizontal: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1.5,
-    backgroundColor: theme?.border || "#E2E8F0",
-  },
-  dividerText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: theme?.textSecondary || "#94A3B8",
-    paddingHorizontal: 12,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  googleButtonBase: {
-    marginTop: 0,
-  },
-  googleButtonUnpressed: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  googleButtonPressed: {
-    backgroundColor: theme?.cardBg || "#F1F5F9",
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-    opacity: 0.85,
-  },
-  googleContentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  googleIconImage: {
-    width: 18,
-    height: 18,
-    marginRight: 10,
-  },
-  googleButtonText: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-  googleButtonTextPressed: {
-    color: theme?.textPrimary || "#0F172A",
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 32,
-  },
-  footerText: {
-    color: theme?.textSecondary || "#64748B",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  linkText: {
-    color: logoGreen,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(26, 43, 35, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalContentCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 24,
-    width: "100%",
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: theme?.textPrimary || "#0F172A",
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: theme?.textSecondary || "#64748B",
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 20,
-    fontWeight: "600",
-  },
-  accountsList: {
-    marginBottom: 16,
-  },
-  accountItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme?.cardBg || baseColor,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  accountGoogleIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 14,
-  },
-  accountTextContainer: {
-    flex: 1,
-  },
-  accountNameText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: theme?.textPrimary || "#0F172A",
-  },
-  accountEmailText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: theme?.textSecondary || "#64748B",
-    marginTop: 2,
-  },
-  useAnotherButton: {
-    paddingVertical: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#64748B",
-    marginBottom: 12,
-  },
-  useAnotherButtonText: {
-    color: "#10B981",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  modalCloseButton: {
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  modalCloseButtonText: {
-    color: theme?.textSecondary || "#94A3B8",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  customInputArea: {
-    marginTop: 8,
-  },
-  modalInputGroup: {
-    marginBottom: 16,
-  },
-  modalInputLabel: {
-    color: theme?.textPrimary || "#64748B",
-    fontSize: 10,
-    fontWeight: "800",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  modalTextInput: {
-    backgroundColor: theme?.inputBg || "#F1F5F9",
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: theme?.textPrimary || "#0F172A",
-    fontWeight: "700",
-    borderWidth: 1,
-    borderColor: theme?.inputBorder || "#E2E8F0",
-  },
-  modalActionButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  modalButton: {
-    flex: 0.48,
-    paddingVertical: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalButtonCancel: {
-    backgroundColor: theme?.cardBg || "#F1F5F9",
-    borderWidth: 1,
-    borderColor: theme?.border || "#E2E8F0",
-  },
-  modalButtonCancelText: {
-    color: theme?.textSecondary || "#64748B",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  modalButtonSubmit: {
-    backgroundColor: "#64748B",
-  },
-  modalButtonSubmitText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    // --- MAIN SCREEN LAYOUT ---
+    // Entire full-screen background
+    container: {
+      flex: 1,
+      backgroundColor: theme?.background || baseColor,
+    },
+    // ScrollView inner padding & vertical centering
+    scrollContainer: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+    },
+
+    // --- HEADER / BRAND SECTION ---
+    // Header wrapper holding title and subtitle
+    headerSection: {
+      marginBottom: 35,
+      alignItems: "center",
+      width: "100%",
+    },
+    // Main "MacroSync" app title text
+    brandTitle: {
+      fontSize: 42,
+      fontWeight: "900",
+      color: logoGreen,
+      letterSpacing: -0.5,
+      textAlign: "center",
+    },
+    // Subtitle description below the title
+    brandSubtitle: {
+      fontSize: 14,
+      color: theme?.textSecondary || "#64748B",
+      marginTop: 10,
+      textAlign: "center",
+      lineHeight: 22,
+      fontWeight: "700",
+    },
+
+    // --- FORM CONTAINER CARD ---
+    // The rounded card containing all input fields and buttons
+    formCard: {
+      backgroundColor: theme?.surface || baseColor,
+      borderRadius: 28,
+      padding: 24,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+
+    // --- INPUT FIELDS (EMAIL & PASSWORD) ---
+    // Wrapper spacing around each input field
+    inputGroup: {
+      marginBottom: 22,
+    },
+    // Uppercase label above input ("EMAIL ADDRESS", "PASSWORD")
+    inputLabel: {
+      color: theme?.textPrimary || "#64748B",
+      fontSize: 11,
+      fontWeight: "800",
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+      marginLeft: 6,
+    },
+    // Input box container (background color and border outline)
+    flatInputField: {
+      backgroundColor: theme?.inputBg || baseColor,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme?.inputBorder || "#E2E8F0",
+    },
+    // Horizontal row layout for leading icon + text input + eye toggle
+    fieldRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+    },
+    // Spacing for leading icon (mail/lock)
+    leadingIcon: {
+      marginRight: 4,
+    },
+    // The actual text typed by user inside the input field
+    input: {
+      flex: 1,
+      color: theme?.textPrimary || "#0F172A",
+      paddingVertical: 15,
+      paddingHorizontal: 8,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    // Password show/hide eye icon touchable wrapper
+    toggleButton: {
+      paddingLeft: 10,
+      paddingVertical: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    // --- REMEMBER ME & FORGOT PASSWORD ROW ---
+    // Horizontal container row holding both Remember Me and Forgot Password
+    rememberForgotRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 24,
+      marginTop: 4,
+    },
+    // Remember Me checkbox + label touchable wrapper
+    rememberMeContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    // Unchecked checkbox box (border and background)
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: theme?.inputBorder || "#94A3B8",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 8,
+      backgroundColor: "transparent",
+    },
+    // Checked checkbox box (filled background and border)
+    checkboxChecked: {
+      backgroundColor: logoGreen,
+      borderColor: logoGreen,
+    },
+    // "Remember me" text next to checkbox
+    rememberMeText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme?.textSecondary || "#64748B",
+    },
+    // "Forgot Password?" touchable container
+    forgotPassword: {
+      alignSelf: "center",
+    },
+    // "Forgot Password?" clickable text color
+    forgotText: {
+      color: logoGreen,
+      fontSize: 13,
+      fontWeight: "800",
+    },
+
+    // --- PRIMARY BUTTON ("SIGN IN") ---
+    // Common dimensions and centering for buttons
+    buttonBase: {
+      paddingVertical: 16,
+      borderRadius: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      height: 54,
+    },
+    // Default "Sign In" button background color
+    buttonUnpressed: {
+      backgroundColor: logoGreen,
+      borderRadius: 20,
+    },
+    // "Sign In" button pressed state color
+    buttonPressed: {
+      backgroundColor: "#059669",
+      opacity: 0.85,
+    },
+    // "Sign In" button text color & font
+    buttonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    // "Sign In" button text color when pressed
+    buttonTextPressed: {
+      color: "#E2E8F0",
+    },
+    // Row holding spinner and "Signing in..." text
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Spinner spacing next to "Signing in..."
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    // "Signing in..." loading text style
+    buttonLoadingText: {
+      opacity: 0.95,
+    },
+
+    // --- DIVIDER ("OR") ---
+    // Horizontal row wrapping left line, "Or" text, and right line
+    dividerContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginVertical: 20,
+      paddingHorizontal: 10,
+    },
+    // Thin horizontal divider line color
+    dividerLine: {
+      flex: 1,
+      height: 1.5,
+      backgroundColor: theme?.border || "#E2E8F0",
+    },
+    // "Or" text between the divider lines
+    dividerText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: theme?.textSecondary || "#94A3B8",
+      paddingHorizontal: 12,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+
+    // --- GOOGLE SIGN IN BUTTON ---
+    // Google button container positioning
+    googleButtonBase: {
+      marginTop: 0,
+    },
+    // Default Google button background & border
+    googleButtonUnpressed: {
+      backgroundColor: theme?.surface || baseColor,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+    },
+    // Google button background & border when tapped
+    googleButtonPressed: {
+      backgroundColor: theme?.cardBg || "#F1F5F9",
+      borderWidth: 1.5,
+      borderColor: theme?.border || "#E2E8F0",
+      opacity: 0.85,
+    },
+    // Row holding Google logo icon + text
+    googleContentRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Google logo image dimensions
+    googleIconImage: {
+      width: 20,
+      height: 20,
+      marginRight: 10,
+    },
+    // "Sign in with Google" text color & font
+    googleButtonText: {
+      color: theme?.textPrimary || "#64748B",
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    // "Sign in with Google" text color when pressed
+    googleButtonTextPressed: {
+      color: theme?.textPrimary || "#0F172A",
+    },
+
+    // --- FOOTER ("DON'T HAVE AN ACCOUNT? SIGN UP") ---
+    // Bottom row layout
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 32,
+    },
+    // "Don't have an account?" text color
+    footerText: {
+      color: theme?.textSecondary || "#64748B",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    // "Sign Up" clickable link text color
+    linkText: {
+      color: logoGreen,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+  });
