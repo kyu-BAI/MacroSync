@@ -262,8 +262,14 @@ export default function OtpScreen({ email, onVerified, onNavigateBack }) {
                   style={styles.leadingIcon}
                 />
                 <TextInput
-                  style={styles.input}
-                  placeholder="------"
+                  style={[
+                    styles.input,
+                    {
+                      letterSpacing: otp.length > 0 ? 8 : 0,
+                      fontSize: otp.length > 0 ? 22 : 15,
+                    },
+                  ]}
+                  placeholder="Enter 6-digit OTP"
                   placeholderTextColor={theme?.placeholderText || COLORS.textMuted}
                   value={otp}
                   onChangeText={handleOtpChange}
@@ -399,9 +405,7 @@ const getStyles = (theme, isDarkMode) =>
       flex: 1,
       color: theme?.textPrimary || COLORS.textDark,
       height: "100%",
-      fontSize: 22,
       fontWeight: "800",
-      letterSpacing: 8,
       textAlign: "center",
     },
     buttonBase: {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+// --- IMPORTS ---
+import React, { useState, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -12,23 +13,101 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { KeyRound, ChevronLeft } from 'lucide-react-native';
-import API_URL from '../config/api';
-import { useCustomAlert } from '../../context/CustomAlertContext';
-import { useTheme } from '../../context/ThemeContext';
+import { Ionicons } from "@expo/vector-icons";
 
-const baseColor = '#F8FAFC';
-const logoGreen = '#10B981';
+import API_URL from "../config/api";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
 
-export default function VerifyEmailScreen({ email, name, password, isLogin, onVerified, onNavigateBack }) {
+// --- CONFIG & THEME TOKENS ---
+const COLORS = {
+  base: "#F8FAFC",
+  logoGreen: "#10B981",
+  logoGreenPressed: "#059669",
+  textDark: "#0F172A",
+  textGrey: "#64748B",
+  textMuted: "#94A3B8",
+  borderLight: "#E2E8F0",
+  cardBgLight: "#EBEBEB",
+  white: "#FFFFFF",
+};
+
+// --- SUBCOMPONENTS ---
+
+// 1. Resend Code Action Row
+function ResendRow({ isResending, resendCooldown, onResend, styles }) {
+  return (
+    <View style={styles.resendContainer}>
+      <Text style={styles.resendText}>Didn't receive code? </Text>
+      <TouchableOpacity
+        disabled={isResending || resendCooldown > 0}
+        onPress={onResend}
+        activeOpacity={0.7}
+        style={styles.resendButton}
+      >
+        {isResending ? (
+          <ActivityIndicator size="small" color={COLORS.logoGreen} />
+        ) : (
+          <Text
+            style={[
+              styles.resendLink,
+              resendCooldown > 0 && styles.resendLinkDisabled,
+            ]}
+          >
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// 2. Primary Verify Action Button
+function VerifyButton({ isLoading, onPress, styles }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={isLoading}
+      onPress={onPress}
+      style={[styles.buttonBase, styles.buttonUnpressed]}
+    >
+      {isLoading ? (
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color={COLORS.white} style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>Verifying OTP...</Text>
+        </View>
+      ) : (
+        <View style={styles.buttonLoadingRow}>
+          <Text style={styles.buttonText}>Verify OTP</Text>
+          <Ionicons
+            name="checkmark-circle"
+            size={18}
+            color={COLORS.white}
+            style={{ marginLeft: 8 }}
+          />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// --- MAIN VERIFY EMAIL SCREEN ---
+export default function VerifyEmailScreen({
+  email,
+  name,
+  password,
+  isLogin,
+  onVerified,
+  onNavigateBack,
+}) {
   const { showAlert } = useCustomAlert();
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
+
   const [otp, setOtp] = useState("");
-  const [isPressed, setIsPressed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Resend OTP State
+  // Resend OTP Cooldown State
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -44,6 +123,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  // Resend OTP Handler with 15s Timeout
   const handleResendOTP = async () => {
     if (isResending || resendCooldown > 0) return;
     setIsResending(true);
@@ -77,7 +157,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
     }
   };
 
-  // --- OTP VERIFICATION LIFE CYCLES ---
+  // OTP Verification Lifecycle with 15s Timeout
   const handleVerifyOTP = async (codeToVerify) => {
     const targetOtp = (typeof codeToVerify === "string" ? codeToVerify : otp).trim();
     if (!targetOtp) {
@@ -95,13 +175,13 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
       const cleanPassword = (password || "").trim();
 
       const endpoint = isLogin ? "/verify-login" : "/verify-signup";
-      const payload = isLogin 
+      const payload = isLogin
         ? { email: cleanEmail, otp: cleanOtp }
         : {
             email: cleanEmail,
             otp: cleanOtp,
             name: cleanName,
-            password: cleanPassword
+            password: cleanPassword,
           };
 
       const controller = new AbortController();
@@ -109,9 +189,7 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
 
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -129,7 +207,10 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
         onVerified(data.user_id, data.is_onboarded);
       } else {
         setIsLoading(false);
-        showAlert("Verification Error", data?.detail || "Invalid or expired OTP code. Please check your email.");
+        showAlert(
+          "Verification Error",
+          data?.detail || "Invalid or expired OTP code. Please check your email."
+        );
       }
     } catch (error) {
       setIsLoading(false);
@@ -141,111 +222,103 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
     }
   };
 
+  // Auto-submit on 6th digit
+  const handleOtpChange = (text) => {
+    const numericText = text.replace(/[^0-9]/g, "").slice(0, 6);
+    setOtp(numericText);
+    if (numericText.length === 6) {
+      handleVerifyOTP(numericText);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar 
-        barStyle={isDarkMode ? "light-content" : "dark-content"} 
-        backgroundColor={theme?.background || baseColor} 
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={theme?.background || COLORS.base}
       />
-      
-      {/* Back Button Row */}
-      <View style={styles.topNavigationRow}>
-        <TouchableOpacity 
-          style={styles.backArrowButton} 
-          onPress={onNavigateBack}
-          activeOpacity={0.7}
-        >
-          <ChevronLeft color={logoGreen} size={24} strokeWidth={2.5} />
-        </TouchableOpacity>
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.flexContainer}
+        style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Section */}
+          {/* Header Sector (Consistent with Step 1 - 4) */}
           <View style={styles.headerSection}>
-            <Text style={styles.brandTitle}>Verify OTP</Text>
-            <Text style={styles.brandSubtitle}>We sent a verification code to:</Text>
-            <View style={styles.emailBadgeContainer}>
-              <Text style={styles.emailText}>{email}</Text>
-            </View>
+            {Boolean(onNavigateBack) && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={onNavigateBack}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color={theme?.textPrimary || COLORS.textDark}
+                />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.stepIndicator}>SECURITY VERIFICATION</Text>
+            <Text style={styles.brandTitle}>Verify Email</Text>
+            <Text style={styles.brandSubtitle}>
+              We sent a 6-digit verification code to{" "}
+              <Text style={styles.emailHighlight}>{email}</Text>. Enter the code below to complete registration.
+            </Text>
           </View>
 
-          {/* Form Card Group */}
+          {/* Form Card (Consistent with Step 1 - 4) */}
           <View style={styles.formCard}>
-            <Text style={styles.inputLabel}>OTP Code</Text>
+            <View style={styles.inputGroup}>
+              <View style={styles.rowLabelWrapper}>
+                <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
+              </View>
 
-            {/* Structured Input Row with Vector Badge Icon */}
-            <View style={[styles.flatInputField, styles.fieldRow]}>
-              <KeyRound color={theme?.textSecondary || "#94A3B8"} size={20} style={styles.leadingIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit OTP"
-                placeholderTextColor={theme?.placeholderText || "#94A3B8"}
-                value={otp}
-                onChangeText={setOtp}
-                keyboardType="numeric"
-                maxLength={6}
-                autoCorrect={false}
-              />
+              {/* Input Row with Vector Badge Icon */}
+              <View style={[styles.flatInputField, styles.fieldRow]}>
+                <Ionicons
+                  name="key-outline"
+                  size={20}
+                  color={COLORS.logoGreen}
+                  style={styles.leadingIcon}
+                />
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      letterSpacing: otp.length > 0 ? 8 : 0,
+                      fontSize: otp.length > 0 ? 22 : 15,
+                    },
+                  ]}
+                  placeholder="Enter 6-digit OTP"
+                  placeholderTextColor={theme?.placeholderText || COLORS.textMuted}
+                  value={otp}
+                  onChangeText={handleOtpChange}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
             </View>
 
             {/* Action Trigger Verification Button */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              disabled={isLoading}
-              onPressIn={() => setIsPressed(true)}
-              onPressOut={() => setIsPressed(false)}
+            <VerifyButton
+              isLoading={isLoading}
               onPress={() => handleVerifyOTP()}
-              style={[
-                styles.buttonBase,
-                isPressed ? styles.buttonPressed : styles.buttonUnpressed
-              ]}
-            >
-              {isLoading ? (
-                <View style={styles.buttonLoadingRow}>
-                  <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
-                  <Text style={[styles.buttonText, styles.buttonLoadingText]}>
-                    Verifying OTP...
-                  </Text>
-                </View>
-              ) : (
-                <Text style={[styles.buttonText, isPressed && styles.buttonTextPressed]}>
-                  Verify OTP
-                </Text>
-              )}
-            </TouchableOpacity>
+              styles={styles}
+            />
 
             {/* Resend OTP Row */}
-            <View style={styles.resendContainer}>
-              <Text style={styles.resendText}>Didn't receive code? </Text>
-              <TouchableOpacity
-                disabled={isResending || resendCooldown > 0}
-                onPress={handleResendOTP}
-                activeOpacity={0.7}
-                style={styles.resendButton}
-              >
-                {isResending ? (
-                  <ActivityIndicator size="small" color={logoGreen} />
-                ) : (
-                  <Text
-                    style={[
-                      styles.resendLink,
-                      resendCooldown > 0 && styles.resendLinkDisabled
-                    ]}
-                  >
-                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
+            <ResendRow
+              isResending={isResending}
+              resendCooldown={resendCooldown}
+              onResend={handleResendOTP}
+              styles={styles}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -253,172 +326,163 @@ export default function VerifyEmailScreen({ email, name, password, isLogin, onVe
   );
 }
 
-// --- COMPONENT STYLES ---
-const getStyles = (theme, isDarkMode) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme?.background || baseColor,
-  },
-  flexContainer: {
-    flex: 1,
-  },
-  topNavigationRow: {
-    width: '100%',
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
-    paddingBottom: 4,
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-  },
-  backArrowButton: {
-    padding: 10,
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-  headerSection: {
-    marginBottom: 32,
-    alignItems: "center",
-    width: '100%',
-  },
-  brandTitle: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: logoGreen, 
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: theme?.textSecondary || '#64748B',
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '700',
-  },
-  emailBadgeContainer: {
-    marginTop: 10,
-    alignSelf: 'center',
-  },
-  emailText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: theme?.textPrimary || "#0F172A",
-    backgroundColor: theme?.cardBg || '#F1F5F9',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-    overflow: 'hidden',
-    textAlign: 'center',
-  },
-  formCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 28,
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  inputLabel: {
-    color: theme?.textPrimary || '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginLeft: 6,
-  },
-  flatInputField: {
-    backgroundColor: theme?.inputBg || baseColor,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: theme?.inputBorder || '#E2E8F0',
-    marginBottom: 24,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  leadingIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    color: theme?.textPrimary || '#0F172A',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: "center",
-    letterSpacing: 6,
-  },
-  buttonBase: {
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  buttonUnpressed: {
-    backgroundColor: logoGreen,
-    borderRadius: 20,
-  },
-  buttonPressed: {
-    backgroundColor: '#059669',
-    opacity: 0.85,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  buttonTextPressed: {
-    color: '#E2E8F0',
-  },
-  buttonLoadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonSpinner: {
-    marginRight: 8,
-  },
-  buttonLoadingText: {
-    opacity: 0.95,
-  },
-  resendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  resendText: {
-    fontSize: 13,
-    color: theme?.textSecondary || '#64748B',
-    fontWeight: '600',
-  },
-  resendButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-  },
-  resendLink: {
-    fontSize: 13,
-    color: logoGreen,
-    fontWeight: '800',
-  },
-  resendLinkDisabled: {
-    color: theme?.textSecondary || '#94A3B8',
-    opacity: 0.7,
-  },
-});
+// --- COMPONENT STYLES (CONSISTENT WITH STEP 1 - 4 DESIGN LANGUAGE) ---
+const getStyles = (theme, isDarkMode) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme?.background || COLORS.base,
+    },
+    scrollContainer: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 30,
+      paddingTop: Platform.OS === "ios" ? 30 : 20,
+    },
+    headerSection: {
+      marginBottom: 24,
+      alignItems: "flex-start",
+      width: "100%",
+    },
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    stepIndicator: {
+      fontSize: 11,
+      fontWeight: "900",
+      color: COLORS.logoGreen,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    brandTitle: {
+      fontSize: 34,
+      fontWeight: "900",
+      color: theme?.textPrimary || COLORS.textDark,
+      letterSpacing: -0.5,
+      marginTop: 2,
+    },
+    brandSubtitle: {
+      fontSize: 13.5,
+      color: theme?.textSecondary || COLORS.textGrey,
+      marginTop: 8,
+      lineHeight: 20,
+      fontWeight: "600",
+    },
+    emailHighlight: {
+      color: COLORS.logoGreen,
+      fontWeight: "800",
+    },
+    formCard: {
+      backgroundColor: theme?.surface || COLORS.base,
+      borderRadius: 18,
+      padding: 20,
+      borderWidth: 1.5,
+      borderColor: theme?.border || COLORS.borderLight,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDarkMode ? 0.2 : 0.035,
+      shadowRadius: 8,
+      elevation: 1,
+    },
+    inputGroup: {
+      marginBottom: 10,
+    },
+    rowLabelWrapper: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    inputLabel: {
+      color: theme?.textPrimary || COLORS.textGrey,
+      fontSize: 11,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+    },
+    flatInputField: {
+      backgroundColor: theme?.inputBg || COLORS.base,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme?.inputBorder || COLORS.borderLight,
+      height: 52,
+      justifyContent: "center",
+    },
+    fieldRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+    },
+    leadingIcon: {
+      marginRight: 10,
+    },
+    input: {
+      flex: 1,
+      color: theme?.textPrimary || COLORS.textDark,
+      height: "100%",
+      fontWeight: "800",
+      textAlign: "center",
+    },
+    buttonBase: {
+      height: 52,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      marginTop: 10,
+    },
+    buttonUnpressed: {
+      backgroundColor: COLORS.logoGreen,
+    },
+    buttonText: {
+      color: COLORS.white,
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    buttonLoadingText: {
+      opacity: 0.95,
+    },
+    resendContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 18,
+    },
+    resendText: {
+      fontSize: 13,
+      color: theme?.textSecondary || COLORS.textGrey,
+      fontWeight: "600",
+    },
+    resendButton: {
+      paddingVertical: 4,
+      paddingHorizontal: 4,
+    },
+    resendLink: {
+      fontSize: 13,
+      color: COLORS.logoGreen,
+      fontWeight: "800",
+    },
+    resendLinkDisabled: {
+      color: theme?.textSecondary || COLORS.textMuted,
+      opacity: 0.7,
+    },
+  });
+
