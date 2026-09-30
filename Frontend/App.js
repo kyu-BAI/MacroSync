@@ -11,6 +11,7 @@ import {
   LogBox,
   Platform,
   SafeAreaView,
+  BackHandler,
 } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -45,6 +46,7 @@ import ResetPasswordScreen from "./src/screens/auth/ResetPassword";
 import StepOneScreen from "./src/screens/onboarding/StepOne";
 import StepTwoScreen from "./src/screens/onboarding/StepTwo";
 import StepThreeScreen from "./src/screens/onboarding/StepThree";
+import StepFourScreen from "./src/screens/onboarding/StepFour";
 import GeneratingPlanScreen from "./src/screens/onboarding/GeneratingPlan";
 
 // Core Dashboard Main Screen Panels
@@ -117,6 +119,12 @@ function MainApp() {
     goal: "muscle",
     goalWeight: "",
     targetDate: "",
+  });
+  const [userLocation, setUserLocation] = useState({
+    address: "",
+    structuredLocation: null,
+    city: "",
+    province: "",
   });
 
   // Module 5 Frontend State Sharing
@@ -479,6 +487,31 @@ function MainApp() {
     });
     return () => unsubscribe();
   }, [userId]);
+
+  // ── Android Hardware Back Button Handling ─────────────────────────────────
+  useEffect(() => {
+    const onHardwareBack = () => {
+      if (currentScreen === "STEP_FOUR") {
+        setCurrentScreen("STEP_THREE");
+        return true;
+      }
+      if (currentScreen === "STEP_THREE") {
+        setCurrentScreen("STEP_TWO");
+        return true;
+      }
+      if (currentScreen === "STEP_TWO") {
+        setCurrentScreen("STEP_ONE");
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onHardwareBack
+    );
+    return () => sub.remove();
+  }, [currentScreen]);
 
   // ── Deep Link Handling ───────────────────────────────────────────────────
   useEffect(() => {
@@ -974,6 +1007,7 @@ function MainApp() {
   if (currentScreen === "STEP_ONE") {
     return (
       <StepOneScreen
+        initialBaseline={userBaseline}
         onNext={(baselineMetrics) => {
           if (baselineMetrics) {
             setUserBaseline(baselineMetrics);
@@ -986,9 +1020,11 @@ function MainApp() {
   if (currentScreen === "STEP_TWO") {
     return (
       <StepTwoScreen
+        initialGoals={userGoals}
         currentWeight={userBaseline.weight}
         height={userBaseline.height}
         weightUnit={userBaseline.unit || userBaseline.weightUnit || "kg"}
+        onBack={() => setCurrentScreen("STEP_ONE")}
         onNext={(goalMetrics) => {
           if (goalMetrics) {
             setUserGoals(goalMetrics);
@@ -1001,12 +1037,29 @@ function MainApp() {
   if (currentScreen === "STEP_THREE") {
     return (
       <StepThreeScreen
+        initialLocation={userLocation}
+        onBack={() => setCurrentScreen("STEP_TWO")}
+        onNext={(locationData) => {
+          if (locationData) {
+            setUserLocation(locationData);
+          }
+          setCurrentScreen("STEP_FOUR");
+        }}
+      />
+    );
+  }
+  if (currentScreen === "STEP_FOUR") {
+    return (
+      <StepFourScreen
+        locationData={userLocation}
+        onBack={() => setCurrentScreen("STEP_THREE")}
         onSubmit={(finalPersonalizationData) => {
           // Unifies all compiled metrics for data payload synchronization
           const onboardingPayload = {
             userId: userId,
             ...userBaseline,
             ...userGoals,
+            ...userLocation,
             ...finalPersonalizationData,
           };
           console.log(
@@ -1015,12 +1068,21 @@ function MainApp() {
           );
           setUserProfile((prev) => ({
             ...prev,
-            address: finalPersonalizationData?.address || prev.address || "",
+            address:
+              userLocation?.address ||
+              finalPersonalizationData?.address ||
+              prev.address ||
+              "",
             structuredLocation:
+              userLocation?.structuredLocation ||
               finalPersonalizationData?.structuredLocation ||
               prev.structuredLocation ||
               null,
-            city: finalPersonalizationData?.city || prev.city || "",
+            city:
+              userLocation?.city ||
+              finalPersonalizationData?.city ||
+              prev.city ||
+              "",
             allergies:
               finalPersonalizationData?.allergies || prev.allergies || [],
           }));

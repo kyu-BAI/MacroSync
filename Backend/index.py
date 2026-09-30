@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -172,6 +172,7 @@ class OnboardingData(BaseModel):
     weight_unit: str = "kg"
     starting_weight: float = None
     allergies: list = []
+    medical_conditions: list = []
     address: str = None
     structured_location: dict = {}
 
@@ -279,18 +280,26 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 
             # Try SSL (port 465) first, then fallback to TLS (port 587)
             try:
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10.0) as server:
-                    server.login(sender_email, app_password)
-                    server.sendmail(sender_email, clean_to, msg.as_string())
+                server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=4.0)
+                server.login(sender_email, app_password)
+                server.sendmail(sender_email, clean_to, msg.as_string())
+                try:
+                    server.close()
+                except Exception:
+                    pass
                 smtp_sent = True
                 print(f"[SUCCESS] OTP Email successfully sent via Gmail SMTP SSL to recipient: {clean_to}")
             except Exception as ssl_err:
                 print("Gmail SMTP SSL port 465 error, trying TLS port 587:", ssl_err)
                 try:
-                    with smtplib.SMTP("smtp.gmail.com", 587, timeout=10.0) as server:
-                        server.starttls()
-                        server.login(sender_email, app_password)
-                        server.sendmail(sender_email, clean_to, msg.as_string())
+                    server = smtplib.SMTP("smtp.gmail.com", 587, timeout=4.0)
+                    server.starttls()
+                    server.login(sender_email, app_password)
+                    server.sendmail(sender_email, clean_to, msg.as_string())
+                    try:
+                        server.close()
+                    except Exception:
+                        pass
                     smtp_sent = True
                     print(f"[SUCCESS] OTP Email successfully sent via Gmail SMTP TLS to recipient: {clean_to}")
                 except Exception as tls_err:
@@ -321,7 +330,7 @@ def send_otp_via_email(to_email: str, otp_code: str, subject: str = "MacroSync V
 
 # ---------------- SIGNUP ----------------
 @app.post("/signup")
-async def signup(user: UserAuth):
+async def signup(user: UserAuth, background_tasks: BackgroundTasks):
     try:
         email = user.email.strip().lower()
         existing_profile = supabase_admin.table("user_profiles").select("id").eq("email", email).execute()
@@ -376,11 +385,8 @@ async def signup(user: UserAuth):
             "expires_at": expiry
         }).execute()
 
-        # 4. Dispatch Email OTP directly via Gmail SMTP / Resend
-        try:
-            send_otp_via_email(email, otp_code, "MacroSync Verification OTP")
-        except Exception as mail_err:
-            print("Mail dispatch error (OTP saved in DB):", mail_err)
+        # 4. Dispatch Email OTP asynchronously in background (0ms delay to user!)
+        background_tasks.add_task(send_otp_via_email, email, otp_code, "MacroSync Verification OTP")
 
         return {"user_id": user_id}
 
@@ -499,7 +505,7 @@ async def execute_account_deletion(target_uid: str):
 
 # ---------------- GOOGLE SIGNIN (OAUTH & ROUTING) ----------------
 @app.post("/auth/google-signin")
-async def google_signin(data: GoogleSignInRequest):
+async def google_signin(data: GoogleSignInRequest, background_tasks: BackgroundTasks):
     try:
         email = data.email.strip().lower()
         name = data.name.strip() or "Google User"
@@ -558,10 +564,7 @@ async def google_signin(data: GoogleSignInRequest):
                 print("OTP DB upsert error:", otp_db_err)
 
         print(f"Dispatching Google Verification OTP code {otp_code} to {email}")
-        try:
-            send_otp_via_email(email, otp_code, "MacroSync Verification OTP - Google Account")
-        except Exception as email_err:
-            print("Google verification email error:", email_err)
+        background_tasks.add_task(send_otp_via_email, email, otp_code, "MacroSync Verification OTP - Google Account")
 
         return {
             "success": True,
@@ -583,7 +586,7 @@ async def google_signin(data: GoogleSignInRequest):
 
 # ---------------- FORGOT PASSWORD (FIXED) ----------------
 @app.post("/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest):
+async def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
 
     try:
         clean_email = data.email.strip().lower()
@@ -622,10 +625,8 @@ async def forgot_password(data: ForgotPasswordRequest):
             "expires_at": expires_at
         }).execute()
 
-        # Send OTP email
-        sent = send_otp_via_email(clean_email, otp, "MacroSync Password Reset OTP")
-        if not sent:
-            raise HTTPException(status_code=400, detail=f"Failed to send OTP email to {clean_email}.")
+        # Send OTP email in background
+        background_tasks.add_task(send_otp_via_email, clean_email, otp, "MacroSync Password Reset OTP")
 
         return {"message": "OTP sent to your email successfully"}
 
@@ -1123,6 +1124,8 @@ async def save_onboarding(data: OnboardingData):
     prefs["goal_weight"] = float(data.goal_weight) if data.goal_weight is not None else float(data.weight_kg)
     if data.allergies is not None:
         prefs["allergies"] = data.allergies
+    if data.medical_conditions is not None:
+        prefs["medical_conditions"] = data.medical_conditions
     if data.address:
         prefs["address"] = data.address
     if data.structured_location:

@@ -161,15 +161,27 @@ function CalendarPickerModal({
 // Form dispatch submit button
 function PrimaryButton({ onPress, isLoading, styles }) {
   return (
-    <TouchableOpacity activeOpacity={0.85} disabled={isLoading} onPress={onPress} style={[styles.buttonBase, styles.buttonUnpressed]}>
-      {isLoading ? <ActivityIndicator size="small" color={COLORS.whiteHighlight} /> : <Text style={styles.buttonText}>Continue</Text>}
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={isLoading}
+      onPress={onPress}
+      style={[styles.buttonBase, styles.buttonUnpressed]}
+    >
+      {isLoading ? (
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color={COLORS.whiteHighlight} style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>Calibrating...</Text>
+        </View>
+      ) : (
+        <Text style={styles.buttonText}>Continue to Regional Availability</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 // --- MAIN STEP TWO SCREEN ---
 
-export default function StepTwoScreen({ onNext, currentWeight, height, weightUnit }) {
+export default function StepTwoScreen({ onNext, onBack, currentWeight, height, weightUnit, initialGoals }) {
   // Theme & screen styling
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
@@ -196,9 +208,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
     handleNextMonth,
     handleSelectDate,
     handleContinue,
-  } = useStepTwoGoals({ onNext, currentWeight, height, weightUnit });
-
-  const isMaintain = form.selectedGoal === "maintain";
+  } = useStepTwoGoals({ onNext, currentWeight, height, weightUnit, initialGoals });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -208,7 +218,20 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Header Sector */}
           <View style={styles.headerSection}>
-            <Text style={styles.stepIndicator}>STEP 2 OF 3</Text>
+            {Boolean(onBack) && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={onBack}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color={theme?.textPrimary || COLORS.textDark}
+                />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.stepIndicator}>STEP 2 OF 4</Text>
             <Text style={styles.brandTitle}>Objectives</Text>
             <Text style={styles.brandSubtitle}>
               Define your physical targets and lifestyle profile parameters so MacroSync can calibrate your diet structure.
@@ -238,15 +261,16 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                   <Text style={styles.inputLabel}>Target Goal Weight ({form.goalWeightUnit})</Text>
                 </View>
 
-                <View style={[styles.flatInputField, isMaintain && styles.flatInputFieldDisabled]}>
+                <View style={styles.flatInputField}>
                   <TextInput
-                    style={[styles.input, isMaintain && styles.inputDisabled]}
+                    style={styles.input}
                     placeholder={`Enter target weight in ${form.goalWeightUnit}`}
                     placeholderTextColor={theme?.placeholderText || COLORS.textPlaceholder}
                     value={form.goalWeight}
                     onChangeText={handleGoalWeightChange}
-                    keyboardType="numeric"
-                    editable={!isLoading && !isMaintain}
+                    keyboardType="decimal-pad"
+                    autoCorrect={false}
+                    editable={!isLoading}
                   />
                 </View>
 
@@ -261,7 +285,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                 {/* Weight Validation Warning Box */}
                 {Boolean(weightWarningText) && (
                   <View style={styles.warningBox}>
-                    <Ionicons name="alert-circle-outline" size={14} color={COLORS.dangerRed} />
+                    <Ionicons name="alert-circle-outline" size={14} color={COLORS.dangerRed} style={{ marginTop: 1 }} />
                     <Text style={styles.warningBoxText}>{weightWarningText}</Text>
                   </View>
                 )}
@@ -269,7 +293,9 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
 
               {/* Target Goal Date Field */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Target Goal Date</Text>
+                <View style={styles.rowLabelWrapper}>
+                  <Text style={styles.inputLabel}>Target Goal Date</Text>
+                </View>
                 <View style={[styles.flatInputField, styles.fieldRow]}>
                   <TextInput
                     style={styles.input}
@@ -278,6 +304,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                     value={form.targetDate}
                     onChangeText={handleTargetDateChange}
                     keyboardType="numeric"
+                    autoCorrect={false}
                     editable={!isLoading}
                   />
                   <TouchableOpacity style={styles.calendarIconBtn} disabled={isLoading} onPress={handleOpenCalendar} activeOpacity={0.6}>
@@ -288,9 +315,14 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                 {/* Suggested Realistic Date Quick Chip */}
                 {Boolean(suggestedDateInfo) && (
                   <TouchableOpacity style={styles.suggestedChip} activeOpacity={0.7} onPress={handleApplySuggestedDate}>
-                    <Ionicons name="sparkles-outline" size={14} color={COLORS.logoGreen} />
-                    <Text style={styles.suggestedChipText}>
-                      Auto-set realistic date: {suggestedDateInfo.formatted} ({suggestedDateInfo.weeks} wks @ 0.5kg/wk)
+                    <Ionicons name="sparkles" size={13} color={COLORS.logoGreen} />
+                    <Text
+                      style={styles.suggestedChipText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      {suggestedDateInfo.label}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -298,7 +330,7 @@ export default function StepTwoScreen({ onNext, currentWeight, height, weightUni
                 {/* Date Validation Warning Box */}
                 {Boolean(dateWarningText) && (
                   <View style={styles.warningBox}>
-                    <Ionicons name="alert-circle-outline" size={14} color={COLORS.dangerRed} />
+                    <Ionicons name="alert-circle-outline" size={14} color={COLORS.dangerRed} style={{ marginTop: 1 }} />
                     <Text style={styles.warningBoxText}>{dateWarningText}</Text>
                   </View>
                 )}
@@ -367,47 +399,62 @@ const getStyles = (theme, isDarkMode = false) =>
     // --- HEADER / BRAND SECTION ---
     // Header wrapper holding step indicator, title and subtitle
     headerSection: {
-      marginBottom: 28,
-      alignItems: "center",
+      marginBottom: 24,
+      alignItems: "flex-start",
       width: "100%",
     },
-    // "STEP 2 OF 3" tracking indicator text
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+      alignSelf: "flex-start",
+    },
+    // "STEP 2 OF 4" tracking indicator text
     stepIndicator: {
       fontSize: 11,
       fontWeight: "900",
       color: COLORS.logoGreen,
       letterSpacing: 2,
       textTransform: "uppercase",
+      textAlign: "left",
+      marginBottom: 4,
     },
     // Main "Objectives" screen title
     brandTitle: {
-      fontSize: 38,
+      fontSize: 36,
       fontWeight: "900",
       color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
-      marginTop: 4,
+      marginTop: 2,
+      textAlign: "left",
     },
     // Subtitle description below the title
     brandSubtitle: {
-      fontSize: 13,
+      fontSize: 13.5,
       color: theme?.textSecondary || COLORS.textGrey,
       marginTop: 8,
-      textAlign: "center",
+      textAlign: "left",
       lineHeight: 20,
-      fontWeight: "700",
-      paddingHorizontal: 10,
+      fontWeight: "600",
     },
 
     // --- FORM CONTAINER CARD ---
     // Rounded card housing all objective parameters
     formCard: {
       backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 28,
+      borderRadius: 18,
       padding: 20,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
-      shadowOpacity: 0,
-      elevation: 0,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDarkMode ? 0.2 : 0.035,
+      shadowRadius: 8,
+      elevation: 1,
     },
     // Section label ("ACTIVITY LEVEL", "PRIMARY FITNESS GOAL")
     sectionInputLabel: {
@@ -434,7 +481,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Individual option card base shape
     gridCard: {
       width: "31.5%",
-      borderRadius: 20,
+      borderRadius: 12,
       paddingVertical: 14,
       paddingHorizontal: 8,
       alignItems: "center",
@@ -459,7 +506,7 @@ const getStyles = (theme, isDarkMode = false) =>
     iconWrapper: {
       width: 36,
       height: 36,
-      borderRadius: 12,
+      borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 8,
@@ -500,7 +547,7 @@ const getStyles = (theme, isDarkMode = false) =>
     tagBadge: {
       paddingVertical: 2,
       paddingHorizontal: 6,
-      borderRadius: 8,
+      borderRadius: 6,
       marginTop: 2,
     },
     // Inactive goal pill badge background
@@ -523,12 +570,9 @@ const getStyles = (theme, isDarkMode = false) =>
     },
 
     // --- TARGET WEIGHT & DATE SECTION ---
-    // Container separating grids from numeric & calendar inputs
+    // Container housing numeric & calendar inputs with consistent section spacing
     targetSection: {
-      marginTop: 12,
-      borderTopWidth: 1.5,
-      borderColor: theme?.border || COLORS.borderLight,
-      paddingTop: 16,
+      marginTop: 20,
     },
     // Wrapper spacing around each input field
     inputGroup: {
@@ -604,7 +648,7 @@ const getStyles = (theme, isDarkMode = false) =>
     modalFormCard: {
       width: "100%",
       backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 24,
+      borderRadius: 18,
       padding: 20,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
@@ -627,7 +671,7 @@ const getStyles = (theme, isDarkMode = false) =>
     arrowButton: {
       padding: 8,
       backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 14,
+      borderRadius: 10,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
     },
@@ -660,7 +704,7 @@ const getStyles = (theme, isDarkMode = false) =>
       justifyContent: "center",
       alignItems: "center",
       marginVertical: 2,
-      borderRadius: 12,
+      borderRadius: 8,
     },
     // Empty spacer slot for day offset alignment
     calendarDayEmpty: {
@@ -677,7 +721,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Highlighted cell styling for the selected target date
     calendarDaySelected: {
       backgroundColor: COLORS.logoGreen,
-      borderRadius: 12,
+      borderRadius: 8,
     },
     // Day text styling when cell is actively selected
     calendarDayTextSelected: {
@@ -713,45 +757,46 @@ const getStyles = (theme, isDarkMode = false) =>
       color: theme?.textSecondary || COLORS.textGrey,
       marginLeft: 5,
     },
-    // Interactive suggestion chip container
+    // Interactive suggestion chip container (sleek soft-tinted action pill)
     suggestedChip: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: theme?.cardBg || COLORS.bgPill,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 12,
+      alignSelf: "flex-start",
+      backgroundColor: isDarkMode ? "rgba(16, 185, 129, 0.14)" : "rgba(16, 185, 129, 0.08)",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
       marginTop: 8,
-      borderWidth: 1,
-      borderColor: COLORS.logoGreen,
     },
     // Suggested realistic date highlight text
     suggestedChipText: {
-      fontSize: 12,
+      fontSize: 11.5,
       fontWeight: "800",
       color: COLORS.logoGreen,
-      marginLeft: 6,
+      marginLeft: 5,
     },
     // Validation warning container box
     warningBox: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       marginTop: 6,
       paddingHorizontal: 4,
     },
     // Warning error text
     warningBoxText: {
+      flex: 1,
       fontSize: 12,
       fontWeight: "700",
       color: COLORS.dangerRed,
       marginLeft: 5,
+      lineHeight: 16,
     },
 
     // --- PRIMARY SUBMIT BUTTON ---
     // Primary button baseline dimensions & centering
     buttonBase: {
       paddingVertical: 14,
-      borderRadius: 20,
+      borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
       width: "100%",
@@ -765,8 +810,22 @@ const getStyles = (theme, isDarkMode = false) =>
     // Button label typography
     buttonText: {
       color: COLORS.whiteHighlight,
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: "800",
       letterSpacing: 0.5,
+    },
+    // Row holding spinner and loading text
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Spinner spacing next to loading text
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    // Loading text style
+    buttonLoadingText: {
+      opacity: 0.95,
     },
   });

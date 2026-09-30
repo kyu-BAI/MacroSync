@@ -18,12 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "../../context/ThemeContext";
-import PrivacyModal from "../../components/PrivacyModal";
-import useStepThreeDietary, {
-  PRESET_ALLERGENS,
-  PRESET_MEDICAL_CONDITIONS,
-  ITEM_HEIGHT,
-} from "../../hooks/useStepThreeDietary";
+import useStepThreeLocation, { ITEM_HEIGHT } from "../../hooks/useStepThreeLocation";
 
 // --- LIGHTWEIGHT SUBCOMPONENTS ---
 
@@ -32,8 +27,6 @@ function LocationSection({
   province,
   city,
   openPicker,
-  isFetchingPicker,
-  disabled,
   styles,
 }) {
   return (
@@ -49,7 +42,6 @@ function LocationSection({
           style={[styles.flatInputField, styles.selectorRow]}
           onPress={() => openPicker("province")}
           activeOpacity={0.7}
-          disabled={disabled || isFetchingPicker === "province"}
         >
           <Text
             style={[
@@ -59,11 +51,7 @@ function LocationSection({
           >
             {province ? province.name : "Select Province"}
           </Text>
-          {isFetchingPicker === "province" ? (
-            <ActivityIndicator size="small" color={COLORS.logoGreen} />
-          ) : (
-            <Ionicons name="chevron-down" size={16} color={COLORS.logoGreen} />
-          )}
+          <Ionicons name="chevron-down" size={16} color={COLORS.logoGreen} />
         </TouchableOpacity>
       </View>
 
@@ -74,12 +62,11 @@ function LocationSection({
           style={[
             styles.flatInputField,
             styles.selectorRow,
-            (!province || isFetchingPicker === "city") &&
-              styles.disabledSelector,
+            !province && styles.disabledSelector,
           ]}
           onPress={() => openPicker("city")}
           activeOpacity={0.7}
-          disabled={disabled || !province || isFetchingPicker === "city"}
+          disabled={!province}
         >
           <Text
             style={[
@@ -89,239 +76,35 @@ function LocationSection({
           >
             {city ? city.name : "Select City / Municipality"}
           </Text>
-          {isFetchingPicker === "city" ? (
-            <ActivityIndicator size="small" color={COLORS.logoGreen} />
-          ) : (
-            <Ionicons
-              name="chevron-down"
-              size={16}
-              color={province ? COLORS.logoGreen : COLORS.textDisabled}
-            />
-          )}
+          <Ionicons
+            name="chevron-down"
+            size={16}
+            color={province ? COLORS.logoGreen : COLORS.textDisabled}
+          />
         </TouchableOpacity>
       </View>
     </>
   );
 }
 
-// Allergies and dietary restrictions selector
-function AllergensSection({
-  selectedAllergies,
-  customAllergy,
-  onToggleAllergen,
-  onCustomAllergyChange,
-  disabled,
-  styles,
-}) {
+// Visual informative badge for Palengke calibration
+function PalengkeRadarBadge({ styles }) {
   return (
-    <>
-      <Text style={[styles.sectionInputLabel, styles.allergiesSectionLabel]}>
-        Allergies & Restrictions
-      </Text>
-      <Text style={styles.inputLabel}>Select Known Allergens</Text>
-
-      {/* Preset Allergen Chips Grid */}
-      <View style={styles.chipGrid}>
-        {PRESET_ALLERGENS.map((allergen) => {
-          const isSelected = selectedAllergies.includes(allergen.id);
-          return (
-            <TouchableOpacity
-              key={allergen.id}
-              activeOpacity={0.8}
-              disabled={disabled}
-              onPress={() => onToggleAllergen(allergen.id)}
-              style={[
-                styles.chip,
-                isSelected ? styles.chipActive : styles.chipInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  isSelected && styles.chipTextActive,
-                ]}
-              >
-                {allergen.title}
-              </Text>
-              {isSelected && (
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color={COLORS.whiteHighlight}
-                  style={styles.chipIconMargin}
-                />
-              )}
-            </TouchableOpacity>
-          );
-        })}
+    <View style={styles.radarCard}>
+      <View style={styles.radarIconBox}>
+        <Ionicons name="storefront-outline" size={22} color={COLORS.logoGreen} />
       </View>
-
-      {/* Custom Allergen Input Field */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Other Custom Food Allergy</Text>
-        <View style={styles.flatInputField}>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., Shrimp, Almonds (Optional)"
-            placeholderTextColor={COLORS.textMuted}
-            value={customAllergy}
-            onChangeText={onCustomAllergyChange}
-            autoCorrect={true}
-            editable={!disabled}
-          />
-        </View>
-      </View>
-    </>
-  );
-}
-
-// Pre-existing health screening & condition selector
-function MedicalScreeningSection({
-  selectedConditions,
-  customCondition,
-  onToggleCondition,
-  onCustomConditionChange,
-  disabled,
-  styles,
-}) {
-  return (
-    <>
-      <Text style={[styles.sectionInputLabel, styles.medicalSectionLabel]}>
-        Health Screening & Clinical Notice
-      </Text>
-
-      {/* Clinical Guidance Notice Banner */}
-      <View style={styles.medicalNoticeBox}>
-        <View style={styles.medicalNoticeHeader}>
-          <Ionicons name="medical-outline" size={16} color={COLORS.amberText} />
-          <Text style={styles.medicalNoticeTitle}>
-            Pre-Existing Health Screening
-          </Text>
-        </View>
-        <Text style={styles.medicalNoticeSubtitle}>
-          MacroSync is an educational wellness tool. Users with diabetes, eating
-          disorders, or chronic conditions should consult a healthcare
-          professional rather than relying solely on automated advice.
+      <View style={styles.radarContentBox}>
+        <Text style={styles.radarTitle}>Palengke & Regional Food Calibration</Text>
+        <Text style={styles.radarSubtitle}>
+          MacroSync utilizes your location to detect nearby public wet markets, catch schedules, and authentic regional delicacies.
         </Text>
       </View>
-
-      <Text style={styles.inputLabel}>Select Any Known Medical Conditions</Text>
-
-      {/* Preset Condition Chips Grid */}
-      <View style={styles.chipGrid}>
-        {PRESET_MEDICAL_CONDITIONS.map((condition) => {
-          const isSelected = selectedConditions.includes(condition.id);
-          const isNone = condition.id === "none";
-          return (
-            <TouchableOpacity
-              key={condition.id}
-              activeOpacity={0.8}
-              disabled={disabled}
-              onPress={() => onToggleCondition(condition.id)}
-              style={[
-                styles.chip,
-                isSelected
-                  ? isNone
-                    ? styles.medicalChipActiveNone
-                    : styles.medicalChipActive
-                  : styles.medicalChipInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  isSelected && styles.chipTextActive,
-                ]}
-              >
-                {condition.title}
-              </Text>
-              {isSelected && (
-                <Ionicons
-                  name={isNone ? "checkmark-circle" : "close-circle"}
-                  size={14}
-                  color={COLORS.whiteHighlight}
-                  style={styles.chipIconMargin}
-                />
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Custom Condition Input Field */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Other Medical Condition / Illness</Text>
-        <View style={styles.flatInputField}>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., PCOS, Thyroid, Fatty Liver (Optional)"
-            placeholderTextColor={COLORS.textMuted}
-            value={customCondition}
-            onChangeText={onCustomConditionChange}
-            autoCorrect={true}
-            editable={!disabled}
-          />
-        </View>
-      </View>
-    </>
-  );
-}
-
-// Medical disclaimer checkbox & privacy policy trigger
-function DisclaimerAgreement({
-  disclaimerAccepted,
-  onToggleDisclaimer,
-  onOpenPrivacyModal,
-  styles,
-}) {
-  return (
-    <View style={styles.disclaimerAgreementBox}>
-      <TouchableOpacity
-        style={styles.disclaimerAgreementRow}
-        activeOpacity={0.7}
-        onPress={onToggleDisclaimer}
-      >
-        <View
-          style={[
-            styles.disclaimerCheckbox,
-            disclaimerAccepted && styles.disclaimerCheckboxActive,
-          ]}
-        >
-          {disclaimerAccepted && (
-            <Ionicons
-              name="checkmark"
-              size={14}
-              color={COLORS.whiteHighlight}
-            />
-          )}
-        </View>
-        <Text style={styles.disclaimerAgreementText}>
-          I acknowledge that MacroSync provides nutritional & workout tracking
-          for general wellness only and does not replace licensed medical
-          diagnosis or clinical treatment.
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.disclaimerLinkButton}
-        activeOpacity={0.7}
-        onPress={() => onOpenPrivacyModal("medical")}
-      >
-        <Text style={styles.disclaimerLinkText}>
-          Read Medical Disclaimer & Privacy Policy (RA 10173)
-        </Text>
-        <Ionicons
-          name="open-outline"
-          size={13}
-          color={COLORS.logoGreen}
-          style={styles.linkIconMargin}
-        />
-      </TouchableOpacity>
     </View>
   );
 }
 
-// Searchable location picker bottom sheet modal
+// Interactive location searchable picker modal sheet
 function LocationPickerModal({
   visible,
   pickerType,
@@ -339,44 +122,56 @@ function LocationPickerModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.pickerModalCard}>
+      <View style={styles.pickerModalOverlay}>
+        <View style={styles.pickerSheetContainer}>
           <View style={styles.pickerHeaderRow}>
-            <Text style={styles.pickerModalTitle}>
-              Select {pickerType.toUpperCase()}
+            <Text style={styles.pickerHeaderTitle}>
+              Select {pickerType === "province" ? "Province" : "City / Municipality"}
             </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={COLORS.textDark} />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closePickerBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="close-circle"
+                size={24}
+                color={COLORS.textSecondary}
+              />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.searchBarContainer}>
+          {/* Dynamic Search Bar */}
+          <View style={styles.pickerSearchBar}>
             <Ionicons
               name="search"
-              size={18}
-              color={COLORS.textMuted}
+              size={16}
+              color={COLORS.textSecondary}
               style={styles.searchIconMargin}
             />
             <TextInput
-              style={styles.searchInput}
-              placeholder={`Search ${pickerType}...`}
+              style={styles.pickerSearchInput}
+              placeholder={`Search ${
+                pickerType === "province" ? "province" : "city"
+              }...`}
               placeholderTextColor={COLORS.textMuted}
               value={searchQuery}
               onChangeText={onSearchChange}
               autoCorrect={false}
+              autoCapitalize="none"
               clearButtonMode="while-editing"
             />
           </View>
 
-          <View style={styles.pickerContentWrapper}>
+          {/* Lazy Virtualized Results List */}
+          <View style={styles.pickerListContainer}>
             <FlatList
               data={pickerData}
               keyExtractor={(item, index) =>
-                `${item.province_code || item.city_code || "loc"}-${item.name || "item"}-${index}`
+                item.city_code ||
+                item.province_code ||
+                `${item.name}-${index}`
               }
-              showsVerticalScrollIndicator={false}
-              style={styles.optionsList}
-              contentContainerStyle={styles.optionsListContent}
               keyboardShouldPersistTaps="handled"
               getItemLayout={(_, index) => ({
                 length: ITEM_HEIGHT,
@@ -399,103 +194,7 @@ function LocationPickerModal({
   );
 }
 
-// Pre-submission review summary confirmation sheet
-function ReviewMetricsModal({
-  visible,
-  compiledAddress,
-  compiledAllergiesText,
-  compiledConditionsText,
-  onClose,
-  onConfirm,
-  styles,
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.confirmOverlay}>
-        <View style={styles.confirmModalCard}>
-          <View style={styles.confirmIconContainer}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={32}
-              color={COLORS.logoGreen}
-            />
-          </View>
-
-          <Text style={styles.confirmTitle}>Review Metrics</Text>
-          <Text style={styles.confirmSubtitle}>
-            Please double check your parameters before finalizing baseline
-            calibrations.
-          </Text>
-
-          <View style={styles.confirmDataBlock}>
-            <Text style={styles.confirmDataLabel}>Current Address String</Text>
-            <Text style={styles.confirmDataValue}>{compiledAddress}</Text>
-
-            <View style={styles.confirmDivider} />
-
-            <Text style={styles.confirmDataLabel}>
-              Profile Exclusions & Allergies
-            </Text>
-            <Text
-              style={[
-                styles.confirmDataValue,
-                compiledAllergiesText.includes("No")
-                  ? styles.confirmDataValueMuted
-                  : styles.confirmDataValueNeutral,
-              ]}
-            >
-              {compiledAllergiesText}
-            </Text>
-
-            <View style={styles.confirmDivider} />
-
-            <Text style={styles.confirmDataLabel}>
-              Health & Medical Screening
-            </Text>
-            <Text
-              style={[
-                styles.confirmDataValue,
-                compiledConditionsText.includes("None")
-                  ? styles.confirmDataValueMuted
-                  : styles.confirmDataValueWarning,
-              ]}
-            >
-              {compiledConditionsText}
-            </Text>
-          </View>
-
-          <View style={styles.confirmActionRow}>
-            <TouchableOpacity
-              style={[
-                styles.confirmButtonBase,
-                styles.confirmButtonSecondary,
-              ]}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.confirmButtonTextSecondary}>Edit Details</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.confirmButtonBase, styles.confirmButtonPrimary]}
-              onPress={onConfirm}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.confirmButtonTextPrimary}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// Form dispatch submit button in footer
+// Navigation continue action button
 function PrimaryButton({ onPress, isLoading, styles }) {
   return (
     <TouchableOpacity
@@ -505,9 +204,12 @@ function PrimaryButton({ onPress, isLoading, styles }) {
       style={[styles.buttonBase, styles.buttonUnpressed]}
     >
       {isLoading ? (
-        <ActivityIndicator size="small" color={COLORS.whiteHighlight} />
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>Calibrating...</Text>
+        </View>
       ) : (
-        <Text style={styles.buttonText}>Complete Set Up</Text>
+        <Text style={styles.buttonText}>Continue to Health Screening</Text>
       )}
     </TouchableOpacity>
   );
@@ -515,53 +217,26 @@ function PrimaryButton({ onPress, isLoading, styles }) {
 
 // --- MAIN STEP THREE SCREEN ---
 
-export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
-  // Theme & screen styling
+export default function StepThreeScreen({ onNext, onBack, initialLocation }) {
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
 
-  // Step three dietary hook: geographic locations, restrictions & submit dispatcher
   const {
     province,
     city,
-    selectedAllergies,
-    customAllergy,
-    selectedConditions,
-    customCondition,
-    disclaimerAccepted,
-    privacyModalVisible,
-    privacyInitialTab,
     pickerVisible,
     pickerType,
     filteredPickerData,
-    isFetchingPicker,
     searchQuery,
-    confirmVisible,
-    compiledAddress,
-    compiledAllergiesText,
-    compiledConditionsText,
-    isLoading,
-    toggleAllergen,
-    toggleCondition,
-    handleCustomAllergyChange,
-    handleCustomConditionChange,
-    handleToggleDisclaimer,
-    handleOpenPrivacyModal,
-    handleClosePrivacyModal,
     openPicker,
     handleClosePicker,
     handleSearchQueryChange,
     handleSelectLocation,
-    handleTriggerConfirmationModal,
-    handleCloseConfirmModal,
-    handleFinalSubmitDispatch,
-  } = useStepThreeDietary({ onSubmit, isLoadingExternal });
-
-  const isScreenBusy = isLoading || isLoadingExternal;
+    handleContinue,
+  } = useStepThreeLocation({ onNext, initialLocation });
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Status Bar */}
       <StatusBar
         barStyle={isDarkMode ? "light-content" : "dark-content"}
         backgroundColor={theme?.background || COLORS.base}
@@ -577,64 +252,41 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         >
           {/* Header Sector */}
           <View style={styles.headerSection}>
-            <Text style={styles.stepIndicator}>STEP 3 OF 3</Text>
-            <Text style={styles.brandTitle}>Dietary Context</Text>
+            {Boolean(onBack) && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={onBack}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color={theme?.text || COLORS.textPrimary}
+                />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.stepIndicator}>STEP 3 OF 4</Text>
+            <Text style={styles.brandTitle}>Regional Availability</Text>
             <Text style={styles.brandSubtitle}>
-              Finalize your location and constraints to ensure recommendations
-              match your local food context.
+              Select your province and city to calibrate seasonal ingredients, local food availability, and nearby palengke markets.
             </Text>
           </View>
 
           {/* Form Configuration Card */}
           <View style={styles.formCard}>
-            {/* Location Selectors */}
             <LocationSection
               province={province}
               city={city}
               openPicker={openPicker}
-              isFetchingPicker={isFetchingPicker}
-              disabled={isScreenBusy}
               styles={styles}
             />
 
-            {/* Allergens & Dietary Restrictions */}
-            <AllergensSection
-              selectedAllergies={selectedAllergies}
-              customAllergy={customAllergy}
-              onToggleAllergen={toggleAllergen}
-              onCustomAllergyChange={handleCustomAllergyChange}
-              disabled={isScreenBusy}
-              styles={styles}
-            />
+            <PalengkeRadarBadge styles={styles} />
 
-            {/* Medical Screening & Conditions */}
-            <MedicalScreeningSection
-              selectedConditions={selectedConditions}
-              customCondition={customCondition}
-              onToggleCondition={toggleCondition}
-              onCustomConditionChange={handleCustomConditionChange}
-              disabled={isScreenBusy}
-              styles={styles}
-            />
-
-            {/* Disclaimer & Policy Agreement */}
-            <DisclaimerAgreement
-              disclaimerAccepted={disclaimerAccepted}
-              onToggleDisclaimer={handleToggleDisclaimer}
-              onOpenPrivacyModal={handleOpenPrivacyModal}
-              styles={styles}
-            />
+            {/* Submit Action Button */}
+            <PrimaryButton onPress={handleContinue} styles={styles} />
           </View>
         </ScrollView>
-
-        {/* Fixed Footer Bottom Action */}
-        <View style={styles.fixedFooter}>
-          <PrimaryButton
-            onPress={handleTriggerConfirmationModal}
-            isLoading={isScreenBusy}
-            styles={styles}
-          />
-        </View>
       </KeyboardAvoidingView>
 
       {/* Location Search Picker Modal Dropdown */}
@@ -648,24 +300,6 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
         onClose={handleClosePicker}
         styles={styles}
       />
-
-      {/* Pre-Submission Review Modal Sheet */}
-      <ReviewMetricsModal
-        visible={confirmVisible}
-        compiledAddress={compiledAddress}
-        compiledAllergiesText={compiledAllergiesText}
-        compiledConditionsText={compiledConditionsText}
-        onClose={handleCloseConfirmModal}
-        onConfirm={handleFinalSubmitDispatch}
-        styles={styles}
-      />
-
-      {/* Privacy Policy & Clinical Scope Modal */}
-      <PrivacyModal
-        visible={privacyModalVisible}
-        onClose={handleClosePrivacyModal}
-        initialTab={privacyInitialTab}
-      />
     </SafeAreaView>
   );
 }
@@ -675,563 +309,267 @@ export default function StepThreeScreen({ onSubmit, isLoadingExternal }) {
 // ============================================================================
 const COLORS = {
   base: "#F8FAFC",
-  logoGreen: "#10B981",
-  logoGreenPressed: "#059669",
-  textDark: "#0F172A",
-  textGrey: "#64748B",
-  textMuted: "#94A3B8",
-  textPlaceholder: "#94A3B8",
-  textDisabled: "#CBD5E1",
-  borderLight: "#E2E8F0",
-  bgPill: "#F1F5F9",
-  cardBgLight: "#EBEBEB",
+  card: "#FFFFFF",
   whiteHighlight: "#FFFFFF",
-  amberLight: "rgba(245, 158, 11, 0.08)",
-  amberBorder: "rgba(245, 158, 11, 0.3)",
-  amberText: "#B45309",
-  amberSubtitle: "#92400E",
-  amberActive: "#D97706",
-  overlayDark: "rgba(0, 0, 0, 0.5)",
-  overlayDialog: "rgba(26, 32, 44, 0.5)",
+  logoGreen: "#10B981",
+  textDark: "#0F172A",
+  textPrimary: "#1E293B",
+  textSecondary: "#64748B",
+  textDisabled: "#94A3B8",
+  textMuted: "#9CA3AF",
+  borderLight: "#E2E8F0",
+  inputBg: "#F8FAFC",
+  buttonLabel: "#FFFFFF",
+  modalOverlayBg: "rgba(0,0,0,0.5)",
+  disabledBg: "#E2E8F0",
 };
 
-const getStyles = (theme, isDarkMode = false) =>
-  StyleSheet.create({
+// Dynamic stylesheet factory
+function getStyles(theme, isDarkMode) {
+  return StyleSheet.create({
     // --- MAIN SCREEN LAYOUT ---
-    // Entire full-screen background
     container: {
       flex: 1,
       backgroundColor: theme?.background || COLORS.base,
     },
-    // ScrollView inner padding & vertical centering
     scrollContainer: {
-      flexGrow: 1,
       paddingHorizontal: 20,
-      paddingBottom: 20,
-      paddingTop: Platform.OS === "ios" ? 35 : 25,
+      paddingTop: 12,
+      paddingBottom: 30,
     },
 
     // --- HEADER / BRAND SECTION ---
-    // Header wrapper holding step indicator, title and subtitle
     headerSection: {
-      alignItems: "center",
+      marginBottom: 24,
+      alignItems: "flex-start",
       width: "100%",
-      marginTop: Platform.OS === "ios" ? 20 : 15,
-      marginBottom: 20,
     },
-    // "STEP 3 OF 3" tracking indicator text
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+      alignSelf: "flex-start",
+    },
     stepIndicator: {
       fontSize: 11,
       fontWeight: "900",
       color: COLORS.logoGreen,
       letterSpacing: 2,
+      marginBottom: 4,
       textTransform: "uppercase",
+      textAlign: "left",
     },
-    // Main "Dietary Context" screen title
     brandTitle: {
-      fontSize: 36,
+      fontSize: 32,
       fontWeight: "900",
-      color: theme?.textPrimary || COLORS.textDark,
+      color: theme?.text || COLORS.textPrimary,
       letterSpacing: -0.5,
-      marginTop: 4,
+      marginTop: 2,
+      marginBottom: 8,
+      textAlign: "left",
     },
-    // Subtitle description below the title
     brandSubtitle: {
-      fontSize: 13,
-      color: theme?.textSecondary || COLORS.textGrey,
-      marginTop: 6,
-      textAlign: "center",
-      lineHeight: 19,
-      fontWeight: "700",
-      paddingHorizontal: 10,
+      fontSize: 13.5,
+      fontWeight: "600",
+      color: theme?.textSecondary || COLORS.textSecondary,
+      textAlign: "left",
+      lineHeight: 20,
     },
 
-    // --- FORM CONTAINER CARD ---
-    // Rounded card housing all dietary parameters
+    // --- FORM CONFIGURATION CARD ---
     formCard: {
-      backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 24,
+      backgroundColor: theme?.cardBg || COLORS.card,
+      borderRadius: 18,
       padding: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDarkMode ? 0.2 : 0.035,
+      shadowRadius: 8,
+      elevation: 1,
       borderWidth: 1.5,
-      borderColor: theme?.border || COLORS.borderLight,
-      shadowOpacity: 0,
-      elevation: 0,
-      marginBottom: 10,
+      borderColor: theme?.cardBorder || COLORS.borderLight,
     },
-    // Section header label
     sectionInputLabel: {
-      color: theme?.textPrimary || COLORS.textGrey,
-      fontSize: 11,
+      fontSize: 15,
       fontWeight: "800",
-      marginBottom: 12,
-      textTransform: "uppercase",
-      letterSpacing: 1.2,
-      marginLeft: 4,
-    },
-    // Margin spacing above allergies section label
-    allergiesSectionLabel: {
-      marginTop: 14,
-    },
-    // Margin spacing above medical screening section label
-    medicalSectionLabel: {
-      marginTop: 18,
-    },
-
-    // --- INPUT FIELDS & SELECTORS ---
-    // Wrapper spacing around each input field
-    inputGroup: {
+      color: theme?.text || COLORS.textPrimary,
       marginBottom: 14,
+      letterSpacing: -0.2,
     },
-    // Field title label above input or selector
+    inputGroup: {
+      marginBottom: 16,
+    },
     inputLabel: {
-      color: theme?.textPrimary || COLORS.textGrey,
-      fontSize: 11,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme?.textSecondary || COLORS.textSecondary,
       marginBottom: 6,
       textTransform: "uppercase",
-      letterSpacing: 1.2,
-      marginLeft: 4,
+      letterSpacing: 0.5,
     },
-    // Flat rounded input container
     flatInputField: {
-      backgroundColor: theme?.inputBg || COLORS.base,
+      backgroundColor: theme?.inputBg || COLORS.inputBg,
       borderRadius: 12,
       borderWidth: 1.5,
-      borderColor: theme?.inputBorder || COLORS.borderLight,
-      height: 48,
+      borderColor: theme?.cardBorder || COLORS.borderLight,
+      paddingHorizontal: 16,
+      height: 52,
       justifyContent: "center",
     },
-    // Horizontal row layout for dropdown selector touchable
     selectorRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 16,
     },
-    // Dropdown selected value text
-    selectorValueText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme?.textPrimary || COLORS.textDark,
-    },
-    // Placeholder text style when unselected
-    placeholderText: {
-      color: theme?.textSecondary || COLORS.textMuted,
-      fontWeight: "600",
-    },
-    // Disabled dropdown selector appearance
     disabledSelector: {
-      backgroundColor: theme?.cardBg || COLORS.bgPill,
-      borderColor: theme?.border || COLORS.borderLight,
+      backgroundColor: theme?.cardBorder || COLORS.disabledBg,
       opacity: 0.6,
     },
-    // Text input inside flat input field
-    input: {
-      flex: 1,
-      color: theme?.textPrimary || COLORS.textDark,
-      paddingHorizontal: 16,
-      height: "100%",
-      fontSize: 14,
-      fontWeight: "700",
-    },
-
-    // --- ALLERGEN & MEDICAL CHIPS ---
-    // Grid container wrapping selection chips
-    chipGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      marginBottom: 14,
-      marginLeft: 2,
-    },
-    // Individual allergen chip shape
-    chip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 14,
-      marginRight: 8,
-      marginBottom: 8,
-      borderWidth: 1.5,
-    },
-    // Unselected chip styling
-    chipInactive: {
-      backgroundColor: theme?.surface || COLORS.base,
-      borderColor: theme?.border || COLORS.borderLight,
-    },
-    // Selected allergen chip styling
-    chipActive: {
-      backgroundColor: COLORS.logoGreen,
-      borderColor: COLORS.logoGreen,
-    },
-    // Chip label text
-    chipText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: theme?.textSecondary || COLORS.textGrey,
-    },
-    // Active chip label text color
-    chipTextActive: {
-      color: COLORS.whiteHighlight,
-      fontWeight: "800",
-    },
-    // Margin between chip label and dismiss icon
-    chipIconMargin: {
-      marginLeft: 4,
-    },
-
-    // --- MEDICAL SCREENING & NOTICE BOX ---
-    // Advisory alert banner container
-    medicalNoticeBox: {
-      backgroundColor: COLORS.amberLight,
-      borderColor: COLORS.amberBorder,
-      borderWidth: 1.2,
-      borderRadius: 16,
-      padding: 14,
-      marginBottom: 14,
-    },
-    // Header row inside advisory banner
-    medicalNoticeHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 4,
-    },
-    // Title of medical advisory banner
-    medicalNoticeTitle: {
-      fontSize: 12.5,
-      fontWeight: "800",
-      color: COLORS.amberText,
-      marginLeft: 6,
-    },
-    // Subtitle copy inside advisory banner
-    medicalNoticeSubtitle: {
-      fontSize: 11.5,
+    selectorValueText: {
+      fontSize: 15,
       fontWeight: "600",
-      color: COLORS.amberSubtitle,
-      lineHeight: 16,
+      color: theme?.text || COLORS.textPrimary,
     },
-    // Unselected medical chip style
-    medicalChipInactive: {
-      backgroundColor: theme?.surface || COLORS.base,
-      borderColor: theme?.border || COLORS.borderLight,
-    },
-    // Selected medical condition chip style
-    medicalChipActive: {
-      backgroundColor: COLORS.amberActive,
-      borderColor: COLORS.amberActive,
-    },
-    // Selected "None / Healthy" chip style
-    medicalChipActiveNone: {
-      backgroundColor: COLORS.logoGreen,
-      borderColor: COLORS.logoGreen,
+    placeholderText: {
+      color: theme?.placeholderText || COLORS.textMuted,
+      fontWeight: "500",
     },
 
-    // --- DISCLAIMER AGREEMENT BOX ---
-    // Container for medical acknowledgment & policy link
-    disclaimerAgreementBox: {
-      backgroundColor: theme?.inputBg || COLORS.base,
-      borderRadius: 16,
-      borderWidth: 1.2,
-      borderColor: theme?.border || COLORS.borderLight,
-      padding: 14,
-      marginTop: 10,
-      marginBottom: 6,
-    },
-    // Row holding acknowledgment checkbox and text
-    disclaimerAgreementRow: {
+    // --- PALENGKE RADAR BADGE ---
+    radarCard: {
       flexDirection: "row",
-      alignItems: "flex-start",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? "rgba(0, 176, 116, 0.12)" : "#ECFDF5",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: isDarkMode ? "rgba(0, 176, 116, 0.3)" : "#A7F3D0",
+      padding: 14,
+      marginTop: 8,
     },
-    // Checkbox container square
-    disclaimerCheckbox: {
-      width: 22,
-      height: 22,
-      borderRadius: 6,
-      borderWidth: 1.8,
-      borderColor: theme?.border || COLORS.textDisabled,
+    radarIconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 10,
+      backgroundColor: isDarkMode ? "rgba(0, 176, 116, 0.2)" : "#D1FAE5",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: COLORS.whiteHighlight,
-      marginTop: 2,
-      marginRight: 10,
+      marginRight: 12,
     },
-    // Checked state for disclaimer checkbox
-    disclaimerCheckboxActive: {
-      backgroundColor: COLORS.logoGreen,
-      borderColor: COLORS.logoGreen,
-    },
-    // Acknowledgment description text
-    disclaimerAgreementText: {
+    radarContentBox: {
       flex: 1,
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme?.textPrimary || "#334155",
-      lineHeight: 17,
     },
-    // Link touchable to open policy modal
-    disclaimerLinkButton: {
-      marginTop: 8,
-      marginLeft: 32,
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    // Underlined policy link text
-    disclaimerLinkText: {
-      fontSize: 11.5,
+    radarTitle: {
+      fontSize: 13,
       fontWeight: "800",
-      color: COLORS.logoGreen,
-      textDecorationLine: "underline",
+      color: isDarkMode ? "#34D399" : "#065F46",
+      marginBottom: 2,
     },
-    // Margin next to external link icon
-    linkIconMargin: {
-      marginLeft: 4,
+    radarSubtitle: {
+      fontSize: 11.5,
+      fontWeight: "500",
+      color: isDarkMode ? "#A7F3D0" : "#047857",
+      lineHeight: 16,
     },
 
-    // --- FIXED FOOTER & PRIMARY BUTTON ---
-    // Pinned bottom footer container
-    fixedFooter: {
-      paddingHorizontal: 20,
-      paddingBottom: Platform.OS === "ios" ? 24 : 16,
-      paddingTop: 8,
-      backgroundColor: theme?.background || COLORS.base,
-      borderTopWidth: 1,
-      borderColor: theme?.border || COLORS.borderLight,
-    },
-    // Primary button dimensions & centering
+    // --- PRIMARY SUBMIT BUTTON ---
     buttonBase: {
-      paddingVertical: 14,
-      borderRadius: 20,
+      height: 52,
+      borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
       width: "100%",
-      height: 50,
+      marginTop: 18,
     },
-    // Primary button unpressed green background
     buttonUnpressed: {
       backgroundColor: COLORS.logoGreen,
     },
-    // Primary button label typography
     buttonText: {
       color: COLORS.whiteHighlight,
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: "800",
       letterSpacing: 0.5,
     },
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    buttonLoadingText: {
+      opacity: 0.95,
+    },
 
-    // --- SEARCH / PICKER MODAL LIST ---
-    // Fullscreen backdrop for location picker modal
-    modalOverlay: {
+    // --- SEARCH PICKER MODAL ---
+    pickerModalOverlay: {
       flex: 1,
-      backgroundColor: COLORS.overlayDark,
+      backgroundColor: COLORS.modalOverlayBg,
       justifyContent: "flex-end",
     },
-    // Bottom sheet card for location picker
-    pickerModalCard: {
-      backgroundColor: theme?.surface || COLORS.base,
-      borderTopLeftRadius: 32,
-      borderTopRightRadius: 32,
-      paddingHorizontal: 24,
-      paddingTop: 24,
-      paddingBottom: Platform.OS === "ios" ? 40 : 24,
-      height: "75%",
-      width: "100%",
+    pickerSheetContainer: {
+      backgroundColor: theme?.cardBg || COLORS.card,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      paddingTop: 16,
+      paddingHorizontal: 20,
+      paddingBottom: Platform.OS === "ios" ? 40 : 20,
+      maxHeight: "80%",
     },
-    // Header row inside location picker sheet
     pickerHeaderRow: {
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
+      justifyContent: "space-between",
       marginBottom: 12,
-      borderBottomWidth: 1,
-      borderColor: theme?.border || COLORS.borderLight,
-      paddingBottom: 12,
     },
-    // Title inside location picker modal
-    pickerModalTitle: {
-      fontSize: 15,
-      fontWeight: "900",
-      color: theme?.textPrimary || COLORS.textDark,
-      letterSpacing: 1,
+    pickerHeaderTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: theme?.text || COLORS.textPrimary,
     },
-    // Search input bar container
-    searchBarContainer: {
+    closePickerBtn: {
+      padding: 4,
+    },
+    pickerSearchBar: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: theme?.inputBg || COLORS.bgPill,
-      borderRadius: 14,
-      paddingHorizontal: 12,
-      height: 42,
-      marginBottom: 12,
+      backgroundColor: theme?.inputBg || COLORS.inputBg,
+      borderRadius: 10,
       borderWidth: 1,
-      borderColor: theme?.inputBorder || COLORS.borderLight,
+      borderColor: theme?.cardBorder || COLORS.borderLight,
+      paddingHorizontal: 12,
+      height: 44,
+      marginBottom: 12,
     },
-    // Search icon margin
     searchIconMargin: {
       marginRight: 8,
     },
-    // Search text input
-    searchInput: {
+    pickerSearchInput: {
       flex: 1,
       fontSize: 14,
-      color: theme?.textPrimary || COLORS.textDark,
-      fontWeight: "600",
+      fontWeight: "500",
+      color: theme?.text || COLORS.textPrimary,
       height: "100%",
     },
-    // Content wrapper for picker list
-    pickerContentWrapper: {
-      flex: 1,
-      flexDirection: "row",
-      width: "100%",
+    pickerListContainer: {
+      minHeight: 200,
+      maxHeight: 380,
     },
-    // List container
-    optionsList: {
-      flex: 1,
-    },
-    // Bottom padding for scrollable list
-    optionsListContent: {
-      paddingBottom: 60,
-    },
-    // Individual location item row
     pickerItemRow: {
       height: ITEM_HEIGHT,
       justifyContent: "center",
-      borderBottomWidth: 1,
-      borderColor: theme?.border || COLORS.borderLight,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme?.cardBorder || COLORS.borderLight,
+      paddingHorizontal: 4,
     },
-    // Location item text label
     pickerItemText: {
       fontSize: 15,
-      fontWeight: "700",
-      color: theme?.textPrimary || COLORS.textDark,
-    },
-
-    // --- CONFIRMATION SUMMARY DIALOG ---
-    // Fullscreen backdrop for review modal
-    confirmOverlay: {
-      flex: 1,
-      backgroundColor: COLORS.overlayDialog,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 24,
-    },
-    // Centered card container for review confirmation
-    confirmModalCard: {
-      width: "100%",
-      backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 24,
-      padding: 24,
-      alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: theme?.border || COLORS.borderLight,
-      shadowOpacity: 0,
-      elevation: 0,
-    },
-    // Shield icon background circle
-    confirmIconContainer: {
-      width: 64,
-      height: 64,
-      borderRadius: 22,
-      backgroundColor: theme?.cardBg || COLORS.cardBgLight,
-      justifyContent: "center",
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    // Modal title text
-    confirmTitle: {
-      fontSize: 22,
-      fontWeight: "900",
-      color: theme?.textPrimary || COLORS.textDark,
-      marginBottom: 6,
-    },
-    // Modal subtitle description
-    confirmSubtitle: {
-      fontSize: 13,
-      color: theme?.textSecondary || COLORS.textGrey,
       fontWeight: "600",
-      textAlign: "center",
-      lineHeight: 18,
-      paddingHorizontal: 10,
-      marginBottom: 20,
-    },
-    // Data display block container
-    confirmDataBlock: {
-      width: "100%",
-      backgroundColor: theme?.inputBg || COLORS.bgPill,
-      borderRadius: 20,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: theme?.inputBorder || COLORS.borderLight,
-      marginBottom: 24,
-    },
-    // Section label inside review block
-    confirmDataLabel: {
-      fontSize: 10,
-      fontWeight: "900",
-      color: theme?.textSecondary || COLORS.textGrey,
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      marginBottom: 4,
-    },
-    // Value text inside review block
-    confirmDataValue: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme?.textPrimary || COLORS.textDark,
-      lineHeight: 20,
-    },
-    // Muted text color for empty review fields
-    confirmDataValueMuted: {
-      color: COLORS.textMuted,
-    },
-    // Neutral text color for active allergies
-    confirmDataValueNeutral: {
-      color: COLORS.textGrey,
-    },
-    // Amber warning text color for active conditions
-    confirmDataValueWarning: {
-      color: COLORS.amberActive,
-    },
-    // Divider line between summary rows
-    confirmDivider: {
-      height: 1,
-      backgroundColor: theme?.border || COLORS.borderLight,
-      marginVertical: 12,
-    },
-    // Action buttons container row
-    confirmActionRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      width: "100%",
-    },
-    // Button base shape inside confirmation dialog
-    confirmButtonBase: {
-      flex: 1,
-      height: 48,
-      borderRadius: 18,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    // Secondary "Edit Details" button
-    confirmButtonSecondary: {
-      backgroundColor: theme?.surface || COLORS.base,
-      marginRight: 12,
-      borderWidth: 1.5,
-      borderColor: theme?.border || COLORS.borderLight,
-    },
-    // Primary "Confirm" button
-    confirmButtonPrimary: {
-      backgroundColor: COLORS.logoGreen,
-    },
-    // Secondary button label typography
-    confirmButtonTextSecondary: {
-      fontSize: 14,
-      fontWeight: "800",
-      color: theme?.textSecondary || COLORS.textGrey,
-    },
-    // Primary button label typography
-    confirmButtonTextPrimary: {
-      fontSize: 14,
-      fontWeight: "800",
-      color: COLORS.whiteHighlight,
+      color: theme?.text || COLORS.textPrimary,
     },
   });
+}

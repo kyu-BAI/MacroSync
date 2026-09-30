@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -48,16 +49,21 @@ function PrimaryButton({ onPress, isLoading, styles }) {
       onPress={onPress}
       style={[styles.buttonBase, styles.buttonUnpressed]}
     >
-      <Text style={styles.buttonText}>
-        {isLoading ? "Processing..." : "Continue"}
-      </Text>
+      {isLoading ? (
+        <View style={styles.buttonLoadingRow}>
+          <ActivityIndicator size="small" color="#FFFFFF" style={styles.buttonSpinner} />
+          <Text style={[styles.buttonText, styles.buttonLoadingText]}>Processing...</Text>
+        </View>
+      ) : (
+        <Text style={styles.buttonText}>Continue to Objectives</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 // --- MAIN STEP ONE SCREEN ---
 
-export default function StepOneScreen({ onNext }) {
+export default function StepOneScreen({ onNext, initialBaseline }) {
   // Theme & screen styling
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
@@ -72,7 +78,7 @@ export default function StepOneScreen({ onNext }) {
     handleHeightFtChange,
     handleHeightInChange,
     handleNextStep,
-  } = useStepOneBaseline({ onNext });
+  } = useStepOneBaseline({ onNext, initialBaseline });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -92,10 +98,10 @@ export default function StepOneScreen({ onNext }) {
         >
           {/* Header Sector */}
           <View style={styles.headerSection}>
-            <Text style={styles.stepIndicator}>STEP 1 OF 3</Text>
+            <Text style={styles.stepIndicator}>STEP 1 OF 4</Text>
             <Text style={styles.brandTitle}>Your Baseline</Text>
             <Text style={styles.brandSubtitle}>
-              Let's establish your starting metrics so we can track your progress.
+              Let's establish your starting metrics so we can track your progress and personalize your daily nutrition.
             </Text>
           </View>
 
@@ -221,46 +227,52 @@ const getStyles = (theme, isDarkMode = false) =>
     // --- HEADER / BRAND SECTION ---
     // Header wrapper holding step indicator, title and subtitle
     headerSection: {
-      marginBottom: 35,
-      alignItems: "center",
+      marginBottom: 28,
+      alignItems: "flex-start",
       width: "100%",
     },
-    // "STEP 1 OF 3" tracking indicator text
+    // "STEP 1 OF 4" tracking indicator text
     stepIndicator: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "900",
       color: COLORS.logoGreen,
       letterSpacing: 2,
       textTransform: "uppercase",
+      textAlign: "left",
+      marginBottom: 4,
     },
     // Main "Your Baseline" screen title
     brandTitle: {
-      fontSize: 42,
+      fontSize: 36,
       fontWeight: "900",
       color: theme?.textPrimary || COLORS.textDark,
       letterSpacing: -0.5,
-      marginTop: 6,
+      marginTop: 2,
+      textAlign: "left",
     },
     // Subtitle description below the title
     brandSubtitle: {
-      fontSize: 14,
+      fontSize: 13.5,
       color: theme?.textSecondary || COLORS.textMuted,
-      marginTop: 10,
-      textAlign: "center",
-      lineHeight: 22,
-      fontWeight: "700",
+      marginTop: 8,
+      textAlign: "left",
+      lineHeight: 20,
+      fontWeight: "600",
     },
 
     // --- FORM CONTAINER CARD ---
     // The rounded card containing all baseline metric fields
     formCard: {
       backgroundColor: theme?.surface || COLORS.base,
-      borderRadius: 28,
+      borderRadius: 18,
       padding: 24,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
-      shadowOpacity: 0,
-      elevation: 0,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDarkMode ? 0.2 : 0.035,
+      shadowRadius: 8,
+      elevation: 1,
     },
 
     // --- INPUT FIELDS (AGE, HEIGHT & WEIGHT) ---
@@ -320,7 +332,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Recessed background panel holding BMI metric readout
     bmiPanelRecess: {
       backgroundColor: theme?.inputBg || COLORS.base,
-      borderRadius: 16,
+      borderRadius: 12,
       padding: 20,
       marginTop: 6,
       marginBottom: 10,
@@ -380,8 +392,8 @@ const getStyles = (theme, isDarkMode = false) =>
     // --- SUBMISSION BUTTON ("CONTINUE") ---
     // Common dimensions and centering for submit button
     buttonBase: {
-      paddingVertical: 16,
-      borderRadius: 24,
+      height: 52,
+      borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
       width: "100%",
@@ -390,7 +402,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Default "Continue" button background color
     buttonUnpressed: {
       backgroundColor: COLORS.logoGreen,
-      borderRadius: 20,
+      borderRadius: 14,
     },
     // "Continue" button text color & font
     buttonText: {
@@ -398,5 +410,19 @@ const getStyles = (theme, isDarkMode = false) =>
       fontSize: 16,
       fontWeight: "800",
       letterSpacing: 0.5,
+    },
+    // Row holding spinner and loading text
+    buttonLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Spinner spacing next to loading text
+    buttonSpinner: {
+      marginRight: 8,
+    },
+    // Loading text style
+    buttonLoadingText: {
+      opacity: 0.95,
     },
   });

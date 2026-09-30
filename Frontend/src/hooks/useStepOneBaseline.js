@@ -10,19 +10,19 @@ const BMI_COLORS = {
   muted: "#64748B",
 };
 
-export default function useStepOneBaseline({ onNext }) {
+export default function useStepOneBaseline({ onNext, initialBaseline }) {
   const { showAlert } = useCustomAlert();
 
   // Core Form Metrics State
-  const [form, setForm] = useState({
-    age: "",
-    weight: "",
-    height: "",
-    heightFt: "",
-    heightIn: "",
-    weightUnit: "kg",
-    heightUnit: "ft",
-  });
+  const [form, setForm] = useState(() => ({
+    age: initialBaseline?.rawAge || (initialBaseline?.age ? initialBaseline.age.toString() : ""),
+    weight: initialBaseline?.rawWeight || (initialBaseline?.weight ? initialBaseline.weight.toString() : ""),
+    height: initialBaseline?.rawHeight || (initialBaseline?.height ? initialBaseline.height.toString() : ""),
+    heightFt: initialBaseline?.heightFt || (initialBaseline?.height ? Math.floor(initialBaseline.height / 30.48).toString() : ""),
+    heightIn: initialBaseline?.heightIn || (initialBaseline?.height ? Math.round((initialBaseline.height % 30.48) / 2.54).toString() : ""),
+    weightUnit: initialBaseline?.weightUnit || initialBaseline?.unit || "kg",
+    heightUnit: initialBaseline?.heightUnit || "ft",
+  }));
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -131,9 +131,16 @@ export default function useStepOneBaseline({ onNext }) {
     try {
       await onNext?.({
         age: parseInt(form.age, 10),
+        rawAge: form.age,
         weight: finalWeightKg,
+        rawWeight: form.weight,
         height: finalHeightCm,
+        rawHeight: form.height,
+        heightFt: form.heightFt,
+        heightIn: form.heightIn,
+        heightUnit: form.heightUnit,
         weightUnit: form.weightUnit,
+        unit: form.weightUnit,
         startingWeight: finalWeightKg,
       });
     } catch (err) {

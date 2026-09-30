@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,29 +8,29 @@ import {
   ScrollView,
   Dimensions,
   Platform,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import {
   ShieldAlert,
   ShieldCheck,
-  FileText,
   X,
   HeartPulse,
   Lock,
   Scale,
-  AlertTriangle
+  AlertTriangle,
+  PhoneCall,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 const logoGreen = '#10B981';
 
 export default function PrivacyModal({ visible, onClose, onAgree, initialTab = 'medical' }) {
   const { theme, isDarkMode } = useTheme();
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  // Sync initial tab if passed
-  React.useEffect(() => {
+  // Synchronize active tab when modal opens
+  useEffect(() => {
     if (visible && initialTab) {
       setActiveTab(initialTab);
     }
@@ -53,35 +53,35 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
       />
       <View style={styles.overlay}>
         <View style={[styles.modalCard, isDarkMode && styles.modalCardDark]}>
-          {/* Header */}
+          {/* Header Row */}
           <View style={styles.headerRow}>
             <View style={styles.headerIconBadge}>
-              <ShieldAlert color={logoGreen} size={22} strokeWidth={2.3} />
+              <ShieldAlert color={logoGreen} size={20} strokeWidth={2.4} />
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
+            <View style={styles.headerTitleBlock}>
               <Text style={[styles.headerTitle, isDarkMode && styles.textWhite]}>
                 Legal & Health Disclaimers
               </Text>
               <Text style={styles.headerSubtitle}>
-                MacroSync Clinical Scope & Policies
+                MacroSync Policies & Medical Disclaimers
               </Text>
             </View>
             <TouchableOpacity
               onPress={onClose}
               style={[styles.closeButton, isDarkMode && styles.closeButtonDark]}
               activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X color={isDarkMode ? '#CBD5E1' : '#64748B'} size={20} />
+              <X color={isDarkMode ? '#CBD5E1' : '#64748B'} size={18} />
             </TouchableOpacity>
           </View>
 
-          {/* Segmented Tab Bar */}
+          {/* Segmented Navigation Tab Bar (Equally spaced, no overlap) */}
           <View style={[styles.tabBar, isDarkMode && styles.tabBarDark]}>
             <TouchableOpacity
               style={[
                 styles.tabItem,
                 activeTab === 'medical' && styles.tabItemActive,
-                activeTab === 'medical' && isDarkMode && styles.tabItemActiveDark,
               ]}
               onPress={() => setActiveTab('medical')}
               activeOpacity={0.8}
@@ -89,10 +89,9 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
               <HeartPulse
                 size={14}
                 color={activeTab === 'medical' ? '#FFFFFF' : isDarkMode ? '#94A3B8' : '#64748B'}
-                style={{ marginRight: 5 }}
+                style={styles.tabIconMargin}
               />
               <Text
-                numberOfLines={1}
                 style={[
                   styles.tabText,
                   activeTab === 'medical' && styles.tabTextActive,
@@ -107,7 +106,6 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
               style={[
                 styles.tabItem,
                 activeTab === 'privacy' && styles.tabItemActive,
-                activeTab === 'privacy' && isDarkMode && styles.tabItemActiveDark,
               ]}
               onPress={() => setActiveTab('privacy')}
               activeOpacity={0.8}
@@ -115,10 +113,9 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
               <Lock
                 size={14}
                 color={activeTab === 'privacy' ? '#FFFFFF' : isDarkMode ? '#94A3B8' : '#64748B'}
-                style={{ marginRight: 5 }}
+                style={styles.tabIconMargin}
               />
               <Text
-                numberOfLines={1}
                 style={[
                   styles.tabText,
                   activeTab === 'privacy' && styles.tabTextActive,
@@ -133,7 +130,6 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
               style={[
                 styles.tabItem,
                 activeTab === 'terms' && styles.tabItemActive,
-                activeTab === 'terms' && isDarkMode && styles.tabItemActiveDark,
               ]}
               onPress={() => setActiveTab('terms')}
               activeOpacity={0.8}
@@ -141,10 +137,9 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
               <Scale
                 size={14}
                 color={activeTab === 'terms' ? '#FFFFFF' : isDarkMode ? '#94A3B8' : '#64748B'}
-                style={{ marginRight: 5 }}
+                style={styles.tabIconMargin}
               />
               <Text
-                numberOfLines={1}
                 style={[
                   styles.tabText,
                   activeTab === 'terms' && styles.tabTextActive,
@@ -156,126 +151,159 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
             </TouchableOpacity>
           </View>
 
-          {/* Tab Content Body */}
+          {/* Scrollable Content Body (Pure Editorial Clean Layout, No Inner Box Containers) */}
           <ScrollView
             style={styles.scrollBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            {/* ============================================================ */}
+            {/* --- MEDICAL TAB CONTENT --- */}
+            {/* ============================================================ */}
             {activeTab === 'medical' && (
               <View>
+                {/* Clinical Notice Banner */}
                 <View style={styles.alertNoticeBox}>
-                  <AlertTriangle size={18} color="#D97706" style={{ marginTop: 2, marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.alertNoticeTitle}>General Wellness Notice</Text>
+                  <AlertTriangle size={18} color="#D97706" style={styles.alertIconMargin} />
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertNoticeTitle}>Non-Diagnostic Wellness Tool</Text>
                     <Text style={styles.alertNoticeText}>
-                      MacroSync is a wellness and nutrition tracker, not a clinical diagnostic tool or medical device.
+                      MacroSync is an educational wellness and nutrition tracker. It is not a licensed medical device and does not provide clinical diagnoses, medical therapy, or prescription diets.
                     </Text>
                   </View>
                 </View>
 
+                {/* Section 1 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
                   1. Educational & Wellness Scope
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  All macro targets, calorie estimations, and Vita AI recommendations are generated for educational and general wellness purposes. They do not constitute personalized medical advice, clinical nutrition therapy, or prescription diets.
+                  All caloric estimates, macronutrient targets, and Vita AI recommendations are generated strictly for general wellness and educational purposes using standard scientific formulas (such as Mifflin-St Jeor and WHO Dietary Guidelines). They do not constitute personalized medical advice or prescription clinical nutrition plans.
                 </Text>
 
+                {/* Section 2 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. Pre-Existing Medical Conditions
+                  2. Pre-Existing Conditions & Screening
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  If you have diagnosed health conditions—such as <Text style={styles.boldSpan}>diabetes, chronic kidney or liver disease, heart conditions, eating disorders, or are pregnant/nursing</Text>—you should consult your physician or Registered Dietitian before adopting new diet plans, calorie deficits, or intense exercise.
+                  If you have diagnosed health conditions—including <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>diabetes, kidney or liver disease, cardiac issues, eating disorders, or are pregnant or nursing</Text>—you must consult your physician or a Registered Nutritionist-Dietitian (RND) before undertaking calorie deficits, fasting, or intense fitness regimens.
                 </Text>
 
+                {/* Section 3 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. Allergen & Food Scanner Notice
+                  3. AI Food Scanner & Allergen Notice
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  AI food image scanning and recipe suggestions cannot guarantee 100% allergen detection. Hidden cooking fats, cross-contamination, and restaurant ingredients may not be visible. Always verify foods independently if you have severe allergies.
+                  AI camera scanning and recipe suggestions cannot guarantee 100% allergen detection. Hidden restaurant oils, shared preparation fryers, and microscopic trace ingredients cannot be visually detected. Always independently verify foods if you have severe or life-threatening food allergies (anaphylaxis).
                 </Text>
 
-                <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  4. Medical Emergencies
+                {/* Section 4 */}
+                <Text style={[styles.sectionHeading, { color: '#DC2626' }]}>
+                  4. Emergency Medical Protocol
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  In case of acute symptoms (e.g., chest tightness, dizziness, severe allergic reactions, or diabetic hypoglycemia), stop using the app immediately and contact emergency medical services (911) or proceed to the nearest emergency clinic.
+                  If you experience acute distress—such as chest tightness, severe dizziness, hypoglycemia, or allergic reactions—stop using the app immediately and contact emergency medical services via the Philippine Emergency Hotline (<Text style={styles.boldRedSpan}>911</Text>) or the Philippine Red Cross (<Text style={styles.boldRedSpan}>143</Text>).
                 </Text>
               </View>
             )}
 
+            {/* ============================================================ */}
+            {/* --- PRIVACY TAB CONTENT (RA 10173) --- */}
+            {/* ============================================================ */}
             {activeTab === 'privacy' && (
               <View>
-                <View style={[styles.alertNoticeBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.25)' }]}>
-                  <ShieldCheck size={18} color="#10B981" style={{ marginTop: 2, marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.alertNoticeTitle, { color: '#065F46' }]}>Philippine Data Privacy (RA 10173)</Text>
+                {/* Philippine Data Privacy Banner */}
+                <View style={[styles.alertNoticeBox, styles.privacyNoticeBox]}>
+                  <ShieldCheck size={18} color="#10B981" style={styles.alertIconMargin} />
+                  <View style={styles.alertContent}>
+                    <Text style={[styles.alertNoticeTitle, { color: '#065F46' }]}>
+                      Philippine Data Privacy Act (RA 10173)
+                    </Text>
                     <Text style={[styles.alertNoticeText, { color: '#047857' }]}>
-                      MacroSync strictly complies with RA 10173 to safeguard your personal health and nutrition metrics.
+                      MacroSync complies with RA 10173 and National Privacy Commission (NPC) circulars to safeguard your personal health and nutrition biometrics.
                     </Text>
                   </View>
                 </View>
 
+                {/* Section 1 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
                   1. Information We Collect
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  We collect account identifiers (username, email), physical metrics (height, weight, fitness goals), declared food allergies, and your Philippine province/city to calibrate regional food availability and pricing.
+                  We collect account identifiers (username, email), physical biometrics (height, weight, activity profile, targets), declared food allergies, and your Philippine province/city to calibrate regional food availability and pricing.
                 </Text>
 
+                {/* Section 2 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. Security & AI Privacy
+                  2. Security & Zero-Monetization Policy
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Data transmission is encrypted via HTTPS/TLS, and user records are protected by database row-level security. We do not sell, rent, or monetize your health data with third-party advertisers or insurance companies.
+                  All network communication is encrypted via HTTPS / TLS 1.3 in transit. Stored data is protected by Database Row-Level Security (RLS). <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>MacroSync never sells, rents, or licenses your personal health data to insurance firms, third-party advertisers, or data brokers.</Text>
                 </Text>
 
+                {/* Section 3 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. Your Rights & Account Deletion
+                  3. Your Rights as a Data Subject
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Under RA 10173, you have the right to access, update, or permanently delete your account and all stored health history at any time through <Text style={styles.boldSpan}>Settings → Delete Account</Text>.
+                  Under RA 10173 Section 16, you hold the:
+                </Text>
+                <Text style={[styles.bulletItem, isDarkMode && styles.textMutedDark]}>
+                  • <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>Right to Access & Rectify:</Text> View and update your profile anytime.
+                </Text>
+                <Text style={[styles.bulletItem, isDarkMode && styles.textMutedDark]}>
+                  • <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>Right to Erasure / Deletion:</Text> Permanently purge your account and all associated metrics instantly via <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>Settings → Delete Account</Text>.
+                </Text>
+                <Text style={[styles.bulletItem, isDarkMode && styles.textMutedDark]}>
+                  • <Text style={[styles.boldSpan, isDarkMode && styles.textWhite]}>Right to Object:</Text> Withdraw consent and export your nutrition data.
                 </Text>
               </View>
             )}
 
+            {/* ============================================================ */}
+            {/* --- TERMS TAB CONTENT --- */}
+            {/* ============================================================ */}
             {activeTab === 'terms' && (
               <View>
+                {/* Section 1 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  1. Acceptance & Age Requirement
+                  1. Acceptance & Age Eligibility
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  By creating an account, you agree to these Terms. You confirm that you are at least 18 years of age or possess legal parental or guardian consent to use MacroSync.
+                  By creating an account or continuing to use MacroSync, you agree to be bound by these Terms of Service. You affirm that you are at least 18 years of age or possess legal parental/guardian consent to use this wellness platform.
                 </Text>
 
+                {/* Section 2 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  2. Personal Responsibility & Risk
+                  2. Voluntary Assumption of Physical Risk
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Physical training and nutritional changes involve inherent health risks. You voluntarily assume full responsibility for your wellness decisions and workout routines undertaken while using this app.
+                  Dietary adjustments, caloric deficits, and workout programs carry inherent physiological risks. You voluntarily assume full responsibility for your wellness decisions, exercise execution, and dietary choices made while using MacroSync.
                 </Text>
 
+                {/* Section 3 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  3. Estimation Variance
+                  3. Estimation & Regional Pricing Variance
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  Nutritional breakdowns and regional food prices are approximations based on standard nutritional databases and market averages. Actual values may vary depending on local food preparation and vendors.
+                  Nutritional values and regional wet market (palengke) food prices are estimates based on standard databases and municipal market averages. Actual prices, portion weights, and nutritional content may fluctuate across local vendors and seasonal harvest cycles.
                 </Text>
 
+                {/* Section 4 */}
                 <Text style={[styles.sectionHeading, isDarkMode && styles.textWhite]}>
-                  4. Acceptable Fair Use
+                  4. Acceptable Fair Use & IP Protection
                 </Text>
                 <Text style={[styles.bodyText, isDarkMode && styles.textMutedDark]}>
-                  MacroSync is for personal, lawful wellness tracking. Automated data scraping, reverse-engineering, or abusive activity on AI chatbot services is strictly prohibited.
+                  MacroSync is granted for personal, non-commercial health tracking. Automated data scraping, reverse-engineering of calculation algorithms, or abusive requests targeting our AI services are strictly prohibited.
                 </Text>
               </View>
             )}
           </ScrollView>
 
-          {/* Footer Action */}
+          {/* Modal Footer with Explicit Acceptance Action */}
           <View style={[styles.modalFooter, isDarkMode && styles.modalFooterDark]}>
             <Text style={[styles.footerNotice, isDarkMode && styles.textMutedDark]}>
-              By continuing, you agree to MacroSync policies.
+              By continuing, you accept MacroSync's terms and disclaimers.
             </Text>
             <TouchableOpacity
               style={styles.doneButton}
@@ -285,7 +313,7 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
                 }
                 onClose();
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Text style={styles.doneButtonText}>Agree & Continue</Text>
             </TouchableOpacity>
@@ -296,10 +324,13 @@ export default function PrivacyModal({ visible, onClose, onAgree, initialTab = '
   );
 }
 
+// ============================================================================
+// --- COMPONENT STYLES ---
+// ============================================================================
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -309,71 +340,79 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 440,
-    maxHeight: height * 0.82,
+    maxHeight: height * 0.85,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingTop: 20,
+    borderRadius: 22,
+    paddingTop: 18,
     paddingHorizontal: 20,
     paddingBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
     display: 'flex',
     flexDirection: 'column',
   },
   modalCardDark: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F172A',
     borderColor: '#334155',
-    borderWidth: 1,
   },
+
+  // Header Row
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerIconBadge: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleBlock: {
+    flex: 1,
+    marginLeft: 12,
+  },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16.5,
+    fontWeight: '900',
     color: '#0F172A',
     letterSpacing: -0.3,
   },
   headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#64748B',
     marginTop: 2,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeButtonDark: {
-    backgroundColor: '#334155',
+    backgroundColor: '#1E293B',
   },
+
+  // Segmented Tab Bar: 3 equal tabs, zero overlap
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 16,
-    gap: 4,
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 14,
   },
   tabBarDark: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#1E293B',
   },
   tabItem: {
     flex: 1,
@@ -386,59 +425,72 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {
     backgroundColor: logoGreen,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  tabItemActiveDark: {
-    backgroundColor: logoGreen,
+  tabIconMargin: {
+    marginRight: 6,
   },
   tabText: {
     fontSize: 12.5,
     fontWeight: '700',
     color: '#64748B',
+    textAlign: 'center',
   },
   tabTextActive: {
     color: '#FFFFFF',
     fontWeight: '800',
   },
+
+  // Scroll Content Area
   scrollBody: {
     flexGrow: 1,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   scrollContent: {
-    paddingBottom: 28,
+    paddingBottom: 16,
   },
+
+  // Alert Notice Banner
   alertNoticeBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
     borderColor: 'rgba(245, 158, 11, 0.25)',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 14,
   },
+  alertIconMargin: {
+    marginTop: 2,
+    marginRight: 8,
+  },
+  alertContent: {
+    flex: 1,
+  },
   alertNoticeTitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#B45309',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   alertNoticeText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '500',
     color: '#92400E',
-    lineHeight: 17,
+    lineHeight: 16.5,
   },
+  privacyNoticeBox: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+
+  // Pure Editorial Clean Typography (No Box Containers)
   sectionHeading: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
     marginTop: 12,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   bodyText: {
     fontSize: 12.5,
@@ -446,44 +498,53 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 10,
   },
+  bulletItem: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#475569',
+    marginBottom: 6,
+    paddingLeft: 4,
+  },
   boldSpan: {
     fontWeight: '700',
     color: '#0F172A',
   },
+  boldRedSpan: {
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+
+  // Modal Footer
   modalFooter: {
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingTop: 12,
+    paddingTop: 10,
   },
   modalFooterDark: {
-    borderTopColor: '#334155',
+    borderTopColor: '#1E293B',
   },
   footerNotice: {
     fontSize: 11,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
     fontWeight: '500',
-    lineHeight: 16,
-    paddingHorizontal: 8,
+    lineHeight: 15,
+    paddingHorizontal: 4,
   },
   doneButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: logoGreen,
-    paddingVertical: 13,
+    height: 48,
     borderRadius: 14,
-    shadowColor: logoGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
   },
   doneButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
   textWhite: {
     color: '#FFFFFF',
