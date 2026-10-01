@@ -6,12 +6,9 @@ import {
   Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  Dimensions
 } from 'react-native';
 import { CheckCircle2, AlertCircle, HelpCircle, Info, AlertTriangle, X, LogOut } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-
-const { width } = Dimensions.get('window');
 
 // ── Per-type color palettes ───────────────────────────────────────────────────
 const TYPE_CONFIG = {
@@ -221,7 +218,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   cardContainer: {
-    width: Math.min(width - 40, 360),
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
     borderRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 32,

@@ -477,6 +477,8 @@ function getStyles(theme, isDarkMode) {
       marginBottom: 24,
       alignItems: "center",
       width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
     },
     backButton: {
       width: 38,
@@ -517,6 +519,9 @@ function getStyles(theme, isDarkMode) {
       backgroundColor: theme?.cardBg || COLORS.card,
       borderRadius: 18,
       padding: 20,
+      width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: isDarkMode ? 0.2 : 0.035,

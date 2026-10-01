@@ -409,6 +409,8 @@ const getStyles = (theme, isDarkMode = false) =>
       marginBottom: 24,
       alignItems: "center",
       width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
     },
     backButton: {
       width: 38,
@@ -451,6 +453,9 @@ const getStyles = (theme, isDarkMode = false) =>
       padding: 20,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
+      width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: isDarkMode ? 0.2 : 0.035,

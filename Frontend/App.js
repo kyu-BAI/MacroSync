@@ -158,6 +158,37 @@ function MainApp() {
     recentExercise: "None",
   });
 
+  // Inject butter-smooth transition styles for web resize & scaling
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const styleId = "macrosync-web-smooth-transitions";
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.innerHTML = `
+          html, body, #root {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+          }
+          * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+          }
+          /* Smoothly glide centered columns and cards during window resize */
+          div[style*="max-width: 680px"],
+          div[style*="maxWidth: 680px"] {
+            transition: width 0.12s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
+
   // ── Real Pedometer Step Tracking ─────────────────────────────────────────
   useEffect(() => {
     let subscription = null;
@@ -380,8 +411,10 @@ function MainApp() {
           applyDashboardData(data);
           await cacheDashboardData(uid, data);
           setIsLoadedFromCache(false);
+          return data;
         } else {
           console.log("Failed to fetch dashboard data:", data.detail);
+          return null;
         }
       } catch (error) {
         clearTimeout(timeoutId);
@@ -398,7 +431,9 @@ function MainApp() {
         if (cached && cached.data) {
           applyDashboardData(cached.data);
           setIsLoadedFromCache(true);
+          return cached.data;
         }
+        return null;
       } finally {
         inFlightDashboardFetchRef.current = null;
       }

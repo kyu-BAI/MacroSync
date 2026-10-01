@@ -50,17 +50,42 @@ export const NotificationService = {
   },
 
   /**
+   * Send an immediate test notification to verify system behavior
+   */
+  async sendTestNotification() {
+    if (!Notifications) {
+      return { success: false, reason: 'Notifications are unavailable in Expo Go. Please test in a compiled APK.' };
+    }
+    const granted = await this.requestPermissions();
+    if (!granted) {
+      return { success: false, reason: 'Notification permission was denied.' };
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'MacroSync Alert 🎯',
+        body: 'Notifications are active! You will receive your daily meal, workout, and macro check-ins on schedule.',
+        sound: true,
+        channelId: 'default',
+      },
+      trigger: null, // null trigger delivers immediately
+    });
+
+    return { success: true };
+  },
+
+  /**
    * Schedule daily recurring reminders based on user notification preferences
    * @param {{ habitReminders?: boolean, motivationalUpdates?: boolean, personalizedAlerts?: boolean }} prefs
    */
   async scheduleDailyReminders(prefs = { habitReminders: true, motivationalUpdates: true, personalizedAlerts: true }) {
     if (!Notifications) {
       console.log('[NotificationService] Notifications are disabled or unavailable in Expo Go.');
-      return;
+      return false;
     }
-    // Check permissions first
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') return;
+    // Check or request permissions
+    const granted = await this.requestPermissions();
+    if (!granted) return false;
 
     // Clear any existing schedules to prevent duplicates
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -139,6 +164,8 @@ export const NotificationService = {
           title: schedule.title,
           body: schedule.body,
           data: { category: schedule.category },
+          sound: true,
+          channelId: 'default',
         },
         trigger: {
           hour: schedule.hour,

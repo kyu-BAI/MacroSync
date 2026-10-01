@@ -5,65 +5,73 @@ import {
   Text,
   View,
   StatusBar,
-  Dimensions,
   Animated,
   Easing,
   Image,
 } from "react-native";
 
-const { width: screenWidth } = Dimensions.get("window");
-
 // Assets
 const LOGO_IMAGE = require("../../images/macrosync_logo.png");
 
-// Option A: Signature clean light brand tokens
+// Brand tokens
 const baseColor = "#F8FAFC";
 const logoGreen = "#10B981";
 const textSecondary = "#64748B";
 
-// Spinner configurations
+// Spinner config
 const TOTAL_SPINNER_DOTS = 8;
 const BASE_SPEED_MS = 900;
 
 export default function SplashScreen({ onAppReady }) {
-  // Entrance animations for branding (GPU driven)
+  // Entrance animations (GPU-driven native driver)
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.92)).current;
-  const contentFade = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.88)).current;
+  const taglineFade = useRef(new Animated.Value(0)).current;
+  const taglineSlide = useRef(new Animated.Value(12)).current;
 
-  // Generates 8 independent animation timelines for the spinner
+  // 8 independent spinner dot timelines
   const dotTimelines = useRef(
     Array.from({ length: TOTAL_SPINNER_DOTS }, () => new Animated.Value(0))
   ).current;
 
   useEffect(() => {
-    // 1. Logo & Content Entrance Animation (60 FPS Native GPU)
+    // Stage 1: Logo entrance
     Animated.parallel([
       Animated.timing(logoOpacity, {
         toValue: 1,
-        duration: 500,
+        duration: 480,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.spring(logoScale, {
         toValue: 1,
-        tension: 30,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentFade, {
-        toValue: 1,
-        duration: 600,
-        delay: 200,
-        easing: Easing.out(Easing.ease),
+        tension: 28,
+        friction: 6,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // 2. Pulse animation loop for 8 spinner dots (GPU Native Driver)
+    // Stage 2: Tagline slides up into view
+    Animated.parallel([
+      Animated.timing(taglineFade, {
+        toValue: 1,
+        duration: 500,
+        delay: 280,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(taglineSlide, {
+        toValue: 0,
+        duration: 450,
+        delay: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Stage 3: Spinner dots
     const activeAnimations = dotTimelines.map((timelineNode, dotIndex) => {
       const delayOffset = dotIndex * (BASE_SPEED_MS / TOTAL_SPINNER_DOTS);
-
       const anim = Animated.loop(
         Animated.sequence([
           Animated.delay(delayOffset),
@@ -85,16 +93,16 @@ export default function SplashScreen({ onAppReady }) {
       return anim;
     });
 
-    // 3. Smooth transition to main app flow
+    // Boot transition
     const bootTimer = setTimeout(() => {
       if (onAppReady) onAppReady();
-    }, 1800);
+    }, 1900);
 
     return () => {
       clearTimeout(bootTimer);
       activeAnimations.forEach((anim) => anim.stop());
     };
-  }, [onAppReady, dotTimelines, logoOpacity, logoScale, contentFade]);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -104,7 +112,7 @@ export default function SplashScreen({ onAppReady }) {
         translucent={true}
       />
 
-      {/* Central Brand Frame */}
+      {/* Central Logo */}
       <Animated.View
         style={[
           styles.imagePresenterFrame,
@@ -121,25 +129,33 @@ export default function SplashScreen({ onAppReady }) {
         />
       </Animated.View>
 
-      {/* Brand Subtitle Tagline */}
-      <Animated.View style={[styles.brandSubtitleGroup, { opacity: contentFade }]}>
-        <Text style={styles.brandTitle}>MacroSync</Text>
+      {/* Tagline only — no redundant app name text */}
+      <Animated.View
+        style={[
+          styles.brandTaglineGroup,
+          {
+            opacity: taglineFade,
+            transform: [{ translateY: taglineSlide }],
+          },
+        ]}
+      >
         <Text style={styles.brandTagline}>SMART NUTRITION & MACRO TRACKING</Text>
       </Animated.View>
 
-      {/* Modern Compact Dot Spinner Hub */}
+
+      {/* Dot Spinner Hub */}
       <View style={styles.spinnerContainerHub}>
         {dotTimelines.map((timelineNode, index) => {
           const rotationAngle = index * 45;
 
           const scaleMatrix = timelineNode.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.25, 1],
+            outputRange: [0.2, 1],
           });
 
           const opacityMatrix = timelineNode.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.25, 1],
+            outputRange: [0.2, 1],
           });
 
           return (
@@ -167,7 +183,7 @@ export default function SplashScreen({ onAppReady }) {
   );
 }
 
-// --- COMPONENT STYLES (OPTION A: FIXED SIGNATURE LIGHT PALETTE) ---
+// --- COMPONENT STYLES ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -176,34 +192,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   imagePresenterFrame: {
-    width: Math.min(screenWidth * 0.65, 240),
+    width: "60%",
+    maxWidth: 230,
     aspectRatio: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: -60,
+    marginTop: -50,
   },
   logoImageLarge: {
     width: "100%",
     height: "100%",
   },
-  brandSubtitleGroup: {
+  // Only the tagline — no redundant app name
+  brandTaglineGroup: {
     alignItems: "center",
-    marginTop: 8,
-  },
-  brandTitle: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: logoGreen,
-    letterSpacing: -0.5,
+    marginTop: 16,
+    paddingHorizontal: 24,
   },
   brandTagline: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "800",
     color: textSecondary,
-    letterSpacing: 1.5,
-    marginTop: 4,
+    letterSpacing: 2,
     textTransform: "uppercase",
+    textAlign: "center",
   },
+
   spinnerContainerHub: {
     position: "absolute",
     bottom: 80,

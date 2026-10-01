@@ -230,6 +230,8 @@ const getStyles = (theme, isDarkMode = false) =>
       marginBottom: 28,
       alignItems: "center",
       width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
     },
     // "STEP 1 OF 4" tracking indicator text
     stepIndicator: {
@@ -268,6 +270,9 @@ const getStyles = (theme, isDarkMode = false) =>
       padding: 24,
       borderWidth: 1.5,
       borderColor: theme?.border || COLORS.borderLight,
+      width: "100%",
+      maxWidth: 540,
+      alignSelf: "center",
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: isDarkMode ? 0.2 : 0.035,

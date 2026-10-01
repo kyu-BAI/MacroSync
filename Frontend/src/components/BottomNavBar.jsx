@@ -28,9 +28,15 @@ export const TABS = [
   { id: 'SETTINGS',  label: 'Settings', Icon: Settings },
 ];
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowDimensions } from 'react-native';
+
 export default function BottomNavBar({ activeTab, onTabChange }) {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme, isDarkMode);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
 
   // --- 4. ANIMATIONS ---
   const scaleRefs = useRef(
@@ -111,33 +117,62 @@ export default function BottomNavBar({ activeTab, onTabChange }) {
     );
   };
 
-  const isIos = Platform.OS === 'ios';
-  const barHeight = isIos ? 76 : 68;
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 14 : 6);
+  const barHeight = (Platform.OS === 'ios' ? 62 : 58) + bottomInset;
+  const outerHeight = barHeight + 20;
+  const fabBottomElevation = bottomInset + (Platform.OS === 'ios' ? 18 : 14);
 
   return (
-    <View style={[styles.outerWrapper, { height: isIos ? 96 : 84 }]}>
-      {/* Tab Row Container */}
-      <View style={[styles.container, { height: barHeight }]}>
-        {TABS.map(renderTab)}
-      </View>
-
-      {/* Center Floating Camera FAB (Auto-Centered with alignSelf) */}
-      <View style={styles.fabWrapper}>
-        <TouchableOpacity
-          onPress={() => handleTabPress('SCANNER')}
-          activeOpacity={1}
+    <View style={[styles.outerWrapper, { height: outerHeight }]} pointerEvents="box-none">
+      {/* 1. Full-Width Background Bar */}
+      <View
+        style={[
+          styles.barBackground,
+          {
+            height: barHeight,
+            backgroundColor: theme?.surface || (isDarkMode ? '#1E293B' : '#FFFFFF'),
+            borderTopColor: theme?.border || (isDarkMode ? '#334155' : '#E2E8F0'),
+          },
+        ]}
+      >
+        {/* 2. Responsive Centered Content Container */}
+        <View
+          style={[
+            styles.innerContentRow,
+            {
+              height: barHeight,
+              paddingBottom: bottomInset,
+            },
+          ]}
         >
-          <Animated.View
+          {TABS.map(renderTab)}
+
+          {/* 3. Center Floating Camera FAB (Directly Centered within the Tabs Row) */}
+          <View
             style={[
-              styles.fab,
-              { borderColor: theme?.surface || '#FFFFFF' },
-              activeTab === 'SCANNER' && styles.fabActive,
-              { transform: [{ scale: fabScale }] },
+              styles.fabWrapper,
+              {
+                bottom: fabBottomElevation,
+              },
             ]}
           >
-            <Camera color="#FFFFFF" size={26} strokeWidth={2.5} />
-          </Animated.View>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleTabPress('SCANNER')}
+              activeOpacity={0.9}
+            >
+              <Animated.View
+                style={[
+                  styles.fab,
+                  { borderColor: theme?.surface || (isDarkMode ? '#1E293B' : '#FFFFFF') },
+                  activeTab === 'SCANNER' && styles.fabActive,
+                  { transform: [{ scale: fabScale }] },
+                ]}
+              >
+                <Camera color="#FFFFFF" size={26} strokeWidth={2.5} />
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -152,18 +187,29 @@ const getStyles = (theme, isDarkMode) =>
       left: 0,
       right: 0,
       zIndex: 99,
+      alignItems: 'center',
     },
-    // Main navigation bar background and top border
-    container: {
+    // Edge-to-edge background bar across the screen
+    barBackground: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
+      width: '100%',
+      borderTopWidth: 1,
+      zIndex: 3,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // Centered content container matching max card width on tablets/desktop
+    innerContentRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme?.surface || '#FFFFFF',
-      paddingBottom: Platform.OS === 'ios' ? 14 : 0,
-      zIndex: 3,
+      justifyContent: 'space-between',
+      width: '100%',
+      maxWidth: 680,
+      alignSelf: 'center',
+      position: 'relative',
     },
     tabItem: {
       flex: 1,
@@ -184,7 +230,7 @@ const getStyles = (theme, isDarkMode) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 6,
-      paddingHorizontal: 12,
+      paddingHorizontal: 8,
     },
     label: {
       fontSize: 10,
@@ -196,14 +242,14 @@ const getStyles = (theme, isDarkMode) =>
       fontWeight: '900',
     },
     centerSlot: {
-      width: FAB_SIZE + 4,
+      width: FAB_SIZE + 8,
     },
-    // Auto-centers the camera button horizontally on any screen
+    // Perfectly centered within the inner row
     fabWrapper: {
       position: 'absolute',
-      alignSelf: 'center',
-      bottom: FAB_ELEVATION,
-      zIndex: 5,
+      left: '50%',
+      marginLeft: -FAB_SIZE / 2,
+      zIndex: 10,
     },
     // Circular camera button
     fab: {
@@ -214,10 +260,13 @@ const getStyles = (theme, isDarkMode) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 3.5,
-      shadowOpacity: 0,
-      elevation: 0,
+      shadowColor: DEFAULT_ACTIVE_COLOR,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
     },
     fabActive: {
-      backgroundColor: '#059669ff',
+      backgroundColor: '#059669',
     },
   });

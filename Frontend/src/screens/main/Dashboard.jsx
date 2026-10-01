@@ -1,3 +1,4 @@
+// --- IMPORTS ---
 import React, {
   useState,
   useRef,
@@ -5,8 +6,8 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useTheme } from "../../context/ThemeContext";
 import {
+  StyleSheet,
   Text,
   View,
   ScrollView,
@@ -14,13 +15,13 @@ import {
   StatusBar,
   Platform,
   Dimensions,
+  useWindowDimensions,
   Modal,
   TextInput,
   KeyboardAvoidingView,
   Image,
   Animated,
   Easing,
-  StyleSheet
 } from "react-native";
 import {
   Droplets,
@@ -36,63 +37,24 @@ import {
 } from "lucide-react-native";
 import { LineChart } from "react-native-chart-kit";
 import Svg, { Circle, Text as SvgText } from "react-native-svg";
-import { Pedometer } from "expo-sensors";
 
-import API_URL from "../config/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  addToSyncQueue,
-  updateCachedDashboardField,
-} from "../../services/OfflineStorage";
-import { useCustomAlert } from "../../context/CustomAlertContext";
+import { useTheme } from "../../context/ThemeContext";
+import useDashboard from "../../hooks/useDashboard";
 import PressableCard from "../../components/PressableCard";
 
+// --- CONSTANTS & CONFIGURATION ---
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
-const baseColor = "#F8FAFC";
-const logoGreen = "#10B981";
-const waterColor = "#0EA5E9";
 
-// Helper for local notification filtering
-const pushNotificationIfAllowed = async (newNotif, setNotifications) => {
-  if (!setNotifications) return;
-  try {
-    const stored = await AsyncStorage.getItem("@ms_notification_preferences");
-    const prefs = stored
-      ? JSON.parse(stored)
-      : {
-          habitReminders: true,
-          motivationalUpdates: true,
-          personalizedAlerts: true,
-        };
-    const category = newNotif.category;
-    if (
-      (category === "hydration" || category === "meal") &&
-      prefs.habitReminders === false
-    )
-      return;
-    if (
-      (category === "workout" || category === "achievement") &&
-      prefs.motivationalUpdates === false
-    )
-      return;
-    if (category === "smart" && prefs.personalizedAlerts === false) return;
-    setNotifications((prev) => [newNotif, ...prev]);
-  } catch (e) {
-    setNotifications((prev) => [newNotif, ...prev]);
-  }
-};
-
-// ============================================================================
-// === SECTION 1: HELPER COMPONENTS & ANIMATIONS =============================
-// ============================================================================
+// --- LIGHTWEIGHT SUBCOMPONENTS ---
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-function AnimatedRing({
+// Dynamic SVG circular metric progress ring
+const AnimatedRing = React.memo(function AnimatedRing({
   radius,
   strokeWidth,
   pct,
-  color = logoGreen,
+  color = COLORS.logoGreen,
   trackColor = "#E2E8F0",
   size,
   children,
@@ -157,9 +119,10 @@ function AnimatedRing({
       </View>
     </View>
   );
-}
+});
 
-function AnimatedBar({ pct, color, delay = 0 }) {
+// Horizontal progress bar indicator
+const AnimatedBar = React.memo(function AnimatedBar({ pct, color, delay = 0 }) {
   const animWidth = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(animWidth, {
@@ -193,9 +156,10 @@ function AnimatedBar({ pct, color, delay = 0 }) {
       />
     </View>
   );
-}
+});
 
-function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
+// Interactive fluid physics animated water glass readout
+const AnimatedWaterGlassBar = React.memo(function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
   const pctRatio = Math.min(consumed / target, 1);
   const fillAnim = useRef(new Animated.Value(pctRatio)).current;
   const waveY = useRef(new Animated.Value(0)).current;
@@ -310,9 +274,7 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
             bottom: 0,
             borderRadius: 6,
             borderWidth: 2,
-            borderColor: theme?.border
-              ? theme.border
-              : "rgba(148, 163, 184, 0.65)",
+            borderColor: theme?.border || COLORS.glassBorder,
             borderBottomWidth: 0,
             overflow: "hidden",
           }}
@@ -326,8 +288,8 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
             height: 10,
             borderRadius: 10,
             borderWidth: 2,
-            borderColor: "rgba(148, 163, 184, 0.75)",
-            backgroundColor: "rgba(255, 255, 255, 0.25)",
+            borderColor: COLORS.glassRimBorder,
+            backgroundColor: COLORS.glassRimBg,
             zIndex: 30,
           }}
         />
@@ -341,7 +303,7 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
             borderBottomLeftRadius: 14,
             borderBottomRightRadius: 14,
             overflow: "hidden",
-            backgroundColor: theme?.inputBg || "rgba(241, 245, 249, 0.35)",
+            backgroundColor: theme?.inputBg || COLORS.waterGlassBg,
             zIndex: 5,
           }}
         >
@@ -352,7 +314,7 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: waterColor || "#0EA5E9",
+              backgroundColor: COLORS.waterColor,
               opacity: 1.0,
             }}
           >
@@ -377,7 +339,7 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
                   left: 0,
                   right: 0,
                   height: 6,
-                  backgroundColor: "#38BDF8",
+                  backgroundColor: COLORS.waterHighlight,
                   borderTopLeftRadius: 8,
                   borderTopRightRadius: 8,
                 }}
@@ -395,8 +357,8 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
             borderBottomLeftRadius: 10,
             borderBottomRightRadius: 10,
             borderWidth: 2,
-            borderColor: "rgba(148, 163, 184, 0.75)",
-            backgroundColor: "rgba(241, 245, 249, 0.7)",
+            borderColor: COLORS.glassRimBorder,
+            backgroundColor: COLORS.glassBottomBg,
             zIndex: 20,
             overflow: "hidden",
           }}
@@ -410,17 +372,18 @@ function AnimatedWaterGlassBar({ consumed, target, waterColor, theme }) {
               height: 6,
               borderRadius: 6,
               borderWidth: 1.5,
-              borderColor: "rgba(100, 116, 139, 0.5)",
-              backgroundColor: "rgba(148, 163, 184, 0.3)",
+              borderColor: COLORS.glassBottomBorder,
+              backgroundColor: COLORS.glassBottomReflect,
             }}
           />
         </View>
       </View>
     </View>
   );
-}
+});
 
-function FadeCard({ delay = 0, style, children }) {
+// Staggered entry animation wrapper card
+const FadeCard = React.memo(function FadeCard({ delay = 0, style, children }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
   useEffect(() => {
@@ -451,41 +414,9 @@ function FadeCard({ delay = 0, style, children }) {
       {children}
     </Animated.View>
   );
-}
+});
 
-// ============================================================================
-// === SECTION 2: UTILITIES & MEMOIZED CALCULATIONS ===========================
-// ============================================================================
 
-const NEW_GOAL_OPTIONS = [
-  {
-    id: "fatloss",
-    label: "Weight Loss",
-    desc: "Burn fat, slim down, and optimize health (Deficit)",
-    offsetKg: -5,
-    icon: <Flame color="#F97316" size={18} strokeWidth={2.5} />,
-    badgeBg: "rgba(249, 115, 22, 0.12)",
-    accentColor: "#F97316",
-  },
-  {
-    id: "maintain",
-    label: "Maintain Weight",
-    desc: "Maintain balance and focus on recomposition (Balance)",
-    offsetKg: 0,
-    icon: <Target color={logoGreen} size={18} strokeWidth={2.5} />,
-    badgeBg: "rgba(16, 185, 129, 0.12)",
-    accentColor: logoGreen,
-  },
-  {
-    id: "muscle",
-    label: "Gain Weight",
-    desc: "Build muscle mass, gain weight, and build strength (Surplus)",
-    offsetKg: +5,
-    icon: <Activity color="#8B5CF6" size={18} strokeWidth={2.5} />,
-    badgeBg: "rgba(139, 92, 246, 0.12)",
-    accentColor: "#8B5CF6",
-  },
-];
 
 const getInitials = (name) => {
   if (!name) return "U";
@@ -496,9 +427,7 @@ const getInitials = (name) => {
   return name.substring(0, 2).toUpperCase();
 };
 
-// ============================================================================
-// === SECTION 3: MAIN COMPONENT & STATE HANDLERS =============================
-// ============================================================================
+// --- MAIN DASHBOARD SCREEN ---
 
 export default function DashboardScreen({
   onTabChange,
@@ -529,670 +458,120 @@ export default function DashboardScreen({
   setWeightHistory,
 }) {
   const { theme, isDarkMode } = useTheme();
-  const { showAlert } = useCustomAlert();
-  const styles = getStyles(theme);
 
-  // State Modals & Inputs
-  const [showWeightModal, setShowWeightModal] = useState(false);
-  const [weightInput, setWeightInput] = useState("");
-  const [imageError, setImageError] = useState(false);
-  const [showNewGoalModal, setShowNewGoalModal] = useState(false);
-  const [selectedNewGoalOption, setSelectedNewGoalOption] = useState(null);
-  const [weightChangeKg, setWeightChangeKg] = useState("5");
-  const [waterRipples, setWaterRipples] = useState([]);
+  // Screen styling (memoized on theme and dark mode)
+  const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
 
-  useEffect(() => {
-    setImageError(false);
-  }, [userProfile?.profileImage]);
-
-  // Pedometer sensor setup
-  const pedometerBaseRef = useRef(null);
-  const pedometerSubRef = useRef(null);
-
-  useEffect(() => {
-    let active = true;
-    const startPedometer = async () => {
-      try {
-        const { status } = await Pedometer.requestPermissionsAsync();
-        if (status !== "granted") return;
-        const isAvailable = await Pedometer.isAvailableAsync();
-        if (!isAvailable) return;
-
-        pedometerBaseRef.current = null;
-        pedometerSubRef.current = Pedometer.watchStepCount((result) => {
-          if (!active) return;
-          if (pedometerBaseRef.current === null) {
-            pedometerBaseRef.current = result.steps;
-          }
-          const sessionSteps = result.steps - pedometerBaseRef.current;
-          if (sessionSteps > 0 && setDailyExercise) {
-            setDailyExercise((prev) => {
-              const prevBase = prev?._pedometerBase ?? 0;
-              const alreadyAdded = prev?._pedometerAdded ?? 0;
-              const newAdded = sessionSteps;
-              const delta = newAdded - alreadyAdded;
-              if (delta <= 0) return prev;
-              return {
-                ...prev,
-                steps: (prev?.steps || 0) + delta,
-                caloriesBurned:
-                  (prev?.caloriesBurned || 0) + Math.round(delta * 0.04),
-                activeMinutes:
-                  (prev?.activeMinutes || 0) + Math.round(delta / 100),
-                _pedometerBase: prevBase,
-                _pedometerAdded: newAdded,
-              };
-            });
-          }
-        });
-      } catch (err) {
-        if (__DEV__) console.log("Pedometer error:", err);
-      }
-    };
-
-    startPedometer();
-    return () => {
-      active = false;
-      if (pedometerSubRef.current) {
-        pedometerSubRef.current.remove();
-        pedometerSubRef.current = null;
-      }
-    };
-  }, []);
-
-  // Memoized User & Goal Stats
-  const weightUnit = userBaseline?.unit || "kg";
-  const consumedGlasses =
-    globalConsumedGlasses !== undefined ? globalConsumedGlasses : 0;
-  const weightKg =
-    weightUnit === "lbs"
-      ? parseFloat(userBaseline?.weight || 154) / 2.20462
-      : parseFloat(userBaseline?.weight || 70);
-  const heightCm = parseFloat(userBaseline?.height || 170);
-
-  const recommendedWaterMl = useMemo(() => {
-    return weightKg * 35 + Math.max(0, heightCm - 150) * 10;
-  }, [weightKg, heightCm]);
-
-  const targetGlasses = useMemo(() => {
-    return Math.min(15, Math.max(6, Math.round(recommendedWaterMl / 250)));
-  }, [recommendedWaterMl]);
-
-  const currentStreak = userProfile?.streakDays || 0;
-  const primaryGoal =
-    localGoalLabel ||
-    (userGoals?.goal === "muscle" || userGoals?.goal === "Build Muscle"
-      ? "Build Muscle"
-      : userGoals?.goal === "maintain" || userGoals?.goal === "Maintain Weight"
-        ? "Maintain Weight"
-        : "Lose Weight");
-  const startingWeight =
-    localStartingWeight !== null
-      ? localStartingWeight
-      : parseFloat(userBaseline?.startingWeight || userBaseline?.weight || 70);
-  const currentWeight =
-    globalLoggedWeight !== null ? globalLoggedWeight : startingWeight;
-  const goalWeight =
-    localGoalWeight !== null
-      ? localGoalWeight
-      : parseFloat(
-          userGoals?.goalWeight ||
-            userBaseline?.targetWeight ||
-            userBaseline?.weight ||
-            currentWeight ||
-            60,
-        );
-  const weightChange = currentWeight - startingWeight;
-
-  const progressPct = useMemo(() => {
-    const totalDiff = goalWeight - startingWeight;
-    const currentDiff = currentWeight - startingWeight;
-    let pct = totalDiff === 0 ? 0 : currentDiff / totalDiff;
-    if (pct < 0) pct = 0;
-    if (pct > 1) pct = 1;
-    return pct;
-  }, [goalWeight, startingWeight, currentWeight]);
-
-  // Goal Completion Check
-  const activeGoalType =
-    userGoals?.goal ||
-    (primaryGoal.toLowerCase().includes("muscle") ||
-    primaryGoal.toLowerCase().includes("gain")
-      ? "muscle"
-      : primaryGoal.toLowerCase().includes("maintain")
-        ? "maintain"
-        : "fatloss");
-
-  // Goal Completion Check:
-  // A goal is only achieved when:
-  // 1. Goal is NOT "maintain" (maintenance is an ongoing habit, not a modal popup trigger)
-  // 2. A real difference exists between goal weight and starting weight (>= 0.5 units)
-  // 3. User has actually progressed away from starting baseline (not still at day-1 weight)
-  // 4. Current weight has reached or surpassed target goal weight in the goal direction
-  const isGoalAchieved = useMemo(() => {
-    if (activeGoalType === "maintain") return false;
-    if (globalLoggedWeight === null) return false;
-
-    const totalDiff = Math.abs(goalWeight - startingWeight);
-    if (totalDiff < 0.5) return false;
-
-    // Must not be identical to starting weight (user must have made real progress)
-    if (Math.abs(currentWeight - startingWeight) < 0.2) return false;
-
-    if (activeGoalType === "muscle") {
-      return goalWeight > startingWeight && currentWeight >= goalWeight && currentWeight > startingWeight;
-    }
-
-    if (activeGoalType === "fatloss") {
-      return goalWeight < startingWeight && currentWeight <= goalWeight && currentWeight < startingWeight;
-    }
-
-    return false;
-  }, [globalLoggedWeight, currentWeight, goalWeight, startingWeight, activeGoalType]);
-
-  useEffect(() => {
-    if (isGoalAchieved && !goalReachedAlertShown) {
-      if (setGoalReachedAlertShown) setGoalReachedAlertShown(true);
-      setShowNewGoalModal(true);
-    }
-  }, [isGoalAchieved, goalReachedAlertShown, setGoalReachedAlertShown]);
-
-  // Water Intake Action
-  const handleAddGlass = async () => {
-    setWaterRipples((prev) => [...prev, Date.now()]);
-    const newAmount = consumedGlasses + 1;
-    if (!userId) {
-      showAlert("Authentication Error", "You must be logged in to log water.");
-      return;
-    }
-
-    const logWaterAction = async () => {
-      if (setGlobalConsumedGlasses) setGlobalConsumedGlasses(newAmount);
-      if (newAmount === targetGlasses) {
-        await pushNotificationIfAllowed(
-          {
-            id: `n-${Date.now()}`,
-            title: "Hydration Goal Reached!",
-            category: "hydration",
-            time: "Just Now",
-            read: false,
-            message:
-              "Great job hitting your AI-recommended water intake for the day! Staying hydrated is essential.",
-          },
-          setNotifications,
-        );
-      }
-
-      if (!isOnline) {
-        await addToSyncQueue({
-          type: "LOG_WATER",
-          payload: { user_id: userId, glasses: newAmount },
-        });
-        await updateCachedDashboardField(userId, {
-          water: { glasses: newAmount },
-        });
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_URL}/water`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, glasses: newAmount }),
-        });
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.detail || "Failed to log water on server");
-        }
-      } catch (error) {
-        if (__DEV__) console.error("LOG WATER ERROR:", error);
-        await addToSyncQueue({
-          type: "LOG_WATER",
-          payload: { user_id: userId, glasses: newAmount },
-        });
-        await updateCachedDashboardField(userId, {
-          water: { glasses: newAmount },
-        });
-      }
-    };
-
-    if (consumedGlasses >= targetGlasses) {
-      showAlert(
-        "Hydration Target Reached",
-        "You have already reached your daily water intake quota. Drinking too much water can be harmful. Do you want to log another glass?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Log Anyway", onPress: logWaterAction },
-        ],
-      );
-    } else {
-      await logWaterAction();
-    }
-  };
-
-  // Select New Goal Handler
-  const handleSelectNewGoal = useCallback(
-    async (option) => {
-      const achievedWeight = goalWeight;
-      if (setGlobalLoggedWeight) setGlobalLoggedWeight(achievedWeight);
-
-      const newStarting = achievedWeight;
-      const newGoal =
-        option.targetWeight !== undefined
-          ? option.targetWeight
-          : (option.offsetKg !== undefined ? achievedWeight + option.offsetKg : achievedWeight);
-
-      setLocalStartingWeight(newStarting);
-      setLocalGoalWeight(newGoal);
-      setLocalGoalLabel(option.label);
-      if (setGoalReachedAlertShown) setGoalReachedAlertShown(true);
-      setShowNewGoalModal(false);
-      setSelectedNewGoalOption(null);
-
-      if (setWeightHistory) {
-        setWeightHistory(
-          Array.from({ length: 7 }, () => parseFloat(achievedWeight.toFixed(1))),
-        );
-      }
-
-      if (setNotifications) {
-        setNotifications((prev) => [
-          {
-            id: "ng-" + Date.now(),
-            title: "New Goal Set!",
-            category: "achievement",
-            time: "Just Now",
-            read: false,
-            message: `Your weight goal has been reset. New target: ${option.label}. Starting from ${newStarting.toFixed(1)} ${weightUnit} → ${newGoal.toFixed(1)} ${weightUnit}. Let's go!`,
-          },
-          ...prev,
-        ]);
-      }
-
-      if (isOnline && userId) {
-        try {
-          const targetDateObj = new Date();
-          targetDateObj.setDate(targetDateObj.getDate() + 90);
-          const formattedTargetDate = `${String(targetDateObj.getMonth() + 1).padStart(2, "0")}/${String(targetDateObj.getDate()).padStart(2, "0")}/${targetDateObj.getFullYear()}`;
-
-          const response = await fetch(`${API_URL}/save-onboarding`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              age: parseInt(userBaseline?.age || 25, 10),
-              weight_kg: achievedWeight,
-              height_cm: parseFloat(userBaseline?.height || 170),
-              goal: option.id,
-              goal_weight: newGoal,
-              target_date: formattedTargetDate,
-              weight_unit: userBaseline?.unit || "kg",
-              starting_weight: achievedWeight,
-            }),
-          });
-
-          if (response.ok && onRefreshDashboard) {
-            onRefreshDashboard();
-          }
-        } catch (e) {
-          if (__DEV__) console.log("NEW GOAL PERSIST ERROR:", e);
-        }
-      }
-    },
-    [
-      goalWeight,
-      weightUnit,
-      isOnline,
-      userId,
-      userBaseline,
-      setGlobalLoggedWeight,
-      setNotifications,
-      onRefreshDashboard,
-      setLocalStartingWeight,
-      setLocalGoalWeight,
-      setLocalGoalLabel,
-      setGoalReachedAlertShown,
-      setWeightHistory,
-    ],
-  );
-
-  // Macro Calculation
-  const { targetCalories, targetProtein, targetCarbs, targetFats } =
-    useMemo(() => {
-      let tCal = 2000,
-        tProt = 150,
-        tCarb = 225,
-        tFat = 55;
-      if (
-        userBaseline?.weight &&
-        userBaseline?.height &&
-        userBaseline?.age &&
-        userGoals?.activityLevel
-      ) {
-        const w = parseFloat(userBaseline.weight);
-        const h = parseFloat(userBaseline.height);
-        const a = parseInt(userBaseline.age, 10);
-        let bmr = 10 * w + 6.25 * h - 5 * a + 5;
-        let mult = 1.2;
-        if (userGoals.activityLevel === "moderate") mult = 1.55;
-        if (userGoals.activityLevel === "active") mult = 1.725;
-        let tdee = bmr * mult;
-        if (userGoals.goal === "muscle") tdee += 300;
-        if (userGoals.goal === "fatloss") tdee -= 500;
-        tCal = Math.round(tdee);
-        tProt = Math.round((tCal * 0.3) / 4);
-        tCarb = Math.round((tCal * 0.45) / 4);
-        tFat = Math.round((tCal * 0.25) / 9);
-      }
-      return {
-        targetCalories: tCal,
-        targetProtein: tProt,
-        targetCarbs: tCarb,
-        targetFats: tFat,
-      };
-    }, [userBaseline, userGoals]);
-
-  const nutrition = dailyNutrition || {
-    consumedCalories: 0,
-    protein: { current: 0 },
-    carbs: { current: 0 },
-    fats: { current: 0 },
-  };
-  const exercise2BurnedCalories = (dailyExercise?.caloriesBurned || 0);
-  const netCalories2 = Math.max(0, (nutrition.consumedCalories || 0) - exercise2BurnedCalories);
-  let nutritionPct =
-    targetCalories === 0 ? 0 : netCalories2 / targetCalories;
-  if (nutritionPct < 0) nutritionPct = 0;
-  if (nutritionPct > 1) nutritionPct = 1;
-
-  const macros = [
-    {
-      label: "Protein",
-      current: nutrition.protein?.current || 0,
-      target: targetProtein,
-      color: logoGreen,
-      unit: "g",
-    },
-    {
-      label: "Carbs",
-      current: nutrition.carbs?.current || 0,
-      target: targetCarbs,
-      color: "#F59E0B",
-      unit: "g",
-    },
-    {
-      label: "Fats",
-      current: nutrition.fats?.current || 0,
-      target: targetFats,
-      color: "#EC4899",
-      unit: "g",
-    },
-  ];
-
-  const exercise = dailyExercise || {
-    caloriesBurned: 320,
-    activeMinutes: 45,
-    targetMinutes: 60,
-    recentExercise: "Morning Jog",
-  };
-  const currentSteps = dailyExercise?.steps ?? 0;
-
-  // Chart configuration & data
-  const chartConfig = useMemo(
-    () => ({
-      backgroundGradientFrom: theme?.surface || baseColor,
-      backgroundGradientTo: theme?.surface || baseColor,
-      color: (opacity = 1) =>
-        isDarkMode
-          ? `rgba(52, 211, 153, ${opacity})`
-          : `rgba(16, 185, 129, ${opacity})`,
-      labelColor: (opacity = 1) =>
-        isDarkMode
-          ? `rgba(148, 163, 184, ${opacity})`
-          : `rgba(100, 116, 139, ${opacity})`,
-      strokeWidth: 3,
-      barPercentage: 0.5,
-      useShadowColorFromDataset: false,
-      propsForDots: {
-        r: "5",
-        strokeWidth: "2.5",
-        stroke: logoGreen,
-        fill: theme?.surface || "#FFFFFF",
-      },
-      propsForBackgroundLines: {
-        strokeDasharray: "4 4",
-        stroke: theme?.border || "#E2E8F0",
-        strokeWidth: 1,
-      },
-      decimalPlaces: 1,
-    }),
-    [theme, isDarkMode],
-  );
-
+  // Dashboard business logic hook: state, pedometer watcher, calculations & handlers
   const {
+    showWeightModal,
+    setShowWeightModal,
+    weightInput,
+    setWeightInput,
+    imageError,
+    setImageError,
+    showNewGoalModal,
+    setShowNewGoalModal,
+    selectedNewGoalOption,
+    setSelectedNewGoalOption,
+    weightChangeKg,
+    setWeightChangeKg,
+    waterRipples,
+    weightUnit,
+    consumedGlasses,
+    targetGlasses,
+    recommendedWaterMl,
+    weightKg,
+    heightCm,
+    currentStreak,
+    primaryGoal,
+    startingWeight,
+    currentWeight,
+    goalWeight,
+    weightChange,
+    progressPct,
+    activeGoalType,
+    isGoalAchieved,
+    targetCalories,
+    targetProtein,
+    targetCarbs,
+    targetFats,
+    nutrition,
+    exercise2BurnedCalories,
+    netCalories2,
+    nutritionPct,
+    macros,
+    exercise,
+    currentSteps,
+    chartConfig,
     rollingLabels,
     weightDataPoints,
     maxWeeklyWeight,
     minWeeklyWeight,
     netWeeklyChange,
     weightChartData,
-  } = useMemo(() => {
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const todayIndex = new Date().getDay();
-    const labels = Array.from({ length: 7 }, (_, i) => {
-      const d = (todayIndex - 6 + i + 7) % 7;
-      return dayNames[d];
-    });
+    greetingObj,
+    currentDateStr,
+    displayName,
+    handleAddGlass,
+    handleSelectNewGoal,
+    handleSaveWeightInput,
+    executeWeightSave,
+    getGoalProgressColor,
+  } = useDashboard({
+    userBaseline,
+    userGoals,
+    dailyNutrition,
+    dailyExercise,
+    setDailyExercise,
+    notifications,
+    setNotifications,
+    globalLoggedWeight,
+    setGlobalLoggedWeight,
+    globalConsumedGlasses,
+    setGlobalConsumedGlasses,
+    userProfile,
+    userId,
+    onRefreshDashboard,
+    isOnline,
+    localStartingWeight,
+    setLocalStartingWeight,
+    localGoalWeight,
+    setLocalGoalWeight,
+    localGoalLabel,
+    setLocalGoalLabel,
+    goalReachedAlertShown,
+    setGoalReachedAlertShown,
+    weightHistory,
+    setWeightHistory,
+    theme,
+    isDarkMode,
+  });
 
-    const fallbackStart = startingWeight;
-    const points =
-      weightHistory && weightHistory.length === 7
-        ? weightHistory
-        : Array.from({ length: 6 }, () => fallbackStart).concat([
-            currentWeight,
-          ]);
+  const { width: windowWidth } = useWindowDimensions();
+  const [chartLayoutWidth, setChartLayoutWidth] = useState(0);
 
-    const maxW = Math.max(...points).toFixed(1);
-    const minW = Math.min(...points).toFixed(1);
-    const netChange = (points[points.length - 1] - points[0]).toFixed(1);
-
-    return {
-      rollingLabels: labels,
-      weightDataPoints: points,
-      maxWeeklyWeight: maxW,
-      minWeeklyWeight: minW,
-      netWeeklyChange: netChange,
-      weightChartData: {
-        labels,
-        datasets: [{ data: points, color: () => logoGreen, strokeWidth: 3 }],
-      },
-    };
-  }, [startingWeight, weightHistory, currentWeight]);
-
-  const greetingObj = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return { text: "Good Morning" };
-    if (hour >= 12 && hour < 18) return { text: "Good Afternoon" };
-    return { text: "Good Evening" };
-  }, []);
-
-  const currentDateStr = useMemo(() => {
-    return new Date()
-      .toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      })
-      .toUpperCase();
-  }, []);
-
-  const rawName = userProfile?.name || "User";
-  const displayName =
-    rawName.length > 14 ? `${rawName.substring(0, 12)}...` : rawName;
-
-  const getGoalProgressColor = useCallback(
-    (delta) => {
-      if (delta === 0) return theme?.textSecondary || "#94A3B8";
-      const goalType =
-        userGoals?.goal ||
-        (primaryGoal.toLowerCase().includes("muscle") ||
-        primaryGoal.toLowerCase().includes("gain")
-          ? "muscle"
-          : primaryGoal.toLowerCase().includes("maintain")
-            ? "maintain"
-            : "fatloss");
-
-      if (goalType === "muscle") {
-        return delta > 0 ? logoGreen : "#EF4444";
-      } else if (goalType === "maintain") {
-        return Math.abs(delta) <= 1.0 ? logoGreen : "#F59E0B";
-      } else {
-        return delta < 0 ? logoGreen : "#EF4444";
-      }
-    },
-    [theme, userGoals, primaryGoal],
+  // Responsive card width constraint (capped cleanly inside the max 680px card)
+  const maxAvailableCardWidth = Math.min(windowWidth - 72, 608);
+  const chartWidth = Math.max(
+    280,
+    chartLayoutWidth > 0 ? chartLayoutWidth : maxAvailableCardWidth
   );
-
-  const executeWeightSave = async (parsed) => {
-    if (setGlobalLoggedWeight) setGlobalLoggedWeight(parsed);
-    const totalDiff = Math.abs(goalWeight - startingWeight);
-    const isNewWeightAchieved =
-      activeGoalType !== "maintain" &&
-      totalDiff >= 0.5 &&
-      Math.abs(parsed - startingWeight) >= 0.2 &&
-      ((activeGoalType === "muscle" && goalWeight > startingWeight && parsed >= goalWeight) ||
-       (activeGoalType === "fatloss" && goalWeight < startingWeight && parsed <= goalWeight));
-
-    if (isNewWeightAchieved) {
-      if (setGoalReachedAlertShown) setGoalReachedAlertShown(false);
-      setShowNewGoalModal(true);
-    } else if (setGoalReachedAlertShown) {
-      setGoalReachedAlertShown(false);
-    }
-    if (setWeightHistory) {
-      setWeightHistory((prev) => {
-        const base =
-          prev && prev.length === 7
-            ? [...prev]
-            : Array.from({ length: 6 }, () => startingWeight).concat([
-                currentWeight,
-              ]);
-        base[6] = parseFloat(parsed.toFixed(1));
-        return base;
-      });
-    }
-    setShowWeightModal(false);
-    await pushNotificationIfAllowed(
-      {
-        id: "w" + Date.now(),
-        title: "Weight Logged",
-        category: "achievement",
-        time: "Just Now",
-        read: false,
-        message: `Successfully logged your weight as ${parsed.toFixed(1)} ${weightUnit}. Keep up the great work!`,
-      },
-      setNotifications,
-    );
-
-    if (!isOnline) {
-      await addToSyncQueue({
-        type: "LOG_WEIGHT",
-        payload: {
-          user_id: userId,
-          new_weight: parsed,
-          unit: userBaseline?.unit || "kg",
-        },
-      });
-      await updateCachedDashboardField(userId, {
-        profile: { currentWeight: parsed },
-      });
-      showAlert(
-        "Saved Offline",
-        "Weight saved locally. Will sync when back online.",
-      );
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/update-weight`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          new_weight: parsed,
-          unit: userBaseline?.unit || "kg",
-        }),
-      });
-      if (response.ok && onRefreshDashboard) {
-        onRefreshDashboard();
-      } else if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        showAlert(
-          "Error Logging Weight",
-          errData.detail || "Failed to log weight to server.",
-        );
-      }
-    } catch (error) {
-      if (__DEV__) console.log("LOG WEIGHT ERROR:", error);
-      await addToSyncQueue({
-        type: "LOG_WEIGHT",
-        payload: {
-          user_id: userId,
-          new_weight: parsed,
-          unit: userBaseline?.unit || "kg",
-        },
-      });
-      await updateCachedDashboardField(userId, {
-        profile: { currentWeight: parsed },
-      });
-    }
-  };
-
-  const handleSaveWeightInput = () => {
-    const parsed = parseFloat(weightInput);
-    const minVal = weightUnit === "lbs" ? 55 : 25;
-    const maxVal = weightUnit === "lbs" ? 660 : 300;
-    if (isNaN(parsed) || parsed < minVal || parsed > maxVal) {
-      showAlert(
-        "Invalid Weight Input",
-        `Please enter a realistic weight value between ${minVal} ${weightUnit} and ${maxVal} ${weightUnit}.`,
-      );
-      return;
-    }
-
-    const thresholdJump = weightUnit === "lbs" ? 11.0 : 5.0;
-    const weightJump = Math.abs(parsed - currentWeight);
-    if (currentWeight > 0 && weightJump >= thresholdJump) {
-      showAlert(
-        "Unusual Weight Jump",
-        `You entered ${parsed.toFixed(1)} ${weightUnit}, which is ${weightJump.toFixed(1)} ${weightUnit} ${parsed > currentWeight ? "higher" : "lower"} than your recent weight (${currentWeight.toFixed(1)} ${weightUnit}). Are you sure?`,
-        [
-          { text: "Fix Input", style: "cancel" },
-          { text: "Yes, Confirm", onPress: () => executeWeightSave(parsed) },
-        ],
-      );
-      return;
-    }
-
-    executeWeightSave(parsed);
-  };
-
-  // ============================================================================
-  // === SECTION 4: MAIN SCREEN UI RENDER =======================================
-  // ============================================================================
 
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar
         barStyle={isDarkMode ? "light-content" : "dark-content"}
         backgroundColor="transparent"
-        translucent
+        translucent={true}
       />
 
       <ScrollView
         style={styles.container}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={Platform.OS === "android"}
       >
         {/* ── HEADER ── */}
         <FadeCard delay={0} style={styles.header}>
@@ -1207,74 +586,28 @@ export default function DashboardScreen({
               {greetingObj.text}, {displayName}!
             </Text>
 
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 6,
-                flexWrap: "wrap",
-                gap: 6,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: isDarkMode
-                    ? "rgba(16, 185, 129, 0.16)"
-                    : "rgba(16, 185, 129, 0.10)",
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: isDarkMode
-                    ? "rgba(16, 185, 129, 0.25)"
-                    : "rgba(16, 185, 129, 0.2)",
-                }}
-              >
+            <View style={styles.headerBadgeRow}>
+              <View style={styles.goalBadge}>
                 <Target
                   size={12}
-                  color={logoGreen}
+                  color={COLORS.logoGreen}
                   strokeWidth={2.5}
-                  style={{ marginRight: 4 }}
+                  style={styles.goalBadgeIcon}
                 />
-                <Text
-                  style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}
-                >
+                <Text style={styles.goalBadgeText}>
                   {primaryGoal}
                 </Text>
               </View>
 
               {currentStreak > 0 && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: isDarkMode
-                      ? "rgba(249, 115, 22, 0.16)"
-                      : "rgba(249, 115, 22, 0.10)",
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: isDarkMode
-                      ? "rgba(249, 115, 22, 0.25)"
-                      : "rgba(249, 115, 22, 0.2)",
-                  }}
-                >
+                <View style={styles.streakBadge}>
                   <Flame
                     size={12}
-                    color="#F97316"
+                    color={COLORS.orange}
                     strokeWidth={2.5}
-                    style={{ marginRight: 4 }}
+                    style={styles.streakBadgeIcon}
                   />
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "800",
-                      color: "#F97316",
-                    }}
-                  >
+                  <Text style={styles.streakBadgeText}>
                     {currentStreak} Day Streak
                   </Text>
                 </View>
@@ -1335,6 +668,7 @@ export default function DashboardScreen({
 
         {/* ── 1. WEIGHT TRACKING PROGRESS CARD ── */}
         <FadeCard delay={80} style={styles.formCard}>
+
           <Text style={styles.cardTitle}>Weight Progress</Text>
           <View
             style={[styles.weightSplitLayout, { alignItems: "flex-start" }]}
@@ -1344,7 +678,7 @@ export default function DashboardScreen({
               radius={52}
               strokeWidth={10}
               pct={progressPct}
-              color={logoGreen}
+              color={COLORS.logoGreen}
               delay={200}
             >
               <Text
@@ -1378,7 +712,7 @@ export default function DashboardScreen({
                 </View>
                 <View style={styles.statGridItem}>
                   <Text style={styles.statLabel}>Current</Text>
-                  <Text style={[styles.statValue, { color: logoGreen }]}>
+                  <Text style={[styles.statValue, { color: COLORS.logoGreen }]}>
                     {currentWeight.toFixed(1)} {weightUnit}
                   </Text>
                 </View>
@@ -1407,7 +741,7 @@ export default function DashboardScreen({
                   setShowWeightModal(true);
                 }}
                 style={{
-                  backgroundColor: logoGreen,
+                  backgroundColor: COLORS.logoGreen,
                   paddingVertical: 10,
                   borderRadius: 12,
                   marginTop: 4,
@@ -1438,7 +772,7 @@ export default function DashboardScreen({
                 color={
                   netCalories2 > targetCalories
                     ? "#EF4444"
-                    : logoGreen
+                    : COLORS.logoGreen
                 }
                 delay={300}
               >
@@ -1465,22 +799,8 @@ export default function DashboardScreen({
                 <Text style={styles.calorieSubText}>NET KCAL</Text>
               </AnimatedRing>
               {nutrition.consumedCalories > targetCalories && (
-                <View
-                  style={{
-                    backgroundColor: "rgba(239, 68, 68, 0.12)",
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 4,
-                    marginTop: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 9,
-                      color: "#EF4444",
-                      fontWeight: "bold",
-                    }}
-                  >
+                <View style={styles.overLimitBadge}>
+                  <Text style={styles.overLimitText}>
                     OVER LIMIT
                   </Text>
                 </View>
@@ -1517,22 +837,18 @@ export default function DashboardScreen({
 
           {/* ── Eaten − Burned = Net Kcal equation strip ── */}
           {exercise2BurnedCalories > 0 && (
-            <View style={{
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-              paddingVertical: 10, marginTop: 4,
-              borderTopWidth: 1, borderTopColor: theme?.border || 'rgba(0,0,0,0.06)',
-            }}>
-              <Text style={{ fontSize: 12, color: theme?.textSecondary || '#64748B', fontWeight: '600' }}>
-                <Text style={{ color: theme?.textPrimary || '#0F172A', fontWeight: '800' }}>
+            <View style={styles.equationStrip}>
+              <Text style={styles.equationText}>
+                <Text style={{ color: isDarkMode ? COLORS.textLight : COLORS.textDark, fontWeight: '800' }}>
                   {(nutrition.consumedCalories || 0).toLocaleString()}
                 </Text>
                 {' eaten − '}
-                <Text style={{ color: '#F97316', fontWeight: '800' }}>
+                <Text style={{ color: COLORS.orange, fontWeight: '800' }}>
                   {exercise2BurnedCalories.toLocaleString()}
                 </Text>
                 {' burned = '}
                 <Text style={{
-                  color: netCalories2 > targetCalories ? '#EF4444' : netCalories2 === 0 ? logoGreen : (theme?.textPrimary || '#0F172A'),
+                  color: netCalories2 > targetCalories ? COLORS.red : netCalories2 === 0 ? COLORS.logoGreen : (isDarkMode ? COLORS.textLight : COLORS.textDark),
                   fontWeight: '900'
                 }}>
                   {netCalories2.toLocaleString()} net kcal
@@ -1547,23 +863,15 @@ export default function DashboardScreen({
             const isOverNet2   = netCalories2 > targetCalories;
             const isSaved2     = isOverGross2 && !isOverNet2;
             if (isSaved2) return (
-              <View style={[styles.warningBanner, {
-                backgroundColor: isDarkMode ? 'rgba(16,185,129,0.08)' : 'rgba(240,253,244,0.6)',
-                borderColor: isDarkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.25)',
-                marginTop: 0,
-              }]}>
-                <Text style={[styles.warningBannerText, { color: isDarkMode ? '#34D399' : '#059669' }]}>
+              <View style={styles.exerciseOffsetBanner}>
+                <Text style={styles.exerciseOffsetText}>
                   Saved by Exercise! Your workout offset your calorie overage.
                 </Text>
               </View>
             );
             if (isOverNet2) return (
-
-              <View style={[styles.warningBanner, {
-                  backgroundColor: isDarkMode ? 'rgba(239,68,68,0.08)' : 'rgba(254,242,242,0.5)',
-                  borderColor: isDarkMode ? 'rgba(239,68,68,0.2)' : 'rgba(252,165,165,0.5)',
-                }]}>
-                <Text style={[styles.warningBannerText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>
+              <View style={styles.calorieExceededBanner}>
+                <Text style={styles.calorieExceededText}>
                   You have exceeded your net calorie budget ({netCalories2.toLocaleString()} / {targetCalories.toLocaleString()} kcal).
                 </Text>
               </View>
@@ -1589,9 +897,9 @@ export default function DashboardScreen({
                 label: "Kcal Burned",
               },
               {
-                icon: <Clock color={logoGreen} size={22} strokeWidth={2.5} />,
+                icon: <Clock color={COLORS.logoGreen} size={22} strokeWidth={2.5} />,
                 val: `${exercise.activeMinutes}/60`,
-                label: "Active Mins",
+                label: "Active Mins"
               },
               {
                 icon: (
@@ -1625,7 +933,7 @@ export default function DashboardScreen({
                   style={{
                     fontSize: 16,
                     fontWeight: "900",
-                    color: theme?.textPrimary || "#0F172A",
+                    color: item.textColor || theme?.textPrimary || "#0F172A",
                   }}
                 >
                   {item.val}
@@ -1633,7 +941,7 @@ export default function DashboardScreen({
                 <Text
                   style={{
                     fontSize: 9,
-                    color: theme?.textSecondary || "#94A3B8",
+                    color: item.textColor || theme?.textSecondary || "#94A3B8",
                     fontWeight: "800",
                     marginTop: 2,
                     textTransform: "uppercase",
@@ -1668,18 +976,8 @@ export default function DashboardScreen({
               <View
                 style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
               >
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    backgroundColor: "rgba(249, 115, 22, 0.15)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 10,
-                  }}
-                >
-                  <Flame color="#F97316" size={18} strokeWidth={2.5} />
+                <View style={styles.workoutIconBadge}>
+                  <Flame color={COLORS.orange} size={18} strokeWidth={2.5} />
                 </View>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text
@@ -1709,22 +1007,8 @@ export default function DashboardScreen({
               </View>
 
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View
-                  style={{
-                    backgroundColor: "rgba(249, 115, 22, 0.12)",
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 8,
-                    marginRight: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "900",
-                      color: "#F97316",
-                    }}
-                  >
+                <View style={styles.workoutGoalChip}>
+                  <Text style={styles.workoutGoalChipText}>
                     {Math.min(
                       Math.round(
                         (exercise.activeMinutes /
@@ -1748,31 +1032,14 @@ export default function DashboardScreen({
                 exercise.activeMinutes / (exercise.targetMinutes || 60),
                 1,
               )}
-              color="#F97316"
+              color={COLORS.orange}
               delay={500}
             />
           </PressableCard>
 
           {exercise.activeMinutes >= (exercise.targetMinutes || 60) && (
-            <View
-              style={[
-                styles.warningBanner,
-                {
-                  backgroundColor: isDarkMode
-                    ? "rgba(245, 158, 11, 0.08)"
-                    : "rgba(255, 251, 235, 0.5)",
-                  borderColor: isDarkMode
-                    ? "rgba(245, 158, 11, 0.2)"
-                    : "rgba(252, 211, 77, 0.5)",
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.warningBannerText,
-                  { color: isDarkMode ? "#FCD34D" : "#D97706" },
-                ]}
-              >
+            <View style={styles.exerciseQuotaBanner}>
+              <Text style={styles.exerciseQuotaBannerText}>
                 Daily exercise quota achieved ({exercise.activeMinutes} mins).
                 Excellent work, make sure to rest!
               </Text>
@@ -1855,7 +1122,7 @@ export default function DashboardScreen({
                 }}
               >
                 Your custom daily target is{" "}
-                <Text style={{ fontWeight: "700", color: waterColor }}>
+                <Text style={{ fontWeight: "700", color: COLORS.waterColor }}>
                   {(targetGlasses * 250).toLocaleString()}ml
                 </Text>{" "}
                 based on your weight ({weightKg}kg) and height ({heightCm}cm).
@@ -1865,14 +1132,14 @@ export default function DashboardScreen({
             <AnimatedWaterGlassBar
               consumed={consumedGlasses}
               target={targetGlasses}
-              waterColor={waterColor}
+              waterColor={COLORS.waterColor}
               theme={theme}
             />
           </View>
 
           <TouchableOpacity
             style={{
-              backgroundColor: waterColor,
+              backgroundColor: COLORS.waterColor,
               paddingHorizontal: 16,
               paddingVertical: 12,
               borderRadius: 12,
@@ -1896,7 +1163,7 @@ export default function DashboardScreen({
                 },
               ]}
             >
-              <Text style={[styles.warningBannerText, { color: waterColor }]}>
+              <Text style={[styles.warningBannerText, { color: COLORS.waterColor }]}>
                 Daily hydration target achieved ({consumedGlasses} /{" "}
                 {targetGlasses} glasses). Stay balanced and avoid overhydrating.
               </Text>
@@ -1928,35 +1195,33 @@ export default function DashboardScreen({
             </View>
 
             <View
-              style={{
-                backgroundColor:
-                  getGoalProgressColor(parseFloat(netWeeklyChange)) ===
-                  logoGreen
-                    ? "rgba(16, 185, 129, 0.12)"
-                    : getGoalProgressColor(parseFloat(netWeeklyChange)) ===
-                        "#EF4444"
-                      ? "rgba(239, 68, 68, 0.12)"
-                      : theme?.inputBg || "#F1F5F9",
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor:
-                  getGoalProgressColor(parseFloat(netWeeklyChange)) ===
-                  logoGreen
-                    ? "rgba(16, 185, 129, 0.25)"
-                    : getGoalProgressColor(parseFloat(netWeeklyChange)) ===
-                        "#EF4444"
-                      ? "rgba(239, 68, 68, 0.25)"
-                      : theme?.border || "#E2E8F0",
-              }}
+              style={[
+                styles.weeklyDeltaBadge,
+                {
+                  backgroundColor:
+                    parseFloat(netWeeklyChange) < 0
+                      ? COLORS.greenAlpha
+                      : parseFloat(netWeeklyChange) > 0
+                      ? COLORS.redAlpha
+                      : isDarkMode
+                      ? COLORS.borderDark
+                      : COLORS.pillLight,
+                  borderColor:
+                    parseFloat(netWeeklyChange) < 0
+                      ? COLORS.greenAlphaBorder
+                      : parseFloat(netWeeklyChange) > 0
+                      ? COLORS.redAlphaBorder
+                      : isDarkMode
+                      ? COLORS.borderDark
+                      : COLORS.borderLight,
+                },
+              ]}
             >
               <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "900",
-                  color: getGoalProgressColor(parseFloat(netWeeklyChange)),
-                }}
+                style={[
+                  styles.weeklyDeltaText,
+                  { color: getGoalProgressColor(parseFloat(netWeeklyChange)) },
+                ]}
               >
                 7D NET: {parseFloat(netWeeklyChange) > 0 ? "+" : ""}
                 {netWeeklyChange} {weightUnit}
@@ -2082,16 +1347,24 @@ export default function DashboardScreen({
 
           <View style={styles.glassDivider} />
 
-          <View style={styles.chartContainer}>
+          <View
+            style={styles.chartContainer}
+            onLayout={(e) => {
+              const w = Math.floor(e.nativeEvent.layout.width);
+              if (w > 0 && Math.abs(w - chartLayoutWidth) > 16) {
+                setChartLayoutWidth(w);
+              }
+            }}
+          >
             <LineChart
               data={weightChartData}
-              width={screenWidth - 76}
-              height={180}
+              width={chartWidth}
+              height={175}
               chartConfig={{
                 ...chartConfig,
-                fillShadowGradient: logoGreen,
+                fillShadowGradient: COLORS.logoGreen,
                 fillShadowGradientOpacity: isDarkMode ? 0.35 : 0.22,
-                fillShadowGradientTo: theme?.surface || baseColor,
+                fillShadowGradientTo: theme?.surface || COLORS.base,
                 fillShadowGradientToOpacity: 0.05,
               }}
               bezier
@@ -2172,20 +1445,8 @@ export default function DashboardScreen({
             {!selectedNewGoalOption ? (
               <>
                 <View style={{ alignItems: "center", marginBottom: 16 }}>
-                  <View
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 32,
-                      backgroundColor: "rgba(16, 185, 129, 0.12)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1.5,
-                      borderColor: "rgba(16, 185, 129, 0.3)",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <Trophy color={logoGreen} size={32} strokeWidth={2.5} />
+                  <View style={styles.goalCelebrationBadge}>
+                    <Trophy color={COLORS.logoGreen} size={32} strokeWidth={2.5} />
                   </View>
 
                   <Text
@@ -2210,7 +1471,7 @@ export default function DashboardScreen({
                     }}
                   >
                     Fantastic progress! You reached your target weight of{" "}
-                    <Text style={{ color: logoGreen, fontWeight: "800" }}>
+                    <Text style={{ color: COLORS.logoGreen, fontWeight: "800" }}>
                       {goalWeight.toFixed(1)} {weightUnit}
                     </Text>
                     .{`\n`}Select your next goal to stay on track:
@@ -2555,119 +1816,675 @@ export default function DashboardScreen({
   );
 }
 
-// --- COMPONENT STYLES ---
-const getStyles = (theme) => StyleSheet.create({
-  fullscreenOverlay: {
-    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
-    width: screenWidth, height: screenHeight, backgroundColor: theme?.background || baseColor,
+// ============================================================================
+// --- COMPONENT STYLES & COLOR CONFIGURATION ---
+// ============================================================================
+const COLORS = {
+  // Main Backgrounds
+  base: "#F8FAFC",
+  bgDark: "#0F172A",
+
+  // Cards & Surfaces
+  cardLight: "#FFFFFF",
+  cardDark: "#1E293B",
+  surfaceLight: "#FFFFFF",
+  surfaceDark: "#1E293B",
+
+  // Brand Green & Accents
+  logoGreen: "#10B981",
+  greenAlpha: "rgba(16, 185, 129, 0.12)",
+  greenAlphaSubtle: "rgba(16, 185, 129, 0.06)",
+  greenAlphaBorder: "rgba(16, 185, 129, 0.30)",
+  greenHighlight: "rgba(16, 185, 129, 0.08)",
+  greenHighlightSubtle: "rgba(240, 253, 244, 0.60)",
+
+  // Water & Hydration Accents
+  waterColor: "#0EA5E9",
+  waterHighlight: "#38BDF8",
+  waterTrack: "#E2E8F0",
+  waterGlassBg: "rgba(241, 245, 249, 0.35)",
+
+  // Glass & Skeuomorphic Tokens
+  glassBorder: "rgba(148, 163, 184, 0.65)",
+  glassRimBorder: "rgba(148, 163, 184, 0.75)",
+  glassRimBg: "rgba(255, 255, 255, 0.25)",
+  glassBottomBg: "rgba(241, 245, 249, 0.70)",
+  glassBottomReflect: "rgba(148, 163, 184, 0.30)",
+  glassBottomBorder: "rgba(100, 116, 139, 0.50)",
+
+  // Typography
+  textDark: "#0F172A",
+  textLight: "#F8FAFC",
+  textMuted: "#64748B",
+  textMutedDark: "#94A3B8",
+  textPlaceholder: "#94A3B8",
+  textWhite: "#FFFFFF",
+  textSlate: "#475569",
+
+  // Borders & Dividers
+  borderLight: "#E2E8F0",
+  borderDark: "#334155",
+  borderDividerLight: "rgba(0, 0, 0, 0.06)",
+  inputBorderLight: "#CBD5E1",
+  inputBorderDark: "#334155",
+  pillLight: "#F1F5F9",
+
+  // Overlays & Accents
+  overlay: "rgba(0, 0, 0, 0.65)",
+  red: "#EF4444",
+  redAlpha: "rgba(239, 68, 68, 0.12)",
+  redAlphaBorder: "rgba(239, 68, 68, 0.25)",
+  redHighlightSubtle: "rgba(254, 242, 242, 0.50)",
+  redHighlightDark: "rgba(239, 68, 68, 0.08)",
+  orange: "#F97316",
+  orangeAlpha: "rgba(249, 115, 22, 0.12)",
+  orangeAlphaBorder: "rgba(249, 115, 22, 0.25)",
+  purple: "#8B5CF6",
+  purpleAlpha: "rgba(139, 92, 246, 0.12)",
+  amber: "#F59E0B",
+  amberAlpha: "rgba(245, 158, 11, 0.12)",
+  amberHighlightSubtle: "rgba(255, 251, 235, 0.50)",
+  amberHighlightDark: "rgba(245, 158, 11, 0.08)",
+  amberBorderSubtle: "rgba(252, 211, 77, 0.50)",
+  amberBorderDark: "rgba(245, 158, 11, 0.20)",
+};
+
+const NEW_GOAL_OPTIONS = [
+  {
+    id: "fatloss",
+    label: "Weight Loss",
+    desc: "Burn fat, slim down, and optimize health (Deficit)",
+    offsetKg: -5,
+    icon: <Flame color={COLORS.orange} size={18} strokeWidth={2.5} />,
+    badgeBg: COLORS.orangeAlpha,
+    accentColor: COLORS.orange,
   },
-  container:    { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 54 : 48, paddingBottom: 85 },
-
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 12, paddingHorizontal: 4, width: '100%',
+  {
+    id: "maintain",
+    label: "Maintain Weight",
+    desc: "Maintain balance and focus on recomposition (Balance)",
+    offsetKg: 0,
+    icon: <Target color={COLORS.logoGreen} size={18} strokeWidth={2.5} />,
+    badgeBg: COLORS.greenAlpha,
+    accentColor: COLORS.logoGreen,
   },
-  headerTextGroup: { flex: 1, paddingRight: 12 },
-  appName:     { fontSize: 12, fontWeight: '900', color: logoGreen, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 },
-  greeting:    { fontSize: 22, fontWeight: '900', color: theme?.textPrimary || '#0F172A', letterSpacing: -0.5 },
-  subGreeting: { fontSize: 13, fontWeight: '700', color: theme?.textSecondary || '#94A3B8', marginTop: 2 },
-
-  avatarContainer: { borderRadius: 24, borderWidth: 1, borderColor: theme?.border || '#E2E8F0' },
-  avatarGlass:     { width: 44, height: 44, borderRadius: 22, backgroundColor: logoGreen, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarText:      { fontWeight: '900', color: logoGreen, fontSize: 16 },
-  avatarImage:     { width: 44, height: 44, borderRadius: 22 },
-
-  formCard: {
-    backgroundColor: theme?.surface || baseColor,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
+  {
+    id: "muscle",
+    label: "Gain Weight",
+    desc: "Build muscle mass, gain weight, and build strength (Surplus)",
+    offsetKg: +5,
+    icon: <Activity color={COLORS.purple} size={18} strokeWidth={2.5} />,
+    badgeBg: COLORS.purpleAlpha,
+    accentColor: COLORS.purple,
   },
-  cardTitle: { fontSize: 11, color: theme?.textPrimary || '#0F172A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12, fontWeight: '800', marginLeft: 2 },
+];
 
-  weightSplitLayout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statsGrid:     { flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginLeft: 20 },
-  statGridItem:  { width: '50%', marginBottom: 10 },
-  statLabel:     { fontSize: 10, color: theme?.textSecondary || '#94A3B8', textTransform: 'uppercase', fontWeight: '800', marginBottom: 2 },
-  statValue:     { fontSize: 15, fontWeight: '900', color: theme?.textPrimary || '#0F172A' },
+const getStyles = (theme, isDarkMode = false) =>
+  StyleSheet.create({
+    // --- MAIN SCREEN LAYOUT ---
+    // Fullscreen fixed background wrapper
+    fullscreenOverlay: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.base,
+    },
+    // Main screen flex container
+    container: {
+      flex: 1,
+    },
+    // ScrollView inner padding & safe margins
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: Platform.OS === "ios" ? 54 : 48,
+      paddingBottom: 85,
+      maxWidth: 680,
+      width: "100%",
+      alignSelf: "center",
+    },
 
-  nutritionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
-  calorieColumn:      { marginRight: 18, alignItems: 'center' },
-  calorieBigText:     { fontSize: 18, fontWeight: '900', color: theme?.textPrimary || '#0F172A', letterSpacing: -0.5 },
-  calorieSubText:     { fontSize: 9, color: theme?.textSecondary || '#94A3B8', fontWeight: '800' },
-  macroColumn:        { flex: 1, justifyContent: 'center' },
-  macroRow:           { marginBottom: 10 },
-  macroInfo:          { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  macroLabel:         { fontSize: 12, fontWeight: '800', color: theme?.textPrimary || '#0F172A' },
-  macroValue:         { fontSize: 11, color: theme?.textSecondary || '#94A3B8', fontWeight: '700' },
+    // --- HEADER / BRAND SECTION ---
+    // Top header bar row containing greeting and avatar
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+      paddingHorizontal: 4,
+      width: "100%",
+    },
+    // Header text group wrapper
+    headerTextGroup: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    // Brand category tag above user greeting
+    appName: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: COLORS.logoGreen,
+      textTransform: "uppercase",
+      letterSpacing: 2,
+      marginBottom: 2,
+    },
+    // Personalized welcome greeting heading
+    greeting: {
+      fontSize: 22,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      letterSpacing: -0.5,
+    },
+    // Sub-greeting motivational or context phrase
+    subGreeting: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      marginTop: 2,
+    },
 
-  analyticsHubHeader: { marginBottom: 12 },
-  glassDivider:       { height: 1, backgroundColor: theme?.border || '#E2E8F0', marginVertical: 14 },
-  chartContainer:     { alignItems: 'center', justifyContent: 'center', marginLeft: -15 },
+    // --- HEADER BADGES ---
+    // Row holding target goal and streak badges
+    headerBadgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 6,
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    // Primary fitness goal badge tag
+    goalBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.greenHighlight : COLORS.greenHighlightSubtle,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.greenAlphaBorder,
+    },
+    // Target icon spacer inside goal badge
+    goalBadgeIcon: {
+      marginRight: 4,
+    },
+    // Goal badge label text
+    goalBadgeText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: COLORS.logoGreen,
+    },
+    // Daily active streak badge
+    streakBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.orangeAlpha,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.orangeAlphaBorder,
+    },
+    // Streak flame icon spacer
+    streakBadgeIcon: {
+      marginRight: 4,
+    },
+    // Streak badge label text
+    streakBadgeText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: COLORS.orange,
+    },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: theme?.surface || theme?.background || baseColor, borderRadius: 24, padding: 24, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0' },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: theme?.textPrimary || '#0F172A', marginBottom: 6, textAlign: 'center' },
-  modalSubtitle: { fontSize: 13, color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginBottom: 20, fontWeight: '600' },
-  modalInput: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 14, padding: 14, fontSize: 16, fontWeight: '700', color: theme?.textPrimary || '#0F172A', marginBottom: 18, borderWidth: 1.2, borderColor: theme?.inputBorder || theme?.border || '#E2E8F0' },
-  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 4 },
-  modalCancel: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: theme?.inputBg || '#F1F5F9', alignItems: 'center', marginRight: 8, borderWidth: 1.2, borderColor: theme?.border || '#E2E8F0' },
-  modalCancelText: { color: theme?.textSecondary || '#94A3B8', fontWeight: '800', fontSize: 14 },
-  modalSave: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
-  modalSaveText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+    // --- USER AVATAR BADGE ---
+    // Circular border wrapper around user avatar
+    avatarContainer: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Frosted green avatar circle
+    avatarGlass: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    // Initials fallback text inside avatar
+    avatarText: {
+      fontWeight: "900",
+      color: COLORS.textWhite,
+      fontSize: 16,
+    },
+    // Circular profile photo image
+    avatarImage: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+    },
 
-  newGoalOptionBtn: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme?.inputBg || '#F1F5F9',
-    borderRadius: 16,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  newGoalOptionLabel: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 2,
-  },
-  newGoalOptionDesc: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#94A3B8',
-  },
+    // --- FORM CARDS & STATS GRID ---
+    // Standard content card container
+    formCard: {
+      backgroundColor: isDarkMode ? COLORS.cardDark : COLORS.cardLight,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      overflow: "hidden",
+    },
+    // Uppercase card section header label
+    cardTitle: {
+      fontSize: 11,
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+      marginBottom: 12,
+      fontWeight: "800",
+      marginLeft: 2,
+    },
+    // Split layout for weight circle and stats grid
+    weightSplitLayout: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    // Grid container holding metric stat items
+    statsGrid: {
+      flex: 1,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginLeft: 20,
+    },
+    // Individual stat item wrapper (2 columns)
+    statGridItem: {
+      width: "50%",
+      marginBottom: 10,
+    },
+    // Uppercase stat label text
+    statLabel: {
+      fontSize: 10,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      textTransform: "uppercase",
+      fontWeight: "800",
+      marginBottom: 2,
+    },
+    // Bold numerical stat value text
+    statValue: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+    },
 
-  chatbotFab: {
-    position: 'absolute', bottom: 104, right: 24,
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: logoGreen,
-    alignItems: 'center', justifyContent: 'center',
-    zIndex: 100,
-  },
+    // --- NUTRITION BREAKDOWN ---
+    // Horizontal row pairing calorie ring and macro columns
+    nutritionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+    },
+    // Calorie ring container column
+    calorieColumn: {
+      marginRight: 18,
+      alignItems: "center",
+    },
+    // Large primary calorie count readout
+    calorieBigText: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      letterSpacing: -0.5,
+    },
+    // Small remaining/target calorie subtitle
+    calorieSubText: {
+      fontSize: 9,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      fontWeight: "800",
+    },
+    // Calorie over-limit warning tag
+    overLimitBadge: {
+      backgroundColor: COLORS.redAlpha,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginTop: 4,
+    },
+    // Over-limit text
+    overLimitText: {
+      fontSize: 9,
+      color: COLORS.red,
+      fontWeight: "bold",
+    },
+    // Net calorie equation banner strip
+    equationStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      marginTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: isDarkMode ? COLORS.borderDark : COLORS.borderDividerLight,
+    },
+    // Equation description text
+    equationText: {
+      fontSize: 12,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      fontWeight: "600",
+    },
+    // Vertical container holding macro progress bars
+    macroColumn: {
+      flex: 1,
+      justifyContent: "center",
+    },
+    // Individual macro row wrapper
+    macroRow: {
+      marginBottom: 10,
+    },
+    // Row holding macro label name and current/target grams
+    macroInfo: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 4,
+    },
+    // Macro label title (e.g. Protein, Carbs, Fat)
+    macroLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+    },
+    // Macro gram readout text
+    macroValue: {
+      fontSize: 11,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      fontWeight: "700",
+    },
 
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  warningBannerText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '700',
-    marginLeft: 6,
-    flex: 1,
-    lineHeight: 15,
-  },
-});
+    // --- ANALYTICS & CHARTS ---
+    // Header container for analytics chart section
+    analyticsHubHeader: {
+      marginBottom: 12,
+    },
+    // Weekly weight delta indicator tag
+    weeklyDeltaBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 10,
+      borderWidth: 1,
+    },
+    // Weekly weight delta readout text
+    weeklyDeltaText: {
+      fontSize: 11,
+      fontWeight: "900",
+    },
+    // Divider line between card sections
+    glassDivider: {
+      height: 1,
+      backgroundColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      marginVertical: 14,
+    },
+    // Centered wrapper for LineChart
+    chartContainer: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      marginTop: 4,
+    },
+
+    // --- MODAL DIALOGS ---
+    // Large celebratory trophy badge in goal modal
+    goalCelebrationBadge: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: COLORS.greenAlpha,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: COLORS.greenAlphaBorder,
+      marginBottom: 12,
+    },
+    // Dimmed modal backdrop overlay
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: COLORS.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // Modal dialog content container
+    modalContent: {
+      width: "85%",
+      maxWidth: 440,
+      alignSelf: "center",
+      backgroundColor: isDarkMode ? COLORS.surfaceDark : COLORS.surfaceLight,
+      borderRadius: 24,
+      padding: 24,
+      borderWidth: 1.5,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Modal dialog heading title
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 6,
+      textAlign: "center",
+    },
+    // Modal dialog explanatory subtitle
+    modalSubtitle: {
+      fontSize: 13,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      textAlign: "center",
+      marginBottom: 20,
+      fontWeight: "600",
+    },
+    // Modal text/numeric input box
+    modalInput: {
+      width: "100%",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.cardLight,
+      borderRadius: 14,
+      padding: 14,
+      fontSize: 16,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 18,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.inputBorderDark : COLORS.inputBorderLight,
+    },
+    // Modal action buttons container
+    modalButtons: {
+      flexDirection: "row",
+      width: "100%",
+      justifyContent: "space-between",
+      marginTop: 4,
+    },
+    // Modal cancel button
+    modalCancel: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: isDarkMode ? COLORS.borderDark : COLORS.pillLight,
+      alignItems: "center",
+      marginRight: 8,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Modal cancel button text
+    modalCancelText: {
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      fontWeight: "800",
+      fontSize: 14,
+    },
+    // Modal primary action button (Save / Confirm)
+    modalSave: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+      marginLeft: 8,
+    },
+    // Modal primary action button text
+    modalSaveText: {
+      color: COLORS.textWhite,
+      fontWeight: "800",
+      fontSize: 14,
+    },
+
+    // --- GOAL SELECTION OPTIONS ---
+    // Goal selector card button
+    newGoalOptionBtn: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.pillLight,
+      borderRadius: 16,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      marginBottom: 10,
+    },
+    // Goal selector primary label
+    newGoalOptionLabel: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 2,
+    },
+    // Goal selector subtitle description
+    newGoalOptionDesc: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+
+    // --- FLOATING ACTION, WORKOUT & NOTICES ---
+    // Workout percentage goal chip
+    workoutGoalChip: {
+      backgroundColor: COLORS.orangeAlpha,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      marginRight: 4,
+    },
+    // Workout goal chip text
+    workoutGoalChipText: {
+      fontSize: 11,
+      fontWeight: "900",
+      color: COLORS.orange,
+    },
+    // Small square workout icon container
+    workoutIconBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: COLORS.orangeAlpha,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 10,
+    },
+    // Exercise quota achieved notice banner
+    exerciseQuotaBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.amberHighlightDark : COLORS.amberHighlightSubtle,
+      borderColor: isDarkMode ? COLORS.amberBorderDark : COLORS.amberBorderSubtle,
+      borderRadius: 12,
+      padding: 10,
+      marginTop: 12,
+      borderWidth: 1,
+    },
+    // Exercise quota banner text
+    exerciseQuotaBannerText: {
+      fontSize: 11,
+      color: isDarkMode ? "#FCD34D" : "#D97706",
+      fontWeight: "700",
+      marginLeft: 6,
+      flex: 1,
+      lineHeight: 15,
+    },
+    // Exercise offset success notice
+    exerciseOffsetBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.greenHighlight : COLORS.greenHighlightSubtle,
+      borderColor: COLORS.greenAlphaBorder,
+      borderRadius: 12,
+      padding: 10,
+      borderWidth: 1,
+      marginTop: 0,
+    },
+    // Exercise offset success text
+    exerciseOffsetText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: isDarkMode ? "#34D399" : "#059669",
+      marginLeft: 6,
+      flex: 1,
+      lineHeight: 15,
+    },
+    // Calorie limit exceeded alert banner
+    calorieExceededBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.redHighlightDark : COLORS.redHighlightSubtle,
+      borderColor: COLORS.redAlphaBorder,
+      borderRadius: 12,
+      padding: 10,
+      borderWidth: 1,
+      marginTop: 12,
+    },
+    // Calorie limit exceeded alert text
+    calorieExceededText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: isDarkMode ? "#FCA5A5" : "#DC2626",
+      marginLeft: 6,
+      flex: 1,
+      lineHeight: 15,
+    },
+    // Floating circular action button for AI chatbot
+    chatbotFab: {
+      position: "absolute",
+      bottom: 104,
+      right: 24,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 100,
+    },
+    // Cautionary note / banner card
+    warningBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.pillLight,
+      borderRadius: 12,
+      padding: 10,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Warning banner description text
+    warningBannerText: {
+      fontSize: 11,
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      fontWeight: "700",
+      marginLeft: 6,
+      flex: 1,
+      lineHeight: 15,
+    },
+  });
+
+

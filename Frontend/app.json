@@ -16,7 +16,12 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.kyubibiasalah.macrosync",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "output": "single",
@@ -46,6 +51,13 @@
             "enableShrinkResourcesInReleaseBuilds": false,
             "enableMinifyInReleaseBuilds": false
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#10B981"
         }
       ],
       "expo-web-browser"

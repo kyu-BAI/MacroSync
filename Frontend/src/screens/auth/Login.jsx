@@ -269,6 +269,8 @@ const getStyles = (theme) =>
       marginBottom: 35,
       alignItems: "center",
       width: "100%",
+      maxWidth: 480,
+      alignSelf: "center",
     },
     // Main "MacroSync" app title text
     brandTitle: {
@@ -291,11 +293,14 @@ const getStyles = (theme) =>
     // --- FORM CONTAINER CARD ---
     // The rounded card containing all input fields and buttons
     formCard: {
-      backgroundColor: theme?.surface || baseColor,
+      backgroundColor: '#ffffff',
       borderRadius: 28,
       padding: 24,
       borderWidth: 1.5,
       borderColor: theme?.border || "#E2E8F0",
+      width: "100%",
+      maxWidth: 480,
+      alignSelf: "center",
     },
 
     // --- INPUT FIELDS (EMAIL & PASSWORD) ---

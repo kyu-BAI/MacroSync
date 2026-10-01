@@ -410,6 +410,8 @@ const getStyles = (theme) =>
       marginBottom: 35,
       alignItems: "center",
       width: "100%",
+      maxWidth: 480,
+      alignSelf: "center",
     },
     // Main "Create Account" title text
     brandTitle: {
@@ -437,6 +439,9 @@ const getStyles = (theme) =>
       padding: 24,
       borderWidth: 1.5,
       borderColor: theme?.border || "#E2E8F0",
+      width: "100%",
+      maxWidth: 480,
+      alignSelf: "center",
     },
 
     // --- INPUT FIELDS (USERNAME, EMAIL & PASSWORD) ---

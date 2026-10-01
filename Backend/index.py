@@ -414,21 +414,21 @@ def signin(user: UserLogin):
         email = auth.user.email
         is_onboarded = False
 
-        # Ensure profile exists in user_profiles and check onboarding status
+        # Ensure profile exists in user_profiles and check onboarding status (using admin to bypass RLS)
         try:
-            profile_response = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+            profile_response = supabase_admin.table("user_profiles").select("*").eq("id", user_id).execute()
             if not profile_response.data:
                 name = auth.user.user_metadata.get("full_name") if auth.user.user_metadata else None
                 if not name:
                     name = email.split("@")[0]
-                supabase.table("user_profiles").insert({
+                supabase_admin.table("user_profiles").insert({
                     "id": user_id,
                     "email": email,
                     "name": name
                 }).execute()
             else:
                 p = profile_response.data[0]
-                if p.get("weight_kg") is not None and p.get("height_cm") is not None:
+                if (p.get("weight_kg") is not None and p.get("height_cm") is not None) or p.get("age") is not None or p.get("goal") is not None:
                     is_onboarded = True
         except Exception as profile_err:
             print("ERROR ENSURING PROFILE ON SIGNIN:", repr(profile_err))
@@ -1173,7 +1173,7 @@ def sanitize_meals_for_allergies(meals_list: list, allergies_raw) -> list:
 @app.post("/save-onboarding")
 async def save_onboarding(data: OnboardingData):
     # Fetch existing location JSON to preserve fields like usage/is_premium
-    existing_res = supabase.table("user_profiles").select("location").eq("id", data.user_id).execute()
+    existing_res = supabase_admin.table("user_profiles").select("location").eq("id", data.user_id).execute()
     prefs = {}
     if existing_res.data and existing_res.data[0].get("location"):
         try:
@@ -1214,11 +1214,11 @@ async def save_onboarding(data: OnboardingData):
         update_payload["allergies"] = data.allergies
 
     try:
-        supabase.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
+        supabase_admin.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
     except Exception as update_err:
         print("Save onboarding update error, retrying without top-level allergies:", update_err)
         update_payload.pop("allergies", None)
-        supabase.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
+        supabase_admin.table("user_profiles").update(update_payload).eq("id", data.user_id).execute()
 
     return {"success": True}
 
@@ -1226,7 +1226,7 @@ async def save_onboarding(data: OnboardingData):
 @app.post("/update-profile")
 async def update_profile(data: UpdateProfileRequest):
     try:
-        supabase.table("user_profiles").update({
+        supabase_admin.table("user_profiles").update({
             "name": data.name,
             "email": data.email
         }).eq("id", data.user_id).execute()
@@ -1240,7 +1240,7 @@ async def update_profile(data: UpdateProfileRequest):
 async def update_subscription(data: UpdateSubscriptionRequest):
     try:
         # Fetch existing profile location/preferences JSON to preserve other keys
-        res = supabase.table("user_profiles").select("location").eq("id", data.user_id).execute()
+        res = supabase_admin.table("user_profiles").select("location").eq("id", data.user_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="User profile not found")
         
@@ -1254,7 +1254,7 @@ async def update_subscription(data: UpdateSubscriptionRequest):
                 
         prefs["is_premium"] = data.is_premium
         
-        supabase.table("user_profiles").update({
+        supabase_admin.table("user_profiles").update({
             "location": json.dumps(prefs)
         }).eq("id", data.user_id).execute()
         
@@ -1333,7 +1333,7 @@ async def log_water(data: WaterLog):
 @app.post("/update-profile-picture")
 async def update_profile_picture(data: ProfilePictureUpdate):
     try:
-        supabase.table("user_profiles").update({
+        supabase_admin.table("user_profiles").update({
             "profile_image": data.profile_image
         }).eq("id", data.user_id).execute()
         return {"success": True}
@@ -2642,7 +2642,7 @@ def debug_gemini():
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
 
 class CheckoutRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = "guest_user"
     amount: int  # Amount in centavos (e.g., 50000 = PHP 500.00)
     description: str = "Premium Subscription"
 
@@ -2676,7 +2676,7 @@ async def create_checkout_session(data: CheckoutRequest):
                     }
                 ],
                 "payment_method_types": ["gcash", "paymaya", "grab_pay", "dob"],
-                "reference_number": data.user_id,
+                "reference_number": data.user_id or "guest_user",
             }
         }
     }
@@ -2715,7 +2715,7 @@ async def paymongo_webhook(request: Request):
             if user_id:
                 # Update the user's status in Supabase user_profiles location preferences
                 try:
-                    res = supabase.table("user_profiles").select("location").eq("id", user_id).execute()
+                    res = supabase_admin.table("user_profiles").select("location").eq("id", user_id).execute()
                     if res.data:
                         prefs = {}
                         loc_str = res.data[0].get("location")
@@ -2725,7 +2725,7 @@ async def paymongo_webhook(request: Request):
                             except:
                                 pass
                         prefs["is_premium"] = True
-                        supabase.table("user_profiles").update({
+                        supabase_admin.table("user_profiles").update({
                             "location": json.dumps(prefs)
                         }).eq("id", user_id).execute()
                         print(f"User {user_id} successfully upgraded to premium via PayMongo.")

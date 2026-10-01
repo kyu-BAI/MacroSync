@@ -9,7 +9,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
-  Dimensions,
   StyleSheet,
 } from 'react-native';
 import { X, Home, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight, Navigation } from 'lucide-react-native';
@@ -29,7 +28,6 @@ import {
   getBarangayMarkersForCity,
 } from '../services/barangayGeocodingService';
 
-const { width: screenWidth } = Dimensions.get('window');
 const logoGreen = '#10B981';
 
 export default function PhilippineLocationModal({
@@ -236,7 +234,8 @@ export default function PhilippineLocationModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: bgColor }]}>
+      <View style={{ flex: 1, backgroundColor: bgColor, alignItems: 'center' }}>
+        <View style={[styles.container, { backgroundColor: bgColor }]}>
         {/* Header Bar */}
         <View style={[styles.header, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
           <View style={{ flex: 1, paddingRight: 8 }}>
@@ -626,12 +625,18 @@ export default function PhilippineLocationModal({
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+    </View>
+  </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -741,7 +746,8 @@ const styles = StyleSheet.create({
   pinActionBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   hubGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   hubCard: {
-    width: (screenWidth - 40) / 2,
+    flexBasis: '48%',
+    flexGrow: 1,
     padding: 10,
     borderRadius: 12,
     borderWidth: 1,
@@ -801,6 +807,8 @@ const styles = StyleSheet.create({
     bottom: Platform.OS === 'ios' ? 34 : 20,
     left: 16,
     right: 16,
+    maxWidth: 648,
+    marginHorizontal: 'auto',
     borderRadius: 18,
     padding: 14,
     elevation: 10,

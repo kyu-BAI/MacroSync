@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+// --- IMPORTS ---
+import React, { useMemo, useCallback } from "react";
 import {
+  StyleSheet,
   Text,
   View,
   ScrollView,
@@ -8,748 +10,303 @@ import {
   Platform,
   Dimensions,
   Switch,
-  Alert,
   Image,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Linking,
   ActivityIndicator,
-  StyleSheet
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
-import * as WebBrowser from "expo-web-browser";
 import {
-  Camera,
-  UtensilsCrossed,
-  BotMessageSquare,
-  Home,
-  Settings,
-  User,
   Bell,
   Shield,
-  CircleHelp,
   LogOut,
   ChevronRight,
-  Sliders,
   Smartphone,
   CheckCircle2,
   Sparkles,
   Moon,
   Sun,
   Flame,
-  Droplets,
-  Activity,
-  Eye,
-  EyeOff,
-  Wallet,
-  CreditCard,
   Crown,
-  X,
   Pencil,
-  ImagePlus,
   FileText,
   Trash2,
 } from "lucide-react-native";
-import API_URL from "../config/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NotificationService } from "../../services/NotificationService";
-import { useCustomAlert } from "../../context/CustomAlertContext";
+
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { clearSavedUserId, clearRememberedCredentials, clearRememberedPassword } from "../../services/OfflineStorage";
+import { useCustomAlert } from "../../context/CustomAlertContext";
+import useSettings from "../../hooks/useSettings";
+
 import PressableCard from "../../components/PressableCard";
 import PrivacyModal from "../../components/PrivacyModal";
+import EditProfileModal from "../../components/settings/EditProfileModal";
+import ChangePasswordModal from "../../components/settings/ChangePasswordModal";
+import PaymentMethodModal from "../../components/settings/PaymentMethodModal";
+import PhotoPreviewModal from "../../components/settings/PhotoPreviewModal";
 
+// --- CONSTANTS & CONFIGURATION ---
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
-const logoGreen = "#10B981";
 
-export default function SettingsScreen({
-  onTabChange,
-  onLogout,
-  userProfile,
-  setUserProfile,
-  userId,
-}) {
-  const { showAlert } = useCustomAlert();
-  const { isDarkMode, themeMode, setThemeMode, toggleTheme, theme } =
-    useTheme();
-  const { language, setLanguage } = useLanguage();
+// Theme selector options
+const THEME_OPTIONS = [
+  { id: "system", label: "System", Icon: Smartphone },
+  { id: "light", label: "Light", Icon: Sun },
+  { id: "dark", label: "Dark", Icon: Moon },
+];
 
-  const styles = getStyles(theme, isDarkMode);
-  const [isPressedBtn, setIsPressedBtn] = useState(null);
+// Language selector options
+const LANGUAGE_OPTIONS = [
+  { id: "English", label: "English" },
+  { id: "Tagalog", label: "Tagalog" },
+  { id: "Cebuano", label: "Cebuano" },
+];
 
-  // --- EDIT PROFILE MODAL STATE ---
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [tempName, setTempName] = useState("");
-  const [tempImage, setTempImage] = useState(null);
+// --- LIGHTWEIGHT SUBCOMPONENTS ---
 
-  // --- PHOTO PREVIEW & AVATAR MANAGER STATES ---
-  const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+// Section title label
+const SectionTitle = React.memo(function SectionTitle({ title, styles }) {
+  return <Text style={styles.sectionLabelTitle}>{title}</Text>;
+});
 
-  const getInitials = (name) => {
-    if (!name) return "U";
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  // --- CHANGE PASSWORD STATE ---
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  // --- PASSWORD VISIBILITY STATE ---
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // --- LIVE PASSWORD RULES ---
-  const pwRules = [
-    { label: "At least 8 characters", ok: newPassword.length >= 8 },
-    { label: "One uppercase letter (A–Z)", ok: /[A-Z]/.test(newPassword) },
-    { label: "One lowercase letter (a–z)", ok: /[a-z]/.test(newPassword) },
-    { label: "One number (0–9)", ok: /[0-9]/.test(newPassword) },
-    {
-      label: "One special character (!@#$…)",
-      ok: /[^A-Za-z0-9]/.test(newPassword),
-    },
-  ];
-  const allRulesPass = pwRules.every((r) => r.ok);
-
-  // --- PAYMENT FLOW STATE ---
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentPlan, setPaymentPlan] = useState({ name: "", price: "" });
-  const [selectedMethod, setSelectedMethod] = useState(null); // 'gcash' | 'maya' | 'card'
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-
-  const handleOpenEditModal = () => {
-    setTempName(userProfile?.name || "");
-    setTempImage(userProfile?.profileImage || null);
-    setShowEditModal(true);
-  };
-
-  const handleOpenPasswordModal = () => {
-    setOldPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setShowPasswordModal(true);
-  };
-
-  const handlePickTempImage = async () => {
-    try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        showAlert(
-          "Permission Denied",
-          "You need to allow gallery access to select a profile picture.",
+// Segmented 3-option control (Theme & Language)
+const SegmentedSelector = React.memo(function SegmentedSelector({ options, selectedId, onSelect, theme, styles }) {
+  return (
+    <View style={styles.segmentedContainer}>
+      {options.map((option) => {
+        const isActive = selectedId === option.id;
+        const IconComponent = option.Icon;
+        return (
+          <TouchableOpacity
+            key={option.id}
+            style={[styles.segmentedOption, isActive && styles.segmentedOptionActive]}
+            activeOpacity={0.8}
+            onPress={() => onSelect(option.id)}
+          >
+            {IconComponent ? (
+              <View style={styles.segmentedIconContainer}>
+                <IconComponent
+                  size={15}
+                  color={isActive ? COLORS.textWhite : COLORS.textMutedDark}
+                />
+              </View>
+            ) : null}
+            <Text style={[styles.segmentedOptionText, isActive && styles.segmentedOptionTextActive]}>
+              {option.label}
+            </Text>
+          </TouchableOpacity>
         );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.3,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const localUri = result.assets[0].uri;
-        setTempImage(localUri);
-      }
-    } catch (error) {
-      if (__DEV__) console.log("Error picking image:", error);
-      showAlert("Error", "Could not pick image from gallery.");
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!tempName.trim()) {
-      showAlert("Validation Error", "Name cannot be empty.");
-      return;
-    }
-
-    try {
-      const currentEmail = userProfile?.email || "";
-      // ⚡ INSTANT OPTIMISTIC UI UPDATE
-      if (setUserProfile) {
-        setUserProfile((prev) => ({
-          ...prev,
-          name: tempName.trim(),
-          profileImage: tempImage,
-        }));
-      }
-      setShowEditModal(false);
-      setTimeout(() => {
-        showAlert("Success", "Profile updated!");
-      }, 250);
-
-      // Background network sync
-      (async () => {
-        try {
-          await fetch(`${API_URL}/update-profile`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              name: tempName.trim(),
-              email: userProfile?.email,
-            }),
-          });
-
-          if (tempImage && tempImage !== userProfile?.profileImage) {
-            await fetch(`${API_URL}/update-profile-picture`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                user_id: userId,
-                profile_image: tempImage,
-              }),
-            });
-          }
-        } catch (e) {
-          if (__DEV__) console.log("Background profile sync error:", e);
-        }
-      })();
-    } catch (error) {
-      if (__DEV__) console.error("UPDATE PROFILE ERROR:", error);
-      showAlert("Error", "Failed to update profile. Please try again.");
-    }
-  };
-
-  const handleRemoveProfileImage = () => {
-    if (setUserProfile) {
-      setUserProfile((prev) => ({
-        ...prev,
-        profileImage: null,
-      }));
-      setImageError(false);
-      showAlert("Photo Removed", "Reverted to your default initials avatar.");
-    }
-    fetch(`${API_URL}/update-profile-picture`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, profile_image: "" }),
-    }).catch(
-      (err) =>
-        __DEV__ && console.log("Remove profile pic sync error:", err),
-    );
-  };
-
-  const handleLaunchImagePicker = async () => {
-    try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        showAlert(
-          "Permission Denied",
-          "You need to allow gallery access to select a profile picture.",
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.4,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const localUri = result.assets[0].uri;
-        const selectedUri = "data:image/jpeg;base64," + result.assets[0].base64;
-
-        setImageError(false);
-        if (setUserProfile) {
-          setUserProfile((prev) => ({
-            ...prev,
-            profileImage: localUri,
-          }));
-          showAlert("Success", "Profile picture updated!");
-        }
-
-        fetch(`${API_URL}/update-profile-picture`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: userId,
-            profile_image: selectedUri,
-          }),
-        }).catch(
-          (err) =>
-            __DEV__ && console.log("Background profile pic sync error:", err),
-        );
-      }
-    } catch (error) {
-      if (__DEV__) console.log("Error picking profile image:", error);
-      showAlert("Error", "Could not pick image from gallery.");
-    }
-  };
-
-  const handlePickProfileImage = () => {
-    const hasImage = !!userProfile?.profileImage && !imageError;
-    const buttons = [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Choose from Gallery",
-        style: "default",
-        onPress: handleLaunchImagePicker,
-      },
-    ];
-
-    if (hasImage) {
-      buttons.unshift({
-        text: "View Full Photo",
-        style: "default",
-        onPress: () => setShowPhotoPreviewModal(true),
-      });
-      buttons.push({
-        text: "Remove Photo",
-        style: "destructive",
-        onPress: handleRemoveProfileImage,
-      });
-    }
-
-    showAlert(
-      "Profile Photo Options",
-      "Select an action for your profile picture:",
-      buttons,
-    );
-  };
-
-  // --- DYNAMIC INTERACTIVE SWITCH STATES ---
-  const [habitReminders, setHabitReminders] = useState(true);
-  const [motivationalUpdates, setMotivationalUpdates] = useState(true);
-  const [personalizedAlerts, setPersonalizedAlerts] = useState(false);
-
-  // Load saved notification switch preferences on mount
-  useEffect(() => {
-    const loadNotificationPrefs = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(
-          "@ms_notification_preferences",
-        );
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.habitReminders !== undefined)
-            setHabitReminders(!!parsed.habitReminders);
-          if (parsed.motivationalUpdates !== undefined)
-            setMotivationalUpdates(!!parsed.motivationalUpdates);
-          if (parsed.personalizedAlerts !== undefined)
-            setPersonalizedAlerts(!!parsed.personalizedAlerts);
-        }
-      } catch (e) {
-        if (__DEV__) console.log("Failed to load notification prefs:", e);
-      }
-    };
-    loadNotificationPrefs();
-  }, []);
-
-  const saveAndUpdateNotificationPrefs = async (updatedPrefs) => {
-    try {
-      await AsyncStorage.setItem(
-        "@ms_notification_preferences",
-        JSON.stringify(updatedPrefs),
-      );
-      await NotificationService.scheduleDailyReminders(updatedPrefs);
-    } catch (e) {
-      if (__DEV__) console.log("Failed to save notification prefs:", e);
-    }
-  };
-
-  const handleToggleHabitReminders = (val) => {
-    setHabitReminders(val);
-    saveAndUpdateNotificationPrefs({
-      habitReminders: val,
-      motivationalUpdates,
-      personalizedAlerts,
-    });
-  };
-
-  const handleToggleMotivationalUpdates = (val) => {
-    setMotivationalUpdates(val);
-    saveAndUpdateNotificationPrefs({
-      habitReminders,
-      motivationalUpdates: val,
-      personalizedAlerts,
-    });
-  };
-
-  const handleTogglePersonalizedAlerts = (val) => {
-    setPersonalizedAlerts(val);
-    saveAndUpdateNotificationPrefs({
-      habitReminders,
-      motivationalUpdates,
-      personalizedAlerts: val,
-    });
-  };
-
-  // --- DYNAMIC ACCOUNT TIERS & BILLING STATES ---
-  const [accountTier, setAccountTier] = useState(
-    userProfile?.isPremium ? "Premium" : "Free",
+      })}
+    </View>
   );
-  const [showBillingOptions, setShowBillingOptions] = useState(false);
+});
 
-  // Tracks exactly which option ('Monthly' or 'Annual') has the active focus/outline
-  const [selectedBillingCycle, setSelectedBillingCycle] = useState(null);
+// Notification toggle row with switch
+const NotificationToggleRow = React.memo(function NotificationToggleRow({
+  icon: IconComponent,
+  iconColor,
+  iconBgColor,
+  title,
+  subtitle,
+  value,
+  onValueChange,
+  isDarkMode = false,
+  styles,
+}) {
+  return (
+    <View style={styles.settingActionRowItem}>
+      <View style={styles.settingIconTextGroup}>
+        <View style={[styles.settingIconBadge, { backgroundColor: iconBgColor }]}>
+          <IconComponent color={iconColor} size={16} />
+        </View>
+        <View style={styles.settingTextContainer}>
+          <Text style={styles.settingRowItemMainTitle}>{title}</Text>
+          <Text style={styles.settingRowItemSubTitle}>{subtitle}</Text>
+        </View>
+      </View>
+      <Switch
+        trackColor={{ false: isDarkMode ? COLORS.borderDark : COLORS.borderLight, true: COLORS.logoGreen }}
+        thumbColor={value ? COLORS.logoGreen : COLORS.textMuted}
+        ios_backgroundColor={isDarkMode ? COLORS.borderDark : COLORS.borderLight}
+        onValueChange={onValueChange}
+        value={value}
+      />
+    </View>
+  );
+});
 
-  useEffect(() => {
-    setAccountTier(userProfile?.isPremium ? "Premium" : "Free");
-  }, [userProfile?.isPremium]);
+// Setting action button row with chevron/spinner
+const SettingActionRow = React.memo(function SettingActionRow({
+  icon: IconComponent,
+  iconColor,
+  iconBgColor,
+  title,
+  subtitle,
+  onPress,
+  disabled = false,
+  isLoading = false,
+  isDestructive = false,
+  styles,
+}) {
+  return (
+    <PressableCard
+      scaleDown={0.97}
+      style={styles.settingActionRowItem}
+      onPress={onPress}
+      disabled={disabled || isLoading}
+    >
+      <View style={styles.settingIconTextGroup}>
+        <View style={[styles.settingIconBadge, { backgroundColor: iconBgColor }]}>
+          <IconComponent color={iconColor} size={16} />
+        </View>
+        <View style={styles.settingTextContainer}>
+          <Text style={[styles.settingRowItemMainTitle, isDestructive && styles.destructiveText]}>{title}</Text>
+          <Text style={styles.settingRowItemSubTitle}>{subtitle}</Text>
+        </View>
+      </View>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={COLORS.red} />
+      ) : (
+        <ChevronRight color={isDestructive ? COLORS.red : COLORS.textPlaceholder} size={16} />
+      )}
+    </PressableCard>
+  );
+});
 
-  const handlePressIn = (id) => setIsPressedBtn(id);
-  const handlePressOut = () => setIsPressedBtn(null);
+// --- MAIN SETTINGS SCREEN ---
 
-  // --- ACCOUNT TIER MANAGER ACTIONS ---
-  const handleSelectTierOption = async (tierType) => {
-    if (tierType === "Free") {
-      if (userProfile?.isPremium) {
-        showAlert(
-          "Cancel Subscription",
-          "Are you sure you want to cancel your Premium subscription and revert to the Free tier (limits apply)?",
-          [
-            { text: "No", style: "cancel" },
-            {
-              text: "Yes, Downgrade",
-              onPress: async () => {
-                try {
-                  const response = await fetch(
-                    `${API_URL}/update-subscription`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        user_id: userId,
-                        is_premium: false,
-                      }),
-                    },
-                  );
-                  if (response.ok) {
-                    setUserProfile((prev) => ({ ...prev, isPremium: false }));
-                    setAccountTier("Free");
-                    showAlert(
-                      "Plan Updated",
-                      "Your subscription was cancelled. You are now on the Free Plan.",
-                    );
-                  } else {
-                    showAlert(
-                      "Error",
-                      "Failed to cancel subscription on server.",
-                    );
-                  }
-                } catch (e) {
-                  showAlert(
-                    "Error",
-                    "Network connection failed. Cannot connect to server.",
-                  );
-                }
-              },
-            },
-          ],
-        );
-      } else {
-        setAccountTier("Free");
-      }
-    } else {
-      setAccountTier("Premium");
-    }
-  };
+export default function SettingsScreen({ onTabChange, onLogout, userProfile, setUserProfile, userId }) {
+  // Theme, language & alert contexts
+  const { isDarkMode, themeMode, setThemeMode, theme } = useTheme();
+  const { language, setLanguage } = useLanguage();
+  const { showAlert } = useCustomAlert();
 
-  // --- TRIGGER PAYMENT HANDLER FOR FRONTEND FLOW ---
-  const handleInitiatePaymentFlow = (planName, price) => {
-    // Instantly apply the selection outline indicator visually
-    setSelectedBillingCycle(planName);
+  // Screen styling (memoized strictly on isDarkMode to avoid redundant StyleSheet creation)
+  const styles = useMemo(() => getStyles(theme, isDarkMode), [isDarkMode]);
 
-    showAlert(
-      "Confirm Payment Method",
-      `Would you like to proceed with the ${planName} Plan (${price})?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => setSelectedBillingCycle(null),
+  // Language switch handler with localized notification alert
+  const handleLanguageSelect = useCallback(
+    (newLang) => {
+      if (newLang === language) return;
+      setLanguage(newLang);
+
+      const alertDetails = {
+        English: {
+          title: "Language Updated",
+          message: "Meal titles, recommendations, and recipes will now display in English.",
         },
-        {
-          text: "Proceed to Pay",
-          onPress: async () => {
-            try {
-              const amount_cents = planName === "Monthly" ? 14900 : 119900; // ₱149.00 or ₱1,199.00 (in cents)
-              const response = await fetch(
-                `${API_URL}/create-checkout-session`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    user_id: userId,
-                    amount: amount_cents,
-                    description: `MacroSync Premium - ${planName} Plan`,
-                  }),
-                },
-              );
-
-              if (response.ok) {
-                const data = await response.json();
-                const checkoutUrl = data?.data?.attributes?.checkout_url;
-                if (checkoutUrl) {
-                  // Open the PayMongo checkout page in an in-app browser overlay
-                  await WebBrowser.openBrowserAsync(checkoutUrl);
-
-                  showAlert(
-                    "Checkout Opened",
-                    "Please complete your payment securely on the PayMongo page. Once you pay, your account will be automatically upgraded to Premium!",
-                  );
-                } else {
-                  if (__DEV__) console.log("PayMongo response:", data);
-                  showAlert("Error", "Could not generate payment link.");
-                }
-              } else {
-                showAlert("Error", "Failed to initiate payment on the server.");
-                setSelectedBillingCycle(null);
-              }
-            } catch (e) {
-              showAlert(
-                "Error",
-                "Network connection failed. Cannot connect to server.",
-              );
-              setSelectedBillingCycle(null);
-            }
-          },
+        Tagalog: {
+          title: "Na-update ang Wika",
+          message: "Ang mga pangalan ng pagkain, rekomendasyon, at recipe ay ipapakita na sa Tagalog (Wikang Filipino).",
         },
-      ],
-    );
-  };
-
-  const handleConfirmPayment = () => {
-    if (!selectedMethod) {
-      showAlert(
-        "Payment Method Required",
-        "Please select a payment method to proceed.",
-      );
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    setTimeout(() => {
-      setUserProfile((prev) => ({ ...prev, isPremium: true }));
-      setAccountTier("Premium");
-      setShowPaymentModal(false);
-      setIsProcessingPayment(false);
-    }, 1000);
-  };
-
-  const handleChangePassword = async () => {
-    if (!oldPassword.trim()) {
-      showAlert("Validation Error", "Please enter your current password.");
-      return;
-    }
-    if (!newPassword.trim()) {
-      showAlert("Validation Error", "Please enter a new password.");
-      return;
-    }
-    if (!allRulesPass) {
-      showAlert(
-        "Weak Password",
-        "Your new password does not meet all the requirements. Please check the checklist and try again.",
-      );
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showAlert("Validation Error", "New passwords do not match.");
-      return;
-    }
-
-    setIsChangingPassword(true);
-    try {
-      const response = await fetch(`${API_URL}/update-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+        Cebuano: {
+          title: "Na-update ang Sinultihan",
+          message: "Ang mga ngalan sa pagkaon, rekomendasyon, ug mga recipe ipakita na sa Cebuano (Binisaya).",
         },
-        body: JSON.stringify({
-          user_id: userId,
-          email: userProfile?.email,
-          password: newPassword.trim(),
-          current_password: oldPassword.trim(),
-        }),
-      });
+      };
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to update password");
-      }
+      const details = alertDetails[newLang] || alertDetails.English;
+      showAlert(details.title, details.message, [{ text: "OK", style: "default" }]);
+    },
+    [language, setLanguage, showAlert]
+  );
 
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setShowPasswordModal(false);
+  // Settings business logic hook: profile, password, billing, notifications & lifecycle
+  const {
+    getInitials,
 
-      setTimeout(() => {
-        showAlert(
-          "Password Updated",
-          "Your password has been changed successfully. For your security, please sign in with your new password.",
-          [
-            {
-              text: "Sign In Now",
-              onPress: async () => {
-                try {
-                  await clearSavedUserId();
-                } catch (e) {}
-                if (onLogout) {
-                  onLogout();
-                } else if (onTabChange) {
-                  onTabChange("AUTH");
-                }
-              },
-            },
-          ],
-        );
-      }, 250);
-    } catch (error) {
-      if (__DEV__) console.error("CHANGE PASSWORD ERROR:", error);
-      showAlert(
-        "Error",
-        error.message || "Failed to change password. Please try again.",
-      );
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
+    // Profile
+    showEditModal,
+    setShowEditModal,
+    tempName,
+    setTempName,
+    tempImage,
+    handleOpenEditModal,
+    handleSaveProfile,
+    handlePickTempImage,
+    handleRemoveProfileImage,
+    handleLaunchImagePicker,
 
-  const handleSavePreferences = () => {
-    showAlert(
-      "Preferences Saved",
-      "Your profile metrics and notification thresholds have been synced successfully.",
-    );
-  };
+    // Photo Preview
+    showPhotoPreviewModal,
+    setShowPhotoPreviewModal,
+    imageError,
+    setImageError,
 
-  // --- FULL LOGOUT SYSTEM WITH CONFIRMATION AND LOGIN REDIRECT ---
-  const handleLogOut = () => {
-    showAlert(
-      "Log Out",
-      "Are you sure you want to exit your active tracking session?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Log Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await clearSavedUserId();
-              await clearRememberedPassword();
-            } catch (e) {
-              console.warn("Logout clearSavedUserId warning:", e);
-            }
-            try {
-              if (onLogout) {
-                onLogout();
-              } else if (onTabChange) {
-                onTabChange("AUTH");
-              }
-            } catch (err) {
-              console.error("Logout navigation callback error:", err);
-            }
-          },
-        },
-      ],
-    );
-  };
+    // Password
+    showPasswordModal,
+    setShowPasswordModal,
+    isChangingPassword,
+    handleOpenPasswordModal,
+    handleChangePassword,
 
-  // --- PERMANENT ACCOUNT DELETION (RA 10173 & APP STORE MANDATORY) ---
-  const handleDeleteAccount = () => {
-    showAlert(
-      "Delete Account",
-      "Are you sure you want to permanently delete your account? All your personal health profiles, meal logs, water logs, and workout history will be permanently erased. This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete My Account",
-          style: "destructive",
-          onPress: async () => {
-            setIsDeletingAccount(true);
-            try {
-              const response = await fetch(`${API_URL}/delete-account`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: userId }),
-              });
-              const data = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                setIsDeletingAccount(false);
-                showAlert(
-                  "Deletion Failed",
-                  data.detail || "Could not delete account. Please try again."
-                );
-                return;
-              }
+    // Subscription & Billing
+    accountTier,
+    selectedBillingCycle,
+    showPaymentModal,
+    setShowPaymentModal,
+    paymentPlan,
+    selectedMethod,
+    setSelectedMethod,
+    isProcessingPayment,
+    handleSelectTierOption,
+    handleInitiatePaymentFlow,
+    handleConfirmPayment,
 
-              // Purge local storage credentials & active user session
-              await clearSavedUserId();
-              await clearRememberedCredentials();
+    // Notifications
+    habitReminders,
+    motivationalUpdates,
+    personalizedAlerts,
+    handleToggleHabitReminders,
+    handleToggleMotivationalUpdates,
+    handleTogglePersonalizedAlerts,
 
-              setIsDeletingAccount(false);
-              if (onLogout) {
-                onLogout();
-              } else if (onTabChange) {
-                onTabChange("AUTH");
-              }
-            } catch (err) {
-              setIsDeletingAccount(false);
-              console.warn("Delete account network error:", err);
-              showAlert(
-                "Network Error",
-                "Could not connect to the server to delete your account. Check your network."
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
+    // Account lifecycle
+    handleLogOut,
+    handleDeleteAccount,
+    isDeletingAccount,
+
+    // Privacy
+    privacyModalVisible,
+    setPrivacyModalVisible,
+  } = useSettings({
+    userProfile,
+    setUserProfile,
+    userId,
+    onTabChange,
+    onLogout,
+  });
+
+  /* remove everything in the screen */
+  // return <View style={styles.fullscreenOverlay} />;
 
   return (
     <View style={styles.fullscreenOverlay}>
+      {/* Top Status Bar */}
       <StatusBar
         barStyle={isDarkMode ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent={true}
       />
 
+      {/* Main Scrollable View */}
       <ScrollView
         style={styles.container}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={Platform.OS === "android"}
       >
-        {/* HEADER BRANDING SECTION */}
+        {/* Header Sector */}
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <Text style={styles.appName}>MacroSync</Text>
             <Text style={styles.greeting}>Settings Hub</Text>
-            <Text style={styles.subGreeting}>
-              Manage your profile parameters, configurations, and alerts
-            </Text>
+            <Text style={styles.subGreeting}>Customize your profile, preferences, and app experience</Text>
           </View>
         </View>
 
-        {/* PROFILE IDENTIFICATION CARD */}
+        {/* Profile Card */}
         <View style={styles.profileFormCard}>
           <View style={styles.profileUserRow}>
+            {/* User Avatar */}
             <TouchableOpacity
               onPress={() => setShowPhotoPreviewModal(true)}
               activeOpacity={0.85}
@@ -759,104 +316,61 @@ export default function SettingsScreen({
                 <Image
                   source={{ uri: userProfile.profileImage }}
                   style={styles.avatarImageLarge}
+                  resizeMode="cover"
                   onError={() => setImageError(true)}
                 />
               ) : (
-                <View
-                  style={[
-                    styles.avatarImageLarge,
-                    {
-                      backgroundColor: "#10B981",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: 26,
-                      fontWeight: "900",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {getInitials(userProfile?.name)}
-                  </Text>
+                <View style={styles.avatarFallbackBox}>
+                  <Text style={styles.avatarFallbackText}>{getInitials(userProfile?.name)}</Text>
                 </View>
               )}
-              {/* Small Edit Pen Icon Badge on Lower Right */}
+
+              {/* Camera Badge */}
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation();
                   handleLaunchImagePicker();
                 }}
                 activeOpacity={0.8}
-                style={{
-                  position: "absolute",
-                  bottom: -2,
-                  right: -2,
-                  backgroundColor: logoGreen,
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 2.5,
-                  borderColor: isDarkMode ? "#1E293B" : (theme?.surface || "#FFFFFF"),
-                  shadowColor: "#000000",
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 5,
-                  elevation: 6,
-                  zIndex: 10,
-                }}
+                style={styles.avatarEditBadge}
               >
-                <Pencil color="#FFFFFF" size={14} strokeWidth={2.5} />
+                <Pencil color={COLORS.textWhite} size={14} strokeWidth={2.5} />
               </TouchableOpacity>
             </TouchableOpacity>
+
+            {/* User Info */}
             <View style={styles.profileMetadataTextGroup}>
-              <Text style={styles.profileUserNameText}>
-                {userProfile?.name || "User Account"}
-              </Text>
-              <Text style={styles.profileUserSubText}>
-                {userProfile?.email || "MacroSync Active Member"}
-              </Text>
-              <TouchableOpacity
-                style={styles.editProfileButton}
-                onPress={handleOpenEditModal}
-                activeOpacity={0.75}
-              >
+              <Text style={styles.profileUserNameText}>{userProfile?.name || "User Account"}</Text>
+              <Text style={styles.profileUserSubText}>{userProfile?.email || "MacroSync Active Member"}</Text>
+
+              {/* Edit Profile Button */}
+              <TouchableOpacity style={styles.editProfileButton} onPress={handleOpenEditModal} activeOpacity={0.75}>
                 <Text style={styles.editProfileButtonText}>Edit Profile</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* INTERACTIVE SUBSCRIPTION CONFIGURATION TIER CARD */}
-        <Text style={styles.sectionLabelTitle}>Account Subscription Tier</Text>
+        {/* Subscription Tier Card */}
+        <SectionTitle title="Account Subscription Tier" styles={styles} />
         <View style={styles.formCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)', borderRadius: 10, padding: 6, marginRight: 10 }}>
-              <Sparkles color="#8B5CF6" size={18} />
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.sparklesIconBadge}>
+              <Sparkles color={COLORS.purple} size={18} />
             </View>
             <Text style={styles.cardTitle}>Select Target Membership Level</Text>
           </View>
+
+          {/* Tier Chips */}
           <View style={styles.filterButtonGroupRow}>
             <TouchableOpacity
               style={[
                 styles.filterChipButton,
-                accountTier === "Free"
-                  ? styles.filterChipActive
-                  : styles.filterChipInactive,
+                accountTier === "Free" ? styles.filterChipActive : styles.filterChipInactive,
               ]}
               onPress={() => handleSelectTierOption("Free")}
             >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  accountTier === "Free" && styles.filterChipTextActive,
-                ]}
-              >
+              <Text style={[styles.filterChipText, accountTier === "Free" && styles.filterChipTextActive]}>
                 Free Plan
               </Text>
             </TouchableOpacity>
@@ -864,28 +378,19 @@ export default function SettingsScreen({
             <TouchableOpacity
               style={[
                 styles.filterChipButton,
-                accountTier === "Premium"
-                  ? {
-                      backgroundColor: "#10B981",
-                      borderColor: "#10B981",
-                      borderWidth: 1.5,
-                    }
-                  : styles.filterChipInactive,
+                accountTier === "Premium" ? styles.filterChipPremiumActive : styles.filterChipInactive,
               ]}
               onPress={() => handleSelectTierOption("Premium")}
             >
               <Crown
-                color={accountTier === "Premium" ? "#FFFFFF" : "#10B981"}
+                color={accountTier === "Premium" ? COLORS.textWhite : COLORS.logoGreen}
                 size={13}
-                style={{ marginRight: 4 }}
+                style={styles.crownIconSpacer}
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  accountTier === "Premium" && {
-                    color: "#FFFFFF",
-                    fontWeight: "900",
-                  },
+                  accountTier === "Premium" && styles.filterChipPremiumTextActive,
                 ]}
               >
                 Premium Tier
@@ -893,88 +398,59 @@ export default function SettingsScreen({
             </TouchableOpacity>
           </View>
 
+          {/* Premium Details */}
           {accountTier === "Premium" && (
             <View style={styles.premiumConfigurationWrapper}>
               <View style={styles.innerGlassDivider} />
 
-              {/* Premium Feature List (Visible for BOTH Monthly & Annual plans) */}
-              <View
-                style={[
-                  styles.premiumFeatureDetailsBox,
-                  isDarkMode && {
-                    backgroundColor: "#1E293B",
-                    borderColor: "#334155",
-                  },
-                ]}
-              >
+              {/* Benefits Box */}
+              <View style={[styles.premiumFeatureDetailsBox, isDarkMode && styles.premiumFeatureDetailsBoxDark]}>
                 <View style={styles.featureDetailsHeadingFlexRow}>
-                  <Crown color="#F59E0B" size={18} style={{ marginRight: 6 }} />
-                  <Text
-                    style={[
-                      styles.premiumDetailsHeadingText,
-                      isDarkMode && { color: "#F8FAFC" },
-                    ]}
-                  >
+                  <Crown color={COLORS.amber} size={18} style={styles.crownHeadingSpacer} />
+                  <Text style={[styles.premiumDetailsHeadingText, isDarkMode && styles.textWhiteDark]}>
                     MacroSync Premium Benefits
                   </Text>
                 </View>
 
+                {/* AI Food Camera */}
                 <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2
-                    color={logoGreen}
-                    size={15}
-                    style={styles.bulletCheckIconSpacer}
-                  />
-                  <Text
-                    style={[
-                      styles.featureBulletBodyText,
-                      isDarkMode && { color: "#94A3B8" },
-                    ]}
-                  >
+                  <CheckCircle2 color={COLORS.logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[styles.featureBulletBodyText, isDarkMode && styles.textMutedDark]}>
                     Unlimited AI Food Camera & Gallery Photo Analysis
                   </Text>
                 </View>
 
+                {/* Vita AI Guidance */}
                 <View style={styles.featureBulletRowItem}>
-                  <CheckCircle2
-                    color={logoGreen}
-                    size={15}
-                    style={styles.bulletCheckIconSpacer}
-                  />
-                  <Text
-                    style={[
-                      styles.featureBulletBodyText,
-                      isDarkMode && { color: "#94A3B8" },
-                    ]}
-                  >
+                  <CheckCircle2 color={COLORS.logoGreen} size={15} style={styles.bulletCheckIconSpacer} />
+                  <Text style={[styles.featureBulletBodyText, isDarkMode && styles.textMutedDark]}>
                     Unlimited Vita AI 24/7 Health, Macro & Workout Guidance
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.premiumPanelHeading}>
-                Select Billing Frequency
-              </Text>
+              {/* Billing Plans */}
+              <Text style={styles.premiumPanelHeading}>Select Billing Frequency</Text>
 
               {/* Monthly Plan */}
               <TouchableOpacity
                 style={[
                   styles.billingPlanSelectorRowItem,
-                  selectedBillingCycle === "Monthly" &&
-                    styles.billingPlanActive,
-                  { marginBottom: 12 },
+                  selectedBillingCycle === "Monthly" && styles.billingPlanActive,
+                  styles.marginBottom12,
                 ]}
                 onPress={() => handleInitiatePaymentFlow("Monthly", "₱149/mo")}
+                disabled={isProcessingPayment}
               >
                 <View style={styles.billingPlanTextGroup}>
-                  <Text style={styles.billingPlanMainTitle}>
-                    Monthly Membership
-                  </Text>
-                  <Text style={styles.billingPlanSubDescription}>
-                    Billed monthly. Cancel anytime with one tap.
-                  </Text>
+                  <Text style={styles.billingPlanMainTitle}>Monthly Membership</Text>
+                  <Text style={styles.billingPlanSubDescription}>Billed monthly. Cancel anytime with one tap.</Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱149/mo</Text>
+                {isProcessingPayment && selectedBillingCycle === "Monthly" ? (
+                  <ActivityIndicator size="small" color={COLORS.logoGreen} />
+                ) : (
+                  <Text style={styles.billingPlanPriceBadgeText}>₱149/mo</Text>
+                )}
               </TouchableOpacity>
 
               {/* Annual Plan */}
@@ -984,12 +460,11 @@ export default function SettingsScreen({
                   selectedBillingCycle === "Annual" && styles.billingPlanActive,
                 ]}
                 onPress={() => handleInitiatePaymentFlow("Annual", "₱1,199/yr")}
+                disabled={isProcessingPayment}
               >
                 <View style={styles.billingPlanTextGroup}>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text style={styles.billingPlanMainTitle}>
-                      Annual Membership
-                    </Text>
+                  <View style={styles.rowAlign}>
+                    <Text style={styles.billingPlanMainTitle}>Annual Membership</Text>
                     <View style={styles.bestValueBadge}>
                       <Text style={styles.bestValueBadgeText}>SAVE 33%</Text>
                     </View>
@@ -998,1510 +473,953 @@ export default function SettingsScreen({
                     ₱1,199/year (~₱99/mo). Best value for long-term health!
                   </Text>
                 </View>
-                <Text style={styles.billingPlanPriceBadgeText}>₱1,199/yr</Text>
+                {isProcessingPayment && selectedBillingCycle === "Annual" ? (
+                  <ActivityIndicator size="small" color={COLORS.logoGreen} />
+                ) : (
+                  <Text style={styles.billingPlanPriceBadgeText}>₱1,199/yr</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* APP THEME SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>App Appearance</Text>
+        {/* Appearance Card */}
+        <SectionTitle title="App Appearance" styles={styles} />
         <View style={styles.formCard}>
-          <View style={{ marginBottom: 12 }}>
+          <View style={styles.settingHeaderSpacing}>
             <Text style={styles.settingRowItemMainTitle}>Theme Mode</Text>
             <Text style={styles.settingRowItemSubTitle}>
               {themeMode === "system"
                 ? `System Default (${isDarkMode ? "Dark" : "Light"})`
                 : themeMode === "dark"
-                  ? "Dark Theme Enabled"
-                  : "Light Theme Enabled"}
+                ? "Dark Theme Enabled"
+                : "Light Theme Enabled"}
             </Text>
           </View>
 
-          {/* 3-Option Segmented Selector */}
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: theme?.inputBg || "#F1F5F9",
-              borderRadius: 14,
-              padding: 4,
-              borderWidth: 1,
-              borderColor: theme?.border || "#E2E8F0",
-            }}
-          >
-            {[
-              {
-                id: "system",
-                label: "System",
-                icon: (
-                  <Smartphone
-                    size={15}
-                    color={
-                      themeMode === "system"
-                        ? "#FFFFFF"
-                        : theme?.textSecondary || "#94A3B8"
-                    }
-                  />
-                ),
-              },
-              {
-                id: "light",
-                label: "Light",
-                icon: (
-                  <Sun
-                    size={15}
-                    color={
-                      themeMode === "light"
-                        ? "#FFFFFF"
-                        : theme?.textSecondary || "#94A3B8"
-                    }
-                  />
-                ),
-              },
-              {
-                id: "dark",
-                label: "Dark",
-                icon: (
-                  <Moon
-                    size={15}
-                    color={
-                      themeMode === "dark"
-                        ? "#FFFFFF"
-                        : theme?.textSecondary || "#94A3B8"
-                    }
-                  />
-                ),
-              },
-            ].map((mode) => {
-              const isActive = themeMode === mode.id;
-              return (
-                <TouchableOpacity
-                  key={mode.id}
-                  style={{
-                    flex: 1,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    backgroundColor: isActive
-                      ? theme?.primary || "#10B981"
-                      : "transparent",
-                  }}
-                  activeOpacity={0.8}
-                  onPress={() => setThemeMode(mode.id)}
-                >
-                  <View style={{ marginRight: 6 }}>{mode.icon}</View>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "800",
-                      color: isActive
-                        ? "#FFFFFF"
-                        : theme?.textSecondary || "#94A3B8",
-                    }}
-                  >
-                    {mode.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Theme Selector */}
+          <SegmentedSelector
+            options={THEME_OPTIONS}
+            selectedId={themeMode}
+            onSelect={setThemeMode}
+            theme={theme}
+            styles={styles}
+          />
         </View>
 
-
-        {/* APP LANGUAGE SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Language & Localization</Text>
+        {/* Language Card */}
+        <SectionTitle title="Language & Localization" styles={styles} />
         <View style={styles.formCard}>
-          <View style={{ marginBottom: 12 }}>
-            <Text style={styles.settingRowItemMainTitle}>
-              App Meal Language
-            </Text>
+          <View style={styles.settingHeaderSpacing}>
+            <Text style={styles.settingRowItemMainTitle}>App Meal Language</Text>
             <Text style={styles.settingRowItemSubTitle}>
               {language === "English"
                 ? "English (Default meal titles)"
                 : language === "Tagalog"
-                  ? "Tagalog (Wikang Filipino)"
-                  : "Cebuano (Pinulongang Binisaya)"}
+                ? "Tagalog (Wikang Filipino)"
+                : "Cebuano (Pinulongang Binisaya)"}
             </Text>
           </View>
 
-          {/* 3-Option Segmented Language Selector */}
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: theme?.inputBg || "#F1F5F9",
-              borderRadius: 14,
-              padding: 4,
-              borderWidth: 1,
-              borderColor: theme?.border || "#E2E8F0",
-            }}
-          >
-            {[
-              { id: "English", label: "English" },
-              { id: "Tagalog", label: "Tagalog" },
-              { id: "Cebuano", label: "Cebuano" },
-            ].map((langItem) => {
-              const isActive = language === langItem.id;
-              return (
-                <TouchableOpacity
-                  key={langItem.id}
-                  style={{
-                    flex: 1,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    backgroundColor: isActive
-                      ? theme?.primary || "#10B981"
-                      : "transparent",
-                  }}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (langItem.id === language) return;
-                    const previousLang = language;
-                    // Preview selection in UI
-                    setLanguage(langItem.id);
-                    showAlert(
-                      "Language Updated",
-                      `Meal names will now display in ${langItem.label}!`,
-                      [
-                        {
-                          text: "Cancel",
-                          style: "cancel",
-                          onPress: () => {
-                            // Revert language back to original if canceled or X'd out
-                            setLanguage(previousLang);
-                          },
-                        },
-                        {
-                          text: "Apply",
-                          style: "default",
-                          onPress: () => {
-                            // Confirm new language selection
-                            setLanguage(langItem.id);
-                          },
-                        },
-                      ],
-                      "info",
-                      { preventBackdropDismiss: true },
-                    );
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "800",
-                      color: isActive
-                        ? "#FFFFFF"
-                        : theme?.textSecondary || "#94A3B8",
-                    }}
-                  >
-                    {langItem.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Language Selector */}
+          <SegmentedSelector
+            options={LANGUAGE_OPTIONS}
+            selectedId={language}
+            onSelect={handleLanguageSelect}
+            theme={theme}
+            styles={styles}
+          />
         </View>
 
-        {/* NOTIFICATIONS SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Notification Settings</Text>
+        {/* Notification Settings Card */}
+        <SectionTitle title="Notification Settings" styles={styles} />
         <View style={styles.formCard}>
-          <View style={styles.settingActionRowItem}>
-            <View style={styles.settingIconTextGroup}>
-              <View
-                style={{
-                  backgroundColor: "rgba(16, 185, 129, 0.12)",
-                  borderRadius: 10,
-                  padding: 7,
-                  marginRight: 12,
-                }}
-              >
-                <Bell color={"#10B981"} size={16} />
-              </View>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>
-                  Habit & Routine Reminders
-                </Text>
-                <Text style={styles.settingRowItemSubTitle}>
-                  Automated reminders for meals, hydration, calories, and
-                  workouts
-                </Text>
-              </View>
-            </View>
-            <Switch
-              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
-              thumbColor={habitReminders ? "#10B981" : "#64748B"}
-              ios_backgroundColor={"#E2E8F0"}
-              onValueChange={handleToggleHabitReminders}
-              value={habitReminders}
-            />
-          </View>
+          {/* Meal Reminders */}
+          <NotificationToggleRow
+            icon={Bell}
+            iconColor={COLORS.logoGreen}
+            iconBgColor={COLORS.greenAlpha}
+            title="Meal & Hydration Reminders"
+            subtitle="Daily reminders for breakfast, lunch, water, and dinner"
+            value={habitReminders}
+            onValueChange={handleToggleHabitReminders}
+            isDarkMode={isDarkMode}
+            styles={styles}
+          />
 
           <View style={styles.glassDivider} />
 
-          <View style={styles.settingActionRowItem}>
-            <View style={styles.settingIconTextGroup}>
-              <View
-                style={{
-                  backgroundColor: "rgba(249, 115, 22, 0.12)",
-                  borderRadius: 10,
-                  padding: 7,
-                  marginRight: 12,
-                }}
-              >
-                <Flame color={"#F97316"} size={16} />
-              </View>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>
-                  Motivational Updates
-                </Text>
-                <Text style={styles.settingRowItemSubTitle}>
-                  Updates on achievements, completed workouts, and step
-                  milestones
-                </Text>
-              </View>
-            </View>
-            <Switch
-              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
-              thumbColor={motivationalUpdates ? "#10B981" : "#64748B"}
-              ios_backgroundColor={"#E2E8F0"}
-              onValueChange={handleToggleMotivationalUpdates}
-              value={motivationalUpdates}
-            />
-          </View>
+          {/* Workout Prompts */}
+          <NotificationToggleRow
+            icon={Flame}
+            iconColor={COLORS.orange}
+            iconBgColor={COLORS.orangeAlpha}
+            title="Workout & Activity Prompts"
+            subtitle="Evening reminders to complete workouts and hit step goals"
+            value={motivationalUpdates}
+            onValueChange={handleToggleMotivationalUpdates}
+            isDarkMode={isDarkMode}
+            styles={styles}
+          />
 
           <View style={styles.glassDivider} />
 
-          <View style={styles.settingActionRowItem}>
-            <View style={styles.settingIconTextGroup}>
-              <View
-                style={{
-                  backgroundColor: "rgba(139, 92, 246, 0.12)",
-                  borderRadius: 10,
-                  padding: 7,
-                  marginRight: 12,
-                }}
-              >
-                <Sparkles color={"#8B5CF6"} size={16} />
-              </View>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.settingRowItemMainTitle}>
-                  Personalized Smart Alerts
-                </Text>
-                <Text style={styles.settingRowItemSubTitle}>
-                  Adjusted based on your behavior, goals, and daily routines
-                </Text>
-              </View>
-            </View>
-            <Switch
-              trackColor={{ false: "#E2E8F0", true: "#10B981" }}
-              thumbColor={personalizedAlerts ? "#10B981" : "#64748B"}
-              ios_backgroundColor={"#E2E8F0"}
-              onValueChange={handleTogglePersonalizedAlerts}
-              value={personalizedAlerts}
-            />
-          </View>
+          {/* Macro Check-in */}
+          <NotificationToggleRow
+            icon={Sparkles}
+            iconColor={COLORS.purple}
+            iconBgColor={COLORS.purpleAlpha}
+            title="Vita AI Macro Check-in"
+            subtitle="Mid-day smart coaching to monitor daily calories and protein"
+            value={personalizedAlerts}
+            onValueChange={handleTogglePersonalizedAlerts}
+            isDarkMode={isDarkMode}
+            styles={styles}
+          />
         </View>
 
-        {/* SECURITY SETTINGS CARD */}
-        <Text style={styles.sectionLabelTitle}>Account Security</Text>
+        {/* Account Security Card */}
+        <SectionTitle title="Account Security" styles={styles} />
         <View style={styles.formCard}>
-          <PressableCard
-            scaleDown={0.97}
-            style={styles.settingActionRowItem}
+          {/* Change Password */}
+          <SettingActionRow
+            icon={Shield}
+            iconColor={COLORS.amber}
+            iconBgColor={COLORS.amberAlpha}
+            title="Change Password"
+            subtitle="Update your password securely"
             onPress={handleOpenPasswordModal}
-          >
-            <View style={styles.settingIconTextGroup}>
-              <View
-                style={{
-                  backgroundColor: "rgba(245, 158, 11, 0.12)",
-                  borderRadius: 10,
-                  padding: 7,
-                  marginRight: 12,
-                }}
-              >
-                <Shield color={"#F59E0B"} size={16} />
-              </View>
-              <View>
-                <Text style={styles.settingRowItemMainTitle}>
-                  Change Password
-                </Text>
-                <Text style={styles.settingRowItemSubTitle}>
-                  Update your password securely
-                </Text>
-              </View>
-            </View>
-            <ChevronRight color={"#94A3B8"} size={16} />
-          </PressableCard>
+            styles={styles}
+          />
+
+          <View style={styles.glassDivider} />
+
+          {/* Delete Account */}
+          <SettingActionRow
+            icon={Trash2}
+            iconColor={COLORS.red}
+            iconBgColor={COLORS.redAlpha}
+            title={isDeletingAccount ? "Deleting Account..." : "Delete Account"}
+            subtitle="Permanently erase your data & profile"
+            onPress={handleDeleteAccount}
+            disabled={isDeletingAccount}
+            isLoading={isDeletingAccount}
+            isDestructive={true}
+            styles={styles}
+          />
         </View>
 
-        {/* LEGAL & CLINICAL COMPLIANCE CARD */}
-        <Text style={styles.sectionLabelTitle}>Legal & Health Policy</Text>
+        {/* Legal & Health Policy Card */}
+        <SectionTitle title="Legal & Health Policy" styles={styles} />
         <View style={styles.formCard}>
-          <PressableCard
-            scaleDown={0.97}
-            style={styles.settingActionRowItem}
+          <SettingActionRow
+            icon={FileText}
+            iconColor={COLORS.logoGreen}
+            iconBgColor={COLORS.greenAlpha}
+            title="Privacy Policy & Medical Scope"
+            subtitle="RA 10173 data privacy & clinical terms"
             onPress={() => setPrivacyModalVisible(true)}
-          >
-            <View style={styles.settingIconTextGroup}>
-              <View
-                style={{
-                  backgroundColor: "rgba(16, 185, 129, 0.12)",
-                  borderRadius: 10,
-                  padding: 7,
-                  marginRight: 12,
-                }}
-              >
-                <FileText color={"#10B981"} size={16} />
-              </View>
-              <View>
-                <Text style={styles.settingRowItemMainTitle}>
-                  Privacy Policy & Medical Scope
-                </Text>
-                <Text style={styles.settingRowItemSubTitle}>
-                  RA 10173 data privacy & clinical terms
-                </Text>
-              </View>
-            </View>
-            <ChevronRight color={"#94A3B8"} size={16} />
-          </PressableCard>
+            styles={styles}
+          />
         </View>
 
-        {/* LOGOUT BUTTON */}
+        {/* Log Out Button */}
         <PressableCard
           scaleDown={0.96}
-          style={[
-            styles.logOutSecondaryNeuButton,
-            {
-              backgroundColor: "rgba(239, 68, 68, 0.08)",
-              borderColor: "rgba(239, 68, 68, 0.25)",
-              borderWidth: 1.2,
-            },
-          ]}
+          style={styles.logOutSecondaryNeuButton}
           onPress={handleLogOut}
         >
-          <LogOut color={"#EF4444"} size={18} style={{ marginRight: 8 }} />
-          <Text
-            style={[
-              styles.logOutButtonText,
-              { color: "#EF4444", fontWeight: "800" },
-            ]}
-          >
-            Log Out
-          </Text>
-        </PressableCard>
-
-        {/* DELETE ACCOUNT BUTTON (RA 10173 & APP STORE MANDATORY) */}
-        <PressableCard
-          scaleDown={0.96}
-          style={[
-            styles.logOutSecondaryNeuButton,
-            {
-              backgroundColor: "transparent",
-              borderColor: "rgba(239, 68, 68, 0.35)",
-              borderWidth: 1.2,
-              marginTop: 10,
-              marginBottom: 20,
-            },
-          ]}
-          onPress={handleDeleteAccount}
-          disabled={isDeletingAccount}
-        >
-          {isDeletingAccount ? (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 8 }} />
-              <Text
-                style={[
-                  styles.logOutButtonText,
-                  { color: "#EF4444", fontWeight: "800", fontSize: 14 },
-                ]}
-              >
-                Deleting Account...
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Trash2 color={"#EF4444"} size={18} style={{ marginRight: 8 }} />
-              <Text
-                style={[
-                  styles.logOutButtonText,
-                  { color: "#EF4444", fontWeight: "800", fontSize: 14 },
-                ]}
-              >
-                Delete Account
-              </Text>
-            </View>
-          )}
+          <LogOut color={COLORS.red} size={18} style={styles.logoutIconSpacer} />
+          <Text style={styles.logOutButtonText}>Log Out</Text>
         </PressableCard>
       </ScrollView>
 
-      {/* --- EDIT PROFILE MODAL --- */}
-      <Modal
+      {/* Modal Dialogs */}
+      <EditProfileModal
         visible={showEditModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.modalContent}
-          >
-            <Text style={styles.modalTitle}>Edit Profile</Text>
-            <Text style={styles.modalSubtitle}>
-              Update your personal details
-            </Text>
+        onClose={() => setShowEditModal(false)}
+        tempName={tempName}
+        setTempName={setTempName}
+        tempImage={tempImage}
+        userProfile={userProfile}
+        getInitials={getInitials}
+        onPickImage={handlePickTempImage}
+        onSave={handleSaveProfile}
+        styles={styles}
+      />
 
-            <TouchableOpacity
-              onPress={handlePickTempImage}
-              activeOpacity={0.8}
-              style={[
-                styles.avatarNeuOuterBox,
-                { alignSelf: "center", marginBottom: 20 },
-              ]}
-            >
-              {tempImage ? (
-                <Image
-                  source={{ uri: tempImage }}
-                  style={styles.avatarImageLarge}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.avatarImageLarge,
-                    {
-                      backgroundColor: "#10B981",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: 26,
-                      fontWeight: "900",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {getInitials(tempName || userProfile?.name)}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.cameraIconBadge}>
-                <Pencil color="#FFFFFF" size={12} strokeWidth={2.5} />
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.inputLabel}>Username</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempName}
-              onChangeText={setTempName}
-              placeholder="Username"
-              placeholderTextColor="#CBD5E1"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setShowEditModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSave}
-                onPress={handleSaveProfile}
-              >
-                <Text style={styles.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* --- CHANGE PASSWORD MODAL --- */}
-      <Modal
+      <ChangePasswordModal
         visible={showPasswordModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowPasswordModal(false);
-          setOldPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
-          setShowOldPassword(false);
-          setShowNewPassword(false);
-          setShowConfirmPassword(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.modalContent}
-          >
-            <Text style={styles.modalTitle}>Change Password</Text>
-            <Text style={styles.modalSubtitle}>
-              Enter password details below
-            </Text>
+        onClose={() => setShowPasswordModal(false)}
+        isChangingPassword={isChangingPassword}
+        onChangePassword={handleChangePassword}
+        styles={styles}
+      />
 
-            <Text style={styles.inputLabel}>Current Password</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.passwordTextInput}
-                value={oldPassword}
-                onChangeText={setOldPassword}
-                placeholder="Enter current password"
-                placeholderTextColor="#CBD5E1"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={!showOldPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowOldPassword(!showOldPassword)}
-                activeOpacity={0.7}
-              >
-                {showOldPassword ? (
-                  <Eye color="#94A3B8" size={20} />
-                ) : (
-                  <EyeOff color="#94A3B8" size={20} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>New Password</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.passwordTextInput}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="Enter new password"
-                placeholderTextColor="#CBD5E1"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={!showNewPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowNewPassword(!showNewPassword)}
-                activeOpacity={0.7}
-              >
-                {showNewPassword ? (
-                  <Eye color="#94A3B8" size={20} />
-                ) : (
-                  <EyeOff color="#94A3B8" size={20} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* ── LIVE PASSWORD REQUIREMENTS ── */}
-            {newPassword.length > 0 && (
-              <View
-                style={{
-                  backgroundColor: "rgba(15, 23, 42, 0.06)",
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 14,
-                  borderWidth: 1,
-                  borderColor: allRulesPass
-                    ? "rgba(16,185,129,0.35)"
-                    : "rgba(239,68,68,0.20)",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "800",
-                    color: "#64748B",
-                    marginBottom: 8,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.7,
-                  }}
-                >
-                  Password must contain
-                </Text>
-                {pwRules.map((rule, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 5,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        backgroundColor: rule.ok
-                          ? "rgba(16,185,129,0.15)"
-                          : "rgba(239,68,68,0.10)",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: 8,
-                        borderWidth: 1,
-                        borderColor: rule.ok ? "#10B981" : "#EF4444",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "900",
-                          color: rule.ok ? "#10B981" : "#EF4444",
-                        }}
-                      >
-                        {rule.ok ? "✓" : "✕"}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: rule.ok ? "#10B981" : "#94A3B8",
-                      }}
-                    >
-                      {rule.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text style={styles.inputLabel}>Confirm New Password</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.passwordTextInput}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm new password"
-                placeholderTextColor="#CBD5E1"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={!showConfirmPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                activeOpacity={0.7}
-              >
-                {showConfirmPassword ? (
-                  <Eye color="#94A3B8" size={20} />
-                ) : (
-                  <EyeOff color="#94A3B8" size={20} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => {
-                  setShowPasswordModal(false);
-                  setOldPassword("");
-                  setNewPassword("");
-                  setConfirmPassword("");
-                  setShowOldPassword(false);
-                  setShowNewPassword(false);
-                  setShowConfirmPassword(false);
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSave}
-                onPress={handleChangePassword}
-                disabled={isChangingPassword}
-              >
-                <Text style={styles.modalSaveText}>
-                  {isChangingPassword ? "Saving..." : "Change"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* --- PAYMENT METHOD SELECTOR MODAL --- */}
-      <Modal
+      <PaymentMethodModal
         visible={showPaymentModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowPaymentModal(false);
-          setSelectedBillingCycle(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Payment Method</Text>
-            <Text style={styles.modalSubtitle}>
-              Checkout for Premium {paymentPlan.name} Plan ({paymentPlan.price})
-            </Text>
+        onClose={() => setShowPaymentModal(false)}
+        paymentPlan={paymentPlan}
+        selectedMethod={selectedMethod}
+        setSelectedMethod={setSelectedMethod}
+        isProcessingPayment={isProcessingPayment}
+        onConfirmPayment={handleConfirmPayment}
+        styles={styles}
+      />
 
-            {/* GCash Option */}
-            <TouchableOpacity
-              style={[
-                styles.paymentMethodOption,
-                selectedMethod === "gcash" && styles.paymentMethodActive,
-              ]}
-              onPress={() => setSelectedMethod("gcash")}
-              activeOpacity={0.8}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 24,
-                  borderRadius: 6,
-                  backgroundColor: "rgba(0, 85, 254, 0.15)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Smartphone color="#0055FE" size={16} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.paymentMethodText}>GCash</Text>
-            </TouchableOpacity>
-
-            {/* Maya Option */}
-            <TouchableOpacity
-              style={[
-                styles.paymentMethodOption,
-                selectedMethod === "maya" && styles.paymentMethodActive,
-              ]}
-              onPress={() => setSelectedMethod("maya")}
-              activeOpacity={0.8}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 24,
-                  borderRadius: 6,
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Wallet color="#10B981" size={16} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.paymentMethodText}>Maya</Text>
-            </TouchableOpacity>
-
-            {/* Card Option */}
-            <TouchableOpacity
-              style={[
-                styles.paymentMethodOption,
-                selectedMethod === "card" && styles.paymentMethodActive,
-              ]}
-              onPress={() => setSelectedMethod("card")}
-              activeOpacity={0.8}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 24,
-                  borderRadius: 6,
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 12,
-                }}
-              >
-                <CreditCard color="#10B981" size={16} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.paymentMethodText}>Credit or Debit Card</Text>
-            </TouchableOpacity>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => {
-                  setShowPaymentModal(false);
-                  setSelectedBillingCycle(null);
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalSave,
-                  !selectedMethod && styles.modalSaveDisabled,
-                ]}
-                onPress={handleConfirmPayment}
-                disabled={!selectedMethod || isProcessingPayment}
-              >
-                <Text style={styles.modalSaveText}>
-                  {isProcessingPayment ? "Processing..." : "Pay Now"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- FULL-SCREEN PHOTO PREVIEW EXPANSION MODAL --- */}
-      <Modal
+      <PhotoPreviewModal
         visible={showPhotoPreviewModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowPhotoPreviewModal(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.92)",
-            justifyContent: "center",
-            alignItems: "center",
-            position: "relative",
-          }}
-        >
-          {/* Top Header Bar */}
-          <View
-            style={{
-              position: "absolute",
-              top: Platform.OS === "ios" ? 54 : 36,
-              left: 20,
-              right: 20,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              zIndex: 10,
-            }}
-          >
-            <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "900" }}>
-              Profile Photo
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowPhotoPreviewModal(false)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              activeOpacity={0.7}
-            >
-              <X color="#FFFFFF" size={20} />
-            </TouchableOpacity>
-          </View>
+        onClose={() => setShowPhotoPreviewModal(false)}
+        userProfile={userProfile}
+        imageError={imageError}
+        setImageError={setImageError}
+        getInitials={getInitials}
+        screenWidth={screenWidth}
+        onChangePhoto={handleLaunchImagePicker}
+        onRemovePhoto={handleRemoveProfileImage}
+      />
 
-          {/* Expanded Circular Photo Container */}
-          <View
-            style={{
-              width: screenWidth - 48,
-              height: screenWidth - 48,
-              borderRadius: (screenWidth - 48) / 2,
-              overflow: "hidden",
-              borderWidth: 3,
-              borderColor: "#10B981",
-              backgroundColor: "#1E293B",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {userProfile?.profileImage && !imageError ? (
-              <Image
-                source={{ uri: userProfile.profileImage }}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <View
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  backgroundColor: "#10B981",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#FFFFFF",
-                    fontSize: 64,
-                    fontWeight: "900",
-                    letterSpacing: 2,
-                  }}
-                >
-                  {getInitials(userProfile?.name)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Bottom Quick Action Buttons inside Preview */}
-          <View
-            style={{
-              position: "absolute",
-              bottom: Platform.OS === "ios" ? 48 : 32,
-              flexDirection: "row",
-              gap: 16,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => {
-                setShowPhotoPreviewModal(false);
-                setTimeout(() => handleLaunchImagePicker(), 200);
-              }}
-              style={{
-                backgroundColor: "#10B981",
-                paddingHorizontal: 22,
-                paddingVertical: 12,
-                borderRadius: 24,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-              activeOpacity={0.8}
-            >
-              <Camera color="#FFFFFF" size={16} style={{ marginRight: 8 }} />
-              <Text
-                style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}
-              >
-                Change Photo
-              </Text>
-            </TouchableOpacity>
-
-            {Boolean(userProfile?.profileImage) && !imageError && (
-              <TouchableOpacity
-                onPress={() => {
-                  setShowPhotoPreviewModal(false);
-                  handleRemoveProfileImage();
-                }}
-                style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.2)",
-                  borderWidth: 1,
-                  borderColor: "#EF4444",
-                  paddingHorizontal: 22,
-                  paddingVertical: 12,
-                  borderRadius: 24,
-                  flexDirection: "row",
-                  alignItems: "center",
-                }}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={{ color: "#EF4444", fontWeight: "800", fontSize: 14 }}
-                >
-                  Remove
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- PRIVACY POLICY & MEDICAL TERMS MODAL --- */}
       <PrivacyModal
         visible={privacyModalVisible}
         onClose={() => setPrivacyModalVisible(false)}
         initialTab="medical"
       />
-
-      {/* --- BOTTOM NAVIGATION BAR --- */}
     </View>
   );
 }
 
-// --- COMPONENT STYLES ---
-const baseColor = '#F8FAFC';
+// ============================================================================
+// --- COMPONENT STYLES & COLOR CONFIGURATION ---
+// ============================================================================
+const COLORS = {
+  // Main Backgrounds
+  base: "#F8FAFC",
+  bgDark: "#0F172A",
 
-const getStyles = (theme, isDarkModePassed) => {
-  const isDarkMode = isDarkModePassed ?? (theme?.isDarkMode || theme?.mode === 'dark');
-  return StyleSheet.create({
-  fullscreenOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    width: screenWidth, 
-    height: screenHeight, 
-    backgroundColor: isDarkMode ? '#0F172A' : (theme?.background || baseColor),
-  },
-  container: { 
-    flex: 1,
-  },
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 54 : 48, 
-    paddingBottom: 85,
-  },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12, 
-    paddingHorizontal: 4, 
-    width: '100%',
-  },
-  headerTextGroup: { 
-    flex: 1, 
-    paddingRight: 12,
-  },
-  appName: { 
-    fontSize: 12, 
-    fontWeight: '900', 
-    color: logoGreen, 
-    textTransform: 'uppercase', 
-    letterSpacing: 2, 
-    marginBottom: 2,
-  },
-  greeting: { 
-    fontSize: 28, 
-    fontWeight: '900', 
-    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
-    letterSpacing: -0.5,
-  },
-  subGreeting: { 
-    fontSize: 13, 
-    fontWeight: '700', 
-    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#64748B'), 
-    marginTop: 2,
-  },
-  profileFormCard: {
-    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
-    borderRadius: 20, 
-    padding: 16, 
-    marginBottom: 24, 
-    borderWidth: 1.2, 
-    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  profileUserRow: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  avatarNeuOuterBox: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: logoGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
-    position: 'relative',
-  },
-  avatarImageLarge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  profileMetadataTextGroup: {
-    alignItems: 'center',
-  },
-  profileUserNameText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
-    marginBottom: 2,
-    textAlign: 'center',
-  },
-  profileUserSubText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
-    textAlign: 'center',
-  },
-  glassDivider: { 
-    height: 1, 
-    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'), 
-    marginVertical: 12,
-  },
-  innerGlassDivider: {
-    height: 1,
-    backgroundColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  profileMetricsMiniGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileMetricMiniBox: {
-    flex: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderLeftWidth: 1,
-    borderLeftColor: 'transparent',
-  },
-  profileMetricMiniValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'),
-    marginBottom: 2,
-  },
-  profileMetricMiniLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionLabelTitle: { 
-    fontSize: 14, 
-    fontWeight: '900', 
-    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
-    marginBottom: 12, 
-    marginLeft: 4, 
-    letterSpacing: -0.2,
-  },
-  formCard: {
-    backgroundColor: isDarkMode ? '#1E293B' : (theme?.surface || baseColor), 
-    borderRadius: 20, 
-    padding: 16, 
-    marginBottom: 24, 
-    borderWidth: 1.2, 
-    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  cardTitle: { 
-    fontSize: 11, 
-    color: isDarkMode ? '#F8FAFC' : (theme?.textPrimary || '#0F172A'), 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.2, 
-    marginBottom: 12, 
-    fontWeight: '800', 
-    marginLeft: 2,
-  },
-  filterButtonGroupRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-  },
-  filterChipButton: { 
-    paddingHorizontal: 14, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    marginRight: 8, 
-    marginBottom: 8, 
-    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
-    borderWidth: 1.2, 
-    borderColor: isDarkMode ? '#334155' : (theme?.border || '#E2E8F0'),
-    shadowOpacity: 0,
-    elevation: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterChipInactive: { 
-    backgroundColor: isDarkMode ? '#0F172A' : (theme?.surface || baseColor),
-  },
-  filterChipActive: { 
-    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', 
-    borderWidth: 1.5,
-    borderColor: logoGreen,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  filterChipText: { 
-    fontSize: 12, 
-    fontWeight: '800',
-    color: isDarkMode ? '#94A3B8' : (theme?.textSecondary || '#94A3B8'),
-  },
-  filterChipTextActive: {
-    color: logoGreen,
-    fontWeight: '900',
-  },
-  premiumConfigurationWrapper: {
-    marginTop: 6,
-  },
-  premiumPanelHeading: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme?.textSecondary || '#94A3B8',
-    marginBottom: 10,
-  },
-  billingPlanSelectorRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme?.surface || baseColor,
-    padding: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  billingPlanActive: {
-    borderColor: logoGreen,
-    backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.06)',
-    borderWidth: 1.5,
-  },
-  billingPlanTextGroup: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  billingPlanMainTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 4,
-  },
-  billingPlanSubDescription: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#64748B',
-    lineHeight: 16,
-  },
-  billingPlanPriceBadgeText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: logoGreen,
-  },
-  bestValueBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-  },
-  bestValueBadgeText: {
-    color: '#F59E0B',
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  premiumFeatureDetailsBox: {
-    marginTop: 16,
-    backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-  },
-  featureDetailsHeadingFlexRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  premiumDetailsHeadingText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: isDarkMode ? '#F8FAFC' : '#0F172A',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  featureBulletRowItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  bulletCheckIconSpacer: {
-    marginRight: 8,
-    marginTop: 2,
-  },
-  featureBulletBodyText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: isDarkMode ? '#94A3B8' : '#475569',
-    lineHeight: 18,
-  },
-  settingSwitchRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme?.border || '#E2E8F0',
-  },
-  settingIconTextGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingRowIconSpacer: {
-    marginRight: 14,
-  },
-  settingRowItemMainTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    marginBottom: 2,
-  },
-  settingRowItemSubTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme?.textSecondary || '#94A3B8',
-  },
-  systemActionNeuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme?.surface || baseColor,
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    borderWidth: 1.5, 
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  systemActionBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-    marginLeft: 8,
-  },
-  dangerActionBtnText: {
-    color: '#64748B',
-  },
-  dangerActionNeuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme?.cardBg || '#F8FAFC',
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    borderWidth: 1.5, 
-    borderColor: '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  logOutSecondaryNeuButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme?.surface || baseColor,
-    paddingVertical: 16,
-    borderRadius: 20,
-    marginBottom: 14,
-    marginTop: 12,
-    borderWidth: 1.5, 
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  logOutButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme?.error || '#64748B',
-  },
-  versionInfoFooterText: {
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme?.textSecondary || '#CBD5E1',
-    marginBottom: 24,
-    letterSpacing: 1,
-  },
-  floatingChatbotContainer: { 
-    position: 'absolute', 
-    bottom: 104, 
-    right: 20, 
-    zIndex: 99,
-  },
-  chatbotFloatingButton: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  chatbotUnpressed: { 
-    backgroundColor: logoGreen,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-  },
-  chatbotPressed: { 
-    backgroundColor: '#059669',
-    transform: [{ scale: 0.95 }],
-  },
+  // Cards & Surfaces
+  cardLight: "#FFFFFF",
+  cardDark: "#1E293B",
+  surfaceLight: "#FFFFFF",
+  surfaceDark: "#1E293B",
 
-  editProfileButton: {
-    marginTop: 10,
-    backgroundColor: theme?.surface || '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: theme?.border || '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editProfileButtonText: {
-    color: logoGreen,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: theme?.surface || baseColor, borderRadius: 20, padding: 24, borderWidth: 1.5, borderColor: theme?.border || '#E2E8F0' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: logoGreen, marginBottom: 8, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, color: theme?.textSecondary || '#94A3B8', textAlign: 'center', marginBottom: 20 },
-  modalInput: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0' },
-  passwordInputContainer: { width: '100%', backgroundColor: theme?.inputBg || '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderWidth: 1, borderColor: theme?.inputBorder || '#E2E8F0', paddingRight: 14 },
-  passwordTextInput: { flex: 1, padding: 14, fontSize: 16, fontWeight: '600', color: theme?.textPrimary || '#0F172A' },
-  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', marginTop: 8 },
-  modalCancel: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: theme?.cardBg || '#FFFFFF', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: theme?.border || '#E2E8F0' },
-  modalCancelText: { color: theme?.textSecondary || '#94A3B8', fontWeight: '700', fontSize: 14 },
-  modalSave: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: logoGreen, alignItems: 'center', marginLeft: 8 },
-  modalSaveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: logoGreen,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme?.surface || '#FFFFFF',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  settingActionRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  paymentMethodOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme?.inputBg || '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: theme?.border || '#E2E8F0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  paymentMethodActive: {
-    borderColor: logoGreen,
-    backgroundColor: theme?.cardBg || '#EBEBEB',
-  },
-  paymentLogoImage: {
-    width: 60,
-    height: 24,
-    marginRight: 16,
-  },
-  paymentMethodText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme?.textPrimary || '#0F172A',
-  },
-  modalSaveDisabled: {
-    backgroundColor: '#CBD5E1',
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: theme?.textSecondary || '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-});
+  // Brand Green & Accents
+  logoGreen: "#10B981",
+  greenAlpha: "rgba(16, 185, 129, 0.12)",
+  greenAlphaSubtle: "rgba(16, 185, 129, 0.06)",
+  greenAlphaBorder: "rgba(16, 185, 129, 0.30)",
+  greenHighlight: "rgba(16, 185, 129, 0.08)",
+  greenBenefitBorder: "rgba(16, 185, 129, 0.20)",
+
+  // Typography
+  textDark: "#0F172A",
+  textLight: "#F8FAFC",
+  textMuted: "#64748B",
+  textMutedDark: "#94A3B8",
+  textPlaceholder: "#94A3B8",
+  textWhite: "#FFFFFF",
+  textSlate: "#475569",
+
+  // Borders & Dividers
+  borderLight: "#E2E8F0",
+  borderDark: "#334155",
+  inputBorderLight: "#CBD5E1",
+  inputBorderDark: "#334155",
+  pillLight: "#F1F5F9",
+
+  // Accent Colors & Badges
+  purple: "#8B5CF6",
+  purpleAlpha: "rgba(139, 92, 246, 0.12)",
+  amber: "#F59E0B",
+  amberAlpha: "rgba(245, 158, 11, 0.12)",
+  orange: "#F97316",
+  orangeAlpha: "rgba(249, 115, 22, 0.12)",
+  red: "#EF4444",
+  redAlpha: "rgba(239, 68, 68, 0.12)",
+  redAlphaBorder: "rgba(239, 68, 68, 0.25)",
+  redAlphaBg: "rgba(239, 68, 68, 0.08)",
+  overlay: "rgba(0, 0, 0, 0.60)",
 };
+
+const getStyles = (theme, isDarkMode = false) =>
+  StyleSheet.create({
+    // --- MAIN SCREEN LAYOUT ---
+    // Fullscreen fixed background wrapper
+    fullscreenOverlay: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.base,
+    },
+    // Main flex container
+    container: {
+      flex: 1,
+    },
+    // ScrollView inner padding & safe margins
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: Platform.OS === "ios" ? 54 : 48,
+      paddingBottom: 85,
+      maxWidth: 680,
+      width: "100%",
+      alignSelf: "center",
+    },
+
+    // --- HEADER / BRAND SECTION ---
+    // Screen title and subtitle row
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+      paddingHorizontal: 4,
+      width: "100%",
+    },
+    // Header text group wrapper
+    headerTextGroup: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    // Top app category tag
+    appName: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: COLORS.logoGreen,
+      textTransform: "uppercase",
+      letterSpacing: 2,
+      marginBottom: 2,
+    },
+    // Main "Settings Hub" heading
+    greeting: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      letterSpacing: -0.5,
+    },
+    // Subtitle description below the heading
+    subGreeting: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      marginTop: 2,
+    },
+
+    // --- PROFILE CARD ---
+    // Outer card container for profile section
+    profileFormCard: {
+      backgroundColor: isDarkMode ? COLORS.cardDark : COLORS.cardLight,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    // Centered vertical stack holding avatar and user metadata
+    profileUserRow: {
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+    },
+    // Circular container holding user photo or initials
+    avatarNeuOuterBox: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+      borderWidth: 2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      position: "relative",
+    },
+    // Large avatar image
+    avatarImageLarge: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+    },
+    // Fallback circle when no image is uploaded
+    avatarFallbackBox: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Fallback initials text inside avatar
+    avatarFallbackText: {
+      color: COLORS.textWhite,
+      fontSize: 26,
+      fontWeight: "900",
+      letterSpacing: 1,
+    },
+    // Pencil badge overlay to change avatar
+    avatarEditBadge: {
+      position: "absolute",
+      bottom: -2,
+      right: -2,
+      backgroundColor: COLORS.logoGreen,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2.5,
+      borderColor: isDarkMode ? COLORS.surfaceDark : COLORS.surfaceLight,
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 6,
+      zIndex: 10,
+    },
+    // Text container holding name, email and edit button
+    profileMetadataTextGroup: {
+      alignItems: "center",
+    },
+    // User display name text
+    profileUserNameText: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 2,
+      textAlign: "center",
+    },
+    // User email text
+    profileUserSubText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      textAlign: "center",
+    },
+    // "Edit Profile" pill button
+    editProfileButton: {
+      marginTop: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: COLORS.greenAlpha,
+      borderWidth: 1,
+      borderColor: COLORS.greenAlphaBorder,
+    },
+    // "Edit Profile" pill button text
+    editProfileButtonText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: COLORS.logoGreen,
+    },
+
+    // --- SECTION LABELS ---
+    // Uppercase category section headers
+    sectionLabelTitle: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 10,
+      marginLeft: 4,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+    },
+
+    // --- FORM CARDS & FILTER CHIPS ---
+    // Standard content card container
+    formCard: {
+      backgroundColor: isDarkMode ? COLORS.cardDark : COLORS.cardLight,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Header row inside card with icon badge and title
+    cardHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    // Purple icon container for membership header
+    sparklesIconBadge: {
+      backgroundColor: COLORS.purpleAlpha,
+      borderRadius: 10,
+      padding: 6,
+      marginRight: 10,
+    },
+    // Title inside card header
+    cardTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+    },
+    // Horizontal row holding Free and Premium plan chips
+    filterButtonGroupRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 4,
+    },
+    // Base style for plan selector chip
+    filterChipButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1.2,
+    },
+    // Active style for Free Plan chip
+    filterChipActive: {
+      backgroundColor: COLORS.greenAlpha,
+      borderColor: COLORS.logoGreen,
+    },
+    // Active style for Premium Tier chip
+    filterChipPremiumActive: {
+      backgroundColor: COLORS.logoGreen,
+      borderColor: COLORS.logoGreen,
+      borderWidth: 1.5,
+    },
+    // Inactive style for plan chips
+    filterChipInactive: {
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.pillLight,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Default text inside plan chips
+    filterChipText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+    // Active text for Free Plan chip
+    filterChipTextActive: {
+      color: COLORS.logoGreen,
+      fontWeight: "900",
+    },
+    // Active text for Premium Tier chip
+    filterChipPremiumTextActive: {
+      color: COLORS.textWhite,
+      fontWeight: "900",
+    },
+    // Crown icon spacing inside Premium chip
+    crownIconSpacer: {
+      marginRight: 4,
+    },
+
+    // --- SUBSCRIPTION & PREMIUM BENEFITS ---
+    // Expanded container when Premium is active
+    premiumConfigurationWrapper: {
+      marginTop: 12,
+    },
+    // Light background box displaying premium perks
+    premiumFeatureDetailsBox: {
+      backgroundColor: COLORS.greenAlphaSubtle,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: COLORS.greenBenefitBorder,
+      marginBottom: 16,
+    },
+    // Dark mode variant for perks box
+    premiumFeatureDetailsBoxDark: {
+      backgroundColor: COLORS.cardDark,
+      borderColor: COLORS.borderDark,
+    },
+    // Perks box top title row
+    featureDetailsHeadingFlexRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    // Crown icon spacing in perks title
+    crownHeadingSpacer: {
+      marginRight: 6,
+    },
+    // Perks title text
+    premiumDetailsHeadingText: {
+      fontSize: 13,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+    },
+    // Individual feature bullet row
+    featureBulletRowItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    // Checkmark icon spacing
+    bulletCheckIconSpacer: {
+      marginRight: 8,
+    },
+    // Text description of feature bullet
+    featureBulletBodyText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textSlate,
+      flex: 1,
+    },
+    // Heading above Monthly/Annual selectors
+    premiumPanelHeading: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 10,
+    },
+
+    // --- BILLING FREQUENCY SELECTORS ---
+    // Plan selection card (Monthly or Annual)
+    billingPlanSelectorRowItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.cardLight,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Active highlight on selected billing card
+    billingPlanActive: {
+      borderColor: COLORS.logoGreen,
+      backgroundColor: COLORS.greenHighlight,
+    },
+    // Plan title and description text wrapper
+    billingPlanTextGroup: {
+      flex: 1,
+      marginRight: 10,
+    },
+    // Plan name text (e.g. Monthly Membership)
+    billingPlanMainTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 2,
+    },
+    // Plan subtitle / billing interval description
+    billingPlanSubDescription: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+    // Plan price badge text (e.g. ₱149/mo)
+    billingPlanPriceBadgeText: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: COLORS.logoGreen,
+    },
+    // "SAVE 33%" badge on annual plan
+    bestValueBadge: {
+      backgroundColor: COLORS.logoGreen,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      marginLeft: 8,
+    },
+    // "SAVE 33%" text
+    bestValueBadgeText: {
+      color: COLORS.textWhite,
+      fontSize: 9,
+      fontWeight: "900",
+      letterSpacing: 0.5,
+    },
+
+    // --- SEGMENTED OPTION SELECTOR ---
+    // Outer container for 3-option selector (Theme & Language)
+    segmentedContainer: {
+      flexDirection: "row",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.pillLight,
+      borderRadius: 14,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Individual segmented option tab
+    segmentedOption: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: "transparent",
+    },
+    // Active segmented option tab background
+    segmentedOptionActive: {
+      backgroundColor: COLORS.logoGreen,
+    },
+    // Icon container inside segmented tab
+    segmentedIconContainer: {
+      marginRight: 6,
+    },
+    // Segmented tab label text
+    segmentedOptionText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+    // Active segmented tab label text
+    segmentedOptionTextActive: {
+      color: COLORS.textWhite,
+    },
+
+    // --- SETTING ACTION ROWS ---
+    // Action row item with icon, titles, and switch or chevron
+    settingActionRowItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 4,
+    },
+    // Icon and text group
+    settingIconTextGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    // Rounded container holding action row icon
+    settingIconBadge: {
+      borderRadius: 10,
+      padding: 7,
+      marginRight: 12,
+    },
+    // Text container holding title and subtitle
+    settingTextContainer: {
+      flex: 1,
+      marginRight: 10,
+    },
+    // Action row primary title text
+    settingRowItemMainTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      marginBottom: 2,
+    },
+    // Action row subtitle description
+    settingRowItemSubTitle: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+    // Red color for destructive action titles
+    destructiveText: {
+      color: COLORS.red,
+    },
+
+    // --- DIVIDERS & HELPERS ---
+    // Glass divider line between card items
+    glassDivider: {
+      height: 1,
+      backgroundColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      marginVertical: 12,
+    },
+    // Inner divider inside expanded panels
+    innerGlassDivider: {
+      height: 1,
+      backgroundColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      marginBottom: 12,
+      marginTop: 4,
+    },
+    // Spacing above selectors
+    settingHeaderSpacing: {
+      marginBottom: 12,
+    },
+    // Margin utility
+    marginBottom12: {
+      marginBottom: 12,
+    },
+    // Flex row alignment utility
+    rowAlign: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    // White text utility for dark mode
+    textWhiteDark: {
+      color: COLORS.textLight,
+    },
+    // Muted text utility for dark mode
+    textMutedDark: {
+      color: COLORS.textMutedDark,
+    },
+
+    // --- LOGOUT BUTTON ---
+    // Destructive secondary logout button container
+    logOutSecondaryNeuButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 14,
+      borderRadius: 16,
+      backgroundColor: COLORS.redAlphaBg,
+      borderColor: COLORS.redAlphaBorder,
+      borderWidth: 1.2,
+      marginBottom: 30,
+    },
+    // Logout icon spacing
+    logoutIconSpacer: {
+      marginRight: 8,
+    },
+    // Logout button label text
+    logOutButtonText: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: COLORS.red,
+    },
+
+    // --- MODAL DIALOGS ---
+    // Dimmed modal backdrop overlay
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: COLORS.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20,
+    },
+    // Modal dialog content container
+    modalContent: {
+      width: "100%",
+      maxWidth: 460,
+      alignSelf: "center",
+      backgroundColor: isDarkMode ? COLORS.surfaceDark : COLORS.surfaceLight,
+      borderRadius: 24,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+    },
+    // Modal dialog title text
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "900",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    // Modal dialog subtitle description
+    modalSubtitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+      textAlign: "center",
+      marginBottom: 20,
+    },
+    // Form input label text
+    inputLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textPlaceholder : COLORS.textSlate,
+      marginBottom: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    // Modal text input box
+    modalInput: {
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.cardLight,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 14,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.inputBorderDark : COLORS.inputBorderLight,
+      marginBottom: 20,
+    },
+    // Password input row with toggle eye icon
+    passwordInputContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.cardLight,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: isDarkMode ? COLORS.inputBorderDark : COLORS.inputBorderLight,
+      marginBottom: 14,
+    },
+    // Password input text field
+    passwordTextInput: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "700",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+      paddingVertical: 2,
+    },
+    // Camera icon badge in photo modal
+    cameraIconBadge: {
+      position: "absolute",
+      bottom: 2,
+      right: 2,
+      backgroundColor: COLORS.logoGreen,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: isDarkMode ? COLORS.surfaceDark : COLORS.surfaceLight,
+    },
+    // Modal action buttons container
+    modalButtons: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: 8,
+    },
+    // Modal cancel button
+    modalCancel: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: isDarkMode ? COLORS.borderDark : COLORS.pillLight,
+      alignItems: "center",
+    },
+    // Modal cancel button text
+    modalCancelText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
+    },
+    // Modal primary action button (Save / Confirm)
+    modalSave: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 14,
+      backgroundColor: COLORS.logoGreen,
+      alignItems: "center",
+    },
+    // Disabled save button state
+    modalSaveDisabled: {
+      opacity: 0.5,
+    },
+    // Modal primary action button text
+    modalSaveText: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: COLORS.textWhite,
+    },
+    // Payment method selector option item
+    paymentMethodOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1.2,
+      borderColor: isDarkMode ? COLORS.borderDark : COLORS.borderLight,
+      backgroundColor: isDarkMode ? COLORS.bgDark : COLORS.cardLight,
+      marginBottom: 10,
+    },
+    // Selected payment method option state
+    paymentMethodActive: {
+      borderColor: COLORS.logoGreen,
+      backgroundColor: COLORS.greenHighlight,
+    },
+    // Payment method label text
+    paymentMethodText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: isDarkMode ? COLORS.textLight : COLORS.textDark,
+    },
+  });

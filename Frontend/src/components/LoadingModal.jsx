@@ -6,12 +6,9 @@ import {
   Modal,
   Animated,
   Easing,
-  Dimensions
 } from 'react-native';
 import { Sparkles, UtensilsCrossed, Cpu, Dumbbell } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-
-const { width } = Dimensions.get('window');
 
 const MEAL_STAGES = [
   "Analyzing your target calories & macros...",
@@ -235,7 +232,9 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     paddingHorizontal: 24
   },
   card: {
-    width: width - 32,
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
     backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
     borderRadius: 28,
     padding: 24,

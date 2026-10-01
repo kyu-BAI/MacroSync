@@ -6,7 +6,6 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   Platform,
   StatusBar,
 } from 'react-native';
@@ -22,7 +21,6 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
-const { height } = Dimensions.get('window');
 const logoGreen = '#10B981';
 
 export default function PrivacyModal({ visible, onClose, onAgree, initialTab = 'medical' }) {
@@ -339,8 +337,9 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 440,
-    maxHeight: height * 0.85,
+    maxWidth: 480,
+    alignSelf: 'center',
+    maxHeight: '85%',
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     paddingTop: 18,

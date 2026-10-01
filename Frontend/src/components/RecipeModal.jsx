@@ -34,12 +34,13 @@ export default function RecipeModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View
-        style={[
-          styles.recipeModalContent,
-          { backgroundColor: theme?.background || baseColor },
-        ]}
-      >
+      <View style={{ flex: 1, backgroundColor: theme?.background || baseColor, alignItems: 'center' }}>
+        <View
+          style={[
+            styles.recipeModalContent,
+            { backgroundColor: theme?.background || baseColor },
+          ]}
+        >
         <Text
           style={[
             styles.recipeModalTitle,
@@ -182,6 +183,7 @@ export default function RecipeModal({
         <TouchableOpacity style={styles.recipeModalCloseBtn} onPress={onClose}>
           <Text style={styles.recipeModalCloseBtnText}>Dismiss Recipe</Text>
         </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
@@ -193,6 +195,9 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   recipeModalTitle: {
     fontSize: 20,

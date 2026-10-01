@@ -171,6 +171,8 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
   },
   topNavigationRow: {
     width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     paddingHorizontal: 24,
     paddingTop: Platform.OS === 'ios' ? 8 : 12,
     paddingBottom: 4,
@@ -195,6 +197,8 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     marginBottom: 32,
     alignItems: 'center',
     width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   brandTitle: {
     fontSize: 38,
@@ -217,6 +221,9 @@ const getStyles = (theme, isDarkMode) => StyleSheet.create({
     padding: 24,
     borderWidth: 1.5,
     borderColor: theme?.border || '#E2E8F0',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   inputGroup: {
     marginBottom: 24,

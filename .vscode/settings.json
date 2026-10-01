@@ -16,5 +16,7 @@
     "**/Thumbs.db": true,
     "**/Frontend/.expo": true,
     "**/Frontend/dist": true
-  }
+  },
+  "editor.colorDecorators": true,
+  "editor.defaultColorDecorators": true
 }

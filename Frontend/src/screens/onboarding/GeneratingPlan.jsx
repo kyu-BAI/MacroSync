@@ -285,6 +285,9 @@ const getStyles = (theme, isDarkMode = false) =>
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 28,
+      width: '100%',
+      maxWidth: 540,
+      alignSelf: 'center',
     },
 
     // --- AI ENGINE MULTI-RING LOADER ---
