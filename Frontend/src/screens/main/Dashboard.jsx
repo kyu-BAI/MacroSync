@@ -558,6 +558,9 @@ export default function DashboardScreen({
     chartLayoutWidth > 0 ? chartLayoutWidth : maxAvailableCardWidth
   );
 
+  /* remove everything in the screen */
+  // return <View style={styles.fullscreenOverlay} />;
+
   return (
     <View style={styles.fullscreenOverlay}>
       <StatusBar

@@ -235,6 +235,9 @@ export default function StepThreeScreen({ onNext, onBack, initialLocation }) {
     handleContinue,
   } = useStepThreeLocation({ onNext, initialLocation });
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar

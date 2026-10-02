@@ -104,6 +104,9 @@ export default function SplashScreen({ onAppReady }) {
     };
   }, []);
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <View style={styles.container}>
       <StatusBar

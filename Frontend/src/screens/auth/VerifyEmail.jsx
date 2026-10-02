@@ -118,6 +118,9 @@ export default function VerifyEmailScreen({
     onVerified,
   });
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar

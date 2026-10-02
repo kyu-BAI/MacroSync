@@ -62,6 +62,7 @@ import PressableCard from "../../components/PressableCard";
 import MapcnMap from "../../components/MapcnMap";
 import { reverseGeocodeToBarangay, getBarangayMarkersForCity } from "../../services/barangayGeocodingService";
 
+
 // Re-export normalizeToCebuLGU for backward compatibility
 export { normalizeToCebuLGU };
 
@@ -788,6 +789,9 @@ export default function DietRecipesScreen({
     ],
     [netCalories, targetCalories, isOverCalories, isSavedByWorkout, dailyNutrition, targetProtein, targetCarbs, targetFats]
   );
+
+  /* remove everything in the screen */
+  // return <View style={styles.fullscreenOverlay} />;
 
   // Render
   return (

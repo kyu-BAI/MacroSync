@@ -18,5 +18,5 @@
     "**/Frontend/dist": true
   },
   "editor.colorDecorators": true,
-  "editor.defaultColorDecorators": true
+  "editor.defaultColorDecorators": "auto"
 }

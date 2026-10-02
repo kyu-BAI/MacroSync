@@ -102,6 +102,9 @@ export default function ChatbotAIScreen({
     language,
   });
 
+  /* remove everything in the screen */
+  // return <View style={styles.fullscreenOverlay} />;
+
   return (
     <Animated.View
       style={[

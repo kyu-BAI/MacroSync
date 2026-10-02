@@ -371,6 +371,9 @@ export default function StepFourScreen({
 
   const isScreenBusy = isLoading || isLoadingExternal;
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar

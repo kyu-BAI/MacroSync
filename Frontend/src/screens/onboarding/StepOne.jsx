@@ -80,6 +80,9 @@ export default function StepOneScreen({ onNext, initialBaseline }) {
     handleNextStep,
   } = useStepOneBaseline({ onNext, initialBaseline });
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Top Status Bar */}

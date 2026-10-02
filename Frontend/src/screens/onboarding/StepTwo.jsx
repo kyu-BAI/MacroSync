@@ -236,6 +236,9 @@ export default function StepTwoScreen({
     handleContinue,
   } = useStepTwoGoals({ onNext, currentWeight, height, weightUnit, initialGoals });
 
+  /* remove everything in the screen */
+  // return <View style={styles.container} />;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
