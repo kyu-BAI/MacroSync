@@ -22,6 +22,7 @@ import {
   LocateFixed,
   ShoppingBag,
   Maximize2,
+  Home,
   MapPin,
   Search,
   Compass,
