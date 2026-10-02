@@ -11,7 +11,7 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
-import { X, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight, Navigation } from 'lucide-react-native';
+import { X, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight } from 'lucide-react-native';
 import MapcnMap from './MapcnMap';
 import {
   PHILIPPINE_REGIONS,
@@ -336,16 +336,6 @@ export default function PhilippineLocationModal({
                 height="100%"
                 style={{ flex: 1, width: '100%' }}
               />
-
-              {/* Floating Instruction Banner on Map */}
-              <View style={styles.floatingMapGuide} pointerEvents="box-none">
-                <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor }]}>
-                  <Navigation size={12} color={logoGreen} style={{ marginRight: 6 }} />
-                  <Text style={[styles.guideText, { color: textColor }]}>
-                    Tap anywhere on the map to select a Municipality or City
-                  </Text>
-                </View>
-              </View>
             </View>
           </View>
         ) : (
@@ -544,31 +534,6 @@ const styles = StyleSheet.create({
   },
   barangayChipText: {
     fontSize: 11,
-  },
-  floatingMapGuide: {
-    position: 'absolute',
-    top: 14,
-    left: 16,
-    right: 16,
-    alignItems: 'center',
-    zIndex: 50,
-  },
-  guidePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  guideText: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   listContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 130 },
   sectionHeading: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 8 },
