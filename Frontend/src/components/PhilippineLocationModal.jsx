@@ -11,7 +11,7 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
-import { X, Home, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight, Navigation } from 'lucide-react-native';
+import { X, LocateFixed, Search, MapPin, Sparkles, Compass, CheckCircle2, ChevronRight, Navigation } from 'lucide-react-native';
 import MapcnMap from './MapcnMap';
 import {
   PHILIPPINE_REGIONS,
@@ -20,6 +20,7 @@ import {
   normalizeToPhilippineLocation,
 } from '../data/philippine_locations';
 import { normalizeToCebuLGU } from '../data/cebuPalengkeMeals';
+import { CEBU_CITY_COORDINATES } from '../data/cebu_locations';
 import {
   reverseGeocodeToBarangay,
   searchPhilippineBarangays,
@@ -44,14 +45,28 @@ export default function PhilippineLocationModal({
   onLocateMe,
   isLocating,
   currentCityProfile,
+  initialViewMode = 'EXPLORE',
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('All');
-  const [activeViewMode, setActiveViewMode] = useState('EXPLORE'); // 'EXPLORE' | 'MAP'
+  const [activeViewMode, setActiveViewMode] = useState(initialViewMode);
   const [localPinnedBarangay, setLocalPinnedBarangay] = useState(pinnedBarangay);
+  const [localSelectedCity, setLocalSelectedCity] = useState(selectedLocation);
   const [isResolvingBarangay, setIsResolvingBarangay] = useState(false);
   const [barangaySearchResults, setBarangaySearchResults] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+
+  useEffect(() => {
+    if (visible && initialViewMode) {
+      setActiveViewMode(initialViewMode);
+    }
+  }, [visible, initialViewMode]);
+
+  useEffect(() => {
+    if (selectedLocation) {
+      setLocalSelectedCity(selectedLocation);
+    }
+  }, [selectedLocation]);
 
   // Sync incoming pinnedBarangay prop
   useEffect(() => {
@@ -62,8 +77,8 @@ export default function PhilippineLocationModal({
 
   // City-level search results
   const searchResults = useMemo(() => {
-    return searchPhilippineLocations(searchQuery, selectedRegion);
-  }, [searchQuery, selectedRegion]);
+    return searchPhilippineLocations(searchQuery, 'All');
+  }, [searchQuery]);
 
   // Instant barangay search when query >= 2 characters
   useEffect(() => {
@@ -91,18 +106,19 @@ export default function PhilippineLocationModal({
 
   // Popular barangays for currently selected city
   const quickBarangays = useMemo(() => {
-    if (!selectedLocation) return [];
+    const curLoc = localSelectedCity || selectedLocation;
+    if (!curLoc) return [];
     return (
-      POPULAR_BARANGAYS_BY_CITY[selectedLocation] ||
-      POPULAR_BARANGAYS_BY_CITY[`${selectedLocation} City`] ||
+      POPULAR_BARANGAYS_BY_CITY[curLoc] ||
+      POPULAR_BARANGAYS_BY_CITY[`${curLoc} City`] ||
       []
     );
-  }, [selectedLocation]);
+  }, [localSelectedCity, selectedLocation]);
 
   // Dynamic barangay markers for the selected city with exact red dots
   const barangayMarkers = useMemo(() => {
-    return getBarangayMarkersForCity(selectedLocation);
-  }, [selectedLocation]);
+    return getBarangayMarkersForCity(localSelectedCity || selectedLocation);
+  }, [localSelectedCity, selectedLocation]);
 
   const combinedMarkers = useMemo(() => {
     return [...mapMarkers, ...barangayMarkers];
@@ -111,7 +127,12 @@ export default function PhilippineLocationModal({
   // Handle choosing a city
   const handleChooseCity = (cityName) => {
     if (!cityName) return;
+    setLocalPinnedBarangay(null);
+    onPinBarangay?.(null);
+    setLocalSelectedCity(cityName);
     onSelectLocation(cityName);
+    setSearchQuery('');
+    setActiveViewMode('MAP');
   };
 
   // Handle pinning exact barangay from map tap
@@ -206,9 +227,14 @@ export default function PhilippineLocationModal({
   };
 
   const handleCustomCity = () => {
-    if (!searchQuery.trim()) return;
-    onSelectLocation(searchQuery.trim());
-    onClose();
+    const customName = searchQuery.trim();
+    if (!customName) return;
+    setLocalPinnedBarangay(null);
+    onPinBarangay?.(null);
+    setLocalSelectedCity(customName);
+    onSelectLocation(customName);
+    setSearchQuery('');
+    setActiveViewMode('MAP');
   };
 
   const handleConfirmAndClose = () => {
@@ -229,8 +255,13 @@ export default function PhilippineLocationModal({
     if (localPinnedBarangay && localPinnedBarangay.lat && localPinnedBarangay.lng) {
       return [localPinnedBarangay.lng, localPinnedBarangay.lat];
     }
+    const currentLoc = localSelectedCity || selectedLocation;
+    const coords = PHILIPPINE_CITY_COORDINATES[currentLoc] || CEBU_CITY_COORDINATES[currentLoc];
+    if (coords && coords.lng && coords.lat) {
+      return [coords.lng, coords.lat];
+    }
     return currentMapCenter;
-  }, [localPinnedBarangay, currentMapCenter]);
+  }, [localPinnedBarangay, localSelectedCity, selectedLocation, currentMapCenter]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -264,11 +295,19 @@ export default function PhilippineLocationModal({
             <Search size={16} color={textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.textInput, { color: textColor }]}
-              placeholder="Search exact barangay, city, or local food..."
+              placeholder="Search exact City or Municipality..."
               placeholderTextColor={textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                if (searchResults.length > 0) {
+                  handleChooseCity(searchResults[0].name);
+                } else if (searchQuery.trim()) {
+                  handleCustomCity();
+                }
+              }}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -276,139 +315,20 @@ export default function PhilippineLocationModal({
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Region Tabs (shown when not searching) */}
-          {!searchQuery ? (
-            <View style={styles.regionTabRow}>
-              {PHILIPPINE_REGIONS.map((reg) => {
-                const isActive = selectedRegion === reg;
-                return (
-                  <TouchableOpacity
-                    key={reg}
-                    onPress={() => setSelectedRegion(reg)}
-                    style={[
-                      styles.regionChip,
-                      isActive
-                        ? { backgroundColor: logoGreen, borderColor: logoGreen }
-                        : { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor },
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.regionChipText,
-                        isActive ? { color: '#FFFFFF', fontWeight: '800' } : { color: textMuted },
-                      ]}
-                    >
-                      {reg}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : null}
-
-          {/* View Toggle: List / Map */}
-          <View style={styles.viewToggleRow}>
-            <TouchableOpacity
-              onPress={() => setActiveViewMode('EXPLORE')}
-              style={[
-                styles.viewToggleBtn,
-                activeViewMode === 'EXPLORE' && { backgroundColor: logoGreen },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.viewToggleText,
-                  activeViewMode === 'EXPLORE' ? { color: '#FFFFFF' } : { color: textMuted },
-                ]}
-              >
-                Locations ({searchResults.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setActiveViewMode('MAP')}
-              style={[
-                styles.viewToggleBtn,
-                activeViewMode === 'MAP' && { backgroundColor: logoGreen },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.viewToggleText,
-                  activeViewMode === 'MAP' ? { color: '#FFFFFF' } : { color: textMuted },
-                ]}
-              >
-                Interactive Barangay Map
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* Content Area */}
-        {activeViewMode === 'MAP' ? (
+        {/* Content Area: Map view is shown only when in MAP mode AND no search query is typed */}
+        {activeViewMode === 'MAP' && !searchQuery.trim() ? (
           <View style={{ flex: 1 }}>
-            {/* Quick Barangay Chips Toolbar */}
-            {quickBarangays.length > 0 && (
-              <View style={[styles.quickBarangayToolbar, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
-                <Text style={[styles.quickBarangayLabel, { color: textMuted }]}>
-                  Barangays in {selectedLocation}:
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-                  {quickBarangays.map((bName) => {
-                    const isPinned =
-                      localPinnedBarangay &&
-                      localPinnedBarangay.barangay?.toLowerCase() === bName.toLowerCase();
-                    return (
-                      <TouchableOpacity
-                        key={bName}
-                        onPress={() => handleQuickChipSelect(bName)}
-                        style={[
-                          styles.barangayChip,
-                          {
-                            backgroundColor: isPinned ? logoGreen : isDarkMode ? '#0F172A' : '#F1F5F9',
-                            borderColor: isPinned ? logoGreen : borderColor,
-                          },
-                        ]}
-                        activeOpacity={0.75}
-                      >
-                        <View
-                          style={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: 4,
-                            backgroundColor: isPinned ? '#FFFFFF' : '#EF4444',
-                            marginRight: 5,
-                            borderWidth: 1,
-                            borderColor: isPinned ? '#EF4444' : '#FFFFFF',
-                          }}
-                        />
-                        <Text
-                          style={[
-                            styles.barangayChipText,
-                            { color: isPinned ? '#FFFFFF' : textColor, fontWeight: isPinned ? '800' : '600' },
-                          ]}
-                        >
-                          {bName}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
             {/* Interactive Map */}
             <View style={{ flex: 1 }}>
               <MapcnMap
                 center={effectiveMapCenter}
                 zoom={9}
                 markers={[]}
-                activeLocation={selectedLocation}
-                pinnedBarangay={localPinnedBarangay}
+                activeLocation={localSelectedCity || selectedLocation}
+                pinnedBarangay={null}
+                showPin={true}
                 onPinBarangay={handleMapPin}
                 onMarkerPress={(cityName) => handleChooseCity(cityName)}
                 onSelectLocation={(cityName) => handleChooseCity(cityName)}
@@ -418,29 +338,13 @@ export default function PhilippineLocationModal({
               />
 
               {/* Floating Instruction Banner on Map */}
-              <View style={styles.floatingMapGuide}>
-                {isResolvingBarangay ? (
-                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
-                    <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
-                    <Text style={[styles.guideText, { color: logoGreen }]}>
-                      Resolving exact Barangay...
-                    </Text>
-                  </View>
-                ) : localPinnedBarangay ? (
-                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
-                    <CheckCircle2 size={13} color={logoGreen} style={{ marginRight: 6 }} />
-                    <Text style={[styles.guideText, { color: textColor }]}>
-                      📍 Pinned: <Text style={{ fontWeight: '800', color: logoGreen }}>{localPinnedBarangay.formattedTitle || `Brgy. ${localPinnedBarangay.barangay}`}</Text>
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor }]}>
-                    <Navigation size={12} color={logoGreen} style={{ marginRight: 6 }} />
-                    <Text style={[styles.guideText, { color: textColor }]}>
-                      Tap anywhere on the map to pin your exact Barangay
-                    </Text>
-                  </View>
-                )}
+              <View style={styles.floatingMapGuide} pointerEvents="box-none">
+                <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor }]}>
+                  <Navigation size={12} color={logoGreen} style={{ marginRight: 6 }} />
+                  <Text style={[styles.guideText, { color: textColor }]}>
+                    Tap anywhere on the map to select a Municipality or City
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -448,67 +352,20 @@ export default function PhilippineLocationModal({
           <FlatList
             data={searchResults}
             keyExtractor={(item) => item.name}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: searchQuery.trim() ? 40 : 100 }]}
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={
               <View>
-                {/* EXACT BARANGAY MATCHES SECTION */}
-                {barangaySearchResults.length > 0 && (
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={[styles.sectionHeading, { color: logoGreen }]}>
-                      EXACT BARANGAY MATCHES ({barangaySearchResults.length})
-                    </Text>
-                    {barangaySearchResults.map((brgyItem, idx) => {
-                      const isPinned =
-                        localPinnedBarangay &&
-                        localPinnedBarangay.barangay?.toLowerCase() === brgyItem.barangay?.toLowerCase();
-                      return (
-                        <TouchableOpacity
-                          key={`${brgyItem.barangay}-${idx}`}
-                          onPress={() => handleSelectBarangayItem(brgyItem)}
-                          style={[
-                            styles.barangayItemCard,
-                            {
-                              backgroundColor: cardBg,
-                              borderColor: isPinned ? logoGreen : borderColor,
-                            },
-                            isPinned && { borderWidth: 1.8 },
-                          ]}
-                          activeOpacity={0.8}
-                        >
-                          <View style={[styles.pinIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' }} />
-                          </View>
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={[styles.barangayTitle, { color: textColor }]}>
-                                {brgyItem.name}
-                              </Text>
-                              <View style={[styles.barangayBadge, { backgroundColor: `${logoGreen}20` }]}>
-                                <Text style={[styles.barangayBadgeText, { color: logoGreen }]}>
-                                  Exact Barangay
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={[styles.barangayCitySub, { color: textMuted }]}>
-                              {brgyItem.city} {brgyItem.province ? `• ${brgyItem.province}` : ''}
-                            </Text>
-                          </View>
-                          <View style={styles.pinActionBtn}>
-                            <Text style={styles.pinActionBtnText}>Pin</Text>
-                            <ChevronRight size={12} color="#FFFFFF" style={{ marginLeft: 2 }} />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Cities list heading */}
-                {!searchQuery && (
+                {!searchQuery.trim() ? (
                   <View style={{ marginBottom: 12 }}>
                     <Text style={[styles.sectionHeading, { color: textMuted }]}>
                       ALL CITIES & MUNICIPALITIES ({searchResults.length})
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={[styles.sectionHeading, { color: textMuted }]}>
+                      MATCHING LOCATIONS ({searchResults.length})
                     </Text>
                   </View>
                 )}
@@ -574,56 +431,48 @@ export default function PhilippineLocationModal({
           />
         )}
 
-        {/* Floating Quick Action: Locate Me & User Hometown */}
-        <View style={styles.floatingActionRow}>
-          {userHometown && selectedLocation !== userHometown ? (
+        {/* Floating Quick Action: Locate Me (only visible on map when not searching) */}
+        {onLocateMe && !searchQuery.trim() && activeViewMode === 'MAP' ? (
+          <View style={styles.floatingActionRow}>
             <TouchableOpacity
-              onPress={() => handleChooseCity(userHometown)}
+              onPress={onLocateMe}
               activeOpacity={0.85}
               style={[styles.floatingPill, { backgroundColor: cardBg, borderColor: logoGreen }]}
             >
-              <Home size={13} color={logoGreen} style={{ marginRight: 5 }} />
+              {isLocating ? (
+                <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
+              ) : (
+                <LocateFixed size={14} color={logoGreen} style={{ marginRight: 6 }} />
+              )}
               <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
-                {userHometown}
+                {isLocating ? 'Locating...' : 'Locate Me (GPS)'}
               </Text>
             </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity
-            onPress={onLocateMe}
-            activeOpacity={0.85}
-            style={[styles.floatingPill, { backgroundColor: cardBg, borderColor: logoGreen }]}
-          >
-            {isLocating ? (
-              <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
-            ) : (
-              <LocateFixed size={14} color={logoGreen} style={{ marginRight: 6 }} />
-            )}
-            <Text style={{ fontSize: 12, fontWeight: '800', color: logoGreen }}>
-              {isLocating ? 'Locating...' : 'Locate Me (GPS)'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        ) : null}
 
         {/* Bottom Active Location / Pinned Barangay Bar */}
-        <View style={[styles.bottomBar, { backgroundColor: cardBg, borderColor: logoGreen }]}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MapPin size={13} color={logoGreen} style={{ marginRight: 5 }} />
-              <Text style={[styles.bottomBarTitle, { color: textColor }]} numberOfLines={1}>
-                {localPinnedBarangay?.formattedTitle || currentCityProfile?.marketTitle || selectedLocation || 'Select Location'}
+        {!searchQuery.trim() && (
+          <View style={[styles.bottomBar, { backgroundColor: cardBg, borderColor: logoGreen }]}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MapPin size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                <Text style={[styles.bottomBarTitle, { color: textColor }]} numberOfLines={1}>
+                  {localPinnedBarangay?.formattedTitle || currentCityProfile?.marketTitle || localSelectedCity || selectedLocation || 'Select Location'}
+                </Text>
+              </View>
+              <Text style={styles.bottomBarSub} numberOfLines={1}>
+                {localPinnedBarangay
+                  ? `Exact Barangay: Brgy. ${localPinnedBarangay.barangay || localPinnedBarangay.name}, ${localPinnedBarangay.city}`
+                  : (currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions')}
               </Text>
             </View>
-            <Text style={styles.bottomBarSub} numberOfLines={1}>
-              {localPinnedBarangay
-                ? `Exact Barangay: Brgy. ${localPinnedBarangay.barangay || localPinnedBarangay.name}, ${localPinnedBarangay.city}`
-                : (currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions')}
-            </Text>
+            <TouchableOpacity onPress={handleConfirmAndClose} style={styles.doneBtn} activeOpacity={0.8}>
+              <Text style={styles.doneBtnText}>Confirm</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={handleConfirmAndClose} style={styles.doneBtn} activeOpacity={0.8}>
-            <Text style={styles.doneBtnText}>Confirm</Text>
-          </TouchableOpacity>
-        </View>
+        )}
+
       </View>
     </View>
   </Modal>

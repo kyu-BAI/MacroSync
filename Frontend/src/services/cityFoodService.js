@@ -5,6 +5,7 @@
  */
 
 import API_URL from '../screens/config/api';
+import { PHILIPPINE_LOCATIONS } from '../data/philippine_locations';
 
 // Static fallback for offline mode — iconic Philippine culinary capitals
 const STATIC_FALLBACK = {
@@ -283,13 +284,333 @@ const STATIC_FALLBACK = {
       { name: 'Kinalan nga Manok Bisaya sa Barili', desc: 'Slow-simmered native farm chicken with fresh yellow squash and sitaw.' },
     ],
   },
+  'Cordova': {
+    marketTitle: 'Cordova Public Market & Roro Pier',
+    palengkeItems: 'Bakasi (Reef Eel), Saang Snails, Tuba Vinegar, Kamias, Tangigue',
+    lat: 10.2522, lng: 123.9511,
+    specialty: 'Linarang nga Bakasi & Saang',
+    famousDishes: [
+      { name: 'Linarang nga Bakasi sa Cordova', desc: 'World-famous moray eel stew cooked with sour kamias, fermented black beans, and chili.' },
+      { name: 'Presko nga Saang sa Cordova', desc: 'Steamed local sea conch snails dipped in spicy native coconut tuba vinegar.' },
+    ],
+  },
+  'Catmon': {
+    marketTitle: 'Catmon Public Market & Highway Bakery Hub',
+    palengkeItems: 'Millet Grain (Kabog), Native Cacao, Sugar, Fresh Fish, Calamansi',
+    lat: 10.6869, lng: 124.0164,
+    specialty: 'Budbud Kabog & Native Sikwate',
+    famousDishes: [
+      { name: 'Budbud Kabog sa Catmon', desc: 'Heritage sweet rice cake made from heirloom wild millet seeds wrapped in banana leaf.' },
+      { name: 'Tinolang Isda sa Catmon', desc: 'Fresh reef fish simmered with ginger, lemongrass, and native malunggay leaves.' },
+    ],
+  },
+  'Consolacion': {
+    marketTitle: 'Consolacion Public Market',
+    palengkeItems: 'Native Chicken, Ginger, Chili, Pork Tenderloin, Sayote, Sitaw',
+    lat: 10.3803, lng: 123.9575,
+    specialty: 'Halang-Halang nga Manok & Sarok Delicacies',
+    famousDishes: [
+      { name: 'Halang-Halang nga Manok sa Consolacion', desc: 'Fiery shredded chicken simmered in rich spicy coconut milk with chili and ginger.' },
+      { name: 'Nilat-ang Baka sa Consolacion', desc: 'Slow-cooked tender beef with corn on the cob and native cabbage in savory broth.' },
+    ],
+  },
+  'Compostela': {
+    marketTitle: 'Compostela Municipal Market',
+    palengkeItems: 'Carabao Milk Cheese (Q-ueseo), Pan de Sal, Tilapia, Native Eggs',
+    lat: 10.4578, lng: 124.0119,
+    specialty: 'Q-ueseo (Native White Cheese)',
+    famousDishes: [
+      { name: 'Q-ueseo sa Compostela', desc: 'Traditional soft white artisan cheese crafted from fresh carabao milk and vinegar curds.' },
+      { name: 'Sinugbang Tilapia sa Compostela', desc: 'Charcoal-grilled freshwater tilapia seasoned with calamansi and native spices.' },
+    ],
+  },
+  'Minglanilla': {
+    marketTitle: 'Minglanilla Central Public Market',
+    palengkeItems: 'Chicken Inasal, Fresh Fish, Calamansi, Native Greens, Kamote',
+    lat: 10.2444, lng: 123.7961,
+    specialty: 'Inasal sa Minglanilla & Fresh Seafood',
+    famousDishes: [
+      { name: 'Inasal nga Manok sa Minglanilla', desc: 'Savory grilled chicken marinated in lemongrass, annatto, and native calamansi.' },
+      { name: 'Sinugbang Bangus sa Lipata', desc: 'Stuffed grilled milkfish served with fresh tomato and onion relish.' },
+    ],
+  },
+  'Tuburan': {
+    marketTitle: 'Tuburan Public Market & Coffee Farm Center',
+    palengkeItems: 'Tuburan Coffee Beans, Freshwater Fish, Sweet Corn, Saba, Kangkong',
+    lat: 10.7247, lng: 123.8647,
+    specialty: 'Tuburan Organic Highland Coffee',
+    famousDishes: [
+      { name: 'Tuburan Highland Coffee & Steamed Saba', desc: 'Philippine first commercial organic coffee with natural earthy notes and boiled saba.' },
+      { name: 'Sinugbang Tilapia sa Molobolo Springs', desc: 'Fresh mountain spring tilapia grilled over charcoal with native dip.' },
+    ],
+  },
+  'Badian': {
+    marketTitle: 'Badian Public Market & Kawasan Port',
+    palengkeItems: 'Giant River Prawns (Ulang), Bangus, Tilapia, Kamote, Calamansi',
+    lat: 9.8703, lng: 123.3975,
+    specialty: 'Fresh River Prawns (Ulang) & Kawasan Sinugba',
+    famousDishes: [
+      { name: 'Gisadong Ulang sa Badian', desc: 'Sweet freshwater river prawns sautéed in native garlic, butter, and ripe tomatoes.' },
+      { name: 'Sinugbang Isda sa Kawasan', desc: 'Catch of the day grilled fresh and served with soy-calamansi and hanging rice.' },
+    ],
+  },
+  'Alegria': {
+    marketTitle: 'Alegria Municipal Public Market',
+    palengkeItems: 'Fresh Tangigue, Native Vegetables, Sayote, Coconut, Calamansi',
+    lat: 9.7597, lng: 123.3444,
+    specialty: 'Kinilaw nga Tangigue & Binisayang Utan',
+    famousDishes: [
+      { name: 'Kinilaw nga Tangigue sa Alegria', desc: 'Ultra-fresh Spanish mackerel cured in coconut tuba vinegar with ginger and bird’s eye chili.' },
+      { name: 'Utan Bisaya sa Alegria', desc: 'Healthful clear soup of local squash, string beans, and moringa leaves.' },
+    ],
+  },
+  'Alcantara': {
+    marketTitle: 'Alcantara Municipal Market',
+    palengkeItems: 'Tulingan, Inun-unan Fish, Native Greens, Kamote Tops, Calamansi',
+    lat: 9.9769, lng: 123.4072,
+    specialty: 'Inun-unan nga Isda & Native Greens',
+    famousDishes: [
+      { name: 'Inun-unan nga Tulingan sa Alcantara', desc: 'Small tuna simmered in natural tuba vinegar, ginger, and wild native eggplants.' },
+      { name: 'Salada nga Kamote Tops', desc: 'Blanched sweet potato leaves tossed with tomatoes and calamansi vinaigrette.' },
+    ],
+  },
+  'Aloguinsan': {
+    marketTitle: 'Aloguinsan Public Market (Bojo River)',
+    palengkeItems: 'Mangrove Crabs, Balanghoy (Cassava), Wild Greens, Sweet Corn',
+    lat: 10.2297, lng: 123.5519,
+    specialty: 'Bojo River Mangrove Crab & Balanghoy',
+    famousDishes: [
+      { name: 'Nilung-ag nga Kasag sa Bojo', desc: 'Sweet river mangrove crabs steamed simply with native ginger and calamansi.' },
+      { name: 'Gihurnong Balanghoy sa Aloguinsan', desc: 'Toasted native cassava cakes sweetened with coconut sugar.' },
+    ],
+  },
+  'Asturias': {
+    marketTitle: 'Asturias Central Public Market',
+    palengkeItems: 'Native Chicken, Cassava, Bingka, Coconut, Ginger, Malunggay',
+    lat: 10.5708, lng: 123.7164,
+    specialty: 'Binisayang Halang-Halang & Bingka sa Asturias',
+    famousDishes: [
+      { name: 'Halang-Halang nga Manok sa Asturias', desc: 'Spicy chicken broth enriched with fresh coconut milk, crushed ginger, and chili leaves.' },
+      { name: 'Bingka sa Asturias', desc: 'Clay-oven baked native rice bibingka toasted over coconut husks.' },
+    ],
+  },
+  'Boljoon': {
+    marketTitle: 'Boljoon Municipal Heritage Market',
+    palengkeItems: 'Tulingan, Tangigue, Alugbati, Tomatoes, Seaweed, Calamansi',
+    lat: 9.6369, lng: 123.4847,
+    specialty: 'Ili Rock Fresh Catch & Tulingan Kinilaw',
+    famousDishes: [
+      { name: 'Kinilaw nga Tulingan sa Boljoon', desc: 'Fresh deep-sea tuna cured with spiced tuba vinegar, ginger, and shallots.' },
+      { name: 'Sabaw sa Alugbati ug Isda', desc: 'Nutritious native spinach and grilled fish soup.' },
+    ],
+  },
+  'Borbon': {
+    marketTitle: 'Borbon Public Market',
+    palengkeItems: 'Silot Young Coconut, Bodboron Fish, Sweet Corn, Kamote',
+    lat: 10.8419, lng: 124.0367,
+    specialty: 'Silot Buko & Sinugbang Bodboron',
+    famousDishes: [
+      { name: 'Sinugbang Bodboron sa Borbon', desc: 'Plump ocean fish grilled over charcoal with coarse sea salt.' },
+      { name: 'Silot Buko Shake (No Sugar)', desc: 'Hydrating fresh young coconut water and tender meat.' },
+    ],
+  },
+  'Carmen': {
+    marketTitle: 'Carmen Public Market & Safari District',
+    palengkeItems: 'Fresh Sea Catch, Native Pork, Local Greens, Calamansi, Mango',
+    lat: 10.5833, lng: 124.0236,
+    specialty: 'Sinugbang Isda & Palengke Greens sa Carmen',
+    famousDishes: [
+      { name: 'Sinugbang Isda sa Carmen', desc: 'Fresh local coastal fish grilled to perfection with spicy calamansi soy dip.' },
+      { name: 'Utan Bisaya nga adunay Malunggay', desc: 'Wholesome clear vegetable stew packed with local micronutrients.' },
+    ],
+  },
+  'Dumanjug': {
+    marketTitle: 'Dumanjug Central Market',
+    palengkeItems: 'Bisayang Manok, Organic Pork, Banana Blossoms, Calamansi',
+    lat: 10.0617, lng: 123.4983,
+    specialty: 'Bisayang Manok sa Dumanjug & Roasted Lechon',
+    famousDishes: [
+      { name: 'Bisayang Manok sa Dumanjug', desc: 'Free-range native chicken slow-roasted with lemongrass and native garlic.' },
+      { name: 'Humba nga Bisaya sa Dumanjug', desc: 'Tender braised pork with banana blossoms and sweet tuba syrup.' },
+    ],
+  },
+  'Ginatilan': {
+    marketTitle: 'Ginatilan Municipal Market',
+    palengkeItems: 'Inambakan Fish, Glutinous Rice, Coconut Milk, Calamansi, Sayote',
+    lat: 9.6053, lng: 123.3517,
+    specialty: 'Sinulog Rice Delicacy & Inambakan Fish',
+    famousDishes: [
+      { name: 'Sinugbang Isda sa Inambakan Falls', desc: 'Fresh fish grilled riverside with native dipping sauce and sweet corn.' },
+      { name: 'Sinulog Rice Delicacy sa Ginatilan', desc: 'Traditional steamed sticky rice treat wrapped in banana leaves.' },
+    ],
+  },
+  'Madridejos': {
+    marketTitle: 'Madridejos Fish Port & Market',
+    palengkeItems: 'Dried Squid (Buwad Pusit), Blue Crabs, Danggit, Calamansi',
+    lat: 11.2725, lng: 123.7317,
+    specialty: 'Buwad Pusit & Danggit sa Madridejos',
+    famousDishes: [
+      { name: 'Buwad Pusit sa Madridejos', desc: 'Sun-dried island squid toasted crisp over charcoal, paired with spiced vinegar.' },
+      { name: 'Nilung-ag nga Alimango sa Lawis', desc: 'Sweet ocean mangrove crabs steamed with native ginger and calamansi.' },
+    ],
+  },
+  'Malabuyoc': {
+    marketTitle: 'Malabuyoc Public Market',
+    palengkeItems: 'Spring Catch Fish, Highland Greens, Kamote, Calamansi, Tomatoes',
+    lat: 9.6644, lng: 123.3444,
+    specialty: 'Mainit Springs Fresh Catch & Native Greens',
+    famousDishes: [
+      { name: 'Sinugbang Tulingan sa Malabuyoc', desc: 'Charcoal-grilled tuna seasoned with sea salt and served with fresh tomato relish.' },
+      { name: 'Utan Bisaya sa Malabuyoc', desc: 'Clear mountain broth with squash, moringa, and string beans.' },
+    ],
+  },
+  'Medellin': {
+    marketTitle: 'Medellin Public Market',
+    palengkeItems: 'Sugarcane Juice, Biko, Sweet Corn, Pork Cuts, Kangkong',
+    lat: 11.1306, lng: 123.9639,
+    specialty: 'Medellin Biko & Sugarcane Delicacies',
+    famousDishes: [
+      { name: 'Biko sa Medellin', desc: 'Sticky sweet brown rice cake rich with coconut milk and topped with toasted latik.' },
+      { name: 'Sinugbang Pork Tenderloin', desc: 'Lean pork cut grilled over coals with sweet sugarcane-infused marinade.' },
+    ],
+  },
+  'Naga City': {
+    marketTitle: 'Naga City Central Market & Boardwalk',
+    palengkeItems: 'Tangigue, Chicken Inasal, Pork Belly, Chicharon, Calamansi',
+    lat: 10.2089, lng: 123.7578,
+    specialty: 'Naga Boardwalk Seafood & Chicharon',
+    famousDishes: [
+      { name: 'Sinugbang Tangigue sa Boardwalk', desc: 'Fresh king mackerel grilled by the bay, served with calamansi soy sauce.' },
+      { name: 'Inasal nga Manok sa Naga', desc: 'Golden annatto-glazed grilled chicken skewer.' },
+    ],
+  },
+  'Pinamungajan': {
+    marketTitle: 'Pinamungajan Municipal Market',
+    palengkeItems: 'Tañon Strait Bangus, Native Fish, Calamansi, Kamote Tops',
+    lat: 10.2689, lng: 123.5856,
+    specialty: 'Tañon Strait Bangus Inasal',
+    famousDishes: [
+      { name: 'Bangus Inasal sa Pinamungajan', desc: 'Deboned milkfish marinated in calamansi and garlic, grilled golden.' },
+      { name: 'Kinilaw nga Isda sa Pinamungajan', desc: 'Cured fresh catch with native vinegar, ginger, and chili.' },
+    ],
+  },
+  'Ronda': {
+    marketTitle: 'Ronda Public Market',
+    palengkeItems: 'Pork Belly, Tuba Vinegar, Native Greens, Sweet Corn, Calamansi',
+    lat: 9.9197, lng: 123.4478,
+    specialty: 'Ronda Humba sa Tuba',
+    famousDishes: [
+      { name: 'Humba sa Tuba sa Ronda', desc: 'Tender braised pork belly slow-simmered in fermented palm tuba vinegar.' },
+      { name: 'Gisadong Kangkong sa Ahos', desc: 'Stir-fried water spinach with toasted native garlic.' },
+    ],
+  },
+  'Samboan': {
+    marketTitle: 'Samboan Public Market',
+    palengkeItems: 'Native Chicken, River Tilapia, Sayote, Malunggay, Ginger',
+    lat: 9.5317, lng: 123.3083,
+    specialty: 'Aguinid River Catch & Native Chicken Tinola',
+    famousDishes: [
+      { name: 'Tinolang Manok sa Aguinid', desc: 'Aromatic native chicken soup with ginger, green papaya, and moringa leaves.' },
+      { name: 'Sinugbang Tilapia sa Samboan', desc: 'Fresh river tilapia grilled over open flame with calamansi relish.' },
+    ],
+  },
+  'San Fernando': {
+    marketTitle: 'San Fernando Public Market',
+    palengkeItems: 'Pork Cuts, Chicharon, Fresh Coastal Fish, Native Greens',
+    lat: 10.1611, lng: 123.7094,
+    specialty: 'San Fernando Sinugba & Chicharon',
+    famousDishes: [
+      { name: 'Sinugbang Baboy sa San Fernando', desc: 'Charcoal-grilled lean pork chops with spicy native vinegar dip.' },
+      { name: 'Utan Bisaya nga adunay Isda', desc: 'Clear vegetable stew flavored with fried fish broth.' },
+    ],
+  },
+  'Santa Fe': {
+    marketTitle: 'Santa Fe Public Market (Bantayan)',
+    palengkeItems: 'Scallops, Danggit, Blue Crabs, Shellfish, Young Coconut',
+    lat: 11.1556, lng: 123.8056,
+    specialty: 'Santa Fe Baked Scallops & Buwad Danggit',
+    famousDishes: [
+      { name: 'Grilled Scallops sa Santa Fe', desc: 'Sweet ocean scallops grilled in their shells with garlic and butter.' },
+      { name: 'Buwad Danggit sa Pamahaw', desc: 'Crispy sun-dried rabbitfish served with garlic rice and egg.' },
+    ],
+  },
+  'Santander': {
+    marketTitle: 'Santander Pier & Public Market',
+    palengkeItems: 'Yellowfin Tuna, Fresh Lato, Calamansi, Cucumber, Kamote',
+    lat: 9.4217, lng: 123.3361,
+    specialty: 'Tañon Strait Tuna & Fresh Lato Salad',
+    famousDishes: [
+      { name: 'Kinilaw nga Tuna sa Santander', desc: 'Southern Cebu yellowfin tuna cured fresh with coconut tuba vinegar and ginger.' },
+      { name: 'Salada nga Lato sa Calamansi', desc: 'Pop-in-your-mouth sea grapes with diced onions and calamansi juice.' },
+    ],
+  },
+  'Sibonga': {
+    marketTitle: 'Sibonga Public Market',
+    palengkeItems: 'Carabao Milk Pastillas, Native Chicken, Vegetables, Sweet Corn',
+    lat: 10.0167, lng: 123.6167,
+    specialty: 'Pastillas de Leche sa Sibonga & Native Stew',
+    famousDishes: [
+      { name: 'Pastillas de Leche sa Sibonga', desc: 'Sweet, creamy melt-in-your-mouth milk confection from local dairy carabaos.' },
+      { name: 'Kinalan nga Manok sa Sibonga', desc: 'Farm chicken stewed with yellow squash and native long beans.' },
+    ],
+  },
+  'Sogod': {
+    marketTitle: 'Sogod Municipal Market',
+    palengkeItems: 'Fresh Sea Catch, Sweet Corn, Buko Water, Calamansi, Tomatoes',
+    lat: 10.7486, lng: 124.0042,
+    specialty: 'Sogod Bay Fresh Seafood & Sweet Corn',
+    famousDishes: [
+      { name: 'Sinugbang Isda sa Sogod', desc: 'Sweet ocean fish caught in Sogod Bay, grilled fresh over hot coconut coals.' },
+      { name: 'Luto nga Mais sa Karsada', desc: 'Steamed native yellow corn on the cob.' },
+    ],
+  },
+  'Tabogon': {
+    marketTitle: 'Tabogon Public Market',
+    palengkeItems: 'Bodboron Fish, Sweet Corn, Native Tomatoes, Calamansi, Kamote',
+    lat: 10.9333, lng: 124.0333,
+    specialty: 'Tabogon Sweet Corn & Inun-unan nga Bodboron',
+    famousDishes: [
+      { name: 'Inun-unan nga Bodboron sa Tabogon', desc: 'Fresh small mackerel simmered in native palm vinegar, ginger, and chili.' },
+      { name: 'Sweet Corn sa Tabogon', desc: 'Locally grown tender sweet corn harvested fresh daily.' },
+    ],
+  },
+  'Tabuelan': {
+    marketTitle: 'Tabuelan Public Market (Maravilla)',
+    palengkeItems: 'Tulingan Fish, Lato Seaweed, Calamansi, Buko Water, Sayote',
+    lat: 10.9619, lng: 123.8647,
+    specialty: 'Maravilla Fresh Tulingan & Seaweed Salad',
+    famousDishes: [
+      { name: 'Sinugbang Tulingan sa Maravilla', desc: 'White beach coastal tuna grilled over embers with spicy calamansi soy dip.' },
+      { name: 'Salada nga Lato sa Baybayon', desc: 'Crisp ocean sea grapes tossed with tomatoes and native vinegar.' },
+    ],
+  },
+  'San Francisco (Camotes)': {
+    marketTitle: 'San Francisco Public Market (Camotes)',
+    palengkeItems: 'Cassava, Coconut Crab, Fresh Fish, Buko, Native Chicken',
+    lat: 10.6556, lng: 124.3111,
+    specialty: 'Soli-Soli Cassava Treats & Island Seafood',
+    famousDishes: [
+      { name: 'Gihurnong Cassava sa Camotes', desc: 'Island-grown sweet cassava baked with pure coconut milk and young coconut strips.' },
+      { name: 'Sinugbang Isda sa Santiago Bay', desc: 'Fresh reef fish grilled beachfront with spicy coconut vinegar.' },
+    ],
+  },
+  'Poro (Camotes)': {
+    marketTitle: 'Poro Central Public Market',
+    palengkeItems: 'Fresh Fish, Buko, Native Chicken, Cassava, Malunggay',
+    lat: 10.6319, lng: 124.4083,
+    specialty: 'Halang-Halang nga Manok sa Gata sa Camotes',
+    famousDishes: [
+      { name: 'Halang-Halang nga Manok sa Camotes', desc: 'Native island chicken stewed in rich coconut cream with bird’s eye chili.' },
+      { name: 'Sinigang nga Isda sa Tuba', desc: 'Sour fish soup made with island palm vinegar and greens.' },
+    ],
+  },
 };
 
 /**
  * Fetches a city food profile.
  * Tries the backend API first (Supabase cache → pre-seeded data → Gemini AI).
  * Falls back to static data if city is in the static list.
- * Returns null if nothing found.
+ * Falls back to PHILIPPINE_LOCATIONS directory if not in static list.
  *
  * @param {string} cityName - Name of the city or municipality
  * @returns {Promise<object|null>} City food profile or null
@@ -297,9 +618,45 @@ const STATIC_FALLBACK = {
 export async function getCityFoodProfile(cityName) {
   if (!cityName) return null;
 
+  // 1. Instant zero-latency check against STATIC_FALLBACK (contains all 53 Cebu LGUs & PH hubs)
+  if (STATIC_FALLBACK[cityName]) {
+    return STATIC_FALLBACK[cityName];
+  }
+
+  const cleanQ = cityName
+    .toLowerCase()
+    .replace(/\s*\(camotes\)/g, '')
+    .replace(/^city of\s+/g, '')
+    .replace(/\s+city$/g, '')
+    .replace(/^municipality of\s+/g, '')
+    .replace(/,\s*(cebu|philippines).*$/g, '')
+    .trim();
+
+  const cleanKey = Object.keys(STATIC_FALLBACK).find((k) => {
+    const kClean = k
+      .toLowerCase()
+      .replace(/\s*\(camotes\)/g, '')
+      .replace(/^city of\s+/g, '')
+      .replace(/\s+city$/g, '')
+      .replace(/^municipality of\s+/g, '')
+      .trim();
+
+    return (
+      kClean === cleanQ ||
+      k.toLowerCase() === cityName.toLowerCase() ||
+      cityName.toLowerCase().includes(kClean) ||
+      kClean.includes(cleanQ)
+    );
+  });
+
+  if (cleanKey && STATIC_FALLBACK[cleanKey]) {
+    return STATIC_FALLBACK[cleanKey];
+  }
+
+  // 2. Query backend API (Supabase cache / Gemini AI) with a resilient 5s timeout
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch(
       `${API_URL}/api/city-food?city=${encodeURIComponent(cityName)}`,
@@ -323,27 +680,48 @@ export async function getCityFoodProfile(cityName) {
       err.message?.includes('cancelled') ||
       err.message?.includes('aborted');
 
-    if (!isCanceled) {
-      console.warn(`[CityFoodService] API error for "${cityName}":`, err.message);
+    if (!isCanceled && __DEV__) {
+      console.warn(`[CityFoodService] API notice for "${cityName}":`, err.message);
     }
   }
 
-  // Offline fallback: return static data if available
-  if (STATIC_FALLBACK[cityName]) {
-    return STATIC_FALLBACK[cityName];
-  }
-  const cleanKey = Object.keys(STATIC_FALLBACK).find(
-    (k) =>
-      k.toLowerCase() === cityName.toLowerCase() ||
-      cityName.toLowerCase().includes(k.toLowerCase()) ||
-      k.toLowerCase().includes(cityName.toLowerCase())
-  );
-  if (cleanKey && STATIC_FALLBACK[cleanKey]) {
-    return STATIC_FALLBACK[cleanKey];
+  // 3. Robust fallback to PHILIPPINE_LOCATIONS directory
+  if (Array.isArray(PHILIPPINE_LOCATIONS)) {
+    const dirMatch = PHILIPPINE_LOCATIONS.find((l) => {
+      const lName = (l.name || '').toLowerCase();
+      const lNameClean = lName.replace(/\s+city$/i, '').trim();
+      return (
+        lName === cleanQ ||
+        lNameClean === cleanQ ||
+        lName.includes(cleanQ) ||
+        cleanQ.includes(lNameClean)
+      );
+    });
+
+    if (dirMatch) {
+      return {
+        marketTitle: dirMatch.marketTitle || `${dirMatch.name} Public Market`,
+        palengkeItems: dirMatch.palengkeItems || 'Fresh Fish, Native Greens, Calamansi, Kamote, Eggs',
+        lat: dirMatch.lat,
+        lng: dirMatch.lng,
+        specialty: dirMatch.specialty || `${dirMatch.name} Palengke Specialty`,
+        famousDishes: [
+          {
+            name: dirMatch.specialty || `${dirMatch.name} Delicacy`,
+            desc: `Iconic culinary specialty famous in ${dirMatch.name}, ${dirMatch.province || 'Philippines'}.`,
+          },
+          {
+            name: `Sinugba ug Inun-unan sa ${dirMatch.name}`,
+            desc: `Fresh local palengke seafood braised in native palm vinegar, ginger, and local herbs.`,
+          },
+        ],
+      };
+    }
   }
 
   return null;
 }
+
 
 /**
  * Fetches all pre-seeded city profiles from Supabase (for map markers).

@@ -458,7 +458,7 @@ export function normalizeToPhilippineLocation(rawText) {
 export function searchPhilippineLocations(query = '', regionFilter = 'All') {
   const q = query.trim().toLowerCase();
 
-  return PHILIPPINE_LOCATIONS.filter((item) => {
+  const matched = PHILIPPINE_LOCATIONS.filter((item) => {
     // Region check
     if (regionFilter !== 'All') {
       if (regionFilter === 'Cebu' && item.region !== 'Cebu') return false;
@@ -475,4 +475,30 @@ export function searchPhilippineLocations(query = '', regionFilter = 'All') {
       (item.palengkeItems && item.palengkeItems.toLowerCase().includes(q))
     );
   });
+
+  if (!q) return matched;
+
+  // Smart sort: exact city name match first, followed by startsWith, then includes
+  return matched.sort((a, b) => {
+    const aName = a.name.toLowerCase();
+    const bName = b.name.toLowerCase();
+
+    const aExact = aName === q;
+    const bExact = bName === q;
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+
+    const aStarts = aName.startsWith(q);
+    const bStarts = bName.startsWith(q);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+
+    const aIncludes = aName.includes(q);
+    const bIncludes = bName.includes(q);
+    if (aIncludes && !bIncludes) return -1;
+    if (!aIncludes && bIncludes) return 1;
+
+    return 0;
+  });
 }
+

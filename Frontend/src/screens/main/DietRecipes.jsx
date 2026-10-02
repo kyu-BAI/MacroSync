@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
 } from "react-native";
 import {
   ChefHat,
@@ -25,6 +26,7 @@ import {
   MapPin,
   Search,
   Compass,
+  X,
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -46,6 +48,7 @@ import {
   PHILIPPINE_REGIONS,
   PHILIPPINE_CITY_COORDINATES,
   normalizeToPhilippineLocation,
+  searchPhilippineLocations,
 } from "../../data/philippine_locations";
 
 // Contexts & Reusable UI Components
@@ -54,13 +57,12 @@ import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
 import LoadingModal from "../../components/LoadingModal";
 import RecipeModal from "../../components/RecipeModal";
-import CebuMapModal from "../../components/CebuMapModal";
 import PhilippineLocationModal from "../../components/PhilippineLocationModal";
+import MapcnMap from "../../components/MapcnMap";
 import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
-import MapcnMap from "../../components/MapcnMap";
-import { reverseGeocodeToBarangay, getBarangayMarkersForCity } from "../../services/barangayGeocodingService";
+import { reverseGeocodeToBarangay, getBarangayMarkersForCity, findCebuLGUForCoords } from "../../services/barangayGeocodingService";
 
 
 // Re-export normalizeToCebuLGU for backward compatibility
@@ -186,6 +188,7 @@ export default function DietRecipesScreen({
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
   const [showFullMapModal, setShowFullMapModal] = useState(false);
+  const [mapModalMode, setMapModalMode] = useState("EXPLORE");
 
   // Recipe cache
   const recipeCacheRef = useRef({});
@@ -202,28 +205,39 @@ export default function DietRecipesScreen({
   const [pinnedBarangay, setPinnedBarangay] = useState(null);
   const [userAllergies, setUserAllergies] = useState(userProfile?.allergies || []);
   const [isLocating, setIsLocating] = useState(false);
+  const [radarSearchQuery, setRadarSearchQuery] = useState("");
+
+  const radarSearchResults = useMemo(() => {
+    if (!radarSearchQuery.trim()) return [];
+    return searchPhilippineLocations(radarSearchQuery.trim(), "All");
+  }, [radarSearchQuery]);
 
   // Dynamic city food profile state
   const [cityProfilesCache, setCityProfilesCache] = useState({});
   const [currentCityProfile, setCurrentCityProfile] = useState(null);
   const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
 
-  // Handle exact Barangay pinning
-  const handlePinBarangay = useCallback(async (barangayData) => {
-    if (!barangayData) return;
-    if (barangayData.lat && barangayData.lng && !barangayData.formattedTitle) {
+  // Handle City / Municipality selection from Map tap
+  const handlePinBarangay = useCallback(async (locationData) => {
+    if (!locationData) return;
+
+    // 1. Resolve coordinates into Municipality / City using Cebu boundary GeoJSON
+    if (locationData.lat && locationData.lng) {
+      const lgu = findCebuLGUForCoords(locationData.lat, locationData.lng);
+      if (lgu) {
+        const normCity = normalizeToCebuLGU(lgu) || normalizeToPhilippineLocation(lgu) || lgu;
+        setSelectedLocation(normCity);
+        return;
+      }
+
       try {
-        const resolved = await reverseGeocodeToBarangay(barangayData.lat, barangayData.lng);
-        if (resolved) {
-          setPinnedBarangay(resolved);
-          AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(resolved)).catch(() => {});
-          if (resolved.city) {
-            const normCity =
-              normalizeToPhilippineLocation(resolved.city) ||
-              normalizeToCebuLGU(resolved.city) ||
-              resolved.city;
-            setSelectedLocation(normCity);
-          }
+        const resolved = await reverseGeocodeToBarangay(locationData.lat, locationData.lng);
+        if (resolved && resolved.city) {
+          const normCity =
+            normalizeToPhilippineLocation(resolved.city) ||
+            normalizeToCebuLGU(resolved.city) ||
+            resolved.city;
+          setSelectedLocation(normCity);
           return;
         }
       } catch (err) {
@@ -231,16 +245,42 @@ export default function DietRecipesScreen({
       }
     }
 
-    setPinnedBarangay(barangayData);
-    AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(barangayData)).catch(() => {});
-    if (barangayData.city) {
+    // 2. Direct city / municipality object
+    const target = locationData.city || locationData.name || locationData.barangay;
+    if (target) {
       const normCity =
-        normalizeToPhilippineLocation(barangayData.city) ||
-        normalizeToCebuLGU(barangayData.city) ||
-        barangayData.city;
+        normalizeToPhilippineLocation(target) ||
+        normalizeToCebuLGU(target) ||
+        target;
       setSelectedLocation(normCity);
     }
   }, []);
+
+  // Quick municipal hubs for Food Radar: Step 3 hometown first, then major LGUs
+  const quickMunicipalities = useMemo(() => {
+    const coreLGUs = [
+      "Cebu City",
+      "Mandaue City",
+      "Lapu-Lapu City",
+      "Daanbantayan",
+      "Bogo City",
+      "Medellin",
+      "San Remigio",
+      "Bantayan",
+      "Santa Fe",
+      "Talisay City",
+      "Toledo City",
+      "Carcar City",
+      "Balamban",
+      "Moalboal",
+      "Argao",
+    ];
+
+    if (userHometown) {
+      return Array.from(new Set([userHometown, ...coreLGUs]));
+    }
+    return coreLGUs;
+  }, [userHometown]);
 
   // Dynamic barangay markers with red dots for the selected city
   const barangayMarkers = useMemo(() => {
@@ -830,7 +870,7 @@ export default function DietRecipesScreen({
               activeOpacity={0.8}
             >
               <Text style={[styles.tabButtonText, activeDietTab === tabKey ? styles.tabTextActive : styles.tabTextInactive]}>
-                {tabKey === "PLAN" ? "Daily Plan" : "Explore Recipes"}
+                {tabKey === "PLAN" ? "Daily Plan" : "Food Radar"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -929,7 +969,7 @@ export default function DietRecipesScreen({
             </View>
           </View>
         ) : (
-          /* Tab 2: Explore Recipes */
+          /* Tab 2: Food Radar */
           <View style={styles.exploreSection}>
             <View style={styles.formCard}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -937,49 +977,161 @@ export default function DietRecipesScreen({
                   <Compass size={15} color={logoGreen} style={{ marginRight: 6 }} />
                   <Text style={styles.cardTitle}>Philippine Food Radar</Text>
                 </View>
-                <TouchableOpacity style={styles.fullMapButton} onPress={() => setShowFullMapModal(true)} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={styles.fullMapButton}
+                  onPress={() => {
+                    setMapModalMode("EXPLORE");
+                    setShowFullMapModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
                   <Search size={12} color={logoGreen} style={{ marginRight: 4 }} />
                   <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Choose Any City</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* QUICK BARANGAY SELECTOR CHIPS WITH RED DOT PINPOINT */}
-              {barangayMarkers.length > 0 && (
+              {/* INLINE QUICK SEARCH INPUT */}
+              <View style={{ marginBottom: 10 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isDarkMode ? "#1E293B" : "#F1F5F9",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                    paddingHorizontal: 12,
+                    height: 40,
+                  }}
+                >
+                  <Search size={14} color={isDarkMode ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: isDarkMode ? "#F8FAFC" : "#0F172A",
+                    }}
+                    placeholder="Search Cebu town or Philippine city..."
+                    placeholderTextColor={isDarkMode ? "#94A3B8" : "#64748B"}
+                    value={radarSearchQuery}
+                    onChangeText={setRadarSearchQuery}
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    onSubmitEditing={() => {
+                      if (radarSearchResults.length > 0) {
+                        setSelectedLocation(radarSearchResults[0].name);
+                        setRadarSearchQuery("");
+                      } else if (radarSearchQuery.trim()) {
+                        setSelectedLocation(radarSearchQuery.trim());
+                        setRadarSearchQuery("");
+                      }
+                    }}
+                  />
+                  {radarSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setRadarSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <X size={14} color={isDarkMode ? "#94A3B8" : "#64748B"} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Instant Suggestions Dropdown */}
+                {radarSearchQuery.trim().length > 0 && radarSearchResults.length > 0 && (
+                  <View
+                    style={{
+                      marginTop: 4,
+                      backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                      overflow: "hidden",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      elevation: 4,
+                      zIndex: 100,
+                    }}
+                  >
+                    {radarSearchResults.slice(0, 5).map((item) => (
+                      <TouchableOpacity
+                        key={item.name}
+                        onPress={() => {
+                          setSelectedLocation(item.name);
+                          setRadarSearchQuery("");
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: 12,
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: isDarkMode ? "#334155" : "#F1F5F9",
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 8 }}>
+                          <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
+                            {item.name}
+                          </Text>
+                          {item.region && (
+                            <Text style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", marginLeft: 6 }}>
+                              ({item.region})
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: logoGreen }} numberOfLines={1}>
+                          {item.specialty || `${item.province || "Palengke"}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* QUICK CITY / MUNICIPALITY SELECTOR CHIPS */}
+              {quickMunicipalities.length > 0 && (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.hubScrollContainer}
                   contentContainerStyle={styles.hubScrollContent}
                 >
-                  {barangayMarkers.map((b) => {
-                    const isPinned =
-                      pinnedBarangay &&
-                      (pinnedBarangay.barangay?.toLowerCase() === b.barangay.toLowerCase() ||
-                        pinnedBarangay.formattedTitle?.toLowerCase().includes(b.barangay.toLowerCase()));
+                  {quickMunicipalities.map((city) => {
+                    const isSelected = selectedLocation?.toLowerCase() === city.toLowerCase();
+                    const isHome = userHometown?.toLowerCase() === city.toLowerCase();
                     return (
                       <TouchableOpacity
-                        key={b.id}
-                        onPress={() => handlePinBarangay(b)}
+                        key={city}
+                        onPress={() => setSelectedLocation(city)}
                         style={[
                           styles.hubPill,
-                          isPinned && styles.hubPillActive,
+                          isSelected && styles.hubPillActive,
                           { flexDirection: "row", alignItems: "center" },
                         ]}
                         activeOpacity={0.75}
                       >
-                        <View
-                          style={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: 4,
-                            backgroundColor: isPinned ? "#FFFFFF" : "#EF4444",
-                            marginRight: 5,
-                            borderWidth: 1,
-                            borderColor: isPinned ? "#EF4444" : "#FFFFFF",
-                          }}
-                        />
-                        <Text style={[styles.hubPillText, isPinned && styles.hubPillTextActive]}>
-                          {b.barangay}
+                        {isHome ? (
+                          <Home
+                            size={11}
+                            color={isSelected ? "#FFFFFF" : logoGreen}
+                            style={{ marginRight: 5 }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: 4,
+                              backgroundColor: isSelected ? "#FFFFFF" : logoGreen,
+                              marginRight: 5,
+                            }}
+                          />
+                        )}
+                        <Text style={[styles.hubPillText, isSelected && styles.hubPillTextActive]}>
+                          {city}{isHome ? " (Home)" : ""}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -987,14 +1139,15 @@ export default function DietRecipesScreen({
                 </ScrollView>
               )}
 
-              {/* mapcn MAP CONTAINER */}
+              {/* INTERACTIVE MUNICIPALITY & CITY MAP */}
               <View style={styles.staticMapContainer}>
                 <MapcnMap
-                  center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
+                  center={currentMapCenter}
                   zoom={9}
                   markers={[]}
                   activeLocation={selectedLocation}
-                  pinnedBarangay={pinnedBarangay}
+                  pinnedBarangay={null}
+                  showPin={true}
                   onPinBarangay={handlePinBarangay}
                   onMarkerPress={(cityName) => cityName && setSelectedLocation(cityName)}
                   onSelectLocation={(cityName) => cityName && setSelectedLocation(cityName)}
@@ -1003,19 +1156,21 @@ export default function DietRecipesScreen({
                   style={{ width: "100%", height: "100%" }}
                 />
 
+                {/* Floating Full Screen Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMapModalMode("MAP");
+                    setShowFullMapModal(true);
+                  }}
+                  activeOpacity={0.85}
+                  style={styles.floatingFullscreenBtn}
+                >
+                  <Maximize2 size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                  <Text style={styles.floatingFullscreenText}>Full Screen</Text>
+                </TouchableOpacity>
+
                 {/* Floating Map Controls */}
                 <View style={styles.floatingMapControls}>
-                  {userHometown && selectedLocation !== userHometown ? (
-                    <TouchableOpacity
-                      onPress={() => setSelectedLocation(userHometown)}
-                      activeOpacity={0.85}
-                      style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
-                    >
-                      <Home size={13} color={logoGreen} style={{ marginRight: 5 }} />
-                      <Text style={styles.floatingPillText}>{userHometown}</Text>
-                    </TouchableOpacity>
-                  ) : null}
-
                   <TouchableOpacity
                     onPress={handleLocateMe}
                     activeOpacity={0.85}
@@ -1031,48 +1186,59 @@ export default function DietRecipesScreen({
                 </View>
               </View>
 
-              {/* PINNED EXACT BARANGAY BANNER */}
-              {pinnedBarangay ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginTop: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 9,
-                    borderRadius: 12,
-                    backgroundColor: isDarkMode ? "#1E293B" : "#ECFDF5",
-                    borderWidth: 1,
-                    borderColor: isDarkMode ? "#334155" : "#A7F3D0",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
-                    <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: isDarkMode ? "#F8FAFC" : "#065F46",
-                      }}
-                      numberOfLines={1}
-                    >
-                      Exact Barangay: <Text style={{ fontWeight: "900", color: logoGreen }}>{pinnedBarangay.formattedTitle || `Brgy. ${pinnedBarangay.barangay}, ${pinnedBarangay.city}`}</Text>
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setPinnedBarangay(null);
-                      AsyncStorage.removeItem("ms_pinned_barangay").catch(() => {});
+              {/* SELECTED CITY / MUNICIPALITY STATUS BANNER */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderRadius: 12,
+                  backgroundColor: isDarkMode ? "#1E293B" : "#ECFDF5",
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? "#334155" : "#A7F3D0",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
+                  <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: isDarkMode ? "#F8FAFC" : "#065F46",
                     }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    numberOfLines={1}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: isDarkMode ? "#94A3B8" : "#64748B" }}>
-                      Clear Pin
+                    {userHometown && selectedLocation?.toLowerCase() === userHometown?.toLowerCase() ? (
+                      <>Hometown: <Text style={{ fontWeight: "900", color: logoGreen }}>{selectedLocation} (Your Base)</Text></>
+                    ) : (
+                      <>Viewing: <Text style={{ fontWeight: "900", color: logoGreen }}>{selectedLocation}</Text></>
+                    )}
+                  </Text>
+                </View>
+
+                {userHometown && selectedLocation?.toLowerCase() !== userHometown?.toLowerCase() ? (
+                  <TouchableOpacity
+                    onPress={() => setSelectedLocation(userHometown)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: isDarkMode ? "rgba(16, 185, 129, 0.15)" : "#D1FAE5",
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Home size={11} color={logoGreen} style={{ marginRight: 4 }} />
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>
+                      Back to {userHometown}
                     </Text>
                   </TouchableOpacity>
-                </View>
-              ) : null}
+                ) : null}
+              </View>
 
               {/* SELECTED CITY CULINARY BANNER */}
               {isFetchingCityProfile ? (
@@ -1235,16 +1401,18 @@ export default function DietRecipesScreen({
         visible={showFullMapModal}
         onClose={() => setShowFullMapModal(false)}
         isDarkMode={isDarkMode}
-        currentMapCenter={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
-        mapMarkers={[...mapMarkers, ...barangayMarkers]}
+        currentMapCenter={currentMapCenter}
+        mapMarkers={[]}
         selectedLocation={selectedLocation}
         onSelectLocation={setSelectedLocation}
-        pinnedBarangay={pinnedBarangay}
+        pinnedBarangay={null}
+        showPin={false}
         onPinBarangay={handlePinBarangay}
         userHometown={userHometown}
         onLocateMe={handleLocateMe}
         isLocating={isLocating}
         currentCityProfile={currentCityProfile}
+        initialViewMode={mapModalMode}
       />
 
       <LoadingModal
@@ -1486,7 +1654,6 @@ const getStyles = (theme) =>
       flexDirection: "row",
       alignItems: "center",
     },
-    generatePlanButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 },
     staticMapContainer: {
       height: 235,
       width: "100%",
@@ -1521,6 +1688,26 @@ const getStyles = (theme) =>
       borderWidth: 1.5,
     },
     floatingPillText: { fontSize: 12, fontWeight: "800", color: logoGreen },
+    floatingFullscreenBtn: {
+      position: "absolute",
+      top: 12,
+      left: 12,
+      backgroundColor: theme?.surface || "#FFFFFF",
+      borderRadius: 50,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.22,
+      shadowRadius: 5,
+      elevation: 6,
+      borderWidth: 1.2,
+      borderColor: logoGreen,
+      zIndex: 100,
+    },
+    floatingFullscreenText: { fontSize: 11, fontWeight: "800", color: logoGreen },
     fullMapButton: {
       flexDirection: "row",
       alignItems: "center",

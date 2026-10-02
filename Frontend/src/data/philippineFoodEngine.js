@@ -362,16 +362,26 @@ export function generateGoalAlignedPhilippinePlan({
   let rawD = catalog.dinner[(seed + 3) % catalog.dinner.length].name;
 
   // If a dynamic city profile was fetched from Supabase/Gemini with famous delicacies,
-  // seamlessly inject that city's iconic specialty and famous dishes into the meal plan!
-  if (cityProfile?.specialty) {
-    // Feature the specialty in Lunch
-    rawL = `${cityProfile.specialty} (Local Specialty)`;
-  }
+  // seamlessly inject that city's iconic specialty, delicacies, and market produce into all 4 meals!
   if (Array.isArray(cityProfile?.famousDishes) && cityProfile.famousDishes.length > 0) {
-    const dish1 = cityProfile.famousDishes[0]?.name;
-    const dish2 = cityProfile.famousDishes[1]?.name || cityProfile.famousDishes[0]?.name;
-    if (dish1) rawL = `${dish1} (${location} Specialty)`;
-    if (dish2) rawD = `${dish2} (${location} Heritage)`;
+    const dishes = cityProfile.famousDishes;
+    if (dishes[0]?.name) rawL = `${dishes[0].name} (${location} Specialty)`;
+    if (dishes[1]?.name) rawD = `${dishes[1].name} (${location} Heritage)`;
+    if (dishes[2]?.name) rawS = `${dishes[2].name} (${location} Traditional Delicacy)`;
+    if (dishes[3]?.name) rawB = `${dishes[3].name} (${location} Breakfast Specialty)`;
+  } else if (cityProfile?.specialty) {
+    rawL = `${cityProfile.specialty} (${location} Specialty)`;
+  }
+
+  // If local palengke items are specified, incorporate them into breakfast and snack if needed
+  if (cityProfile?.palengkeItems && typeof cityProfile.palengkeItems === 'string') {
+    const palengkeList = cityProfile.palengkeItems.split(',').map((s) => s.trim()).filter(Boolean);
+    if (palengkeList.length > 0 && (!cityProfile?.famousDishes || cityProfile.famousDishes.length < 4)) {
+      rawB = `${palengkeList[0]} with Garlic Rice & Native Egg (${location} Market Fresh)`;
+    }
+    if (palengkeList.length > 1 && (!cityProfile?.famousDishes || cityProfile.famousDishes.length < 3)) {
+      rawS = `Fresh ${palengkeList[1]} with Buko Water (${location} Harvest)`;
+    }
   }
 
   // Goal-Optimization Transformation

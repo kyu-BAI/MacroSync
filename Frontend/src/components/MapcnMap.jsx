@@ -3,6 +3,8 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
 import cebuBoundaries from '../data/cebu_boundaries.json';
+import { PHILIPPINE_CITY_COORDINATES } from '../data/philippine_locations';
+import { CEBU_CITY_COORDINATES } from '../data/cebu_locations';
 
 /**
  * MapcnMap
@@ -10,8 +12,8 @@ import cebuBoundaries from '../data/cebu_boundaries.json';
  * Features:
  *   - Stable WebView lifecycle (no reloads on prop changes)
  *   - Preserves user zoom when pinning (zero unwanted zoom-out)
- *   - Prominent red pinpoint with pulsing ripple and custom SVG marker
- *   - Barangay red dots and city polygon highlights
+ *   - Prominent pin with place name badge and pulsing pinpoint ripple
+ *   - Clean view with pin location and place name (no borders)
  */
 export default function MapcnMap({
   center = [123.8854, 10.3157],
@@ -19,6 +21,7 @@ export default function MapcnMap({
   markers = [],
   activeLocation = '',
   pinnedBarangay = null,
+  showPin = true,
   boundariesGeoJSON = cebuBoundaries,
   onMarkerPress,
   onSelectLocation,
@@ -97,12 +100,14 @@ export default function MapcnMap({
     }
   }, [pinnedBarangay?.lat, pinnedBarangay?.lng, pinnedBarangay?.formattedTitle, injectOrQueue]);
 
-  // Update active boundary ONLY when no barangay is pinned, without flying or zooming out
+  // Update active boundary and zoom to place
   useEffect(() => {
     if (activeLocation) {
       const script = `
         if (typeof window.applyActiveBoundary === 'function') {
-          window.applyActiveBoundary(${JSON.stringify(activeLocation)}, false);
+          window.applyActiveBoundary(${JSON.stringify(activeLocation)}, true);
+        } else {
+          window.pendingActiveLocation = ${JSON.stringify(activeLocation)};
         }
         true;
       `;
@@ -392,6 +397,30 @@ export default function MapcnMap({
           margin-top: 3px;
           pointer-events: none;
         }
+
+        /* ── Modern Zoom In / Out Controls ── */
+        .maplibregl-ctrl-top-right {
+          top: 10px !important;
+          right: 10px !important;
+          z-index: 50 !important;
+        }
+        .maplibregl-ctrl-group {
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)'} !important;
+          border: 1.2px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.12)'} !important;
+          border-radius: 12px !important;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.20) !important;
+          overflow: hidden !important;
+        }
+        .maplibregl-ctrl-group button {
+          width: 32px !important;
+          height: 32px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .maplibregl-ctrl-group button + button {
+          border-top: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'} !important;
+        }
       </style>
     </head>
     <body>
@@ -474,17 +503,12 @@ export default function MapcnMap({
         window.isBarangayPinned = false;
         window.currentPinnedBarangay = null;
         var boundariesData = ${JSON.stringify(boundariesGeoJSON || null)};
-        var currentActiveLocation = '';
+        var currentActiveLocation = ${JSON.stringify(activeLocation || '')};
+        window.CEBU_COORDS = ${JSON.stringify(CEBU_CITY_COORDINATES || {})};
+        window.PHIL_COORDS = ${JSON.stringify(PHILIPPINE_CITY_COORDINATES || {})};
 
         function clearCityHighlight() {
-          try {
-            if (map.getLayer('cebu-boundary-active-fill')) {
-              map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], '___NONE___']);
-            }
-            if (map.getLayer('cebu-boundary-active-line')) {
-              map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], '___NONE___']);
-            }
-          } catch(_) {}
+          // No boundary polygons rendered
         }
         window.clearCityHighlight = clearCityHighlight;
 
@@ -503,12 +527,14 @@ export default function MapcnMap({
           return t.indexOf('+') !== -1 || /^\d+(\.\d+)?[,\s]+\d+(\.\d+)?$/.test(t) || /^\d{3,6}$/.test(t) || (/^[A-Z0-9]{3,8}$/.test(t) && /\d/.test(t));
         }
 
+        var isPinEnabled = true;
+
         function showActivePin(title, lngLat) {
           if (!lngLat || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number') return;
 
-          var displayTitle = title || 'Pinned Barangay';
+          var displayTitle = title || 'Selected Location';
           if (isCodeString(displayTitle)) {
-            displayTitle = 'Pinned Barangay';
+            displayTitle = 'Selected Location';
           }
 
           if (activePinMarker) {
@@ -582,8 +608,6 @@ export default function MapcnMap({
           isBarangayPinned = true;
           window.isBarangayPinned = true;
 
-          clearCityHighlight();
-
           var title = '';
           if (data.barangay && !isCodeString(data.barangay)) {
             title = 'Brgy. ' + data.barangay + (data.city ? (', ' + data.city) : '');
@@ -592,7 +616,7 @@ export default function MapcnMap({
           } else if (data.name && !isCodeString(data.name)) {
             title = data.name;
           } else {
-            title = 'Pinned Barangay';
+            title = 'Pinned Location';
           }
 
           showActivePin(title, [data.lng, data.lat]);
@@ -617,136 +641,190 @@ export default function MapcnMap({
         }
         window.removeActivePin = removeActivePin;
 
-        function applyActiveBoundary(name, shouldFly) {
-          if (!name) return;
-          currentActiveLocation = name;
-
-          // STRICT: If a barangay is pinned, NEVER highlight or zoom out to city
-          if (isBarangayPinned || window.currentPinnedBarangay) {
-            clearCityHighlight();
-            return;
-          }
-
-          try {
-            var matchedName = name;
-            if (boundariesData && boundariesData.features) {
-              var target = boundariesData.features.find(function(f) {
-                return f.properties && (
-                  f.properties.name === name ||
-                  f.properties.original_name === name ||
-                  (f.properties.name && name && f.properties.name.toLowerCase() === name.toLowerCase()) ||
-                  (f.properties.original_name && name && f.properties.original_name.toLowerCase() === name.toLowerCase())
-                );
-              });
-              if (target && target.properties) {
-                matchedName = target.properties.name;
-                if (target.properties.bbox && shouldFly && !isBarangayPinned) {
-                  var bb = target.properties.bbox;
-                  map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], {
-                    padding: { top: 40, bottom: 40, left: 30, right: 30 },
-                    maxZoom: 13,
-                    duration: 850
-                  });
-                }
-              }
-            }
-
-            if (!isBarangayPinned) {
-              if (map.getLayer('cebu-boundary-active-fill')) {
-                map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], matchedName]);
-              }
-              if (map.getLayer('cebu-boundary-active-line')) {
-                map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], matchedName]);
-              }
-            } else {
-              clearCityHighlight();
-            }
-          } catch(err) {
-            console.warn('Error applying active boundary:', err);
-          }
-        }
-        window.applyActiveBoundary = applyActiveBoundary;
-
         function initBoundaries() {
-          if (!boundariesData) return;
+          if (!map || !map.getSource) return;
           try {
-            if (!map.getSource('cebu-boundaries')) {
+            // Invisible Cebu boundaries layer purely for tap detection
+            if (boundariesData && !map.getSource('cebu-boundaries')) {
               map.addSource('cebu-boundaries', {
                 type: 'geojson',
                 data: boundariesData
               });
-            }
 
-            if (!map.getLayer('cebu-boundaries-all-fill')) {
-              map.addLayer({
-                id: 'cebu-boundaries-all-fill',
-                type: 'fill',
-                source: 'cebu-boundaries',
-                paint: {
-                  'fill-color': '#000000',
-                  'fill-opacity': 0.00001
-                }
-              });
-            }
-
-            if (!map.getLayer('cebu-boundary-active-fill')) {
-              map.addLayer({
-                id: 'cebu-boundary-active-fill',
-                type: 'fill',
-                source: 'cebu-boundaries',
-                filter: ['==', ['get', 'name'], '___NONE___'],
-                paint: {
-                  'fill-color': '#10B981',
-                  'fill-opacity': 0.22
-                }
-              });
-            }
-
-            if (!map.getLayer('cebu-boundary-active-line')) {
-              map.addLayer({
-                id: 'cebu-boundary-active-line',
-                type: 'line',
-                source: 'cebu-boundaries',
-                filter: ['==', ['get', 'name'], '___NONE___'],
-                paint: {
-                  'line-color': '#059669',
-                  'line-width': 2.8,
-                  'line-opacity': 0.95
-                }
-              });
-            }
-
-            map.on('click', function(e) {
-              var lng = e.lngLat.lng;
-              var lat = e.lngLat.lat;
-
-              // Immediately set pinned state and show red pinpoint right where tapped
-              isBarangayPinned = true;
-              window.isBarangayPinned = true;
-              clearCityHighlight();
-              showActivePin('📍 Pinning location...', [lng, lat]);
-
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'MAP_TAP_COORDS',
-                  lng: lng,
-                  lat: lat
-                }));
+              if (!map.getLayer('cebu-boundaries-all-fill')) {
+                map.addLayer({
+                  id: 'cebu-boundaries-all-fill',
+                  type: 'fill',
+                  source: 'cebu-boundaries',
+                  paint: {
+                    'fill-color': '#000000',
+                    'fill-opacity': 0.0001
+                  }
+                });
               }
-            });
 
-            map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
-              map.getCanvas().style.cursor = 'pointer';
-            });
-            map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
-              map.getCanvas().style.cursor = '';
-            });
+              // Click listener for tapping directly on any municipality polygon
+              map.on('click', 'cebu-boundaries-all-fill', function(e) {
+                if (e.features && e.features[0] && e.features[0].properties) {
+                  var props = e.features[0].properties;
+                  var clickedCity = props.name || props.original_name || props.NAME_2;
+                  if (clickedCity) {
+                    applyActiveBoundary(clickedCity, true);
+                    if (window.ReactNativeWebView) {
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'BOUNDARY_CLICK',
+                        name: clickedCity
+                      }));
+                    }
+                  }
+                }
+              });
+
+              map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
+                map.getCanvas().style.cursor = 'pointer';
+              });
+              map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
+                map.getCanvas().style.cursor = '';
+              });
+            }
           } catch(err) {
             console.warn('Error initializing boundaries:', err);
           }
         }
 
-        map.on('style.load', function() {
+        function applyActiveBoundary(name, shouldFly) {
+          if (!name) return;
+          currentActiveLocation = name;
+
+          // Clear prior pinned barangay state if selecting a city
+          if (shouldFly) {
+            isBarangayPinned = false;
+            window.isBarangayPinned = false;
+            window.currentPinnedBarangay = null;
+          }
+
+          initBoundaries();
+
+          try {
+            var cleanInput = (name || '')
+              .toLowerCase()
+              .replace(/\s*\(camotes\)/g, '')
+              .replace(/^city of\s+/g, '')
+              .replace(/\s+city$/g, '')
+              .replace(/^municipality of\s+/g, '')
+              .replace(/,\s*(cebu|philippines).*$/g, '')
+              .trim();
+
+            var targetCoord = null;
+            var matchedName = name;
+
+            // 1. Resolve from Cebu Coordinates first (exact precision)
+            if (window.CEBU_COORDS) {
+              if (window.CEBU_COORDS[name]) {
+                targetCoord = window.CEBU_COORDS[name];
+                matchedName = name;
+              } else {
+                var cKey = Object.keys(window.CEBU_COORDS).find(function(k) {
+                  var lk = k.toLowerCase().replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
+                  return lk === cleanInput || lk.indexOf(cleanInput) !== -1 || cleanInput.indexOf(lk) !== -1;
+                });
+                if (cKey) {
+                  targetCoord = window.CEBU_COORDS[cKey];
+                  matchedName = cKey;
+                }
+              }
+            }
+
+            // 2. Resolve from Cebu GeoJSON boundary bbox centroid
+            if (!targetCoord && boundariesData && boundariesData.features) {
+              var targetFeature = boundariesData.features.find(function(f) {
+                if (!f.properties) return false;
+                var fName = (f.properties.name || '').toLowerCase();
+                var fOrig = (f.properties.original_name || '').toLowerCase();
+                var fName2 = (f.properties.NAME_2 || '').toLowerCase();
+                var fCleanName = fName.replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
+                var fCleanOrig = fOrig.replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
+
+                return (
+                  fName === name.toLowerCase() ||
+                  fOrig === name.toLowerCase() ||
+                  fName2 === name.toLowerCase() ||
+                  fCleanName === cleanInput ||
+                  fCleanOrig === cleanInput ||
+                  (cleanInput.length >= 3 && fName.indexOf(cleanInput) !== -1) ||
+                  (cleanInput.length >= 3 && cleanInput.indexOf(fCleanName) !== -1)
+                );
+              });
+
+              if (targetFeature && targetFeature.properties) {
+                matchedName = targetFeature.properties.name || targetFeature.properties.original_name || targetFeature.properties.NAME_2 || name;
+                if (targetFeature.properties.bbox) {
+                  var bb = targetFeature.properties.bbox;
+                  targetCoord = {
+                    lng: (bb[0] + bb[2]) / 2,
+                    lat: (bb[1] + bb[3]) / 2
+                  };
+                }
+              }
+            }
+
+            // 3. Resolve from Philippine City Coordinates
+            if (!targetCoord && window.PHIL_COORDS) {
+              if (window.PHIL_COORDS[name]) {
+                targetCoord = window.PHIL_COORDS[name];
+                matchedName = name;
+              } else {
+                var pKey = Object.keys(window.PHIL_COORDS).find(function(k) {
+                  var lk = k.toLowerCase().replace(/\s+city$/g, '').trim();
+                  return lk === cleanInput || lk.indexOf(cleanInput) !== -1 || cleanInput.indexOf(lk) !== -1;
+                });
+                if (pKey) {
+                  targetCoord = window.PHIL_COORDS[pKey];
+                  matchedName = pKey;
+                }
+              }
+            }
+
+            // If coordinate found: show Pin and Place Name, fly smoothly
+            if (targetCoord && typeof targetCoord.lat === 'number' && typeof targetCoord.lng === 'number') {
+              showActivePin(matchedName, [targetCoord.lng, targetCoord.lat]);
+
+              if (shouldFly && window.map) {
+                map.flyTo({
+                  center: [targetCoord.lng, targetCoord.lat],
+                  zoom: 12.8,
+                  duration: 850,
+                  essential: true
+                });
+              }
+            }
+          } catch(err) {
+            console.warn('Error applying active location pin:', err);
+          }
+        }
+        window.applyActiveBoundary = applyActiveBoundary;
+
+        map.on('click', function(e) {
+          var lng = e.lngLat.lng;
+          var lat = e.lngLat.lat;
+
+          if (isPinEnabled) {
+            isBarangayPinned = true;
+            window.isBarangayPinned = true;
+            clearCityHighlight();
+            showActivePin('📍 Pinning location...', [lng, lat]);
+          }
+
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'MAP_TAP_COORDS',
+              lng: lng,
+              lat: lat
+            }));
+          }
+        });
+
+        function onMapReady() {
           enhanceMapColors();
           initBoundaries();
 
@@ -754,20 +832,31 @@ export default function MapcnMap({
           if (window.pendingPin) {
             setPinnedBarangay(window.pendingPin);
             window.pendingPin = null;
+          } else if (window.pendingActiveLocation) {
+            applyActiveBoundary(window.pendingActiveLocation, true);
+            window.pendingActiveLocation = null;
           } else if (currentActiveLocation && !isBarangayPinned) {
-            applyActiveBoundary(currentActiveLocation, false);
+            applyActiveBoundary(currentActiveLocation, true);
           }
 
           if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
           }
-        });
+        }
+
+        if (map.isStyleLoaded()) {
+          onMapReady();
+        } else {
+          map.once('load', onMapReady);
+          map.once('style.load', onMapReady);
+        }
+
 
       </script>
     </body>
     </html>
     `;
-  }, [isDarkMode, boundariesGeoJSON, interactive, showControls]);
+  }, [isDarkMode, boundariesGeoJSON, interactive, showControls, showPin]);
 
   const handleMessage = (event) => {
     try {
