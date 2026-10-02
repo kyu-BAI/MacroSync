@@ -22,7 +22,6 @@ import {
   LocateFixed,
   ShoppingBag,
   Maximize2,
-  Home,
   MapPin,
   Search,
   Compass,
@@ -255,32 +254,6 @@ export default function DietRecipesScreen({
       setSelectedLocation(normCity);
     }
   }, []);
-
-  // Quick municipal hubs for Food Radar: Step 3 hometown first, then major LGUs
-  const quickMunicipalities = useMemo(() => {
-    const coreLGUs = [
-      "Cebu City",
-      "Mandaue City",
-      "Lapu-Lapu City",
-      "Daanbantayan",
-      "Bogo City",
-      "Medellin",
-      "San Remigio",
-      "Bantayan",
-      "Santa Fe",
-      "Talisay City",
-      "Toledo City",
-      "Carcar City",
-      "Balamban",
-      "Moalboal",
-      "Argao",
-    ];
-
-    if (userHometown) {
-      return Array.from(new Set([userHometown, ...coreLGUs]));
-    }
-    return coreLGUs;
-  }, [userHometown]);
 
   // Dynamic barangay markers with red dots for the selected city
   const barangayMarkers = useMemo(() => {
@@ -1091,54 +1064,6 @@ export default function DietRecipesScreen({
                 )}
               </View>
 
-              {/* QUICK CITY / MUNICIPALITY SELECTOR CHIPS */}
-              {quickMunicipalities.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.hubScrollContainer}
-                  contentContainerStyle={styles.hubScrollContent}
-                >
-                  {quickMunicipalities.map((city) => {
-                    const isSelected = selectedLocation?.toLowerCase() === city.toLowerCase();
-                    const isHome = userHometown?.toLowerCase() === city.toLowerCase();
-                    return (
-                      <TouchableOpacity
-                        key={city}
-                        onPress={() => setSelectedLocation(city)}
-                        style={[
-                          styles.hubPill,
-                          isSelected && styles.hubPillActive,
-                          { flexDirection: "row", alignItems: "center" },
-                        ]}
-                        activeOpacity={0.75}
-                      >
-                        {isHome ? (
-                          <Home
-                            size={11}
-                            color={isSelected ? "#FFFFFF" : logoGreen}
-                            style={{ marginRight: 5 }}
-                          />
-                        ) : (
-                          <View
-                            style={{
-                              width: 7,
-                              height: 7,
-                              borderRadius: 4,
-                              backgroundColor: isSelected ? "#FFFFFF" : logoGreen,
-                              marginRight: 5,
-                            }}
-                          />
-                        )}
-                        <Text style={[styles.hubPillText, isSelected && styles.hubPillTextActive]}>
-                          {city}{isHome ? " (Home)" : ""}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
-
               {/* INTERACTIVE MUNICIPALITY & CITY MAP */}
               <View style={styles.staticMapContainer}>
                 <MapcnMap
@@ -1746,37 +1671,6 @@ const getStyles = (theme) =>
     },
     allergyBannerText: { fontSize: 11, fontWeight: "700", flex: 1 },
     timelineList: { gap: 0 },
-    hubScrollContainer: {
-      marginBottom: 12,
-    },
-    hubScrollContent: {
-      flexDirection: "row",
-      gap: 8,
-      paddingVertical: 2,
-    },
-    hubPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 14,
-      borderWidth: 1.2,
-      borderColor: theme?.border || "#E2E8F0",
-      backgroundColor: theme?.surface || "#FFFFFF",
-    },
-    hubPillActive: {
-      backgroundColor: logoGreen,
-      borderColor: logoGreen,
-    },
-    hubPillText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: theme?.textSecondary || "#64748B",
-    },
-    hubPillTextActive: {
-      color: "#FFFFFF",
-      fontWeight: "800",
-    },
     goalGuardBanner: {
       backgroundColor: "rgba(16, 185, 129, 0.08)",
       borderWidth: 1,
