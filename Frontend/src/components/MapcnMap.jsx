@@ -240,7 +240,7 @@ export default function MapcnMap({
         }
         .mapcn-mappin-pin {
           width: 42px;
-          height: 52px;
+          height: 46px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -250,39 +250,39 @@ export default function MapcnMap({
           transform: scale(1.1);
         }
 
-        /* ── EXACT RED PINPOINT DOT & PULSE AT THE BOTTOM OF THE PIN ── */
-        .mapcn-exact-pinpoint-red-dot {
+        /* ── Exact Pinpoint Dot & Pulse at the tip of the pin ── */
+        .mapcn-exact-pinpoint-dot {
           position: absolute;
-          bottom: -6px;
+          bottom: 0px;
           left: 50%;
           transform: translateX(-50%);
-          width: 14px;
-          height: 14px;
-          background-color: #DC2626;
-          border: 3px solid #FFFFFF;
+          width: 8px;
+          height: 8px;
+          background-color: #10B981;
+          border: 1.8px solid #FFFFFF;
           border-radius: 50%;
-          box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.6), 0 3px 8px rgba(0, 0, 0, 0.6);
-          z-index: 10001;
+          box-shadow: 0 0 4px rgba(16, 185, 129, 0.8), 0 2px 6px rgba(0, 0, 0, 0.35);
+          z-index: 9999;
         }
         .mapcn-exact-pinpoint-pulse {
           position: absolute;
-          bottom: -16px;
+          bottom: -7px;
           left: 50%;
           transform: translateX(-50%);
-          width: 34px;
-          height: 34px;
-          border: 2.5px solid #EF4444;
+          width: 24px;
+          height: 24px;
+          border: 2px solid #10B981;
           border-radius: 50%;
-          animation: redPinpointPulse 1.8s infinite ease-out;
+          animation: pinpointPulse 1.8s infinite ease-out;
           pointer-events: none;
-          z-index: 10000;
+          z-index: 9998;
         }
-        @keyframes redPinpointPulse {
-          0% { transform: translateX(-50%) scale(0.3); opacity: 1; }
+        @keyframes pinpointPulse {
+          0% { transform: translateX(-50%) scale(0.2); opacity: 0.95; }
           100% { transform: translateX(-50%) scale(1.6); opacity: 0; }
         }
 
-        /* ── Municipality / Barangay Popup Badge ── */
+        /* ── Municipality / Barangay Popup Badge (Clean, No Color On Left) ── */
         .maplibregl-popup.mapcn-single-popup {
           z-index: 10050;
         }
@@ -297,13 +297,13 @@ export default function MapcnMap({
           margin-bottom: -1px;
         }
         .mapcn-popup-card {
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)'};
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)'};
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
           color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'};
+          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)'};
           border-radius: 9999px;
-          padding: 6px 14px;
+          padding: 6px 16px;
           box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
           display: flex;
           align-items: center;
@@ -316,22 +316,12 @@ export default function MapcnMap({
           to { opacity: 1; transform: translateY(0); }
         }
         .mapcn-popup-name {
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 800;
           color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
           letter-spacing: -0.2px;
           line-height: 1.2;
-        }
-        .mapcn-popup-pinned {
-          border-left: 3px solid #EF4444 !important;
-        }
-        .mapcn-popup-pinned-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: #EF4444;
-          margin-right: 6px;
-          flex-shrink: 0;
+          text-align: center;
         }
 
         /* ── Hidden Attributions ── */
@@ -343,7 +333,7 @@ export default function MapcnMap({
           display: none !important; 
         }
 
-        /* ── Exact Barangay Red Dot Pinpoint ── */
+        /* ── Exact Barangay Emerald Dot Pinpoint ── */
         .mapcn-barangay-dot-marker {
           display: flex;
           flex-direction: column;
@@ -361,10 +351,10 @@ export default function MapcnMap({
         .mapcn-red-dot-core {
           width: 14px;
           height: 14px;
-          background-color: #EF4444;
+          background-color: #10B981;
           border: 2.5px solid #FFFFFF;
           border-radius: 50%;
-          box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.45), 0 2px 7px rgba(0, 0, 0, 0.42);
+          box-shadow: 0 0 0 2.5px rgba(16, 185, 129, 0.45), 0 2px 7px rgba(0, 0, 0, 0.42);
           position: relative;
         }
         .mapcn-red-dot-pulse {
@@ -373,12 +363,15 @@ export default function MapcnMap({
           left: -6px;
           width: 26px;
           height: 26px;
-          border: 1.5px solid rgba(239, 68, 68, 0.65);
+          border: 1.5px solid rgba(16, 185, 129, 0.65);
           border-radius: 50%;
-          animation: redPulse 2.2s infinite ease-out;
+          animation: emeraldPulse 2.2s infinite ease-out;
           pointer-events: none;
         }
-        @keyframes redPulse {
+        @keyframes emeraldPulse {
+          0% { transform: scale(0.7); opacity: 0.95; }
+          100% { transform: scale(1.55); opacity: 0; }
+        }
           0% { transform: scale(0.7); opacity: 0.95; }
           100% { transform: scale(1.55); opacity: 0; }
         }
@@ -546,34 +539,32 @@ export default function MapcnMap({
           el.className = 'mapcn-mappin-wrapper';
           el.innerHTML = [
             '<div class="mapcn-mappin-pin">',
-              '<svg width="42" height="52" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg">',
+              '<svg width="42" height="46" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
                 '<defs>',
-                  '<linearGradient id="activeRedPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
-                    '<stop offset="0%" stop-color="#EF4444"/>',
-                    '<stop offset="100%" stop-color="#B91C1C"/>',
+                  '<linearGradient id="activeEmeraldPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
+                    '<stop offset="0%" stop-color="#10B981"/>',
+                    '<stop offset="100%" stop-color="#059669"/>',
                   '</linearGradient>',
-                  '<filter id="pinShadow" x="-30%" y="-15%" width="160%" height="160%">',
-                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="rgba(0,0,0,0.5)"/>',
+                  '<filter id="pinShadow" x="-30%" y="-20%" width="160%" height="160%">',
+                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.0" flood-color="rgba(0,0,0,0.42)"/>',
                   '</filter>',
                 '</defs>',
-                '<path d="M12 25C17.5 19.5 21 15 21 11a9 9 0 1 0-18 0c0 4 3.5 8.5 9 14z" fill="url(#activeRedPinGrad)" stroke="#FFFFFF" stroke-width="1.8" filter="url(#pinShadow)"/>',
-                '<circle cx="12" cy="11" r="5" fill="#FFFFFF"/>',
-                '<circle cx="12" cy="11" r="2.8" fill="#DC2626"/>',
+                '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z" fill="url(#activeEmeraldPinGrad)" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#pinShadow)"/>',
+                '<circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>',
               '</svg>',
             '</div>',
             '<div class="mapcn-exact-pinpoint-pulse"></div>',
-            '<div class="mapcn-exact-pinpoint-red-dot"></div>'
+            '<div class="mapcn-exact-pinpoint-dot"></div>'
           ].join('');
 
           var popupContent = [
-            '<div class="mapcn-popup-card mapcn-popup-pinned">',
-              '<div class="mapcn-popup-pinned-dot"></div>',
+            '<div class="mapcn-popup-card">',
               '<div class="mapcn-popup-name">' + displayTitle + '</div>',
             '</div>'
           ].join('');
 
           var popup = new maplibregl.Popup({
-            offset: [0, -50],
+            offset: [0, -46],
             closeButton: false,
             closeOnClick: false,
             className: 'mapcn-single-popup'
