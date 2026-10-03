@@ -74,6 +74,32 @@ export default function ChatbotAIScreen({
   const { language = "English" } = useLanguage();
   const styles = getStyles(theme, isDarkMode);
 
+  const subGreetingText =
+    language === "Tagalog"
+      ? "Real-time na nutrisyon at gabay sa ehersisyo"
+      : language === "Cebuano"
+      ? "Real-time nga nutrisyon ug giya sa ehersisyo"
+      : "Real-time nutrition & zero-equipment fitness guidance";
+
+  const placeholderText = showKeyboardMicHint
+    ? language === "Tagalog"
+      ? "Pindutin ang 🎤 sa keyboard para magsalita..."
+      : language === "Cebuano"
+      ? "I-tap ang 🎤 sa keyboard aron mosulti..."
+      : "Tap 🎤 on your keyboard to speak..."
+    : language === "Tagalog"
+    ? "Magtanong kay Vita AI tungkol sa diyeta o ehersisyo..."
+    : language === "Cebuano"
+    ? "Pangutana kang Vita AI bahin sa pagkaon o ehersisyo..."
+    : "Ask Vita AI about diet, macros, or workouts...";
+
+  const typingIndicatorText =
+    language === "Tagalog"
+      ? "Nag-iisip si Vita AI..."
+      : language === "Cebuano"
+      ? "Naghunahuna si Vita AI..."
+      : "Vita AI is thinking...";
+
   const {
     inputText,
     setInputText,
@@ -101,9 +127,6 @@ export default function ChatbotAIScreen({
     showAlert,
     language,
   });
-
-  /* remove everything in the screen */
-  // return <View style={styles.fullscreenOverlay} />;
 
   return (
     <Animated.View
@@ -198,9 +221,7 @@ export default function ChatbotAIScreen({
           </View>
 
           <Text style={styles.greeting}>Vita AI Assistant</Text>
-          <Text style={styles.subGreeting}>
-            Real-time nutrition & zero-equipment fitness guidance
-          </Text>
+          <Text style={styles.subGreeting}>{subGreetingText}</Text>
         </View>
       </View>
 
@@ -307,7 +328,7 @@ export default function ChatbotAIScreen({
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.typingIndicatorText}>
-                    Vita AI is thinking...
+                    {typingIndicatorText}
                   </Text>
                 </View>
               </View>
@@ -324,11 +345,19 @@ export default function ChatbotAIScreen({
                 <Mic color={COLORS.logoGreen} size={13} />
               </View>
               <Text style={styles.keyboardMicHintText}>
-                Keyboard opened! Tap the{" "}
+                {language === "Tagalog"
+                  ? "Bukas ang keyboard! Pindutin ang "
+                  : language === "Cebuano"
+                  ? "Abli ang keyboard! I-tap ang "
+                  : "Keyboard opened! Tap the "}
                 <Text style={{ fontWeight: "800", color: COLORS.logoGreen }}>
                   🎤 mic key
                 </Text>{" "}
-                on your keyboard to speak.
+                {language === "Tagalog"
+                  ? "sa keyboard para magsalita."
+                  : language === "Cebuano"
+                  ? "sa keyboard aron mosulti."
+                  : "on your keyboard to speak."}
               </Text>
               <TouchableOpacity
                 onPress={() => setShowKeyboardMicHint(false)}
@@ -343,11 +372,7 @@ export default function ChatbotAIScreen({
             <TextInput
               ref={inputRef}
               style={styles.chatTextInputField}
-              placeholder={
-                showKeyboardMicHint
-                  ? "Tap 🎤 on your keyboard to speak..."
-                  : "Ask Vita AI about diet, macros, or workouts..."
-              }
+              placeholder={placeholderText}
               placeholderTextColor={
                 showKeyboardMicHint
                   ? COLORS.logoGreen

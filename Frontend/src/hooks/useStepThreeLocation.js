@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCustomAlert } from "../context/CustomAlertContext";
 import {
   PHILIPPINE_PROVINCES,
@@ -105,6 +106,10 @@ export default function useStepThreeLocation({ onNext, initialLocation }) {
       city: city.name,
       province: province.name,
     };
+
+    try {
+      AsyncStorage.setItem("@ms_default_location", JSON.stringify(locationData));
+    } catch (_) {}
 
     onNext?.(locationData);
   }, [province, city, showAlert, onNext]);

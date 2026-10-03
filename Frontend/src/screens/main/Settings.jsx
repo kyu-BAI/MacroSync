@@ -1,5 +1,6 @@
 // --- IMPORTS ---
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   StyleSheet,
   Text,
@@ -28,6 +29,7 @@ import {
   Pencil,
   FileText,
   Trash2,
+  MapPin,
 } from "lucide-react-native";
 
 import { useTheme } from "../../context/ThemeContext";
@@ -274,6 +276,64 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
     onLogout,
   });
 
+  // Track latest pinned location from storage
+  const [storedPinnedLocation, setStoredPinnedLocation] = useState(null);
+
+  const loadPinnedLocation = useCallback(async () => {
+    try {
+      const storedB = await AsyncStorage.getItem("ms_pinned_barangay");
+      if (storedB) {
+        try {
+          const parsed = JSON.parse(storedB);
+          const title =
+            parsed.formattedTitle ||
+            (parsed.barangay && parsed.city
+              ? `Brgy. ${parsed.barangay}, ${parsed.city}`
+              : parsed.city || parsed.barangay);
+          if (title && typeof title === "string" && title.trim().length > 0) {
+            setStoredPinnedLocation(title.trim());
+            return;
+          }
+        } catch (_) {}
+      }
+      const storedDef = await AsyncStorage.getItem("@ms_default_location");
+      if (storedDef) {
+        try {
+          const parsed = JSON.parse(storedDef);
+          const title =
+            parsed.address ||
+            (parsed.city && parsed.province
+              ? `${parsed.city}, ${parsed.province}`
+              : parsed.city);
+          if (title && typeof title === "string" && title.trim().length > 0) {
+            setStoredPinnedLocation(title.trim());
+            return;
+          }
+        } catch (_) {}
+      }
+      const fallback =
+        userProfile?.address ||
+        (userProfile?.city && userProfile?.province
+          ? `${userProfile.city}, ${userProfile.province}`
+          : userProfile?.city);
+      if (fallback && typeof fallback === "string" && fallback.trim().length > 0) {
+        setStoredPinnedLocation(fallback.trim());
+      }
+    } catch (_) {}
+  }, [userProfile]);
+
+  useEffect(() => {
+    loadPinnedLocation();
+    // Periodic check to capture any background pins from other tabs immediately
+    const interval = setInterval(loadPinnedLocation, 1500);
+    return () => clearInterval(interval);
+  }, [loadPinnedLocation, showEditModal]);
+
+  const handleOpenEditModalWithSync = useCallback(() => {
+    loadPinnedLocation();
+    handleOpenEditModal();
+  }, [loadPinnedLocation, handleOpenEditModal]);
+
   /* remove everything in the screen */
   // return <View style={styles.fullscreenOverlay} />;
 
@@ -343,8 +403,21 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
               <Text style={styles.profileUserNameText}>{userProfile?.name || "User Account"}</Text>
               <Text style={styles.profileUserSubText}>{userProfile?.email || "MacroSync Active Member"}</Text>
 
+              {Boolean(storedPinnedLocation || userProfile?.address || userProfile?.city) && (
+                <View style={styles.locationBadgeRow}>
+                  <MapPin color={COLORS.emerald} size={12} strokeWidth={2.5} style={{ marginRight: 4 }} />
+                  <Text style={styles.locationBadgeText} numberOfLines={1}>
+                    {storedPinnedLocation ||
+                      userProfile?.address ||
+                      (userProfile?.city
+                        ? `${userProfile.city}${userProfile.province ? `, ${userProfile.province}` : ""}`
+                        : "")}
+                  </Text>
+                </View>
+              )}
+
               {/* Edit Profile Button */}
-              <TouchableOpacity style={styles.editProfileButton} onPress={handleOpenEditModal} activeOpacity={0.75}>
+              <TouchableOpacity style={styles.editProfileButton} onPress={handleOpenEditModalWithSync} activeOpacity={0.75}>
                 <Text style={styles.editProfileButtonText}>Edit Profile</Text>
               </TouchableOpacity>
             </View>
@@ -637,14 +710,21 @@ export default function SettingsScreen({ onTabChange, onLogout, userProfile, set
       {/* Modal Dialogs */}
       <EditProfileModal
         visible={showEditModal}
-        onClose={() => setShowEditModal(false)}
+        onClose={() => {
+          setShowEditModal(false);
+          loadPinnedLocation();
+        }}
         tempName={tempName}
         setTempName={setTempName}
         tempImage={tempImage}
         userProfile={userProfile}
+        initialPinnedLocation={storedPinnedLocation}
         getInitials={getInitials}
         onPickImage={handlePickTempImage}
-        onSave={handleSaveProfile}
+        onSave={async (locationPayload) => {
+          await handleSaveProfile(locationPayload);
+          loadPinnedLocation();
+        }}
         styles={styles}
       />
 
@@ -899,6 +979,21 @@ const getStyles = (theme, isDarkMode = false) =>
       fontWeight: "700",
       color: isDarkMode ? COLORS.textMutedDark : COLORS.textMuted,
       textAlign: "center",
+    },
+    // Location badge row
+    locationBadgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      backgroundColor: isDarkMode ? "rgba(16, 185, 129, 0.12)" : "#ECFDF5",
+    },
+    locationBadgeText: {
+      fontSize: 11.5,
+      fontWeight: "700",
+      color: COLORS.emerald,
     },
     // "Edit Profile" pill button
     editProfileButton: {

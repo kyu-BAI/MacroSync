@@ -165,6 +165,15 @@ export default function GeneratingPlanScreen({ profileData, onComplete }) {
         await clearDashboardCache();
         try {
           await AsyncStorage.setItem('@ms_onboarding_data', JSON.stringify(profileData));
+          if (profileData?.structuredLocation || profileData?.city || profileData?.address) {
+            await AsyncStorage.setItem('@ms_default_location', JSON.stringify({
+              address: profileData.address || "",
+              city: profileData.city || profileData.structuredLocation?.city || "",
+              province: profileData.province || profileData.structuredLocation?.province || "",
+              structuredLocation: profileData.structuredLocation || null,
+            }));
+            await AsyncStorage.setItem('ms_user_profile', JSON.stringify(profileData));
+          }
         } catch (_) {}
 
         // Complete 100% progress animation before dispatch

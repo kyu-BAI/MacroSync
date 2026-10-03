@@ -206,7 +206,11 @@ class UpdateSubscriptionRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     user_id: str
     name: str
-    email: str
+    email: Optional[str] = None
+    address: Optional[str] = None
+    structured_location: Optional[dict] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
 
 
 class MealLog(BaseModel):
@@ -1199,6 +1203,11 @@ async def save_onboarding(data: OnboardingData):
         prefs["address"] = data.address
     if data.structured_location:
         prefs["structuredLocation"] = data.structured_location
+        if isinstance(data.structured_location, dict):
+            if data.structured_location.get("city"):
+                prefs["city"] = data.structured_location["city"]
+            if data.structured_location.get("province"):
+                prefs["province"] = data.structured_location["province"]
 
     update_payload = {
         "age": data.age,
@@ -1226,10 +1235,37 @@ async def save_onboarding(data: OnboardingData):
 @app.post("/update-profile")
 async def update_profile(data: UpdateProfileRequest):
     try:
-        supabase_admin.table("user_profiles").update({
+        update_data = {
             "name": data.name,
-            "email": data.email
-        }).eq("id", data.user_id).execute()
+        }
+        if data.email:
+            update_data["email"] = data.email
+
+        # If location information was updated, merge it into the location JSON column
+        if data.address or data.structured_location or data.city or data.province:
+            res = supabase_admin.table("user_profiles").select("location").eq("id", data.user_id).execute()
+            prefs = {}
+            if res.data and res.data[0].get("location"):
+                try:
+                    prefs = json.loads(res.data[0]["location"])
+                except Exception:
+                    prefs = {}
+            if data.address:
+                prefs["address"] = data.address
+            if data.city:
+                prefs["city"] = data.city
+            if data.province:
+                prefs["province"] = data.province
+            if data.structured_location:
+                prefs["structuredLocation"] = data.structured_location
+                if isinstance(data.structured_location, dict):
+                    if data.structured_location.get("city"):
+                        prefs["city"] = data.structured_location["city"]
+                    if data.structured_location.get("province"):
+                        prefs["province"] = data.structured_location["province"]
+            update_data["location"] = json.dumps(prefs)
+
+        supabase_admin.table("user_profiles").update(update_data).eq("id", data.user_id).execute()
         return {"success": True}
     except Exception as e:
         print("UPDATE PROFILE ERROR:", repr(e))
@@ -1578,7 +1614,13 @@ async def get_dashboard_data(user_id: str):
                 "weightHistory": weight_history,
                 "unit": unit,
                 "age": user.get("age"),
-                "height": user.get("height_cm")
+                "height": user.get("height_cm"),
+                "address": prefs.get("address", ""),
+                "structuredLocation": prefs.get("structuredLocation") or {},
+                "city": prefs.get("structuredLocation", {}).get("city") or prefs.get("city") or "",
+                "province": prefs.get("structuredLocation", {}).get("province") or prefs.get("province") or "",
+                "allergies": user.get("allergies") or prefs.get("allergies") or [],
+                "medical_conditions": prefs.get("medical_conditions") or []
             },
             "nutrition": {
                 "isPremium": is_premium,
@@ -1800,12 +1842,39 @@ def chat_with_ai(data: ChatMessageRequest):
         day_usage = {"scans": 0, "chats": 0}
         
         user_lang = data.language or "English"
+        user_lang_clean = user_lang.strip().capitalize()
+
+        if user_lang_clean.lower() == "tagalog":
+            lang_mandate = (
+                "CRITICAL LANGUAGE MANDATE:\n"
+                "The user's app language is set to TAGALOG (FILIPINO).\n"
+                "- You MUST write your ENTIRE response in natural, fluent, and friendly Tagalog / Filipino.\n"
+                "- Even if the user asks their question in English or uses English keywords, your response MUST be in Tagalog.\n"
+                "- Do NOT answer in English.\n\n"
+            )
+            fallback_lang = "Tagalog"
+        elif user_lang_clean.lower() in ["cebuano", "bisaya"]:
+            lang_mandate = (
+                "CRITICAL LANGUAGE MANDATE:\n"
+                "The user's app language is set to CEBUANO (BINISAYA / BISAYA).\n"
+                "- You MUST write your ENTIRE response in natural, fluent, and friendly Cebuano / Bisaya.\n"
+                "- Even if the user asks their question in English or uses English keywords, your response MUST be in Cebuano.\n"
+                "- Do NOT answer in English or Tagalog.\n\n"
+            )
+            fallback_lang = "Cebuano"
+        else:
+            lang_mandate = (
+                "CRITICAL LANGUAGE MANDATE:\n"
+                "The user's app language is set to ENGLISH.\n"
+                "- You MUST write your response in clear, friendly English.\n\n"
+            )
+            fallback_lang = "English"
 
         # Base System Instructions enforcing strict chatbot routes and auto-logging features
         system_instructions = (
             "=== MACROSYNC VITA AI ASSISTANT SYSTEM INSTRUCTIONS ===\n"
             "You are Vita AI, MacroSync's official AI Health, Nutrition, Diet, Fitness, and Personal Profile Assistant.\n\n"
-            f"LANGUAGE RULE: You MUST reply in the user's selected language: {user_lang}. If Tagalog or Cebuano, speak fluently and naturally in that language while keeping health, fitness, food, and meal logging clear.\n\n"
+            f"{lang_mandate}"
             "RULE 1: USER PROFILE & IDENTITY QUESTIONS (HIGHEST PRIORITY)\n"
             "- Whenever the user asks 'Who am I?', 'who am i', 'what is my name', 'where do I live', 'what are my stats', or asks about their profile:\n"
             "  - Greet them warmly using their exact Name / Username!\n"
@@ -2088,14 +2157,21 @@ def chat_with_ai(data: ChatMessageRequest):
 
         if is_identity_query:
             full_prompt = (
+                f"{lang_mandate}"
                 f"You are Vita AI, MacroSync's official AI Health, Fitness, and Personal Profile Assistant.\n"
                 f"The user is asking: '{data.message}'.\n"
                 f"You MUST greet them by their Name ({display_user_name}) and present a complete, friendly summary of all their MacroSync profile data and app content using the exact details below:\n\n"
                 f"{user_context_str}\n"
-                f"Format the response nicely with emoji bullet points highlighting their Profile info (Name, Location/Address: {user_location}, Age, Goal), Weight Stats, Today's Macros & Meals Logged, Water Logged, Active Minutes/Workouts, and Allergies. Do NOT decline or say this is off-topic!"
+                f"Format the response nicely with emoji bullet points highlighting their Profile info (Name, Location/Address: {user_location}, Age, Goal), Weight Stats, Today's Macros & Meals Logged, Water Logged, Active Minutes/Workouts, and Allergies. Do NOT decline or say this is off-topic!\n\n"
+                f"FINAL REMINDER: You MUST write your ENTIRE reply in {fallback_lang}. Do NOT reply in any other language."
             )
         else:
-            full_prompt = system_instructions + user_context_str + f"User message: {data.message}"
+            full_prompt = (
+                f"{system_instructions}\n"
+                f"{user_context_str}\n"
+                f"User message: {data.message}\n\n"
+                f"FINAL REMINDER: You MUST write your ENTIRE reply in {fallback_lang}. Speak fluently and naturally in {fallback_lang}."
+            )
 
         reply_text = ""
         action_logged = False
@@ -2108,44 +2184,130 @@ def chat_with_ai(data: ChatMessageRequest):
                 msg_q = (data.message or "").lower()
                 
                 # Check profile / identity queries
-                if any(q in msg_q for q in ["who am i", "my profile", "my stats", "my name", "where do i live"]):
-                    reply_text = (
-                        f"👋 Hi **{display_user_name}**! Here is your current MacroSync profile summary:\n\n"
-                        f"👤 **Name:** {display_user_name}\n"
-                        f"📧 **Email:** {data.email or user.get('email', 'N/A')}\n"
-                        f"🎯 **Fitness Goal:** {goal}\n"
-                        f"⚖️ **Current Weight:** {current_weight_str} (Target: {target_weight_str})\n"
-                        f"🔥 **Today's Nutrition:** {consumed_calories} / {target_calories} kcal ({consumed_protein}g P | {consumed_carbs}g C | {consumed_fats}g F)\n"
-                        f"💧 **Water Tracker:** {glasses} / 8 glasses\n"
-                        f"⚠️ **Allergies:** {allergies_str}"
-                    )
+                if any(q in msg_q for q in ["who am i", "my profile", "my stats", "my name", "where do i live", "sino ako", "kinsa ko"]):
+                    if fallback_lang == "Tagalog":
+                        reply_text = (
+                            f"👋 Kamusta **{display_user_name}**! Narito ang buod ng iyong kasalukuyang MacroSync profile:\n\n"
+                            f"👤 **Pangalan:** {display_user_name}\n"
+                            f"📧 **Email:** {data.email or user.get('email', 'N/A')}\n"
+                            f"🎯 **Layunin sa Kalusugan:** {goal}\n"
+                            f"⚖️ **Kasalukuyang Timbang:** {current_weight_str} (Target: {target_weight_str})\n"
+                            f"🔥 **Nutrisyon Ngayong Araw:** {consumed_calories} / {target_calories} kcal ({consumed_protein}g Protina | {consumed_carbs}g Karbohidrato | {consumed_fats}g Taba)\n"
+                            f"💧 **Pag-inom ng Tubig:** {glasses} / 8 baso\n"
+                            f"⚠️ **Mga Allergy:** {allergies_str}"
+                        )
+                    elif fallback_lang == "Cebuano":
+                        reply_text = (
+                            f"👋 Kumusta **{display_user_name}**! Ani ang summary sa imong kasamtangang MacroSync profile:\n\n"
+                            f"👤 **Ngalan:** {display_user_name}\n"
+                            f"📧 **Email:** {data.email or user.get('email', 'N/A')}\n"
+                            f"🎯 **Tumong sa Panglawas:** {goal}\n"
+                            f"⚖️ **Karon nga Timbang:** {current_weight_str} (Target: {target_weight_str})\n"
+                            f"🔥 **Nutrisyon Karon:** {consumed_calories} / {target_calories} kcal ({consumed_protein}g Protina | {consumed_carbs}g Karbohidrato | {consumed_fats}g Tambok)\n"
+                            f"💧 **Pag-inom ug Tubig:** {glasses} / 8 ka baso\n"
+                            f"⚠️ **Mga Allergy:** {allergies_str}"
+                        )
+                    else:
+                        reply_text = (
+                            f"👋 Hi **{display_user_name}**! Here is your current MacroSync profile summary:\n\n"
+                            f"👤 **Name:** {display_user_name}\n"
+                            f"📧 **Email:** {data.email or user.get('email', 'N/A')}\n"
+                            f"🎯 **Fitness Goal:** {goal}\n"
+                            f"⚖️ **Current Weight:** {current_weight_str} (Target: {target_weight_str})\n"
+                            f"🔥 **Today's Nutrition:** {consumed_calories} / {target_calories} kcal ({consumed_protein}g P | {consumed_carbs}g C | {consumed_fats}g F)\n"
+                            f"💧 **Water Tracker:** {glasses} / 8 glasses\n"
+                            f"⚠️ **Allergies:** {allergies_str}"
+                        )
                 # Check egg nutrition queries
                 elif "egg" in msg_q or "itlog" in msg_q:
-                    reply_text = (
-                        "🥚 **Egg Nutritional Information:**\n\n"
-                        "• **1 Large Egg (50g):** ~72–78 kcal | **6.3g Protein** | 0.4g Carbs | 5.0g Fat\n"
-                        "• **2 Large Eggs (100g):** ~144–156 kcal | **12.6g Protein** | 0.8g Carbs | 10.0g Fat\n"
-                        "• **1 Hard-Boiled Egg:** ~77 kcal | **6.3g Protein** | 0.6g Carbs | 5.3g Fat\n"
-                        "• **1 Fried Egg (light oil):** ~90–100 kcal | **6.3g Protein** | 0.4g Carbs | 7.0g Fat\n\n"
-                        "💡 *Eggs are an excellent complete protein source containing all 9 essential amino acids, choline, and healthy fats!*"
-                    )
+                    if fallback_lang == "Tagalog":
+                        reply_text = (
+                            "🥚 **Impormasyon sa Nutrisyon ng Itlog:**\n\n"
+                            "• **1 Malaking Itlog (50g):** ~72–78 kcal | **6.3g Protina** | 0.4g Karbohidrato | 5.0g Taba\n"
+                            "• **2 Malalaking Itlog (100g):** ~144–156 kcal | **12.6g Protina** | 0.8g Karbohidrato | 10.0g Taba\n"
+                            "• **1 Nilagang Itlog:** ~77 kcal | **6.3g Protina** | 0.6g Karbohidrato | 5.3g Taba\n"
+                            "• **1 Pritong Itlog (kaunting mantika):** ~90–100 kcal | **6.3g Protina** | 0.4g Karbohidrato | 7.0g Taba\n\n"
+                            "💡 *Ang mga itlog ay mahusay na pinagkukunan ng kumpletong protina na may 9 na mahahalagang amino acids at malusog na taba!*"
+                        )
+                    elif fallback_lang == "Cebuano":
+                        reply_text = (
+                            "🥚 **Impormasyon sa Nutrisyon sa Itlog:**\n\n"
+                            "• **1 Dako nga Itlog (50g):** ~72–78 kcal | **6.3g Protina** | 0.4g Karbohidrato | 5.0g Tambok\n"
+                            "• **2 Dako nga Itlog (100g):** ~144–156 kcal | **12.6g Protina** | 0.8g Karbohidrato | 10.0g Tambok\n"
+                            "• **1 Nilung-ag nga Itlog:** ~77 kcal | **6.3g Protina** | 0.6g Karbohidrato | 5.3g Tambok\n"
+                            "• **1 Prisito nga Itlog (gamay nga mantika):** ~90–100 kcal | **6.3g Protina** | 0.4g Karbohidrato | 7.0g Tambok\n\n"
+                            "💡 *Ang mga itlog maayo kaayo nga tinubdan sa kumpletong protina nga adunay 9 ka mahinungdanong amino acids ug himsog nga tambok!*"
+                        )
+                    else:
+                        reply_text = (
+                            "🥚 **Egg Nutritional Information:**\n\n"
+                            "• **1 Large Egg (50g):** ~72–78 kcal | **6.3g Protein** | 0.4g Carbs | 5.0g Fat\n"
+                            "• **2 Large Eggs (100g):** ~144–156 kcal | **12.6g Protein** | 0.8g Carbs | 10.0g Fat\n"
+                            "• **1 Hard-Boiled Egg:** ~77 kcal | **6.3g Protein** | 0.6g Carbs | 5.3g Fat\n"
+                            "• **1 Fried Egg (light oil):** ~90–100 kcal | **6.3g Protein** | 0.4g Carbs | 7.0g Fat\n\n"
+                            "💡 *Eggs are an excellent complete protein source containing all 9 essential amino acids, choline, and healthy fats!*"
+                        )
                 elif "chicken" in msg_q or "manok" in msg_q:
-                    reply_text = (
-                        "🍗 **Chicken Breast Nutritional Information:**\n\n"
-                        "• **100g Cooked Skinless Chicken Breast:** ~165 kcal | **31g Protein** | 0g Carbs | 3.6g Fat\n"
-                        "• **1 Medium Chicken Breast (175g):** ~284 kcal | **54g Protein** | 0g Carbs | 6.2g Fat"
-                    )
-                elif "rice" in msg_q or "kanin" in msg_q or "bugas" in msg_q:
-                    reply_text = (
-                        "🍚 **White Rice Nutritional Information:**\n\n"
-                        "• **1 Cup Cooked White Rice (158g):** ~206 kcal | **4.3g Protein** | 45g Carbs | 0.4g Fat\n"
-                        "• **1/2 Cup Cooked White Rice (79g):** ~103 kcal | **2.1g Protein** | 22.5g Carbs | 0.2g Fat"
-                    )
+                    if fallback_lang == "Tagalog":
+                        reply_text = (
+                            "🍗 **Impormasyon sa Nutrisyon ng Pitso ng Manok (Chicken Breast):**\n\n"
+                            "• **100g Lutong Pitso ng Manok (walang balat):** ~165 kcal | **31g Protina** | 0g Karbohidrato | 3.6g Taba\n"
+                            "• **1 Katamtamang Pitso ng Manok (175g):** ~284 kcal | **54g Protina** | 0g Karbohidrato | 6.2g Taba"
+                        )
+                    elif fallback_lang == "Cebuano":
+                        reply_text = (
+                            "🍗 **Impormasyon sa Nutrisyon sa Dughan sa Manok (Chicken Breast):**\n\n"
+                            "• **100g Luto nga Dughan sa Manok (walay panit):** ~165 kcal | **31g Protina** | 0g Karbohidrato | 3.6g Tambok\n"
+                            "• **1 Medium nga Dughan sa Manok (175g):** ~284 kcal | **54g Protina** | 0g Karbohidrato | 6.2g Tambok"
+                        )
+                    else:
+                        reply_text = (
+                            "🍗 **Chicken Breast Nutritional Information:**\n\n"
+                            "• **100g Cooked Skinless Chicken Breast:** ~165 kcal | **31g Protein** | 0g Carbs | 3.6g Fat\n"
+                            "• **1 Medium Chicken Breast (175g):** ~284 kcal | **54g Protein** | 0g Carbs | 6.2g Fat"
+                        )
+                elif "rice" in msg_q or "kanin" in msg_q or "bugas" in msg_q or "kan-on" in msg_q:
+                    if fallback_lang == "Tagalog":
+                        reply_text = (
+                            "🍚 **Impormasyon sa Nutrisyon ng Kanin (White Rice):**\n\n"
+                            "• **1 Tasang Lutong Kanin (158g):** ~206 kcal | **4.3g Protina** | 45g Karbohidrato | 0.4g Taba\n"
+                            "• **1/2 Tasang Lutong Kanin (79g):** ~103 kcal | **2.1g Protina** | 22.5g Karbohidrato | 0.2g Taba"
+                        )
+                    elif fallback_lang == "Cebuano":
+                        reply_text = (
+                            "🍚 **Impormasyon sa Nutrisyon sa Kan-on (White Rice):**\n\n"
+                            "• **1 Tasa nga Luto nga Kan-on (158g):** ~206 kcal | **4.3g Protina** | 45g Karbohidrato | 0.4g Tambok\n"
+                            "• **1/2 Tasa nga Luto nga Kan-on (79g):** ~103 kcal | **2.1g Protina** | 22.5g Karbohidrato | 0.2g Tambok"
+                        )
+                    else:
+                        reply_text = (
+                            "🍚 **White Rice Nutritional Information:**\n\n"
+                            "• **1 Cup Cooked White Rice (158g):** ~206 kcal | **4.3g Protein** | 45g Carbs | 0.4g Fat\n"
+                            "• **1/2 Cup Cooked White Rice (79g):** ~103 kcal | **2.1g Protein** | 22.5g Carbs | 0.2g Fat"
+                        )
                 elif "banana" in msg_q or "saging" in msg_q:
-                    reply_text = (
-                        "🍌 **Banana Nutritional Information:**\n\n"
-                        "• **1 Medium Banana (118g):** ~105 kcal | **1.3g Protein** | 27g Carbs | 0.3g Fat (3g Fiber)"
-                    )
+                    if fallback_lang == "Tagalog":
+                        reply_text = (
+                            "🍌 **Impormasyon sa Nutrisyon ng Saging:**\n\n"
+                            "• **1 Katamtamang Saging (118g):** ~105 kcal | **1.3g Protina** | 27g Karbohidrato | 0.3g Taba (3g Fiber)"
+                        )
+                    elif fallback_lang == "Cebuano":
+                        reply_text = (
+                            "🍌 **Impormasyon sa Nutrisyon sa Saging:**\n\n"
+                            "• **1 Medium nga Saging (118g):** ~105 kcal | **1.3g Protina** | 27g Karbohidrato | 0.3g Tambok (3g Fiber)"
+                        )
+                    else:
+                        reply_text = (
+                            "🍌 **Banana Nutritional Information:**\n\n"
+                            "• **1 Medium Banana (118g):** ~105 kcal | **1.3g Protein** | 27g Carbs | 0.3g Fat (3g Fiber)"
+                        )
+                elif "receiving high request volume" in reply_text or not reply_text.strip():
+                    if fallback_lang == "Tagalog":
+                        reply_text = "Medyo marami ang gumagamit sa akin ngayon. Ligtas ang iyong mga macro targets at logs. Pakiusap subukang magtanong muli sa sandaling sandali!"
+                    elif fallback_lang == "Cebuano":
+                        reply_text = "Daghan kaayo ang naggamit nako karon. Luwas ang imong mga macro targets ug logs. Palihug suwayi pag-usab sa pipila ka gutlo!"
+                    else:
+                        reply_text = "I am currently receiving high request volume. Your daily macro targets and logs have been safely preserved. Please try asking again in a few moments!"
 
             # Check if Gemini output LOG_MEAL, LOG_WORKOUT, or LOG_WATER instructions
             if "LOG_MEAL:" in reply_text and user_id:

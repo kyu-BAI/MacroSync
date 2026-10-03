@@ -90,32 +90,46 @@ export default function useChatbotAI({
     }
   }, [userId]);
 
-  // Dynamic Vita AI Greeting on initial open
+  // Dynamic Vita AI Greeting on initial open & whenever language toggles
   useEffect(() => {
-    if (messages.length === 0 && setMessages) {
-      const userName = userProfile?.name || userProfile?.full_name || "there";
-      let greetingText = `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`;
-      if (language === "Tagalog") {
-        greetingText = `Kamusta ${userName}! Ako si Vita AI, ang iyong personal na Health, Diet & Fitness Assistant. Paano kita matutulungan na maabot ang iyong mga layunin ngayon?`;
-      } else if (language === "Cebuano") {
-        greetingText = `Kumusta ${userName}! Ako si Vita AI, ang imong personal nga Health, Diet & Fitness Assistant. Unsaon man tika pagtabang sa pagkab-ot sa imong mga tumong karong adlawa?`;
+    if (!setMessages) return;
+    const userName = userProfile?.name || userProfile?.full_name || "there";
+    let greetingText = `Hi ${userName}! I'm Vita AI, your personal Health, Diet & Fitness Assistant. How can I help you reach your goals today?`;
+    if (language === "Tagalog") {
+      greetingText = `Kamusta ${userName}! Ako si Vita AI, ang iyong personal na Health, Diet & Fitness Assistant. Paano kita matutulungan na maabot ang iyong mga layunin ngayon?`;
+    } else if (language === "Cebuano") {
+      greetingText = `Kumusta ${userName}! Ako si Vita AI, ang imong personal nga Health, Diet & Fitness Assistant. Unsaon man tika pagtabang sa pagkab-ot sa imong mga tumong karong adlawa?`;
+    }
+
+    setMessages((prev) => {
+      if (!prev || prev.length === 0) {
+        return [
+          {
+            id: 1,
+            sender: "ai",
+            text: greetingText,
+            time: new Date().toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            }),
+          },
+        ];
       }
 
-      setMessages([
-        {
-          id: 1,
-          sender: "ai",
-          text: greetingText,
-          time: new Date().toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          }),
-        },
-      ]);
-    }
+      // If the initial greeting (id: 1, sender: "ai") exists, dynamically translate its text to the current language
+      const hasInitialGreeting = prev.some((m) => m.id === 1 && m.sender === "ai");
+      if (hasInitialGreeting) {
+        return prev.map((msg) =>
+          msg.id === 1 && msg.sender === "ai"
+            ? { ...msg, text: greetingText }
+            : msg
+        );
+      }
+
+      return prev;
+    });
   }, [
-    messages.length,
     userProfile?.name,
     userProfile?.full_name,
     language,

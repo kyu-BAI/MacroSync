@@ -11,7 +11,9 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Modal,
   TextInput,
+  Keyboard,
 } from "react-native";
 import {
   ChefHat,
@@ -22,11 +24,12 @@ import {
   LocateFixed,
   ShoppingBag,
   Maximize2,
+  Minimize2,
+  X,
   Home,
   MapPin,
   Search,
   Compass,
-  X,
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -42,8 +45,7 @@ import {
   getMealIconComponent,
   pushNotificationIfAllowed,
 } from "../../services/nutritionCalculator";
-import { normalizeToCebuLGU } from "../../data/cebuPalengkeMeals";
-import { getDynamicPalengkePlan } from "../../data/philippineFoodEngine";
+import { normalizeToCebuLGU, getDynamicPalengkePlan } from "../../data/cebuPalengkeMeals";
 import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from "../../data/cebu_locations";
 import {
   PHILIPPINE_REGIONS,
@@ -58,12 +60,16 @@ import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
 import LoadingModal from "../../components/LoadingModal";
 import RecipeModal from "../../components/RecipeModal";
-import PhilippineLocationModal from "../../components/PhilippineLocationModal";
-import MapcnMap from "../../components/MapcnMap";
 import StaggerCard from "../../components/StaggerCard";
 import SkeletonCard from "../../components/SkeletonCard";
 import PressableCard from "../../components/PressableCard";
-import { reverseGeocodeToBarangay, getBarangayMarkersForCity, findCebuLGUForCoords } from "../../services/barangayGeocodingService";
+import MapcnMap from "../../components/MapcnMap";
+import {
+  reverseGeocodeToBarangay,
+  getBarangayMarkersForCity,
+  searchPhilippineBarangays,
+  POPULAR_BARANGAY_COORDINATES,
+} from "../../services/barangayGeocodingService";
 
 
 // Re-export normalizeToCebuLGU for backward compatibility
@@ -174,6 +180,7 @@ export default function DietRecipesScreen({
   isOnline = true,
   setNotifications,
   userProfile,
+  setUserProfile,
 }) {
   // Hooks & Context
   const { showAlert } = useCustomAlert();
@@ -182,14 +189,23 @@ export default function DietRecipesScreen({
   const styles = useMemo(() => getStyles(theme), [theme]);
 
   // Navigation tabs ('PLAN' or 'EXPLORE')
-  const [activeDietTab, setActiveDietTab] = useState("PLAN");
+  const activeDietTabState = useState("PLAN");
+  const [activeDietTab, setActiveDietTab] = activeDietTabState;
 
   // Modal states
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
-  const [showFullMapModal, setShowFullMapModal] = useState(false);
-  const [mapModalMode, setMapModalMode] = useState("EXPLORE");
+
+  // Interactive Map Maximize and In-Page Location Search states (No modal)
+  const [isMapMaximized, setIsMapMaximized] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState("");
+  const [mapSearchResults, setMapSearchResults] = useState([]);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
+
+  // New Default Location Prompt Modal states
+  const [pendingDefaultLocation, setPendingDefaultLocation] = useState(null);
+  const [showDefaultLocationPrompt, setShowDefaultLocationPrompt] = useState(false);
 
   // Recipe cache
   const recipeCacheRef = useRef({});
@@ -206,56 +222,341 @@ export default function DietRecipesScreen({
   const [pinnedBarangay, setPinnedBarangay] = useState(null);
   const [userAllergies, setUserAllergies] = useState(userProfile?.allergies || []);
   const [isLocating, setIsLocating] = useState(false);
-  const [radarSearchQuery, setRadarSearchQuery] = useState("");
-
-  const radarSearchResults = useMemo(() => {
-    if (!radarSearchQuery.trim()) return [];
-    return searchPhilippineLocations(radarSearchQuery.trim(), "All");
-  }, [radarSearchQuery]);
 
   // Dynamic city food profile state
   const [cityProfilesCache, setCityProfilesCache] = useState({});
   const [currentCityProfile, setCurrentCityProfile] = useState(null);
   const [isFetchingCityProfile, setIsFetchingCityProfile] = useState(false);
 
-  // Handle City / Municipality selection from Map tap
-  const handlePinBarangay = useCallback(async (locationData) => {
-    if (!locationData) return;
-
-    // 1. Resolve coordinates into Municipality / City using Cebu boundary GeoJSON
-    if (locationData.lat && locationData.lng) {
-      const lgu = findCebuLGUForCoords(locationData.lat, locationData.lng);
-      if (lgu) {
-        const normCity = normalizeToCebuLGU(lgu) || normalizeToPhilippineLocation(lgu) || lgu;
-        setSelectedLocation(normCity);
-        return;
-      }
-
+  // Handle exact Barangay pinning
+  const handlePinBarangay = useCallback(async (barangayData) => {
+    if (!barangayData) return;
+    let targetData = barangayData;
+    if (barangayData.lat && barangayData.lng && !barangayData.formattedTitle) {
       try {
-        const resolved = await reverseGeocodeToBarangay(locationData.lat, locationData.lng);
-        if (resolved && resolved.city) {
-          const normCity =
-            normalizeToPhilippineLocation(resolved.city) ||
-            normalizeToCebuLGU(resolved.city) ||
-            resolved.city;
-          setSelectedLocation(normCity);
-          return;
+        const resolved = await reverseGeocodeToBarangay(barangayData.lat, barangayData.lng);
+        if (resolved) {
+          targetData = resolved;
         }
       } catch (err) {
         if (__DEV__) console.warn("[DietRecipes] Reverse geocode error:", err);
       }
     }
 
-    // 2. Direct city / municipality object
-    const target = locationData.city || locationData.name || locationData.barangay;
-    if (target) {
+    const resolvedTitle =
+      targetData.formattedTitle ||
+      (targetData.barangay && targetData.city
+        ? `Brgy. ${targetData.barangay}, ${targetData.city}`
+        : targetData.city || (typeof targetData === "string" ? targetData : ""));
+
+    const resolvedCity = targetData.city || (typeof targetData === "string" ? targetData : "") || "";
+    const resolvedProvince = targetData.province || "";
+    const resolvedBarangay = targetData.barangay || "";
+
+    let resolvedLat = targetData.lat;
+    let resolvedLng = targetData.lng;
+
+    if (typeof resolvedLat !== "number" || typeof resolvedLng !== "number") {
+      const bKey = (resolvedBarangay || "").toLowerCase().trim();
+      if (POPULAR_BARANGAY_COORDINATES && POPULAR_BARANGAY_COORDINATES[bKey]) {
+        resolvedLat = POPULAR_BARANGAY_COORDINATES[bKey].lat;
+        resolvedLng = POPULAR_BARANGAY_COORDINATES[bKey].lng;
+      } else if (resolvedCity) {
+        const cMatches = searchPhilippineLocations(resolvedCity);
+        if (cMatches && cMatches.length > 0 && typeof cMatches[0].lat === "number") {
+          resolvedLat = cMatches[0].lat;
+          resolvedLng = cMatches[0].lng;
+        }
+      }
+    }
+
+    const standardizedPinned = {
+      barangay: resolvedBarangay,
+      city: resolvedCity,
+      province: resolvedProvince,
+      formattedTitle: resolvedTitle,
+      lat: resolvedLat,
+      lng: resolvedLng,
+    };
+
+    setPinnedBarangay(standardizedPinned);
+    AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(standardizedPinned)).catch(() => {});
+    if (resolvedCity) {
       const normCity =
-        normalizeToPhilippineLocation(target) ||
-        normalizeToCebuLGU(target) ||
-        target;
+        normalizeToPhilippineLocation(resolvedCity) ||
+        normalizeToCebuLGU(resolvedCity) ||
+        resolvedCity;
       setSelectedLocation(normCity);
     }
   }, []);
+
+  // Handle checking location and prompting user every time they pin another location
+  const handleCheckAndPromptDefaultLocation = useCallback(
+    async (locData) => {
+      if (!locData) return;
+
+      let targetData = locData;
+      if (locData.lat && locData.lng && !locData.formattedTitle) {
+        try {
+          const resolved = await reverseGeocodeToBarangay(locData.lat, locData.lng);
+          if (resolved) {
+            targetData = resolved;
+          }
+        } catch (err) {
+          if (__DEV__) console.warn("[DietRecipes] Reverse geocode error:", err);
+        }
+      }
+
+      const title =
+        targetData.formattedTitle ||
+        (targetData.barangay && targetData.city
+          ? `Brgy. ${targetData.barangay}, ${targetData.city}`
+          : targetData.city || (typeof targetData === "string" ? targetData : ""));
+
+      const city = targetData.city || (typeof targetData === "string" ? targetData : "") || "";
+      const province = targetData.province || "";
+      const barangay = targetData.barangay || "";
+
+      let resolvedLat = targetData.lat;
+      let resolvedLng = targetData.lng;
+
+      if (typeof resolvedLat !== "number" || typeof resolvedLng !== "number") {
+        const bKey = (barangay || "").toLowerCase().trim();
+        if (POPULAR_BARANGAY_COORDINATES && POPULAR_BARANGAY_COORDINATES[bKey]) {
+          resolvedLat = POPULAR_BARANGAY_COORDINATES[bKey].lat;
+          resolvedLng = POPULAR_BARANGAY_COORDINATES[bKey].lng;
+        } else if (city) {
+          const cMatches = searchPhilippineLocations(city);
+          if (cMatches && cMatches.length > 0 && typeof cMatches[0].lat === "number") {
+            resolvedLat = cMatches[0].lat;
+            resolvedLng = cMatches[0].lng;
+          }
+        }
+      }
+
+      const standardizedPinned = {
+        barangay,
+        city,
+        province,
+        formattedTitle: title,
+        lat: resolvedLat,
+        lng: resolvedLng,
+      };
+
+      // Apply optimistic pin locally so radar and map reflect it right away
+      setPinnedBarangay(standardizedPinned);
+      AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(standardizedPinned)).catch(() => {});
+
+      if (city) {
+        const norm = normalizeToPhilippineLocation(city) || normalizeToCebuLGU(city) || city;
+        setSelectedLocation(norm);
+      }
+
+      // Prompt user choice every time they pin a location
+      setPendingDefaultLocation(standardizedPinned);
+      setShowDefaultLocationPrompt(true);
+    },
+    []
+  );
+
+  // User confirms making this newly pinned location their new default
+  const handleConfirmDefaultLocation = useCallback(async (explicitTarget) => {
+    // CRITICAL: Prevent synthetic touch events from being treated as location targets
+    const isLocationObj =
+      explicitTarget &&
+      typeof explicitTarget === "object" &&
+      !explicitTarget.nativeEvent &&
+      !explicitTarget.dispatchConfig &&
+      (explicitTarget.formattedTitle || explicitTarget.barangay || explicitTarget.city || explicitTarget.name);
+
+    const targetData = (isLocationObj ? explicitTarget : null) || pendingDefaultLocation || pinnedBarangay;
+    if (!targetData) {
+      setShowDefaultLocationPrompt(false);
+      return;
+    }
+
+    const fullTitle =
+      targetData.formattedTitle ||
+      (targetData.barangay && targetData.city
+        ? `Brgy. ${targetData.barangay}, ${targetData.city}`
+        : targetData.city || (typeof targetData === "string" ? targetData : ""));
+
+    const resolvedCity = targetData.city || (typeof targetData === "string" ? targetData : "") || "";
+    const resolvedProvince = targetData.province || "";
+    const addressStr = fullTitle || resolvedCity;
+    const structuredLoc = {
+      city: resolvedCity,
+      province: resolvedProvince,
+    };
+
+    // 1. Update DietRecipes local state
+    const newPinnedObj = {
+      barangay: targetData.barangay || "",
+      city: resolvedCity,
+      province: resolvedProvince,
+      formattedTitle: fullTitle,
+      lat: targetData.lat,
+      lng: targetData.lng,
+    };
+
+    setPinnedBarangay(newPinnedObj);
+    setUserHometown(resolvedCity || fullTitle);
+    setSelectedLocation(resolvedCity || fullTitle);
+
+    // 2. Save ms_pinned_barangay to AsyncStorage
+    await AsyncStorage.setItem("ms_pinned_barangay", JSON.stringify(newPinnedObj)).catch(() => {});
+
+    // 3. Save @ms_default_location to AsyncStorage
+    await AsyncStorage.setItem(
+      "@ms_default_location",
+      JSON.stringify({
+        address: addressStr,
+        city: resolvedCity,
+        province: resolvedProvince,
+        structuredLocation: structuredLoc,
+      })
+    ).catch(() => {});
+
+    // 4. Update user profile in AsyncStorage and App.js state
+    let baseProfile = userProfile || {};
+    try {
+      const storedProfile = await AsyncStorage.getItem("ms_user_profile");
+      if (storedProfile) {
+        baseProfile = { ...baseProfile, ...JSON.parse(storedProfile) };
+      }
+    } catch (_) {}
+
+    const updatedProfile = {
+      ...baseProfile,
+      address: addressStr,
+      city: resolvedCity,
+      province: resolvedProvince,
+      structuredLocation: structuredLoc,
+    };
+    await AsyncStorage.setItem("ms_user_profile", JSON.stringify(updatedProfile)).catch(() => {});
+
+    if (setUserProfile) {
+      setUserProfile((prev) => ({
+        ...prev,
+        address: addressStr,
+        city: resolvedCity,
+        province: resolvedProvince,
+        structuredLocation: structuredLoc,
+      }));
+    }
+
+    // 5. Background sync to backend database
+    try {
+      const activeUserId = userId || (await AsyncStorage.getItem("ms_user_id"));
+      if (activeUserId) {
+        fetch(`${API_URL}/update-profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: activeUserId,
+            name: updatedProfile.name,
+            email: updatedProfile.email,
+            address: addressStr,
+            city: resolvedCity,
+            province: resolvedProvince,
+            structured_location: structuredLoc,
+          }),
+        }).catch((err) => {
+          if (__DEV__) console.warn("[DietRecipes] Backend update-profile error:", err);
+        });
+      }
+    } catch (e) {
+      if (__DEV__) console.warn("[DietRecipes] Profile update error:", e);
+    }
+
+    setShowDefaultLocationPrompt(false);
+    setPendingDefaultLocation(null);
+
+    showAlert(
+      "Default Location Updated",
+      `Your default location has been updated to ${fullTitle}. This is now reflected in your profile and Settings tab.`
+    );
+  }, [pendingDefaultLocation, pinnedBarangay, userProfile, setUserProfile, userId, showAlert]);
+
+  const handleRejectDefaultLocation = useCallback(() => {
+    setShowDefaultLocationPrompt(false);
+    setPendingDefaultLocation(null);
+  }, []);
+
+  // Live autocomplete search across all Philippine barangays and cities
+  useEffect(() => {
+    let isMounted = true;
+    if (!mapSearchQuery || mapSearchQuery.trim().length < 2) {
+      setMapSearchResults([]);
+      return;
+    }
+
+    const cleanQ = mapSearchQuery.trim();
+    setIsSearchingMap(true);
+
+    const cityMatches = searchPhilippineLocations(cleanQ)
+      .slice(0, 5)
+      .map((c) => ({
+        type: "city",
+        name: c.name,
+        city: c.name,
+        province: c.province || "",
+        display: c.name,
+        lat: c.lat,
+        lng: c.lng,
+      }));
+
+    searchPhilippineBarangays(cleanQ)
+      .then((brgyResults) => {
+        if (isMounted) {
+          const combined = [
+            ...(brgyResults || []).slice(0, 6).map((b) => ({ ...b, type: "barangay" })),
+            ...cityMatches,
+          ];
+          setMapSearchResults(combined);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setMapSearchResults(cityMatches);
+      })
+      .finally(() => {
+        if (isMounted) setIsSearchingMap(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mapSearchQuery]);
+
+  const handleSelectSearchResult = useCallback(
+    (item) => {
+      Keyboard.dismiss();
+      setMapSearchQuery("");
+      setMapSearchResults([]);
+
+      if (item.type === "barangay" || item.barangay) {
+        const locObj = {
+          barangay: item.barangay || item.name.replace(/^Brgy\.\s*/i, ""),
+          city: item.city || selectedLocation || "Philippines",
+          province: item.province || "",
+          formattedTitle: item.display || `Brgy. ${item.barangay}, ${item.city}`,
+          lat: item.lat,
+          lng: item.lng,
+        };
+        handleCheckAndPromptDefaultLocation(locObj);
+      } else {
+        const cityName = item.city || item.name;
+        setSelectedLocation(cityName);
+        handleCheckAndPromptDefaultLocation({
+          city: cityName,
+          formattedTitle: cityName,
+          lat: item.lat,
+          lng: item.lng,
+        });
+      }
+    },
+    [selectedLocation, handleCheckAndPromptDefaultLocation, setSelectedLocation]
+  );
 
   // Dynamic barangay markers with red dots for the selected city
   const barangayMarkers = useMemo(() => {
@@ -285,20 +586,37 @@ export default function DietRecipesScreen({
       try {
         const storedProfile = (await AsyncStorage.getItem("ms_user_profile")) || (await AsyncStorage.getItem("@ms_user_profile"));
         const onboardingData = await AsyncStorage.getItem("@ms_onboarding_data");
+        const defaultLocData = await AsyncStorage.getItem("@ms_default_location");
         const dashboardCache = await AsyncStorage.getItem("ms_dashboard_cache");
         const storedBarangay = await AsyncStorage.getItem("ms_pinned_barangay");
 
         if (storedBarangay) {
           try {
             const parsedB = JSON.parse(storedBarangay);
-            if (parsedB && (parsedB.barangay || parsedB.formattedTitle)) {
-              setPinnedBarangay(parsedB);
+            if (parsedB && (parsedB.barangay || parsedB.formattedTitle || parsedB.city)) {
+              let resolvedB = { ...parsedB };
+              if (typeof resolvedB.lat !== "number" || typeof resolvedB.lng !== "number") {
+                const bKey = (resolvedB.barangay || "").toLowerCase().trim();
+                if (POPULAR_BARANGAY_COORDINATES && POPULAR_BARANGAY_COORDINATES[bKey]) {
+                  resolvedB.lat = POPULAR_BARANGAY_COORDINATES[bKey].lat;
+                  resolvedB.lng = POPULAR_BARANGAY_COORDINATES[bKey].lng;
+                  if (!resolvedB.city) resolvedB.city = POPULAR_BARANGAY_COORDINATES[bKey].city;
+                } else if (resolvedB.city) {
+                  const cMatches = searchPhilippineLocations(resolvedB.city);
+                  if (cMatches && cMatches.length > 0 && typeof cMatches[0].lat === "number") {
+                    resolvedB.lat = cMatches[0].lat;
+                    resolvedB.lng = cMatches[0].lng;
+                  }
+                }
+              }
+              setPinnedBarangay(resolvedB);
             }
           } catch (_) {}
         }
 
         const parsedProfile = storedProfile ? JSON.parse(storedProfile) : null;
         const parsedOnb = onboardingData ? JSON.parse(onboardingData) : null;
+        const parsedDefLoc = defaultLocData ? JSON.parse(defaultLocData) : null;
         const parsedCache = dashboardCache ? JSON.parse(dashboardCache)?.data : null;
 
         const allergies = [userProfile, parsedProfile, parsedOnb, parsedCache?.profile].find(
@@ -306,7 +624,7 @@ export default function DietRecipesScreen({
         )?.allergies;
         if (allergies) setUserAllergies(allergies);
 
-        const candidateTown = [userProfile, parsedOnb, parsedCache?.profile, parsedProfile]
+        const candidateTown = [userProfile, parsedDefLoc, parsedOnb, parsedCache?.profile, parsedProfile]
           .map((p) => p?.structuredLocation?.city || p?.structured_location?.city || p?.city || p?.address)
           .find(Boolean);
 
@@ -322,6 +640,15 @@ export default function DietRecipesScreen({
     };
     loadUserDataAndLocation();
   }, [userProfile]);
+
+  useEffect(() => {
+    if (initialHometown) {
+      setUserHometown(initialHometown);
+      if (!selectedLocation || selectedLocation === "Cebu City" || selectedLocation === "San Remigio") {
+        setSelectedLocation(initialHometown);
+      }
+    }
+  }, [initialHometown]);
 
   useEffect(() => {
     if (activeDietTab === "EXPLORE" && userHometown && !pinnedBarangay) {
@@ -401,7 +728,7 @@ export default function DietRecipesScreen({
   // Helper for deterministic local Palengke plan
   const getFallbackLocalPlan = useCallback(() => {
     return getDynamicPalengkePlan({
-      location: selectedLocation || "Cebu City",
+      location: selectedLocation || userHometown || "Cebu City",
       totalUserCalories: targetCalories,
       targetProtein,
       targetCarbs,
@@ -411,7 +738,7 @@ export default function DietRecipesScreen({
       userId,
       cityProfile: currentCityProfile,
     });
-  }, [selectedLocation, targetCalories, targetProtein, targetCarbs, targetFats, userAllergies, guestGoals, userId, currentCityProfile]);
+  }, [selectedLocation, userHometown, targetCalories, targetProtein, targetCarbs, targetFats, userAllergies, guestGoals, userId, currentCityProfile]);
 
   const handleFetchFreshMeals = useCallback(
     async (force = false, isManualAction = false) => {
@@ -543,7 +870,7 @@ export default function DietRecipesScreen({
         return;
       }
 
-      const cacheKey = `${meal.title.trim().toLowerCase()}_${selectedLocation || "San Remigio"}`;
+      const cacheKey = `${meal.title.trim().toLowerCase()}_${selectedLocation || userHometown || "Cebu City"}`;
       if (recipeCacheRef.current[cacheKey]) {
         setSelectedRecipe(recipeCacheRef.current[cacheKey]);
         setShowRecipeModal(true);
@@ -560,7 +887,7 @@ export default function DietRecipesScreen({
             user_id: userId,
             ingredients: meal.title,
             budget: "All",
-            location: selectedLocation || "San Remigio",
+            location: selectedLocation || userHometown || "Cebu City",
           }),
         });
 
@@ -845,7 +1172,7 @@ export default function DietRecipesScreen({
               activeOpacity={0.8}
             >
               <Text style={[styles.tabButtonText, activeDietTab === tabKey ? styles.tabTextActive : styles.tabTextInactive]}>
-                {tabKey === "PLAN" ? "Daily Plan" : "Food Radar"}
+                {tabKey === "PLAN" ? "Daily Plan" : "Explore Recipes"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -944,7 +1271,7 @@ export default function DietRecipesScreen({
             </View>
           </View>
         ) : (
-          /* Tab 2: Food Radar */
+          /* Tab 2: Explore Recipes */
           <View style={styles.exploreSection}>
             <View style={styles.formCard}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -953,151 +1280,245 @@ export default function DietRecipesScreen({
                   <Text style={styles.cardTitle}>Philippine Food Radar</Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.fullMapButton}
-                  onPress={() => {
-                    setMapModalMode("EXPLORE");
-                    setShowFullMapModal(true);
-                  }}
+                  style={styles.maximizeMapButton}
+                  onPress={() => setIsMapMaximized(true)}
                   activeOpacity={0.8}
                 >
-                  <Search size={12} color={logoGreen} style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Choose Any City</Text>
+                  <Maximize2 size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Maximize Map</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* INLINE QUICK SEARCH INPUT */}
-              <View style={{ marginBottom: 10 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: isDarkMode ? "#1E293B" : "#F1F5F9",
-                    borderRadius: 12,
-                    borderWidth: 1,
+              {/* SEARCH TAB AT THE TOP */}
+              <View
+                style={[
+                  styles.mapSearchBox,
+                  {
+                    backgroundColor: isDarkMode ? "#0F172A" : "#F8FAFC",
                     borderColor: isDarkMode ? "#334155" : "#E2E8F0",
-                    paddingHorizontal: 12,
-                    height: 40,
-                  }}
-                >
-                  <Search size={14} color={isDarkMode ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: isDarkMode ? "#F8FAFC" : "#0F172A",
+                  },
+                ]}
+              >
+                <Search size={16} color={logoGreen} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[
+                    styles.mapSearchInput,
+                    { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+                  ]}
+                  placeholder="Search barangay, municipality, or city..."
+                  placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
+                  value={mapSearchQuery}
+                  onChangeText={setMapSearchQuery}
+                  autoCorrect={false}
+                />
+                {isSearchingMap ? (
+                  <ActivityIndicator size="small" color={logoGreen} style={{ marginLeft: 6 }} />
+                ) : mapSearchQuery.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setMapSearchQuery("");
+                      setMapSearchResults([]);
                     }}
-                    placeholder="Search Cebu town or Philippine city..."
-                    placeholderTextColor={isDarkMode ? "#94A3B8" : "#64748B"}
-                    value={radarSearchQuery}
-                    onChangeText={setRadarSearchQuery}
-                    autoCorrect={false}
-                    returnKeyType="search"
-                    onSubmitEditing={() => {
-                      if (radarSearchResults.length > 0) {
-                        setSelectedLocation(radarSearchResults[0].name);
-                        setRadarSearchQuery("");
-                      } else if (radarSearchQuery.trim()) {
-                        setSelectedLocation(radarSearchQuery.trim());
-                        setRadarSearchQuery("");
-                      }
-                    }}
-                  />
-                  {radarSearchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setRadarSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <X size={14} color={isDarkMode ? "#94A3B8" : "#64748B"} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Instant Suggestions Dropdown */}
-                {radarSearchQuery.trim().length > 0 && radarSearchResults.length > 0 && (
-                  <View
-                    style={{
-                      marginTop: 4,
-                      backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: isDarkMode ? "#334155" : "#E2E8F0",
-                      overflow: "hidden",
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 3 },
-                      shadowOpacity: 0.15,
-                      shadowRadius: 6,
-                      elevation: 4,
-                      zIndex: 100,
-                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    {radarSearchResults.slice(0, 5).map((item) => (
-                      <TouchableOpacity
-                        key={item.name}
-                        onPress={() => {
-                          setSelectedLocation(item.name);
-                          setRadarSearchQuery("");
-                        }}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          paddingHorizontal: 12,
-                          paddingVertical: 10,
-                          borderBottomWidth: 1,
-                          borderBottomColor: isDarkMode ? "#334155" : "#F1F5F9",
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 8 }}>
-                          <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
-                            {item.name}
-                          </Text>
-                          {item.region && (
-                            <Text style={{ fontSize: 10, color: isDarkMode ? "#94A3B8" : "#64748B", marginLeft: 6 }}>
-                              ({item.region})
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={{ fontSize: 11, fontWeight: "700", color: logoGreen }} numberOfLines={1}>
-                          {item.specialty || `${item.province || "Palengke"}`}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                    <X size={15} color={isDarkMode ? "#94A3B8" : "#64748B"} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
-              {/* INTERACTIVE MUNICIPALITY & CITY MAP */}
-              <View style={styles.staticMapContainer}>
-                <MapcnMap
-                  center={currentMapCenter}
-                  zoom={9}
-                  markers={[]}
-                  activeLocation={selectedLocation}
-                  pinnedBarangay={null}
-                  showPin={true}
-                  onPinBarangay={handlePinBarangay}
-                  onMarkerPress={(cityName) => cityName && setSelectedLocation(cityName)}
-                  onSelectLocation={(cityName) => cityName && setSelectedLocation(cityName)}
-                  cardContainer={false}
-                  height="100%"
-                  style={{ width: "100%", height: "100%" }}
-                />
-
-                {/* Floating Full Screen Button */}
-                <TouchableOpacity
-                  onPress={() => {
-                    setMapModalMode("MAP");
-                    setShowFullMapModal(true);
-                  }}
-                  activeOpacity={0.85}
-                  style={styles.floatingFullscreenBtn}
+              {/* SEARCH SUGGESTIONS DROPDOWN */}
+              {mapSearchResults.length > 0 && (
+                <View
+                  style={[
+                    styles.mapSearchDropdown,
+                    {
+                      backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                      borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                    },
+                  ]}
                 >
-                  <Maximize2 size={13} color={logoGreen} style={{ marginRight: 5 }} />
-                  <Text style={styles.floatingFullscreenText}>Full Screen</Text>
+                  <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled">
+                    {mapSearchResults.map((item, idx) => (
+                      <TouchableOpacity
+                        key={`${item.name}-${idx}`}
+                        onPress={() => handleSelectSearchResult(item)}
+                        style={[
+                          styles.mapSearchItemRow,
+                          { borderBottomColor: isDarkMode ? "#334155" : "#F1F5F9" },
+                          idx === mapSearchResults.length - 1 && { borderBottomWidth: 0 },
+                        ]}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.mapSearchItemIcon,
+                            {
+                              backgroundColor:
+                                item.type === "barangay"
+                                  ? "rgba(239, 68, 68, 0.12)"
+                                  : "rgba(16, 185, 129, 0.12)",
+                            },
+                          ]}
+                        >
+                          {item.type === "barangay" ? (
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: "#EF4444",
+                              }}
+                            />
+                          ) : (
+                            <MapPin size={13} color={logoGreen} />
+                          )}
+                        </View>
+                        <View style={{ flex: 1, paddingRight: 6 }}>
+                          <Text
+                            style={[
+                              styles.mapSearchItemTitle,
+                              { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.type === "barangay" ? `Brgy. ${item.barangay || item.name}` : item.name}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.mapSearchItemSub,
+                              { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.city}
+                            {item.province ? ` • ${item.province}` : ""}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.mapSearchItemBadge,
+                            {
+                              backgroundColor:
+                                item.type === "barangay"
+                                  ? "rgba(239, 68, 68, 0.1)"
+                                  : "rgba(16, 185, 129, 0.1)",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "800",
+                              color: item.type === "barangay" ? "#EF4444" : logoGreen,
+                            }}
+                          >
+                            {item.type === "barangay" ? "Barangay" : "City"}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* QUICK BARANGAY SELECTOR CHIPS WITH RED DOT PINPOINT */}
+              {barangayMarkers.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.hubScrollContainer}
+                  contentContainerStyle={styles.hubScrollContent}
+                >
+                  {barangayMarkers.map((b) => {
+                    const isPinned =
+                      pinnedBarangay &&
+                      (pinnedBarangay.barangay?.toLowerCase() === b.barangay.toLowerCase() ||
+                        pinnedBarangay.formattedTitle?.toLowerCase().includes(b.barangay.toLowerCase()));
+                    return (
+                      <TouchableOpacity
+                        key={b.id}
+                        onPress={() => handleCheckAndPromptDefaultLocation(b)}
+                        style={[
+                          styles.hubPill,
+                          isPinned && styles.hubPillActive,
+                          { flexDirection: "row", alignItems: "center" },
+                        ]}
+                        activeOpacity={0.75}
+                      >
+                        <View
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 4,
+                            backgroundColor: isPinned ? "#FFFFFF" : "#EF4444",
+                            marginRight: 5,
+                            borderWidth: 1,
+                            borderColor: isPinned ? "#EF4444" : "#FFFFFF",
+                          }}
+                        />
+                        <Text style={[styles.hubPillText, isPinned && styles.hubPillTextActive]}>
+                          {b.barangay}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* mapcn MAP CONTAINER */}
+              <View style={styles.staticMapContainer}>
+                {!isMapMaximized && (
+                  <MapcnMap
+                    center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
+                    zoom={9}
+                    markers={[]}
+                    activeLocation={selectedLocation}
+                    pinnedBarangay={pinnedBarangay}
+                    onPinBarangay={handleCheckAndPromptDefaultLocation}
+                    onMarkerPress={(cityName) => cityName && handleCheckAndPromptDefaultLocation(cityName)}
+                    onSelectLocation={(cityName) => cityName && handleCheckAndPromptDefaultLocation(cityName)}
+                    cardContainer={false}
+                    height={235}
+                    style={{ width: "100%", height: 235 }}
+                  />
+                )}
+
+                {/* Tap to Maximize Map Banner on Map */}
+                <TouchableOpacity
+                  onPress={() => setIsMapMaximized(true)}
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    left: 10,
+                    backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.90)" : "rgba(255, 255, 255, 0.94)",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1.2,
+                    borderColor: logoGreen,
+                    zIndex: 50,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Maximize2 size={12} color={logoGreen} style={{ marginRight: 5 }} />
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>Tap to Maximize Map</Text>
                 </TouchableOpacity>
 
                 {/* Floating Map Controls */}
                 <View style={styles.floatingMapControls}>
+                  {userHometown && selectedLocation !== userHometown ? (
+                    <TouchableOpacity
+                      onPress={() => setSelectedLocation(userHometown)}
+                      activeOpacity={0.85}
+                      style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
+                    >
+                      <Home size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                      <Text style={styles.floatingPillText}>{userHometown}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
                   <TouchableOpacity
                     onPress={handleLocateMe}
                     activeOpacity={0.85}
@@ -1110,62 +1531,61 @@ export default function DietRecipesScreen({
                     )}
                     <Text style={styles.floatingPillText}>{isLocating ? "Locating..." : "Locate Me"}</Text>
                   </TouchableOpacity>
+
+                  {/* Press to Maximize Map pill */}
+                  <TouchableOpacity
+                    onPress={() => setIsMapMaximized(true)}
+                    activeOpacity={0.85}
+                    style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
+                  >
+                    <Maximize2 size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                    <Text style={styles.floatingPillText}>Maximize</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* SELECTED CITY / MUNICIPALITY STATUS BANNER */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 9,
-                  borderRadius: 12,
-                  backgroundColor: isDarkMode ? "#1E293B" : "#ECFDF5",
-                  borderWidth: 1,
-                  borderColor: isDarkMode ? "#334155" : "#A7F3D0",
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
-                  <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: isDarkMode ? "#F8FAFC" : "#065F46",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {userHometown && selectedLocation?.toLowerCase() === userHometown?.toLowerCase() ? (
-                      <>Hometown: <Text style={{ fontWeight: "900", color: logoGreen }}>{selectedLocation} (Your Base)</Text></>
-                    ) : (
-                      <>Viewing: <Text style={{ fontWeight: "900", color: logoGreen }}>{selectedLocation}</Text></>
-                    )}
-                  </Text>
-                </View>
-
-                {userHometown && selectedLocation?.toLowerCase() !== userHometown?.toLowerCase() ? (
+              {/* PINNED EXACT BARANGAY BANNER */}
+              {pinnedBarangay ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderRadius: 12,
+                    backgroundColor: isDarkMode ? "#1E293B" : "#ECFDF5",
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? "#334155" : "#A7F3D0",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 6 }}>
+                    <MapPin size={13} color={logoGreen} style={{ marginRight: 6 }} />
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: isDarkMode ? "#F8FAFC" : "#065F46",
+                      }}
+                      numberOfLines={1}
+                    >
+                      Exact Barangay: <Text style={{ fontWeight: "900", color: logoGreen }}>{pinnedBarangay.formattedTitle || `Brgy. ${pinnedBarangay.barangay}, ${pinnedBarangay.city}`}</Text>
+                    </Text>
+                  </View>
                   <TouchableOpacity
-                    onPress={() => setSelectedLocation(userHometown)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: isDarkMode ? "rgba(16, 185, 129, 0.15)" : "#D1FAE5",
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 8,
+                    onPress={() => {
+                      setPinnedBarangay(null);
+                      AsyncStorage.removeItem("ms_pinned_barangay").catch(() => {});
                     }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Home size={11} color={logoGreen} style={{ marginRight: 4 }} />
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: logoGreen }}>
-                      Back to {userHometown}
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: isDarkMode ? "#94A3B8" : "#64748B" }}>
+                      Clear Pin
                     </Text>
                   </TouchableOpacity>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
 
               {/* SELECTED CITY CULINARY BANNER */}
               {isFetchingCityProfile ? (
@@ -1324,23 +1744,429 @@ export default function DietRecipesScreen({
         translateMealTitle={translateMealTitle}
       />
 
-      <PhilippineLocationModal
-        visible={showFullMapModal}
-        onClose={() => setShowFullMapModal(false)}
-        isDarkMode={isDarkMode}
-        currentMapCenter={currentMapCenter}
-        mapMarkers={[]}
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        pinnedBarangay={null}
-        showPin={false}
-        onPinBarangay={handlePinBarangay}
-        userHometown={userHometown}
-        onLocateMe={handleLocateMe}
-        isLocating={isLocating}
-        currentCityProfile={currentCityProfile}
-        initialViewMode={mapModalMode}
-      />
+      {/* MAXIMIZED FULLSCREEN INTERACTIVE MAP MODAL */}
+      <Modal
+        visible={isMapMaximized}
+        animationType="slide"
+        onRequestClose={() => setIsMapMaximized(false)}
+        statusBarTranslucent={true}
+      >
+        <View style={{ flex: 1, backgroundColor: isDarkMode ? "#0F172A" : "#F8FAFC" }}>
+          {/* Top Bar with Search Tab & Minimize button */}
+          <View
+            style={[
+              styles.maximizedTopBar,
+              {
+                backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                borderBottomColor: isDarkMode ? "#334155" : "#E2E8F0",
+              },
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 8 }}>
+                <Compass size={18} color={logoGreen} style={{ marginRight: 6 }} />
+                <Text style={[styles.maximizedTitle, { color: isDarkMode ? "#F8FAFC" : "#0F172A" }]}>
+                  Interactive Philippine Map
+                </Text>
+              </View>
+
+              {/* Minimize Map Button */}
+              <TouchableOpacity
+                onPress={() => setIsMapMaximized(false)}
+                style={[styles.minimizeBtn, { backgroundColor: isDarkMode ? "#334155" : "#F1F5F9" }]}
+                activeOpacity={0.8}
+              >
+                <Minimize2 size={14} color={isDarkMode ? "#F8FAFC" : "#0F172A"} style={{ marginRight: 5 }} />
+                <Text style={[styles.minimizeBtnText, { color: isDarkMode ? "#F8FAFC" : "#0F172A" }]}>
+                  Minimize
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* SEARCH TAB AT THE TOP OF MAXIMIZED MAP */}
+            <View
+              style={[
+                styles.mapSearchBox,
+                {
+                  backgroundColor: isDarkMode ? "#0F172A" : "#F1F5F9",
+                  borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                  marginBottom: mapSearchResults.length > 0 ? 6 : 0,
+                },
+              ]}
+            >
+              <Search size={16} color={logoGreen} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[
+                  styles.mapSearchInput,
+                  { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+                ]}
+                placeholder="Search any barangay, municipality, or city..."
+                placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
+                value={mapSearchQuery}
+                onChangeText={setMapSearchQuery}
+                autoCorrect={false}
+              />
+              {isSearchingMap ? (
+                <ActivityIndicator size="small" color={logoGreen} style={{ marginLeft: 6 }} />
+              ) : mapSearchQuery.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setMapSearchQuery("");
+                    setMapSearchResults([]);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={15} color={isDarkMode ? "#94A3B8" : "#64748B"} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Search Suggestions Dropdown in Maximized Map */}
+            {mapSearchResults.length > 0 && (
+              <View
+                style={[
+                  styles.mapSearchDropdown,
+                  {
+                    backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                    borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                  },
+                ]}
+              >
+                <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
+                  {mapSearchResults.map((item, idx) => (
+                    <TouchableOpacity
+                      key={`max-${item.name}-${idx}`}
+                      onPress={() => handleSelectSearchResult(item)}
+                      style={[
+                        styles.mapSearchItemRow,
+                        { borderBottomColor: isDarkMode ? "#334155" : "#F1F5F9" },
+                        idx === mapSearchResults.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.mapSearchItemIcon,
+                          {
+                            backgroundColor:
+                              item.type === "barangay"
+                                ? "rgba(239, 68, 68, 0.12)"
+                                : "rgba(16, 185, 129, 0.12)",
+                          },
+                        ]}
+                      >
+                        {item.type === "barangay" ? (
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: "#EF4444",
+                            }}
+                          />
+                        ) : (
+                          <MapPin size={13} color={logoGreen} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1, paddingRight: 6 }}>
+                        <Text
+                          style={[
+                            styles.mapSearchItemTitle,
+                            { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.type === "barangay" ? `Brgy. ${item.barangay || item.name}` : item.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mapSearchItemSub,
+                            { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.city}
+                          {item.province ? ` • ${item.province}` : ""}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.mapSearchItemBadge,
+                          {
+                            backgroundColor:
+                              item.type === "barangay"
+                                ? "rgba(239, 68, 68, 0.1)"
+                                : "rgba(16, 185, 129, 0.1)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "800",
+                            color: item.type === "barangay" ? "#EF4444" : logoGreen,
+                          }}
+                        >
+                          {item.type === "barangay" ? "Barangay" : "City"}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Quick barangay chips in maximized view */}
+            {barangayMarkers.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 8 }}
+                contentContainerStyle={{ paddingRight: 10 }}
+              >
+                {barangayMarkers.map((b) => {
+                  const isPinned =
+                    pinnedBarangay &&
+                    (pinnedBarangay.barangay?.toLowerCase() === b.barangay.toLowerCase() ||
+                      pinnedBarangay.formattedTitle?.toLowerCase().includes(b.barangay.toLowerCase()));
+                  return (
+                    <TouchableOpacity
+                      key={`max-b-${b.id}`}
+                      onPress={() => handleCheckAndPromptDefaultLocation(b)}
+                      style={[
+                        styles.hubPill,
+                        isPinned && styles.hubPillActive,
+                        { flexDirection: "row", alignItems: "center" },
+                      ]}
+                      activeOpacity={0.75}
+                    >
+                      <View
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: 4,
+                          backgroundColor: isPinned ? "#FFFFFF" : "#EF4444",
+                          marginRight: 5,
+                          borderWidth: 1,
+                          borderColor: isPinned ? "#EF4444" : "#FFFFFF",
+                        }}
+                      />
+                      <Text style={[styles.hubPillText, isPinned && styles.hubPillTextActive]}>
+                        {b.barangay}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Full-screen Map */}
+          <View style={{ flex: 1, width: "100%", position: "relative" }}>
+            <MapcnMap
+              center={pinnedBarangay ? [pinnedBarangay.lng, pinnedBarangay.lat] : currentMapCenter}
+              zoom={pinnedBarangay ? 14 : 10}
+              markers={[]}
+              activeLocation={selectedLocation}
+              pinnedBarangay={pinnedBarangay}
+              onPinBarangay={handleCheckAndPromptDefaultLocation}
+              onMarkerPress={(cityName) => cityName && handleCheckAndPromptDefaultLocation(cityName)}
+              onSelectLocation={(cityName) => cityName && handleCheckAndPromptDefaultLocation(cityName)}
+              cardContainer={false}
+              height="100%"
+              style={{ width: "100%", height: "100%" }}
+            />
+
+            {/* Floating Map Controls in Maximized Map */}
+            <View style={styles.floatingMapControls}>
+              {pinnedBarangay ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setPinnedBarangay({ ...pinnedBarangay });
+                  }}
+                  activeOpacity={0.85}
+                  style={[styles.floatingPillBtn, { borderColor: "#EF4444" }]}
+                >
+                  <MapPin size={13} color="#EF4444" style={{ marginRight: 5 }} />
+                  <Text style={[styles.floatingPillText, { color: isDarkMode ? "#F8FAFC" : "#0F172A", fontWeight: "800" }]}>
+                    Go to Pin
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {userHometown && selectedLocation !== userHometown ? (
+                <TouchableOpacity
+                  onPress={() => setSelectedLocation(userHometown)}
+                  activeOpacity={0.85}
+                  style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
+                >
+                  <Home size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                  <Text style={styles.floatingPillText}>{userHometown}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={handleLocateMe}
+                activeOpacity={0.85}
+                style={[styles.floatingPillBtn, { borderColor: logoGreen }]}
+              >
+                {isLocating ? (
+                  <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
+                ) : (
+                  <LocateFixed size={14} color={logoGreen} style={{ marginRight: 6 }} />
+                )}
+                <Text style={styles.floatingPillText}>{isLocating ? "Locating..." : "Locate Me"}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Floating Pinned Location Guide Pill */}
+            <View style={{ position: "absolute", top: 12, alignSelf: "center", zIndex: 100 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (pinnedBarangay) {
+                    setPinnedBarangay({ ...pinnedBarangay });
+                  }
+                }}
+                activeOpacity={pinnedBarangay ? 0.8 : 1}
+                style={[styles.floatingPillBtn, { borderColor: logoGreen, paddingVertical: 7, paddingHorizontal: 12 }]}
+              >
+                {pinnedBarangay ? (
+                  <>
+                    <CheckCircle2 size={13} color={logoGreen} style={{ marginRight: 5 }} />
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
+                      📍 Pinned: <Text style={{ color: logoGreen }}>{pinnedBarangay.formattedTitle || `Brgy. ${pinnedBarangay.barangay}`}</Text>
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Navigation size={12} color={logoGreen} style={{ marginRight: 5 }} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: isDarkMode ? "#F8FAFC" : "#0F172A" }}>
+                      Tap anywhere to pin your exact Barangay
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Set as New Default Location Confirmation In-Modal Overlay */}
+            {showDefaultLocationPrompt && pendingDefaultLocation && (
+              <View style={promptStyles.overlay}>
+                <View
+                  style={[
+                    promptStyles.card,
+                    {
+                      backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                      borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                    },
+                  ]}
+                >
+                  {/* Top Icon Badge */}
+                  <View
+                    style={[
+                      promptStyles.iconBadge,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(16, 185, 129, 0.2)"
+                          : "#ECFDF5",
+                      },
+                    ]}
+                  >
+                    <MapPin size={26} color="#10B981" />
+                  </View>
+
+                  <Text
+                    style={[
+                      promptStyles.title,
+                      { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+                    ]}
+                  >
+                    Set as Default Location?
+                  </Text>
+
+                  <Text
+                    style={[
+                      promptStyles.description,
+                      { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                    ]}
+                  >
+                    Would you like to set{" "}
+                    <Text
+                      style={{
+                        fontWeight: "800",
+                        color: isDarkMode ? "#34D399" : "#059669",
+                      }}
+                    >
+                      {pendingDefaultLocation?.formattedTitle ||
+                        (pendingDefaultLocation?.barangay && pendingDefaultLocation?.city
+                          ? `Brgy. ${pendingDefaultLocation.barangay}, ${pendingDefaultLocation.city}`
+                          : pendingDefaultLocation?.city ||
+                            (typeof pendingDefaultLocation === "string"
+                              ? pendingDefaultLocation
+                              : "this location"))}
+                    </Text>{" "}
+                    as your new default location?
+                  </Text>
+
+                  <View
+                    style={[
+                      promptStyles.infoPill,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(15, 23, 42, 0.6)"
+                          : "#F8FAFC",
+                        borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                      },
+                    ]}
+                  >
+                    <CheckCircle2 size={13} color="#10B981" style={{ marginRight: 6 }} />
+                    <Text
+                      style={[
+                        promptStyles.infoPillText,
+                        { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                      ]}
+                    >
+                      This will automatically reflect in your Settings tab
+                    </Text>
+                  </View>
+
+                  <View style={promptStyles.actionsColumn}>
+                    <TouchableOpacity
+                      style={promptStyles.primaryBtn}
+                      onPress={() => handleConfirmDefaultLocation()}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={promptStyles.primaryBtnText}>
+                        Yes, Set as Default
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        promptStyles.secondaryBtn,
+                        {
+                          borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                          backgroundColor: isDarkMode ? "#0F172A" : "#F1F5F9",
+                        },
+                      ]}
+                      onPress={handleRejectDefaultLocation}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          promptStyles.secondaryBtnText,
+                          { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                        ]}
+                      >
+                        Keep Temporary
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <LoadingModal
         visible={isFetchingRecipe || isGeneratingAIPlan}
@@ -1348,6 +2174,128 @@ export default function DietRecipesScreen({
         title={isFetchingRecipe ? "Crafting Custom Recipe" : "Generating AI Daily Meal Plan"}
         subtitle={isFetchingRecipe ? "Vita AI is personalizing your nutrition" : "Vita AI is calculating your optimal daily macros"}
       />
+
+      {/* Set as New Default Location Confirmation Modal (For Compact View) */}
+      <Modal
+        visible={showDefaultLocationPrompt && !isMapMaximized}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleRejectDefaultLocation}
+      >
+        <View style={promptStyles.overlay}>
+          <View
+            style={[
+              promptStyles.card,
+              {
+                backgroundColor: isDarkMode ? "#1E293B" : "#FFFFFF",
+                borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+              },
+            ]}
+          >
+            {/* Top Icon Badge */}
+            <View
+              style={[
+                promptStyles.iconBadge,
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(16, 185, 129, 0.2)"
+                    : "#ECFDF5",
+                },
+              ]}
+            >
+              <MapPin size={26} color="#10B981" />
+            </View>
+
+            <Text
+              style={[
+                promptStyles.title,
+                { color: isDarkMode ? "#F8FAFC" : "#0F172A" },
+              ]}
+            >
+              Set as Default Location?
+            </Text>
+
+            <Text
+              style={[
+                promptStyles.description,
+                { color: isDarkMode ? "#94A3B8" : "#64748B" },
+              ]}
+            >
+              Would you like to set{" "}
+              <Text
+                style={{
+                  fontWeight: "800",
+                  color: isDarkMode ? "#34D399" : "#059669",
+                }}
+              >
+                {pendingDefaultLocation?.formattedTitle ||
+                  (pendingDefaultLocation?.barangay && pendingDefaultLocation?.city
+                    ? `Brgy. ${pendingDefaultLocation.barangay}, ${pendingDefaultLocation.city}`
+                    : pendingDefaultLocation?.city ||
+                      (typeof pendingDefaultLocation === "string"
+                        ? pendingDefaultLocation
+                        : "this location"))}
+              </Text>{" "}
+              as your new default location?
+            </Text>
+
+            <View
+              style={[
+                promptStyles.infoPill,
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(15, 23, 42, 0.6)"
+                    : "#F8FAFC",
+                  borderColor: isDarkMode ? "#334155" : "#E2E8F0",
+                },
+              ]}
+            >
+              <CheckCircle2 size={13} color="#10B981" style={{ marginRight: 6 }} />
+              <Text
+                style={[
+                  promptStyles.infoPillText,
+                  { color: isDarkMode ? "#94A3B8" : "#64748B" },
+                ]}
+              >
+                This will automatically reflect in your Settings tab
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={promptStyles.actionsColumn}>
+              <TouchableOpacity
+                onPress={() => handleConfirmDefaultLocation()}
+                style={promptStyles.primaryBtn}
+                activeOpacity={0.85}
+              >
+                <CheckCircle2 size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={promptStyles.primaryBtnText}>Yes, Set as Default</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleRejectDefaultLocation}
+                style={[
+                  promptStyles.secondaryBtn,
+                  {
+                    borderColor: isDarkMode ? "#334155" : "#CBD5E1",
+                    backgroundColor: isDarkMode ? "#0F172A" : "#F1F5F9",
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    promptStyles.secondaryBtnText,
+                    { color: isDarkMode ? "#CBD5E1" : "#475569" },
+                  ]}
+                >
+                  Keep as Temporary
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1581,6 +2529,7 @@ const getStyles = (theme) =>
       flexDirection: "row",
       alignItems: "center",
     },
+    generatePlanButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 },
     staticMapContainer: {
       height: 235,
       width: "100%",
@@ -1615,26 +2564,6 @@ const getStyles = (theme) =>
       borderWidth: 1.5,
     },
     floatingPillText: { fontSize: 12, fontWeight: "800", color: logoGreen },
-    floatingFullscreenBtn: {
-      position: "absolute",
-      top: 12,
-      left: 12,
-      backgroundColor: theme?.surface || "#FFFFFF",
-      borderRadius: 50,
-      paddingVertical: 7,
-      paddingHorizontal: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.22,
-      shadowRadius: 5,
-      elevation: 6,
-      borderWidth: 1.2,
-      borderColor: logoGreen,
-      zIndex: 100,
-    },
-    floatingFullscreenText: { fontSize: 11, fontWeight: "800", color: logoGreen },
     fullMapButton: {
       flexDirection: "row",
       alignItems: "center",
@@ -1673,6 +2602,37 @@ const getStyles = (theme) =>
     },
     allergyBannerText: { fontSize: 11, fontWeight: "700", flex: 1 },
     timelineList: { gap: 0 },
+    hubScrollContainer: {
+      marginBottom: 12,
+    },
+    hubScrollContent: {
+      flexDirection: "row",
+      gap: 8,
+      paddingVertical: 2,
+    },
+    hubPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 14,
+      borderWidth: 1.2,
+      borderColor: theme?.border || "#E2E8F0",
+      backgroundColor: theme?.surface || "#FFFFFF",
+    },
+    hubPillActive: {
+      backgroundColor: logoGreen,
+      borderColor: logoGreen,
+    },
+    hubPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme?.textSecondary || "#64748B",
+    },
+    hubPillTextActive: {
+      color: "#FFFFFF",
+      fontWeight: "800",
+    },
     goalGuardBanner: {
       backgroundColor: "rgba(16, 185, 129, 0.08)",
       borderWidth: 1,
@@ -1712,4 +2672,189 @@ const getStyles = (theme) =>
       marginBottom: 6,
       lineHeight: 14,
     },
+    maximizeMapButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+    },
+    mapSearchBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: Platform.OS === "ios" ? 10 : 7,
+      marginBottom: 8,
+    },
+    mapSearchInput: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      padding: 0,
+    },
+    mapSearchDropdown: {
+      borderWidth: 1.5,
+      borderRadius: 14,
+      overflow: "hidden",
+      marginBottom: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 10,
+      elevation: 8,
+      zIndex: 9999,
+    },
+    mapSearchItemRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+    },
+    mapSearchItemIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 10,
+    },
+    mapSearchItemTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    mapSearchItemSub: {
+      fontSize: 11,
+    },
+    mapSearchItemBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    maximizedMapOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 9999,
+      elevation: 9999,
+      flexDirection: "column",
+    },
+    maximizedTopBar: {
+      paddingTop: Platform.OS === "ios" ? 54 : 38,
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 6,
+      zIndex: 100,
+    },
+    maximizedTitle: {
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: -0.3,
+    },
+    minimizeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 12,
+    },
+    minimizeBtnText: {
+      fontSize: 12,
+      fontWeight: "800",
+    },
   });
+
+const promptStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  iconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  description: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 14,
+  },
+  infoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 18,
+    width: "100%",
+    justifyContent: "center",
+  },
+  infoPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  actionsColumn: {
+    width: "100%",
+    gap: 10,
+  },
+  primaryBtn: {
+    backgroundColor: "#10B981",
+    paddingVertical: 13,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+});
+

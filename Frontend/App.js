@@ -357,19 +357,24 @@ function MainApp() {
         return data.loggedMealIds;
       });
     }
-    setUserProfile((prev) => ({
-      ...prev,
-      name: data.profile.name || "User",
-      email: data.profile.email || prev.email || "",
-      profileImage: data.profile.profileImage || null,
-      isPremium: !!data.nutrition.isPremium,
-      streakDays: data.streakDays || 0,
-      address: data.profile.address || prev.address || "",
-      structuredLocation:
-        data.profile.structuredLocation || prev.structuredLocation || null,
-      city: data.profile.city || prev.city || "",
-      allergies: data.profile.allergies || prev.allergies || [],
-    }));
+    setUserProfile((prev) => {
+      const updated = {
+        ...prev,
+        name: data.profile.name || "User",
+        email: data.profile.email || prev.email || "",
+        profileImage: data.profile.profileImage || null,
+        isPremium: !!data.nutrition.isPremium,
+        streakDays: data.streakDays || 0,
+        address: data.profile.address || prev.address || "",
+        structuredLocation:
+          data.profile.structuredLocation || prev.structuredLocation || null,
+        city: data.profile.city || prev.city || "",
+        province: data.profile.province || prev.province || "",
+        allergies: data.profile.allergies || prev.allergies || [],
+      };
+      AsyncStorage.setItem("ms_user_profile", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
   };
 
   const inFlightDashboardFetchRef = useRef(null);
@@ -1098,6 +1103,18 @@ function MainApp() {
         onNext={(locationData) => {
           if (locationData) {
             setUserLocation(locationData);
+            setUserProfile((prev) => {
+              const updated = {
+                ...prev,
+                address: locationData.address || prev.address || "",
+                structuredLocation:
+                  locationData.structuredLocation || prev.structuredLocation || null,
+                city: locationData.city || prev.city || "",
+                province: locationData.province || prev.province || "",
+              };
+              AsyncStorage.setItem("ms_user_profile", JSON.stringify(updated)).catch(() => {});
+              return updated;
+            });
           }
           setCurrentScreen("STEP_FOUR");
         }}
@@ -1122,26 +1139,35 @@ function MainApp() {
             "Complete Integrated Onboarding Payload Matrix:",
             onboardingPayload,
           );
-          setUserProfile((prev) => ({
-            ...prev,
-            address:
-              userLocation?.address ||
-              finalPersonalizationData?.address ||
-              prev.address ||
-              "",
-            structuredLocation:
-              userLocation?.structuredLocation ||
-              finalPersonalizationData?.structuredLocation ||
-              prev.structuredLocation ||
-              null,
-            city:
-              userLocation?.city ||
-              finalPersonalizationData?.city ||
-              prev.city ||
-              "",
-            allergies:
-              finalPersonalizationData?.allergies || prev.allergies || [],
-          }));
+          setUserProfile((prev) => {
+            const updated = {
+              ...prev,
+              address:
+                userLocation?.address ||
+                finalPersonalizationData?.address ||
+                prev.address ||
+                "",
+              structuredLocation:
+                userLocation?.structuredLocation ||
+                finalPersonalizationData?.structuredLocation ||
+                prev.structuredLocation ||
+                null,
+              city:
+                userLocation?.city ||
+                finalPersonalizationData?.city ||
+                prev.city ||
+                "",
+              province:
+                userLocation?.province ||
+                finalPersonalizationData?.province ||
+                prev.province ||
+                "",
+              allergies:
+                finalPersonalizationData?.allergies || prev.allergies || [],
+            };
+            AsyncStorage.setItem("ms_user_profile", JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
           setTempOnboardingData(onboardingPayload);
           setCurrentScreen("GENERATING_PLAN");
         }}
@@ -1308,6 +1334,7 @@ function MainApp() {
             isOnline={isOnline}
             setNotifications={setNotifications}
             userProfile={userProfile}
+            setUserProfile={setUserProfile}
           />
         </FadeTabView>
       )}

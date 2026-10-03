@@ -109,61 +109,103 @@ export default function useSettings({
     }
   }, [showAlert]);
 
-  const handleSaveProfile = useCallback(async () => {
-    if (!tempName.trim()) {
-      showAlert("Validation Error", "Name cannot be empty.");
-      return;
-    }
-
-    try {
-      // ⚡ INSTANT OPTIMISTIC UI UPDATE
-      if (setUserProfile) {
-        setUserProfile((prev) => ({
-          ...prev,
-          name: tempName.trim(),
-          profileImage: tempImage,
-        }));
+  const handleSaveProfile = useCallback(
+    async (locationPayload) => {
+      const nameToSave = (locationPayload?.name !== undefined ? locationPayload.name : tempName).trim();
+      if (!nameToSave) {
+        showAlert("Validation Error", "Name cannot be empty.");
+        return;
       }
-      setShowEditModal(false);
-      setTimeout(() => {
-        showAlert("Success", "Profile updated!");
-      }, 250);
 
-      // Background network sync
-      (async () => {
-        try {
-          const activeUserId = await resolveUserId();
-          if (activeUserId) {
-            await fetch(`${API_URL}/update-profile`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                user_id: activeUserId,
-                name: tempName.trim(),
-                email: userProfile?.email,
-              }),
-            });
+      const provinceName = locationPayload?.province || userProfile?.province || "";
+      const cityName = locationPayload?.city || userProfile?.city || "";
+      const addressStr = locationPayload?.address || (cityName && provinceName ? `${cityName}, ${provinceName}` : userProfile?.address || "");
+      const structuredLoc = locationPayload?.structuredLocation || userProfile?.structuredLocation || null;
 
-            if (tempImage && tempImage !== userProfile?.profileImage) {
-              await fetch(`${API_URL}/update-profile-picture`, {
+      try {
+        // ⚡ INSTANT OPTIMISTIC UI UPDATE
+        if (setUserProfile) {
+          setUserProfile((prev) => {
+            const updated = {
+              ...prev,
+              name: nameToSave,
+              profileImage: tempImage,
+              address: addressStr || prev?.address || "",
+              city: cityName || prev?.city || "",
+              province: provinceName || prev?.province || "",
+              structuredLocation: structuredLoc || prev?.structuredLocation || null,
+            };
+            AsyncStorage.setItem("ms_user_profile", JSON.stringify(updated)).catch(() => {});
+            if (cityName || provinceName) {
+              AsyncStorage.setItem(
+                "@ms_default_location",
+                JSON.stringify({
+                  address: addressStr,
+                  city: cityName,
+                  province: provinceName,
+                  structuredLocation: structuredLoc,
+                })
+              ).catch(() => {});
+
+              AsyncStorage.setItem(
+                "ms_pinned_barangay",
+                JSON.stringify({
+                  barangay: "",
+                  city: cityName,
+                  province: provinceName,
+                  formattedTitle: addressStr || (cityName && provinceName ? `${cityName}, ${provinceName}` : cityName),
+                })
+              ).catch(() => {});
+            }
+            return updated;
+          });
+        }
+        setShowEditModal(false);
+        setTimeout(() => {
+          showAlert("Success", "Profile updated!");
+        }, 250);
+
+        // Background network sync
+        (async () => {
+          try {
+            const activeUserId = await resolveUserId();
+            if (activeUserId) {
+              await fetch(`${API_URL}/update-profile`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   user_id: activeUserId,
-                  profile_image: tempImage,
+                  name: nameToSave,
+                  email: userProfile?.email,
+                  address: addressStr,
+                  city: cityName,
+                  province: provinceName,
+                  structured_location: structuredLoc,
                 }),
               });
+
+              if (tempImage && tempImage !== userProfile?.profileImage) {
+                await fetch(`${API_URL}/update-profile-picture`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    user_id: activeUserId,
+                    profile_image: tempImage,
+                  }),
+                });
+              }
             }
+          } catch (e) {
+            if (__DEV__) console.log("Background profile sync error:", e);
           }
-        } catch (e) {
-          if (__DEV__) console.log("Background profile sync error:", e);
-        }
-      })();
-    } catch (error) {
-      if (__DEV__) console.error("UPDATE PROFILE ERROR:", error);
-      showAlert("Error", "Failed to update profile. Please try again.");
-    }
-  }, [tempName, tempImage, resolveUserId, userProfile?.email, userProfile?.profileImage, setUserProfile, showAlert]);
+        })();
+      } catch (error) {
+        if (__DEV__) console.error("UPDATE PROFILE ERROR:", error);
+        showAlert("Error", "Failed to update profile. Please try again.");
+      }
+    },
+    [tempName, tempImage, resolveUserId, userProfile, setUserProfile, showAlert]
+  );
 
   const handleRemoveProfileImage = useCallback(async () => {
     if (setUserProfile) {

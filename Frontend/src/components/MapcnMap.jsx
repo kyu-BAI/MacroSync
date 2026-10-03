@@ -3,8 +3,6 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
 import cebuBoundaries from '../data/cebu_boundaries.json';
-import { PHILIPPINE_CITY_COORDINATES } from '../data/philippine_locations';
-import { CEBU_CITY_COORDINATES } from '../data/cebu_locations';
 
 /**
  * MapcnMap
@@ -12,8 +10,8 @@ import { CEBU_CITY_COORDINATES } from '../data/cebu_locations';
  * Features:
  *   - Stable WebView lifecycle (no reloads on prop changes)
  *   - Preserves user zoom when pinning (zero unwanted zoom-out)
- *   - Prominent pin with place name badge and pulsing pinpoint ripple
- *   - Clean view with pin location and place name (no borders)
+ *   - Prominent red pinpoint with pulsing ripple and custom SVG marker
+ *   - Barangay red dots and city polygon highlights
  */
 export default function MapcnMap({
   center = [123.8854, 10.3157],
@@ -21,7 +19,6 @@ export default function MapcnMap({
   markers = [],
   activeLocation = '',
   pinnedBarangay = null,
-  showPin = true,
   boundariesGeoJSON = cebuBoundaries,
   onMarkerPress,
   onSelectLocation,
@@ -37,10 +34,26 @@ export default function MapcnMap({
   const mapReadyRef = useRef(false);
   const pendingActionsRef = useRef([]);
 
-  // Normalize center coordinates into [lng, lat]
-  const centerCoords = Array.isArray(center)
-    ? center
-    : [center.lng ?? center.longitude ?? 123.8854, center.lat ?? center.latitude ?? 10.3157];
+  // Normalize center coordinates and zoom dynamically based on pinned location
+  const resolvedLat =
+    (pinnedBarangay && typeof pinnedBarangay.lat === "number" ? pinnedBarangay.lat : null) ??
+    (center && typeof center.lat === "number" ? center.lat : null) ??
+    (Array.isArray(center) && typeof center[1] === "number" ? center[1] : 10.3157);
+
+  const resolvedLng =
+    (pinnedBarangay && typeof pinnedBarangay.lng === "number" ? pinnedBarangay.lng : null) ??
+    (center && typeof center.lng === "number" ? center.lng : null) ??
+    (Array.isArray(center) && typeof center[0] === "number" ? center[0] : 123.8854);
+
+  const hasPinnedCoords = Boolean(
+    pinnedBarangay &&
+    typeof pinnedBarangay.lat === "number" &&
+    typeof pinnedBarangay.lng === "number"
+  );
+
+  const initialCenter = [resolvedLng, resolvedLat];
+  const initialZoom = hasPinnedCoords ? 14 : (typeof zoom === "number" ? zoom : 9);
+  const centerCoords = initialCenter;
 
   // Helper to execute script immediately if map is ready, or queue until MAP_READY
   const injectOrQueue = useCallback((script) => {
@@ -100,14 +113,12 @@ export default function MapcnMap({
     }
   }, [pinnedBarangay?.lat, pinnedBarangay?.lng, pinnedBarangay?.formattedTitle, injectOrQueue]);
 
-  // Update active boundary and zoom to place
+  // Update active boundary ONLY when no barangay is pinned, without flying or zooming out
   useEffect(() => {
     if (activeLocation) {
       const script = `
         if (typeof window.applyActiveBoundary === 'function') {
-          window.applyActiveBoundary(${JSON.stringify(activeLocation)}, true);
-        } else {
-          window.pendingActiveLocation = ${JSON.stringify(activeLocation)};
+          window.applyActiveBoundary(${JSON.stringify(activeLocation)}, false);
         }
         true;
       `;
@@ -240,7 +251,7 @@ export default function MapcnMap({
         }
         .mapcn-mappin-pin {
           width: 42px;
-          height: 46px;
+          height: 52px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -250,39 +261,39 @@ export default function MapcnMap({
           transform: scale(1.1);
         }
 
-        /* ── Exact Pinpoint Dot & Pulse at the tip of the pin ── */
-        .mapcn-exact-pinpoint-dot {
+        /* ── EXACT RED PINPOINT DOT & PULSE AT THE BOTTOM OF THE PIN ── */
+        .mapcn-exact-pinpoint-red-dot {
           position: absolute;
-          bottom: 0px;
+          bottom: -6px;
           left: 50%;
           transform: translateX(-50%);
-          width: 8px;
-          height: 8px;
-          background-color: #10B981;
-          border: 1.8px solid #FFFFFF;
+          width: 14px;
+          height: 14px;
+          background-color: #DC2626;
+          border: 3px solid #FFFFFF;
           border-radius: 50%;
-          box-shadow: 0 0 4px rgba(16, 185, 129, 0.8), 0 2px 6px rgba(0, 0, 0, 0.35);
-          z-index: 9999;
+          box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.6), 0 3px 8px rgba(0, 0, 0, 0.6);
+          z-index: 10001;
         }
         .mapcn-exact-pinpoint-pulse {
           position: absolute;
-          bottom: -7px;
+          bottom: -16px;
           left: 50%;
           transform: translateX(-50%);
-          width: 24px;
-          height: 24px;
-          border: 2px solid #10B981;
+          width: 34px;
+          height: 34px;
+          border: 2.5px solid #EF4444;
           border-radius: 50%;
-          animation: pinpointPulse 1.8s infinite ease-out;
+          animation: redPinpointPulse 1.8s infinite ease-out;
           pointer-events: none;
-          z-index: 9998;
+          z-index: 10000;
         }
-        @keyframes pinpointPulse {
-          0% { transform: translateX(-50%) scale(0.2); opacity: 0.95; }
+        @keyframes redPinpointPulse {
+          0% { transform: translateX(-50%) scale(0.3); opacity: 1; }
           100% { transform: translateX(-50%) scale(1.6); opacity: 0; }
         }
 
-        /* ── Municipality / Barangay Popup Badge (Clean, No Color On Left) ── */
+        /* ── Municipality / Barangay Popup Badge ── */
         .maplibregl-popup.mapcn-single-popup {
           z-index: 10050;
         }
@@ -297,13 +308,13 @@ export default function MapcnMap({
           margin-bottom: -1px;
         }
         .mapcn-popup-card {
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)'};
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)'};
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)'};
+          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'};
           border-radius: 9999px;
-          padding: 6px 16px;
+          padding: 6px 14px;
           box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
           display: flex;
           align-items: center;
@@ -316,12 +327,22 @@ export default function MapcnMap({
           to { opacity: 1; transform: translateY(0); }
         }
         .mapcn-popup-name {
-          font-size: 13.5px;
+          font-size: 13px;
           font-weight: 800;
           color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
           letter-spacing: -0.2px;
           line-height: 1.2;
-          text-align: center;
+        }
+        .mapcn-popup-pinned {
+          border-left: 3px solid #EF4444 !important;
+        }
+        .mapcn-popup-pinned-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: #EF4444;
+          margin-right: 6px;
+          flex-shrink: 0;
         }
 
         /* ── Hidden Attributions ── */
@@ -333,7 +354,7 @@ export default function MapcnMap({
           display: none !important; 
         }
 
-        /* ── Exact Barangay Emerald Dot Pinpoint ── */
+        /* ── Exact Barangay Red Dot Pinpoint ── */
         .mapcn-barangay-dot-marker {
           display: flex;
           flex-direction: column;
@@ -351,10 +372,10 @@ export default function MapcnMap({
         .mapcn-red-dot-core {
           width: 14px;
           height: 14px;
-          background-color: #10B981;
+          background-color: #EF4444;
           border: 2.5px solid #FFFFFF;
           border-radius: 50%;
-          box-shadow: 0 0 0 2.5px rgba(16, 185, 129, 0.45), 0 2px 7px rgba(0, 0, 0, 0.42);
+          box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.45), 0 2px 7px rgba(0, 0, 0, 0.42);
           position: relative;
         }
         .mapcn-red-dot-pulse {
@@ -363,15 +384,12 @@ export default function MapcnMap({
           left: -6px;
           width: 26px;
           height: 26px;
-          border: 1.5px solid rgba(16, 185, 129, 0.65);
+          border: 1.5px solid rgba(239, 68, 68, 0.65);
           border-radius: 50%;
-          animation: emeraldPulse 2.2s infinite ease-out;
+          animation: redPulse 2.2s infinite ease-out;
           pointer-events: none;
         }
-        @keyframes emeraldPulse {
-          0% { transform: scale(0.7); opacity: 0.95; }
-          100% { transform: scale(1.55); opacity: 0; }
-        }
+        @keyframes redPulse {
           0% { transform: scale(0.7); opacity: 0.95; }
           100% { transform: scale(1.55); opacity: 0; }
         }
@@ -390,30 +408,6 @@ export default function MapcnMap({
           margin-top: 3px;
           pointer-events: none;
         }
-
-        /* ── Modern Zoom In / Out Controls ── */
-        .maplibregl-ctrl-top-right {
-          top: 10px !important;
-          right: 10px !important;
-          z-index: 50 !important;
-        }
-        .maplibregl-ctrl-group {
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)'} !important;
-          border: 1.2px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.12)'} !important;
-          border-radius: 12px !important;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.20) !important;
-          overflow: hidden !important;
-        }
-        .maplibregl-ctrl-group button {
-          width: 32px !important;
-          height: 32px !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-        }
-        .maplibregl-ctrl-group button + button {
-          border-top: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'} !important;
-        }
       </style>
     </head>
     <body>
@@ -422,17 +416,28 @@ export default function MapcnMap({
       <script>
         var mapStyle = ${isDarkMode ? "'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'" : "'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'"};
 
+        var initialPinned = ${JSON.stringify(pinnedBarangay || null)};
+        var initialCenter = [${initialCenter[0]}, ${initialCenter[1]}];
+        var initialZoom = ${initialZoom};
+
         var map = new maplibregl.Map({
           container: 'map',
           style: mapStyle,
-          center: [123.8854, 10.3157],
-          zoom: 9,
+          center: initialCenter,
+          zoom: initialZoom,
           pitch: 0,
           bearing: 0,
           interactive: ${interactive},
           attributionControl: false
         });
         window.map = map;
+
+        if (initialPinned && typeof initialPinned.lat === 'number' && typeof initialPinned.lng === 'number') {
+          window.pendingPin = initialPinned;
+          window.currentPinnedBarangay = initialPinned;
+          isBarangayPinned = true;
+          window.isBarangayPinned = true;
+        }
 
         if (${showControls}) {
           map.addControl(new maplibregl.NavigationControl({
@@ -496,12 +501,17 @@ export default function MapcnMap({
         window.isBarangayPinned = false;
         window.currentPinnedBarangay = null;
         var boundariesData = ${JSON.stringify(boundariesGeoJSON || null)};
-        var currentActiveLocation = ${JSON.stringify(activeLocation || '')};
-        window.CEBU_COORDS = ${JSON.stringify(CEBU_CITY_COORDINATES || {})};
-        window.PHIL_COORDS = ${JSON.stringify(PHILIPPINE_CITY_COORDINATES || {})};
+        var currentActiveLocation = '';
 
         function clearCityHighlight() {
-          // No boundary polygons rendered
+          try {
+            if (map.getLayer('cebu-boundary-active-fill')) {
+              map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], '___NONE___']);
+            }
+            if (map.getLayer('cebu-boundary-active-line')) {
+              map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], '___NONE___']);
+            }
+          } catch(_) {}
         }
         window.clearCityHighlight = clearCityHighlight;
 
@@ -520,14 +530,12 @@ export default function MapcnMap({
           return t.indexOf('+') !== -1 || /^\d+(\.\d+)?[,\s]+\d+(\.\d+)?$/.test(t) || /^\d{3,6}$/.test(t) || (/^[A-Z0-9]{3,8}$/.test(t) && /\d/.test(t));
         }
 
-        var isPinEnabled = true;
-
         function showActivePin(title, lngLat) {
           if (!lngLat || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number') return;
 
-          var displayTitle = title || 'Selected Location';
+          var displayTitle = title || 'Pinned Barangay';
           if (isCodeString(displayTitle)) {
-            displayTitle = 'Selected Location';
+            displayTitle = 'Pinned Barangay';
           }
 
           if (activePinMarker) {
@@ -539,32 +547,35 @@ export default function MapcnMap({
           el.className = 'mapcn-mappin-wrapper';
           el.innerHTML = [
             '<div class="mapcn-mappin-pin">',
-              '<svg width="42" height="46" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
+              '<svg width="42" height="52" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg">',
                 '<defs>',
-                  '<linearGradient id="activeEmeraldPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
-                    '<stop offset="0%" stop-color="#10B981"/>',
-                    '<stop offset="100%" stop-color="#059669"/>',
+                  '<linearGradient id="activeRedPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
+                    '<stop offset="0%" stop-color="#EF4444"/>',
+                    '<stop offset="100%" stop-color="#B91C1C"/>',
                   '</linearGradient>',
-                  '<filter id="pinShadow" x="-30%" y="-20%" width="160%" height="160%">',
-                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.0" flood-color="rgba(0,0,0,0.42)"/>',
+                  '<filter id="pinShadow" x="-30%" y="-15%" width="160%" height="160%">',
+                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="rgba(0,0,0,0.5)"/>',
                   '</filter>',
                 '</defs>',
-                '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z" fill="url(#activeEmeraldPinGrad)" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#pinShadow)"/>',
-                '<circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>',
+                '<path d="M12 25C17.5 19.5 21 15 21 11a9 9 0 1 0-18 0c0 4 3.5 8.5 9 14z" fill="url(#activeRedPinGrad)" stroke="#FFFFFF" stroke-width="1.8" filter="url(#pinShadow)"/>',
+                '<circle cx="12" cy="11" r="5" fill="#FFFFFF"/>',
+                '<circle cx="12" cy="11" r="2.8" fill="#DC2626"/>',
               '</svg>',
             '</div>',
             '<div class="mapcn-exact-pinpoint-pulse"></div>',
-            '<div class="mapcn-exact-pinpoint-dot"></div>'
+            '<div class="mapcn-exact-pinpoint-red-dot"></div>'
           ].join('');
 
           var popupContent = [
-            '<div class="mapcn-popup-card">',
+            '<div class="mapcn-popup-card mapcn-popup-pinned">',
+              '<div class="mapcn-popup-pinned-dot"></div>',
               '<div class="mapcn-popup-name">' + displayTitle + '</div>',
             '</div>'
           ].join('');
 
           var popup = new maplibregl.Popup({
-            offset: [0, -46],
+            anchor: 'bottom',
+            offset: [0, -52],
             closeButton: false,
             closeOnClick: false,
             className: 'mapcn-single-popup'
@@ -599,6 +610,8 @@ export default function MapcnMap({
           isBarangayPinned = true;
           window.isBarangayPinned = true;
 
+          clearCityHighlight();
+
           var title = '';
           if (data.barangay && !isCodeString(data.barangay)) {
             title = 'Brgy. ' + data.barangay + (data.city ? (', ' + data.city) : '');
@@ -607,14 +620,20 @@ export default function MapcnMap({
           } else if (data.name && !isCodeString(data.name)) {
             title = data.name;
           } else {
-            title = 'Pinned Location';
+            title = 'Pinned Barangay';
           }
 
           showActivePin(title, [data.lng, data.lat]);
 
           if (window.map) {
-            window.map.panTo([data.lng, data.lat], {
-              duration: 500,
+            try { window.map.resize(); } catch(_) {}
+            var currentZ = window.map.getZoom() || 10;
+            var targetZoom = currentZ < 13 ? 13.8 : currentZ;
+            window.map.flyTo({
+              center: [data.lng, data.lat],
+              zoom: targetZoom,
+              offset: [0, 30],
+              duration: 650,
               essential: true
             });
           }
@@ -632,222 +651,179 @@ export default function MapcnMap({
         }
         window.removeActivePin = removeActivePin;
 
-        function initBoundaries() {
-          if (!map || !map.getSource) return;
+        function applyActiveBoundary(name, shouldFly) {
+          if (!name) return;
+          currentActiveLocation = name;
+
+          // STRICT: If a barangay is pinned, NEVER highlight or zoom out to city
+          if (isBarangayPinned || window.currentPinnedBarangay || initialPinned) {
+            clearCityHighlight();
+            return;
+          }
+
           try {
-            // Invisible Cebu boundaries layer purely for tap detection
-            if (boundariesData && !map.getSource('cebu-boundaries')) {
+            var matchedName = name;
+            if (boundariesData && boundariesData.features) {
+              var target = boundariesData.features.find(function(f) {
+                return f.properties && (
+                  f.properties.name === name ||
+                  f.properties.original_name === name ||
+                  (f.properties.name && name && f.properties.name.toLowerCase() === name.toLowerCase()) ||
+                  (f.properties.original_name && name && f.properties.original_name.toLowerCase() === name.toLowerCase())
+                );
+              });
+              if (target && target.properties) {
+                matchedName = target.properties.name;
+                if (target.properties.bbox && shouldFly && !isBarangayPinned) {
+                  var bb = target.properties.bbox;
+                  map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], {
+                    padding: { top: 40, bottom: 40, left: 30, right: 30 },
+                    maxZoom: 13,
+                    duration: 850
+                  });
+                }
+              }
+            }
+
+            if (!isBarangayPinned) {
+              if (map.getLayer('cebu-boundary-active-fill')) {
+                map.setFilter('cebu-boundary-active-fill', ['==', ['get', 'name'], matchedName]);
+              }
+              if (map.getLayer('cebu-boundary-active-line')) {
+                map.setFilter('cebu-boundary-active-line', ['==', ['get', 'name'], matchedName]);
+              }
+            } else {
+              clearCityHighlight();
+            }
+          } catch(err) {
+            console.warn('Error applying active boundary:', err);
+          }
+        }
+        window.applyActiveBoundary = applyActiveBoundary;
+
+        function initBoundaries() {
+          if (!boundariesData) return;
+          try {
+            if (!map.getSource('cebu-boundaries')) {
               map.addSource('cebu-boundaries', {
                 type: 'geojson',
                 data: boundariesData
               });
+            }
 
-              if (!map.getLayer('cebu-boundaries-all-fill')) {
-                map.addLayer({
-                  id: 'cebu-boundaries-all-fill',
-                  type: 'fill',
-                  source: 'cebu-boundaries',
-                  paint: {
-                    'fill-color': '#000000',
-                    'fill-opacity': 0.0001
-                  }
-                });
-              }
-
-              // Click listener for tapping directly on any municipality polygon
-              map.on('click', 'cebu-boundaries-all-fill', function(e) {
-                if (e.features && e.features[0] && e.features[0].properties) {
-                  var props = e.features[0].properties;
-                  var clickedCity = props.name || props.original_name || props.NAME_2;
-                  if (clickedCity) {
-                    applyActiveBoundary(clickedCity, true);
-                    if (window.ReactNativeWebView) {
-                      window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'BOUNDARY_CLICK',
-                        name: clickedCity
-                      }));
-                    }
-                  }
+            if (!map.getLayer('cebu-boundaries-all-fill')) {
+              map.addLayer({
+                id: 'cebu-boundaries-all-fill',
+                type: 'fill',
+                source: 'cebu-boundaries',
+                paint: {
+                  'fill-color': '#000000',
+                  'fill-opacity': 0.00001
                 }
               });
+            }
 
-              map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
-                map.getCanvas().style.cursor = 'pointer';
-              });
-              map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
-                map.getCanvas().style.cursor = '';
+            if (!map.getLayer('cebu-boundary-active-fill')) {
+              map.addLayer({
+                id: 'cebu-boundary-active-fill',
+                type: 'fill',
+                source: 'cebu-boundaries',
+                filter: ['==', ['get', 'name'], '___NONE___'],
+                paint: {
+                  'fill-color': '#10B981',
+                  'fill-opacity': 0.22
+                }
               });
             }
+
+            if (!map.getLayer('cebu-boundary-active-line')) {
+              map.addLayer({
+                id: 'cebu-boundary-active-line',
+                type: 'line',
+                source: 'cebu-boundaries',
+                filter: ['==', ['get', 'name'], '___NONE___'],
+                paint: {
+                  'line-color': '#059669',
+                  'line-width': 2.8,
+                  'line-opacity': 0.95
+                }
+              });
+            }
+
+            map.on('click', function(e) {
+              var lng = e.lngLat.lng;
+              var lat = e.lngLat.lat;
+
+              // Immediately set pinned state and show red pinpoint right where tapped
+              isBarangayPinned = true;
+              window.isBarangayPinned = true;
+              clearCityHighlight();
+              showActivePin('📍 Pinning location...', [lng, lat]);
+
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'MAP_TAP_COORDS',
+                  lng: lng,
+                  lat: lat
+                }));
+              }
+            });
+
+            map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
+              map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
+              map.getCanvas().style.cursor = '';
+            });
           } catch(err) {
             console.warn('Error initializing boundaries:', err);
           }
         }
 
-        function applyActiveBoundary(name, shouldFly) {
-          if (!name) return;
-          currentActiveLocation = name;
-
-          // Clear prior pinned barangay state if selecting a city
-          if (shouldFly) {
-            isBarangayPinned = false;
-            window.isBarangayPinned = false;
-            window.currentPinnedBarangay = null;
-          }
-
-          initBoundaries();
-
-          try {
-            var cleanInput = (name || '')
-              .toLowerCase()
-              .replace(/\s*\(camotes\)/g, '')
-              .replace(/^city of\s+/g, '')
-              .replace(/\s+city$/g, '')
-              .replace(/^municipality of\s+/g, '')
-              .replace(/,\s*(cebu|philippines).*$/g, '')
-              .trim();
-
-            var targetCoord = null;
-            var matchedName = name;
-
-            // 1. Resolve from Cebu Coordinates first (exact precision)
-            if (window.CEBU_COORDS) {
-              if (window.CEBU_COORDS[name]) {
-                targetCoord = window.CEBU_COORDS[name];
-                matchedName = name;
-              } else {
-                var cKey = Object.keys(window.CEBU_COORDS).find(function(k) {
-                  var lk = k.toLowerCase().replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
-                  return lk === cleanInput || lk.indexOf(cleanInput) !== -1 || cleanInput.indexOf(lk) !== -1;
-                });
-                if (cKey) {
-                  targetCoord = window.CEBU_COORDS[cKey];
-                  matchedName = cKey;
-                }
-              }
-            }
-
-            // 2. Resolve from Cebu GeoJSON boundary bbox centroid
-            if (!targetCoord && boundariesData && boundariesData.features) {
-              var targetFeature = boundariesData.features.find(function(f) {
-                if (!f.properties) return false;
-                var fName = (f.properties.name || '').toLowerCase();
-                var fOrig = (f.properties.original_name || '').toLowerCase();
-                var fName2 = (f.properties.NAME_2 || '').toLowerCase();
-                var fCleanName = fName.replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
-                var fCleanOrig = fOrig.replace(/\s*\(camotes\)/g, '').replace(/\s+city$/g, '').trim();
-
-                return (
-                  fName === name.toLowerCase() ||
-                  fOrig === name.toLowerCase() ||
-                  fName2 === name.toLowerCase() ||
-                  fCleanName === cleanInput ||
-                  fCleanOrig === cleanInput ||
-                  (cleanInput.length >= 3 && fName.indexOf(cleanInput) !== -1) ||
-                  (cleanInput.length >= 3 && cleanInput.indexOf(fCleanName) !== -1)
-                );
-              });
-
-              if (targetFeature && targetFeature.properties) {
-                matchedName = targetFeature.properties.name || targetFeature.properties.original_name || targetFeature.properties.NAME_2 || name;
-                if (targetFeature.properties.bbox) {
-                  var bb = targetFeature.properties.bbox;
-                  targetCoord = {
-                    lng: (bb[0] + bb[2]) / 2,
-                    lat: (bb[1] + bb[3]) / 2
-                  };
-                }
-              }
-            }
-
-            // 3. Resolve from Philippine City Coordinates
-            if (!targetCoord && window.PHIL_COORDS) {
-              if (window.PHIL_COORDS[name]) {
-                targetCoord = window.PHIL_COORDS[name];
-                matchedName = name;
-              } else {
-                var pKey = Object.keys(window.PHIL_COORDS).find(function(k) {
-                  var lk = k.toLowerCase().replace(/\s+city$/g, '').trim();
-                  return lk === cleanInput || lk.indexOf(cleanInput) !== -1 || cleanInput.indexOf(lk) !== -1;
-                });
-                if (pKey) {
-                  targetCoord = window.PHIL_COORDS[pKey];
-                  matchedName = pKey;
-                }
-              }
-            }
-
-            // If coordinate found: show Pin and Place Name, fly smoothly
-            if (targetCoord && typeof targetCoord.lat === 'number' && typeof targetCoord.lng === 'number') {
-              showActivePin(matchedName, [targetCoord.lng, targetCoord.lat]);
-
-              if (shouldFly && window.map) {
-                map.flyTo({
-                  center: [targetCoord.lng, targetCoord.lat],
-                  zoom: 12.8,
-                  duration: 850,
-                  essential: true
-                });
-              }
-            }
-          } catch(err) {
-            console.warn('Error applying active location pin:', err);
-          }
-        }
-        window.applyActiveBoundary = applyActiveBoundary;
-
-        map.on('click', function(e) {
-          var lng = e.lngLat.lng;
-          var lat = e.lngLat.lat;
-
-          if (isPinEnabled) {
-            isBarangayPinned = true;
-            window.isBarangayPinned = true;
-            clearCityHighlight();
-            showActivePin('📍 Pinning location...', [lng, lat]);
-          }
-
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'MAP_TAP_COORDS',
-              lng: lng,
-              lat: lat
-            }));
-          }
-        });
-
-        function onMapReady() {
+        map.on('style.load', function() {
           enhanceMapColors();
           initBoundaries();
 
-          // Check if there is a pending pin from React Native
-          if (window.pendingPin) {
-            setPinnedBarangay(window.pendingPin);
+          try { map.resize(); } catch(_) {}
+
+          var pinToSet = initialPinned || window.pendingPin || window.currentPinnedBarangay;
+          if (pinToSet && typeof pinToSet.lat === 'number' && typeof pinToSet.lng === 'number') {
+            setPinnedBarangay(pinToSet);
             window.pendingPin = null;
-          } else if (window.pendingActiveLocation) {
-            applyActiveBoundary(window.pendingActiveLocation, true);
-            window.pendingActiveLocation = null;
-          } else if (currentActiveLocation && !isBarangayPinned) {
-            applyActiveBoundary(currentActiveLocation, true);
+          } else if (currentActiveLocation && !isBarangayPinned && !initialPinned) {
+            applyActiveBoundary(currentActiveLocation, false);
           }
 
           if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
           }
-        }
+        });
 
-        if (map.isStyleLoaded()) {
-          onMapReady();
-        } else {
-          map.once('load', onMapReady);
-          map.once('style.load', onMapReady);
-        }
-
+        window.addEventListener('resize', function() {
+          if (window.map) {
+            try { window.map.resize(); } catch(_) {}
+            if (window.currentPinnedBarangay && typeof window.currentPinnedBarangay.lat === 'number') {
+              window.map.panTo([window.currentPinnedBarangay.lng, window.currentPinnedBarangay.lat], { duration: 250 });
+            }
+          }
+        });
 
       </script>
     </body>
     </html>
     `;
-  }, [isDarkMode, boundariesGeoJSON, interactive, showControls, showPin]);
+  }, [
+    isDarkMode,
+    boundariesGeoJSON,
+    interactive,
+    showControls,
+    initialCenter[0],
+    initialCenter[1],
+    initialZoom,
+    pinnedBarangay?.lat,
+    pinnedBarangay?.lng,
+    pinnedBarangay?.formattedTitle,
+  ]);
 
   const handleMessage = (event) => {
     try {
@@ -877,12 +853,13 @@ export default function MapcnMap({
 
   const containerStyle = [
     styles.baseContainer,
+    (height === '100%' || style?.flex) && { flex: 1 },
     cardContainer && styles.cardContainer,
     cardContainer && {
       borderColor,
       backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
     },
-    { height },
+    typeof height === 'number' ? { height } : { flex: 1 },
     style,
   ];
 
