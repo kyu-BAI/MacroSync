@@ -42,7 +42,8 @@ import {
   getMealIconComponent,
   pushNotificationIfAllowed,
 } from "../../services/nutritionCalculator";
-import { normalizeToCebuLGU, getDynamicPalengkePlan } from "../../data/cebuPalengkeMeals";
+import { normalizeToCebuLGU } from "../../data/cebuPalengkeMeals";
+import { getDynamicPalengkePlan } from "../../data/philippineFoodEngine";
 import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from "../../data/cebu_locations";
 import {
   PHILIPPINE_REGIONS,

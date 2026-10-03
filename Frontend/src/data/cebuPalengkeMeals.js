@@ -512,30 +512,3 @@ export const sanitizeMealForUserAllergies = (mealTitle, mealType, userAllergies 
 
   return safeTitle;
 };
-
-import { generateGoalAlignedPhilippinePlan } from './philippineFoodEngine';
-
-// Generate rotating daily 4-meal plan based on date seed and target goals
-export const getDynamicPalengkePlan = ({
-  location = 'Cebu City',
-  totalUserCalories = 2000,
-  targetProtein = 150,
-  targetCarbs = 225,
-  targetFats = 55,
-  userAllergies = [],
-  guestGoals = {},
-  userId = 'anon',
-  cityProfile = null,
-}) => {
-  return generateGoalAlignedPhilippinePlan({
-    location,
-    totalUserCalories,
-    targetProtein,
-    targetCarbs,
-    targetFats,
-    userAllergies,
-    guestGoals,
-    userId,
-    cityProfile,
-  });
-};

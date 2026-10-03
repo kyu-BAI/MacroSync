@@ -512,3 +512,5 @@ export function generateGoalAlignedPhilippinePlan({
     },
   ];
 }
+
+export const getDynamicPalengkePlan = generateGoalAlignedPhilippinePlan;
