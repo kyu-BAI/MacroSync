@@ -59,7 +59,7 @@ function GoogleSignInButton({ onPress, isLoading, disabled, styles }) {
       onPress={onPress}
       style={[styles.buttonBase, styles.googleButtonBase, styles.googleButtonUnpressed]}
     >
-      {isLoading ? (
+      {isLoading ? (   
         <ActivityIndicator size="small" color="#64748B" />
       ) : (
         <View style={styles.googleContentRow}>

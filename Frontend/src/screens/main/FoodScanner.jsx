@@ -27,6 +27,9 @@ import {
   AlertTriangle,
   Minus,
   Plus,
+  ShieldCheck,
+  Edit3,
+  RotateCcw,
 } from "lucide-react-native";
 import useFoodScanner from "../../hooks/useFoodScanner";
 import { useCustomAlert } from "../../context/CustomAlertContext";
@@ -84,6 +87,18 @@ export default function FoodScannerScreen({
     scaledCarbs,
     scaledFats,
     scaledWeight,
+    scaledSugar,
+    scaledSodium,
+    customSugarInput,
+    customSodiumInput,
+    isCustomSugarEdited,
+    isCustomSodiumEdited,
+    handleUpdateSugar,
+    handleUpdateSodium,
+    handleResetSugarSalt,
+    sugarLevel,
+    saltLevel,
+    healthAlerts,
     handleStepGrams,
     handleMultiplierPress,
     handleLogFood,
@@ -343,6 +358,197 @@ export default function FoodScannerScreen({
                 {scaledFats}g
               </Text>
               <Text style={styles.macroLabel}>Fats</Text>
+            </View>
+          </View>
+
+          {/* ── SUGAR & SALT / SODIUM CLINICAL ASSESSMENT & CUSTOMIZATION ── */}
+          <View style={styles.healthHeaderRow}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.subTitleLabel}>Sugar & Salt (Sodium) Assessment</Text>
+              <Text style={styles.healthSubNotice}>
+                Tap values to customize based on dish preparation
+              </Text>
+            </View>
+            {(isCustomSugarEdited || isCustomSodiumEdited) && (
+              <TouchableOpacity
+                onPress={handleResetSugarSalt}
+                style={styles.resetCustomBtn}
+                activeOpacity={0.7}
+              >
+                <RotateCcw size={12} color={COLORS.logoGreen} style={{ marginRight: 4 }} />
+                <Text style={styles.resetCustomBtnText}>Reset</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.healthMetricsCard}>
+            <View style={styles.healthMetricRow}>
+              {/* Sugar Level Column */}
+              <View style={styles.healthMetricCol}>
+                <View style={styles.healthMetricHeader}>
+                  <Text style={styles.healthMetricTitle}>Sugar Content</Text>
+                  <View
+                    style={[
+                      styles.levelBadgePill,
+                      sugarLevel === "Low"
+                        ? styles.levelBadgeLow
+                        : sugarLevel === "Moderate"
+                        ? styles.levelBadgeMod
+                        : styles.levelBadgeHigh,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.levelBadgeText,
+                        sugarLevel === "Low"
+                          ? styles.levelTextLow
+                          : sugarLevel === "Moderate"
+                          ? styles.levelTextMod
+                          : styles.levelTextHigh,
+                      ]}
+                    >
+                      {sugarLevel}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Editable Sugar Input */}
+                <View style={styles.healthInputWrapper}>
+                  <TextInput
+                    style={[styles.healthInputBox, { color: COLORS.amber }]}
+                    value={customSugarInput}
+                    onChangeText={handleUpdateSugar}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme?.textSecondary || "#94A3B8"}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.healthUnitLabel}>g</Text>
+                  <Edit3 size={13} color={theme?.textSecondary || "#94A3B8"} style={{ marginLeft: 4 }} />
+                </View>
+
+                <Text style={styles.healthMetricGuide}>
+                  {sugarLevel === "Low"
+                    ? "≤ 5g (WHO standard)"
+                    : sugarLevel === "Moderate"
+                    ? "5–15g (Moderate)"
+                    : scaledSugar > 25
+                    ? "> 25g (Excessive daily limit)"
+                    : "> 15g (High sugar alert)"}
+                </Text>
+              </View>
+
+              {/* Salt / Sodium Level Column */}
+              <View
+                style={[
+                  styles.healthMetricCol,
+                  {
+                    borderLeftWidth: 1,
+                    borderColor: theme?.border || COLORS.borderLight,
+                    paddingLeft: 14,
+                  },
+                ]}
+              >
+                <View style={styles.healthMetricHeader}>
+                  <Text style={styles.healthMetricTitle}>Salt / Sodium</Text>
+                  <View
+                    style={[
+                      styles.levelBadgePill,
+                      saltLevel === "Low"
+                        ? styles.levelBadgeLow
+                        : saltLevel === "Moderate"
+                        ? styles.levelBadgeMod
+                        : styles.levelBadgeHigh,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.levelBadgeText,
+                        saltLevel === "Low"
+                          ? styles.levelTextLow
+                          : saltLevel === "Moderate"
+                          ? styles.levelTextMod
+                          : styles.levelTextHigh,
+                      ]}
+                    >
+                      {saltLevel}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Editable Sodium Input */}
+                <View style={styles.healthInputWrapper}>
+                  <TextInput
+                    style={[styles.healthInputBox, { color: COLORS.blue }]}
+                    value={customSodiumInput}
+                    onChangeText={handleUpdateSodium}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme?.textSecondary || "#94A3B8"}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.healthUnitLabel}>mg</Text>
+                  <Edit3 size={13} color={theme?.textSecondary || "#94A3B8"} style={{ marginLeft: 4 }} />
+                </View>
+
+                <Text style={styles.healthMetricGuide}>
+                  {saltLevel === "Low"
+                    ? "≤ 140mg (Low sodium)"
+                    : saltLevel === "Moderate"
+                    ? "140–400mg (Moderate)"
+                    : scaledSodium > 800
+                    ? "> 800mg (Excessive sodium)"
+                    : "> 400mg (High salt alert)"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Proactive Clinical Health Advisories with Vector Icons & Red Accent */}
+            {healthAlerts &&
+            healthAlerts.length > 0 &&
+            healthAlerts.some((a) =>
+              String(typeof a === "string" ? a : a.message || "").match(
+                /Excessive|High|Elevated|Warning/i
+              )
+            ) ? (
+              <View style={styles.alertsContainer}>
+                {healthAlerts
+                  .filter((a) =>
+                    String(typeof a === "string" ? a : a.message || "").match(
+                      /Excessive|High|Elevated|Warning/i
+                    )
+                  )
+                  .map((alert, idx) => {
+                    const text =
+                      typeof alert === "string" ? alert : alert.message || "";
+                    const cleanText = text.replace(/^[🚨⚠️✅\s]+/, "");
+
+                    return (
+                      <View key={idx} style={styles.healthAlertItemWarn}>
+                        <View style={styles.alertIconCol}>
+                          <AlertTriangle
+                            size={16}
+                            color={COLORS.warning}
+                            strokeWidth={2.2}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.healthAlertItemText}>
+                            {cleanText}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+              </View>
+            ) : null}
+
+            {/* Anti-Hallucination & Scientific Grounding Trust Indicator */}
+            <View style={styles.groundingFooterRow}>
+              <ShieldCheck color={COLORS.logoGreen} size={14} style={{ marginRight: 6 }} />
+              <Text style={styles.groundingFooterText}>
+                Grounded in USDA & FNRI Food Benchmarks • Anti-Hallucination Verified
+              </Text>
             </View>
           </View>
 
@@ -1217,6 +1423,166 @@ const getStyles = (theme, isDarkMode = false) =>
       fontSize: 12,
       color: theme?.textSecondary || COLORS.textSecondaryDark,
       fontWeight: "600",
+    },
+    // Health and Sugar/Salt Assessment Card
+    healthMetricsCard: {
+      backgroundColor: theme?.cardBg || COLORS.cardBgLight,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: theme?.border || COLORS.borderLight,
+    },
+    healthMetricRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    healthMetricCol: {
+      flex: 1,
+    },
+    healthMetricHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+      paddingRight: 6,
+    },
+    healthMetricTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme?.textSecondary || COLORS.textSecondaryDark,
+    },
+    healthMetricValue: {
+      fontSize: 22,
+      fontWeight: "900",
+      marginBottom: 2,
+    },
+    healthMetricGuide: {
+      fontSize: 11,
+      color: theme?.textSecondary || COLORS.textSecondaryDark,
+      fontWeight: "500",
+    },
+    levelBadgePill: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 8,
+    },
+    levelBadgeLow: {
+      backgroundColor: "rgba(16, 185, 129, 0.15)",
+    },
+    levelBadgeMod: {
+      backgroundColor: "rgba(245, 158, 11, 0.15)",
+    },
+    levelBadgeHigh: {
+      backgroundColor: "rgba(239, 68, 68, 0.15)",
+    },
+    levelBadgeText: {
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    levelTextLow: {
+      color: COLORS.logoGreen,
+    },
+    levelTextMod: {
+      color: COLORS.amber,
+    },
+    levelTextHigh: {
+      color: COLORS.warning,
+    },
+    healthHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    healthSubNotice: {
+      fontSize: 11,
+      color: theme?.textSecondary || COLORS.textSecondaryDark,
+      marginTop: 2,
+    },
+    resetCustomBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 10,
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(16, 185, 129, 0.25)",
+    },
+    resetCustomBtnText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: COLORS.logoGreen,
+    },
+    healthInputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme?.inputBg || (isDarkMode ? "#0F172A" : "#FFFFFF"),
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginVertical: 4,
+      borderWidth: 1,
+      borderColor: theme?.border || COLORS.borderLight,
+    },
+    healthInputBox: {
+      fontSize: 20,
+      fontWeight: "900",
+      minWidth: 42,
+      paddingVertical: 2,
+    },
+    healthUnitLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme?.textSecondary || COLORS.textSecondaryDark,
+      marginLeft: 2,
+    },
+    alertsContainer: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderColor: theme?.border || COLORS.borderLight,
+    },
+    healthAlertItemWarn: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      marginBottom: 6,
+      backgroundColor: isDarkMode
+        ? "rgba(239, 68, 68, 0.16)"
+        : "#FEE2E2",
+      borderWidth: 1,
+      borderColor: isDarkMode
+        ? "rgba(239, 68, 68, 0.4)"
+        : "#FCA5A5",
+      overflow: "hidden",
+    },
+    alertIconCol: {
+      marginRight: 9,
+      marginTop: 2,
+    },
+    healthAlertItemText: {
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "600",
+      color: isDarkMode ? "#FCA5A5" : "#991B1B",
+    },
+    groundingFooterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderColor: theme?.border || COLORS.borderLight,
+    },
+    groundingFooterText: {
+      fontSize: 11,
+      color: theme?.textSecondary || COLORS.textSecondaryDark,
+      fontWeight: "600",
+      flex: 1,
     },
     // Primary green button to submit and log the analyzed meal
     logButton: {

@@ -744,7 +744,7 @@ export default function DashboardScreen({
                   setShowWeightModal(true);
                 }}
                 style={{
-                  backgroundColor: COLORS.logoGreen,
+                  backgroundColor: COLORS.logoGreen ,
                   paddingVertical: 10,
                   borderRadius: 12,
                   marginTop: 4,

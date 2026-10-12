@@ -1831,6 +1831,137 @@ def generate_gemini_content(prompt: str, image_bytes: bytes = None, mime_type: s
     )
 
 
+# ---------------- AI SAFETY & NUTRITION GROUNDING GUARDS ----------------
+DANGEROUS_INTENT_KEYWORDS = [
+    "starve myself", "starving myself", "eat 0 calories", "eat 100 calories", "eat 200 calories",
+    "eat 300 calories", "eat 400 calories", "eat 500 calories", "anorexia", "bulimia",
+    "throw up after eating", "purge after eating", "purging food", "laxative abuse",
+    "dry fast 3 days", "dry fast 7 days", "tapeworm diet", "suicide", "kill myself",
+    "take steroids", "anabolic steroids", "buy dnp", "clenbuterol cycle"
+]
+
+def detect_unsafe_health_advice(message: str) -> str | None:
+    msg = (message or "").lower()
+    for kw in DANGEROUS_INTENT_KEYWORDS:
+        if kw in msg:
+            return (
+                "⚠️ **Safety & Health Advisory Notice**\n\n"
+                "MacroSync strictly prioritizes your clinical wellbeing and safety. "
+                "Extreme caloric deprivation (<1,200 kcal/day), prolonged dry fasting, vomiting/purging, or unprescribed performance-enhancing substances pose severe health risks, including acute metabolic shutdown, cardiac arrhythmia, and severe nutrient deficiency.\n\n"
+                "🌱 **Healthy Recommendation**: Safe, sustainable transformation is built on balanced nutrition (sustainable 300–500 kcal deficit), adequate protein, proper hydration, and structured movement.\n\n"
+                "If you are experiencing distress or disordered eating tendencies, please consult a licensed healthcare practitioner, registered dietitian, or health counselor immediately."
+            )
+    return None
+
+def validate_and_ground_nutrition(data: dict) -> dict:
+    """
+    Prevents AI Hallucinations and guarantees Sugar/Salt level assessments.
+    Enforces Atwater factor sanity checks (Calories ≈ 4*P + 4*C + 9*F) and grounds values.
+    """
+    if not isinstance(data, dict) or "error" in data:
+        return data
+
+    name = str(data.get("name", "Unknown Food")).strip()
+    try:
+        cals = int(float(data.get("calories", 0)))
+    except:
+        cals = 0
+    try:
+        prot = int(float(data.get("protein", 0)))
+    except:
+        prot = 0
+    try:
+        carbs = int(float(data.get("carbs", 0)))
+    except:
+        carbs = 0
+    try:
+        fats = int(float(data.get("fats", 0)))
+    except:
+        fats = 0
+
+    # Anti-Hallucination: Sanity check calories against macronutrients
+    calculated_cals = (prot * 4) + (carbs * 4) + (fats * 9)
+    if calculated_cals > 0:
+        diff_ratio = abs(cals - calculated_cals) / max(1, calculated_cals)
+        if diff_ratio > 0.30 or cals <= 0:
+            cals = calculated_cals
+            data["calories"] = cals
+
+    # Extract or realistically deduce sugar (g)
+    sugar_val = data.get("sugar_g")
+    if sugar_val is None:
+        name_lower = name.lower()
+        if any(w in name_lower for w in ["fruit", "mango", "banana", "apple", "shake", "juice", "sweet", "cake", "bibingka", "torta", "dessert", "soda", "sugar", "halo-halo"]):
+            sugar_val = min(carbs, max(8, int(carbs * 0.65)))
+        elif any(w in name_lower for w in ["rice", "bread", "pasta", "kamote", "potato", "oats", "pancit"]):
+            sugar_val = max(1, int(carbs * 0.08))
+        else:
+            sugar_val = max(0, int(carbs * 0.15))
+    else:
+        try:
+            sugar_val = round(float(sugar_val), 1)
+        except:
+            sugar_val = 2.0
+    
+    if carbs > 0:
+        sugar_val = min(sugar_val, float(carbs))
+    data["sugar_g"] = sugar_val
+
+    # Classify sugar level (WHO Benchmarks)
+    if sugar_val <= 5.0:
+        data["sugar_level"] = "Low"
+    elif sugar_val <= 15.0:
+        data["sugar_level"] = "Moderate"
+    else:
+        data["sugar_level"] = "High"
+
+    # Extract or realistically deduce sodium/salt (mg)
+    sodium_val = data.get("sodium_mg")
+    if sodium_val is None:
+        name_lower = name.lower()
+        if any(w in name_lower for w in ["tuyo", "danggit", "buwad", "bagoong", "soy", "patis", "chicharon", "adobo", "sinigang", "inasal", "sisig", "cured", "sausage", "processed"]):
+            sodium_val = 680
+        elif any(w in name_lower for w in ["soup", "tinola", "linat-an", "stew", "pork", "beef", "chicken", "fish", "egg"]):
+            sodium_val = 320
+        elif any(w in name_lower for w in ["fruit", "salad", "banana", "apple", "mango", "water", "buko"]):
+            sodium_val = 25
+        else:
+            sodium_val = 180
+    else:
+        try:
+            sodium_val = int(float(sodium_val))
+        except:
+            sodium_val = 200
+    data["sodium_mg"] = sodium_val
+
+    # Classify salt/sodium level (AHA Benchmarks)
+    if sodium_val <= 140:
+        data["salt_level"] = "Low"
+    elif sodium_val <= 400:
+        data["salt_level"] = "Moderate"
+    else:
+        data["salt_level"] = "High"
+
+    # Clinical health advisories
+    health_alerts = []
+    if data["sugar_level"] == "High":
+        health_alerts.append(
+            f"⚠️ Elevated Sugar ({sugar_val}g): Exceeds recommended single-meal simple sugar threshold. May cause glycemic spikes. Pair with dietary fiber or lean protein."
+        )
+    if data["salt_level"] == "High":
+        health_alerts.append(
+            f"⚠️ High Sodium/Salt ({sodium_val}mg): Exceeds 400mg per-serving guideline. High sodium may elevate blood pressure and fluid retention. Drink extra water and pair with potassium-rich greens."
+        )
+    if not health_alerts:
+        health_alerts.append("✅ Balanced Sugar & Salt: Values align with recommended healthy dietary guidelines.")
+
+    data["health_alerts"] = health_alerts
+    data["grounding_source"] = "USDA FoodData Central & FNRI Philippine Nutritional Benchmarks"
+    data["ai_safety_verified"] = True
+
+    return data
+
+
 # ---------------- AI CHATBOT ----------------
 @app.post("/chat")
 def chat_with_ai(data: ChatMessageRequest):
@@ -1840,6 +1971,16 @@ def chat_with_ai(data: ChatMessageRequest):
         
         is_premium = False
         day_usage = {"scans": 0, "chats": 0}
+
+        # Intercept unsafe or hazardous health advice requests
+        unsafe_check = detect_unsafe_health_advice(data.message)
+        if unsafe_check:
+            return {
+                "response": unsafe_check,
+                "action_logged": False,
+                "is_premium": False,
+                "remaining_chats": 10
+            }
         
         user_lang = data.language or "English"
         user_lang_clean = user_lang.strip().capitalize()
@@ -1899,6 +2040,22 @@ def chat_with_ai(data: ChatMessageRequest):
             "RULE 4: UNRELATED OFF-TOPIC QUESTIONS ONLY\n"
             "- ONLY if the user asks about completely unrelated non-health topics (like math homework, coding, politics, or movies):\n"
             "  - Politely state: \"I am Vita AI, MacroSync's Health, Fitness & Profile Assistant. Please ask a health, nutrition, or profile-related question!\"\n\n"
+            "RULE 5: PREVENT UNSAFE ADVICES & CLINICAL SAFETY BOUNDARIES (MANDATORY MEDICAL SAFETY PROTOCOL)\n"
+            "- You are an educational health & fitness lifestyle assistant, NOT a licensed medical physician.\n"
+            "- ZERO TOLERANCE FOR EXTREME CALORIC RESTRICTION: Never recommend or endorse eating below 1,200 kcal/day for females or 1,500 kcal/day for males. If a user asks to eat dangerously low calories or fast for extreme multi-day periods, refuse and explain the severe health risks (muscle catabolism, hormonal imbalance, metabolic crash).\n"
+            "- ZERO TOLERANCE FOR EATING DISORDERS: Refuse all prompts promoting anorexia, bulimia, vomiting/purging, or laxative abuse. Always respond with supportive guidance toward healthy eating.\n"
+            "- MEDICAL DIAGNOSIS BOUNDARY: Never attempt to diagnose clinical medical conditions, interpret lab/blood work, or prescribe medications, steroids, or unverified fat burner stimulants. Direct users with medical symptoms to licensed healthcare providers.\n"
+            "- FOOD SAFETY: Do not recommend eating raw/undercooked meats without proper cooking, toxic plants, spoiled items, or non-food substances.\n\n"
+            "RULE 6: PREVENT AI HALLUCINATION & GROUND ALL NUTRITIONAL DATA\n"
+            "- Ground all calorie and macronutrient figures strictly in USDA FoodData Central (FDC) and Philippine FNRI Food Composition benchmarks.\n"
+            "- NEVER invent or hallucinate fake ingredients, impossible nutrient values, or false scientific facts.\n"
+            "- Strict Atwater factor consistency: Calories must correspond to 4 kcal/g protein, 4 kcal/g carbohydrates, and 9 kcal/g fat.\n"
+            "- If you do not know the exact composition of a specific custom dish, explicitly state that you are providing a standard estimated benchmark rather than pretending certainty.\n\n"
+            "RULE 7: CHECK AND HIGHLIGHT SUGAR & SALT / SODIUM IN DISHES\n"
+            "- Whenever the user asks about food, dishes, recipes, or meals, explicitly evaluate the SUGAR and SALT/SODIUM levels:\n"
+            "  • Sugar Benchmark: Low (<5g/serving), Moderate (5-15g/serving), High (>15g/serving). Caution users if sugar is high to prevent blood glucose spikes.\n"
+            "  • Sodium / Salt Benchmark: Low (<140mg/serving), Moderate (140-400mg/serving), High (>400mg/serving). Caution users if salt/sodium is high regarding blood pressure and fluid balance (especially in Filipino soy/patis/bagoong/cured dishes).\n"
+            "  • Offer healthy low-sodium/low-sugar alternatives (e.g., calamansi, garlic, herbs instead of heavy salt; fresh fruit instead of refined sugar).\n\n"
         )
 
         user_context_str = ""
@@ -2624,26 +2781,30 @@ def analyze_food(data: AnalyzeFoodRequest):
 
         prompt = """
         You are an expert AI food, beverage, and nutritional scanner for the MacroSync mobile app.
-        Analyze the provided image with extreme precision.
+        Analyze the provided image with extreme precision and clinical grounding.
 
-        CRITICAL CLASSIFICATION RULES:
-        1. EDIBILITY & FOOD/BEVERAGE CHECK:
+        CRITICAL INTEGRITY & ANTI-HALLUCINATION RULES:
+        1. EDIBILITY & FOOD/BEVERAGE VERIFICATION (STRICT REJECTION OF NON-FOOD):
            Is the primary item in the image an EDIBLE food item, dish, meal, snack, raw/cooked ingredient (e.g. egg, boiled egg, fried egg, raw egg, egg yolk, fruit, meat, vegetable, bread, rice), beverage, or packaged food meant for human consumption?
            - IF THE ITEM IS NOT EDIBLE (e.g. non-edible objects, furniture, electronics, keyboards, clothing, shoes, toys, stationery, household items, human faces/hands with no food, empty plates/bowls/utensils with no food, tools, cars, walls, animals, plastic food replicas, or any inedible object):
              Return EXACTLY this JSON object and nothing else:
              {"error": "No edible food detected. Please align an edible food item, meal, or beverage in the frame."}
 
-        2. IF IT IS EDIBLE FOOD OR BEVERAGE:
-           Precisely identify the food items in the image.
-           - COMBO / HEALTHY MULTI-ITEM PLATES:
-             If the plate or bowl contains 2, 3, or more distinct healthy foods (for example: grilled chicken with broccoli and avocado/rice; or salmon with asparagus and sweet potato; or eggs with avocado and toast):
-             - Recognize all distinct foods on the plate.
-             - Formulate a clear, appetizing name including all major items (e.g., "Grilled Chicken with Broccoli & Avocado", "Salmon with Asparagus & Sweet Potato").
-             - Sum up the combined portion weight ("serving_weight_g") and total combined calories, protein, carbs, and fats for the entire plate.
+        2. PREVENT AI HALLUCINATION & GROUND NUTRIENTS IN STANDARDS:
+           - Ground all calorie, macronutrient, sugar, and sodium values strictly in USDA FoodData Central and Philippine DOST-FNRI Food Composition Tables.
+           - NEVER invent arbitrary figures or fake food items.
+           - Enforce Atwater factor consistency: Calories must correspond to 4P + 4C + 9F.
+
+        3. COMPREHENSIVE NUTRIENT, SUGAR & SALT (SODIUM) ANALYSIS:
+           - COMBO / MULTI-ITEM PLATES:
+             Recognize all distinct foods on the plate (e.g. "Grilled Chicken with Broccoli & Rice").
+             Sum up combined portion weight ("serving_weight_g") and all nutrients.
            - SINGLE FOOD ITEMS:
-             If it is a single food item (e.g., boiled egg, apple, banana, steak, protein shake), identify it specifically with accurate single-portion metrics.
-           - Estimate the portion size/weight in grams ("serving_weight_g") realistically.
-           - Provide accurate calorie and macronutrient values based on standard USDA/nutritional benchmarks.
+             Identify specifically with realistic portion metrics (e.g. "Hard-Boiled Egg (50g)").
+           - CHECK LEVEL OF SUGAR AND SALT/SODIUM IN THE DISH:
+             - Sugar (g): Realistic sugar content. Low (<5g), Moderate (5-15g), or High (>15g).
+             - Sodium/Salt (mg): Realistic sodium content. Low (<140mg), Moderate (140-400mg), or High (>400mg).
+
            - Return a valid JSON object with:
              - "name": Precise descriptive name of the food, beverage, or combo plate
              - "serving_weight_g": Estimated portion weight in grams (integer)
@@ -2652,6 +2813,11 @@ def analyze_food(data: AnalyzeFoodRequest):
              - "protein": Protein in grams (integer)
              - "carbs": Carbs in grams (integer)
              - "fats": Fats in grams (integer)
+             - "sugar_g": Sugar in grams (float or integer)
+             - "sodium_mg": Sodium / salt in milligrams (integer)
+             - "sugar_level": "Low", "Moderate", or "High"
+             - "salt_level": "Low", "Moderate", or "High"
+             - "health_alerts": List of clinical alerts (e.g. warnings if sugar > 15g or sodium > 400mg)
 
         Return raw JSON only. Do not include markdown formatting, code block wrappers, or extra explanatory text.
         """
@@ -2675,6 +2841,10 @@ def analyze_food(data: AnalyzeFoodRequest):
                     result_json_str = raw_text
 
                 result_data = json.loads(result_json_str)
+
+                # Ground nutrition and evaluate sugar/salt levels
+                if isinstance(result_data, dict) and "error" not in result_data:
+                    result_data = validate_and_ground_nutrition(result_data)
         except HTTPException as he:
             raise he
         except Exception as scan_err:

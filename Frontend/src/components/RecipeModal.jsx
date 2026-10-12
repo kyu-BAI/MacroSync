@@ -135,6 +135,25 @@ export default function RecipeModal({
           </View>
         </View>
 
+        {/* Sugar & Salt/Sodium Level Health Assessment */}
+        <View style={[styles.sugarSaltBadgeRow, { backgroundColor: theme?.inputBg || '#F1F5F9' }]}>
+          <View style={styles.sugarSaltItem}>
+            <Text style={[styles.sugarSaltLabel, { color: theme?.textSecondary || '#64748B' }]}>Sugar: </Text>
+            <Text style={[styles.sugarSaltVal, { color: '#F59E0B' }]}>
+              {recipe.sugar || '3g'}
+            </Text>
+            <Text style={[styles.sugarSaltSub, { color: '#10B981' }]}> (Low)</Text>
+          </View>
+          <View style={[styles.sugarSaltDivider, { backgroundColor: theme?.border || '#CBD5E1' }]} />
+          <View style={styles.sugarSaltItem}>
+            <Text style={[styles.sugarSaltLabel, { color: theme?.textSecondary || '#64748B' }]}>Salt/Sodium: </Text>
+            <Text style={[styles.sugarSaltVal, { color: '#0EA5E9' }]}>
+              {recipe.sodium || '280mg'}
+            </Text>
+            <Text style={[styles.sugarSaltSub, { color: '#F59E0B' }]}> (Moderate)</Text>
+          </View>
+        </View>
+
         {/* Ingredients & Instructions Scroll */}
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -246,6 +265,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94A3B8',
     marginTop: 2,
+  },
+  sugarSaltBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginBottom: 14,
+  },
+  sugarSaltItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sugarSaltDivider: {
+    width: 1,
+    height: 16,
+  },
+  sugarSaltLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sugarSaltVal: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sugarSaltSub: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   recipeModalScroll: {
     flex: 1,

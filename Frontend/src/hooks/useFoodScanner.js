@@ -22,6 +22,10 @@ export default function useFoodScanner({
   const [selectedMealType, setSelectedMealType] = useState("Lunch");
   const [portionScale, setPortionScale] = useState(1.0);
   const [customGramsInput, setCustomGramsInput] = useState("");
+  const [customSugarInput, setCustomSugarInput] = useState("");
+  const [customSodiumInput, setCustomSodiumInput] = useState("");
+  const [isCustomSugarEdited, setIsCustomSugarEdited] = useState(false);
+  const [isCustomSodiumEdited, setIsCustomSodiumEdited] = useState(false);
 
   // Scan limits tracking state
   const [scanInfo, setScanInfo] = useState({ isPremium: false, remaining: 5 });
@@ -60,6 +64,19 @@ export default function useFoodScanner({
       setPortionScale(1.0);
       const baseGrams = analysisResult.serving_weight_g || 100;
       setCustomGramsInput(baseGrams.toString());
+
+      const baseSugar =
+        analysisResult.sugar_g !== undefined
+          ? Number(analysisResult.sugar_g)
+          : Math.max(0, Math.round((analysisResult.carbs || 0) * 0.2));
+      const baseSodium =
+        analysisResult.sodium_mg !== undefined
+          ? Number(analysisResult.sodium_mg)
+          : 250;
+      setCustomSugarInput(baseSugar.toString());
+      setCustomSodiumInput(baseSodium.toString());
+      setIsCustomSugarEdited(false);
+      setIsCustomSodiumEdited(false);
     }
   }, [analysisResult]);
 
@@ -429,6 +446,10 @@ export default function useFoodScanner({
     setIsScanning(false);
     setPortionScale(1.0);
     setCustomGramsInput("");
+    setCustomSugarInput("");
+    setCustomSodiumInput("");
+    setIsCustomSugarEdited(false);
+    setIsCustomSodiumEdited(false);
   }, []);
 
   // Portion Scaling calculations
@@ -447,6 +468,98 @@ export default function useFoodScanner({
   const scaledCarbs = Math.round((analysisResult?.carbs || 0) * effectiveScale);
   const scaledFats = Math.round((analysisResult?.fats || 0) * effectiveScale);
   const scaledWeight = Math.round(currentGrams);
+
+  // Sugar and Salt (Sodium) metrics grounded to WHO & AHA benchmarks
+  const rawSugar =
+    analysisResult?.sugar_g !== undefined
+      ? Number(analysisResult.sugar_g)
+      : Math.max(0, Math.round((analysisResult?.carbs || 0) * 0.2));
+  const rawSodium =
+    analysisResult?.sodium_mg !== undefined
+      ? Number(analysisResult.sodium_mg)
+      : 250;
+
+  // Default portion-scaled metrics
+  const defaultScaledSugar = Math.round(rawSugar * effectiveScale * 10) / 10;
+  const defaultScaledSodium = Math.round(rawSodium * effectiveScale);
+
+  // Keep unedited inputs automatically aligned when portion scaling changes
+  useEffect(() => {
+    if (!isCustomSugarEdited && analysisResult) {
+      setCustomSugarInput(defaultScaledSugar.toString());
+    }
+  }, [defaultScaledSugar, isCustomSugarEdited, analysisResult]);
+
+  useEffect(() => {
+    if (!isCustomSodiumEdited && analysisResult) {
+      setCustomSodiumInput(defaultScaledSodium.toString());
+    }
+  }, [defaultScaledSodium, isCustomSodiumEdited, analysisResult]);
+
+  // Active user-adjusted or portion-scaled values
+  const scaledSugar = isCustomSugarEdited
+    ? customSugarInput === ""
+      ? 0
+      : parseFloat(customSugarInput) || 0
+    : defaultScaledSugar;
+
+  const scaledSodium = isCustomSodiumEdited
+    ? customSodiumInput === ""
+      ? 0
+      : parseInt(customSodiumInput, 10) || 0
+    : defaultScaledSodium;
+
+  // Real-time clinical benchmark levels (WHO & AHA standards)
+  const sugarLevel =
+    scaledSugar <= 5 ? "Low" : scaledSugar <= 15 ? "Moderate" : "High";
+  const saltLevel =
+    scaledSodium <= 140 ? "Low" : scaledSodium <= 400 ? "Moderate" : "High";
+
+  // Dynamic clinical alerts based on real-time adjusted values (including excessive warnings)
+  const healthAlerts = [];
+  if (scaledSugar > 25) {
+    healthAlerts.push(
+      `Excessive Sugar Warning (${scaledSugar}g): Exceeds WHO 25g daily added sugar limit in a single dish! May cause extreme glycemic spike and fatigue.`
+    );
+  } else if (scaledSugar > 15) {
+    healthAlerts.push(
+      `Elevated Sugar (${scaledSugar}g): Exceeds single-meal 15g threshold. Pair with fiber or protein to stabilize blood glucose.`
+    );
+  }
+
+  if (scaledSodium > 800) {
+    healthAlerts.push(
+      `Excessive Salt / Sodium Warning (${scaledSodium}mg): High cardiovascular risk (>40% of daily 2,000mg limit in one meal). May cause rapid blood pressure surge and fluid retention.`
+    );
+  } else if (scaledSodium > 400) {
+    healthAlerts.push(
+      `High Sodium (${scaledSodium}mg): Exceeds 400mg per-serving guideline. Drink extra water and balance with potassium-rich greens.`
+    );
+  }
+
+  if (healthAlerts.length === 0) {
+    // No warnings when sugar and salt are within normal/moderate thresholds
+  }
+
+  // Handlers for user editing sugar and sodium
+  const handleUpdateSugar = useCallback((text) => {
+    const sanitized = text.replace(/[^0-9.]/g, "");
+    setCustomSugarInput(sanitized);
+    setIsCustomSugarEdited(true);
+  }, []);
+
+  const handleUpdateSodium = useCallback((text) => {
+    const sanitized = text.replace(/[^0-9]/g, "");
+    setCustomSodiumInput(sanitized);
+    setIsCustomSodiumEdited(true);
+  }, []);
+
+  const handleResetSugarSalt = useCallback(() => {
+    setCustomSugarInput(defaultScaledSugar.toString());
+    setCustomSodiumInput(defaultScaledSodium.toString());
+    setIsCustomSugarEdited(false);
+    setIsCustomSodiumEdited(false);
+  }, [defaultScaledSugar, defaultScaledSodium]);
 
   const handleStepGrams = useCallback(
     (delta) => {
@@ -484,6 +597,8 @@ export default function useFoodScanner({
           protein: scaledProtein,
           carbs: scaledCarbs,
           fats: scaledFats,
+          sugar_g: scaledSugar,
+          sodium_mg: scaledSodium,
           mealType: selectedMealType,
           time: new Date().toLocaleTimeString([], {
             hour: "2-digit",
@@ -516,6 +631,8 @@ export default function useFoodScanner({
     scaledCarbs,
     scaledFats,
     scaledWeight,
+    scaledSugar,
+    scaledSodium,
     selectedMealType,
     onLogMeal,
     onTabChange,
@@ -535,6 +652,13 @@ export default function useFoodScanner({
     portionScale,
     customGramsInput,
     setCustomGramsInput,
+    customSugarInput,
+    customSodiumInput,
+    isCustomSugarEdited,
+    isCustomSodiumEdited,
+    handleUpdateSugar,
+    handleUpdateSodium,
+    handleResetSugarSalt,
     scanInfo,
     showTipsCard,
     setShowTipsCard,
@@ -553,6 +677,11 @@ export default function useFoodScanner({
     scaledCarbs,
     scaledFats,
     scaledWeight,
+    scaledSugar,
+    scaledSodium,
+    sugarLevel,
+    saltLevel,
+    healthAlerts,
     handleStepGrams,
     handleMultiplierPress,
     handleLogFood,

@@ -23,6 +23,7 @@ import {
   Mic,
   BotMessageSquare,
   X,
+  ShieldCheck,
 } from "lucide-react-native";
 import useChatbotAI from "../../hooks/useChatbotAI";
 import { useCustomAlert } from "../../context/CustomAlertContext";
@@ -88,10 +89,10 @@ export default function ChatbotAIScreen({
       ? "I-tap ang 🎤 sa keyboard aron mosulti..."
       : "Tap 🎤 on your keyboard to speak..."
     : language === "Tagalog"
-    ? "Magtanong kay Vita AI tungkol sa diyeta o ehersisyo..."
+    ? "Magtanong sa diet, macros o workout..."
     : language === "Cebuano"
-    ? "Pangutana kang Vita AI bahin sa pagkaon o ehersisyo..."
-    : "Ask Vita AI about diet, macros, or workouts...";
+    ? "Pangutana bahin sa diet, macros o workout..."
+    : "Ask Vita AI about diet, macros, or workout...";
 
   const typingIndicatorText =
     language === "Tagalog"
@@ -222,6 +223,24 @@ export default function ChatbotAIScreen({
 
           <Text style={styles.greeting}>Vita AI Assistant</Text>
           <Text style={styles.subGreeting}>{subGreetingText}</Text>
+
+          {/* Clinical Safety & Medical Guardrails Pill */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              showAlert?.(
+                "🛡️ Vita AI Safety & Clinical Standards",
+                "• Prevent Unsafe Advice: Vita AI is an educational fitness assistant. It strictly rejects extreme calorie starvation (<1,200 kcal/day), prolonged dry fasting, vomiting/purging, and unprescribed anabolic substances.\n\n• Prevent AI Hallucination: Nutritional figures and meal calculations are grounded in USDA FoodData Central and Philippine DOST-FNRI data with Atwater mathematical checks.\n\n• Dish Sugar & Salt Analysis: Vita AI evaluates sugar and sodium/salt levels in foods and dishes to support cardiovascular and metabolic health.\n\n• Medical Disclaimer: Always consult a licensed physician or registered dietitian for medical diagnoses or treatments.",
+                [{ text: "Understood", style: "default" }]
+              );
+            }}
+            style={styles.safetyGuardrailPill}
+          >
+            <ShieldCheck color={COLORS.logoGreen} size={11} style={{ marginRight: 5 }} />
+            <Text style={styles.safetyGuardrailText}>
+              Safety Guardrails Active • Clinical Standards
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -385,7 +404,8 @@ export default function ChatbotAIScreen({
                 setInputText(text);
                 if (showKeyboardMicHint) setShowKeyboardMicHint(false);
               }}
-              multiline={true}
+              multiline={inputText.length > 0}
+              numberOfLines={inputText.length > 0 ? undefined : 1}
             />
 
             {/* Keyboard Voice Dictation Microphone Button */}
@@ -583,6 +603,24 @@ const getStyles = (theme, isDarkMode = false) =>
       color: theme?.textSecondary || COLORS.textSecondaryLight,
       marginTop: 2,
     },
+    // Pill displaying clinical safety and anti-hallucination guardrails active
+    safetyGuardrailPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      borderColor: "rgba(16, 185, 129, 0.35)",
+      borderWidth: 1,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginTop: 6,
+    },
+    safetyGuardrailText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: COLORS.logoGreen,
+    },
     // Flexible wrapper adapting to software keyboard height
     keyboardContainer: {
       flex: 1,
@@ -757,12 +795,13 @@ const getStyles = (theme, isDarkMode = false) =>
     // Multi-line text entry field for chat prompt
     chatTextInputField: {
       flex: 1,
-      fontSize: 14,
-      fontWeight: "700",
+      fontSize: 13.5,
+      fontWeight: "600",
       color: theme?.textPrimary || COLORS.textPrimaryLight,
-      maxHeight: 60,
+      maxHeight: 100,
       paddingTop: Platform.OS === "ios" ? 8 : 4,
       paddingBottom: Platform.OS === "ios" ? 8 : 4,
+      paddingRight: 6,
     },
     // Voice dictation microphone action button
     voiceMicBtn: {

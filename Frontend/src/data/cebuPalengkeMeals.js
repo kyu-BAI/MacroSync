@@ -512,5 +512,3 @@ export const sanitizeMealForUserAllergies = (mealTitle, mealType, userAllergies 
 
   return safeTitle;
 };
-
-export { getDynamicPalengkePlan } from './philippineFoodEngine';
