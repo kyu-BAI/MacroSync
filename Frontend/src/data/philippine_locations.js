@@ -5,6 +5,7 @@
  */
 
 import { CEBU_LOCATIONS, CEBU_CITY_COORDINATES } from './cebu_locations';
+import { getAllPhilippineMunicipalities } from './philippine_cities_by_province';
 
 export const PHILIPPINE_REGIONS = [
   'All',
@@ -435,30 +436,74 @@ export function normalizeToPhilippineLocation(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
   const clean = rawText.trim().toLowerCase();
 
-  // 1. Direct match
+  // 1. Direct match in rich culinary locations
   const direct = PHILIPPINE_LOCATIONS.find(
     (l) => l.name.toLowerCase() === clean || (l.province && l.province.toLowerCase() === clean)
   );
   if (direct) return direct.name;
 
-  // 2. Keyword substring matching
+  // 2. Direct match across all Philippine municipalities
+  const allMunis = getAllPhilippineMunicipalities();
+  const directMuni = allMunis.find(
+    (m) => m.name.toLowerCase() === clean || `${m.name.toLowerCase()}, ${m.province.toLowerCase()}` === clean
+  );
+  if (directMuni) return directMuni.name;
+
+  // 3. Keyword substring matching
   const matched = PHILIPPINE_LOCATIONS.find((l) => {
     const lName = l.name.toLowerCase();
     const cleanNoCity = clean.replace(/\s+(city|municipality|province)\b/gi, '').trim();
     const locNoCity = lName.replace(/\s+(city|municipality|province)\b/gi, '').trim();
     return clean.includes(locNoCity) || lName.includes(cleanNoCity);
   });
+  if (matched) return matched.name;
 
-  return matched ? matched.name : null;
+  // 4. Keyword substring match across all municipalities
+  const cleanNoCity = clean.replace(/\s+(city|municipality|province)\b/gi, '').trim();
+  const matchedMuni = allMunis.find((m) => {
+    const mName = m.name.toLowerCase();
+    const mNoCity = mName.replace(/\s+(city|municipality|province)\b/gi, '').trim();
+    return clean.includes(mNoCity) || mName.includes(cleanNoCity);
+  });
+
+  return matchedMuni ? matchedMuni.name : null;
 }
 
 /**
- * Searches Philippine locations by query and optional region filter
+ * Searches Philippine locations across all 82 provinces and cities
  */
 export function searchPhilippineLocations(query = '', regionFilter = 'All') {
   const q = query.trim().toLowerCase();
 
-  const matched = PHILIPPINE_LOCATIONS.filter((item) => {
+  // Combine rich culinary profiles + all Philippine municipalities
+  const allMunis = getAllPhilippineMunicipalities();
+  const locationMap = new Map();
+
+  // 1. Seed with rich PHILIPPINE_LOCATIONS first (includes dishes, market titles)
+  PHILIPPINE_LOCATIONS.forEach((loc) => {
+    locationMap.set(loc.name.toLowerCase(), loc);
+  });
+
+  // 2. Add all municipalities & cities across all 82 provinces
+  allMunis.forEach((muni) => {
+    const key = muni.name.toLowerCase();
+    if (!locationMap.has(key)) {
+      locationMap.set(key, {
+        name: muni.name,
+        city: muni.name,
+        province: muni.province,
+        region: muni.region || "All",
+        lat: muni.lat,
+        lng: muni.lng,
+        marketTitle: `${muni.name} Public Market (${muni.province})`,
+        specialty: `Local Specialties of ${muni.name}, ${muni.province}`,
+      });
+    }
+  });
+
+  const fullList = Array.from(locationMap.values());
+
+  const matched = fullList.filter((item) => {
     // Region check
     if (regionFilter !== 'All') {
       if (regionFilter === 'Cebu' && item.region !== 'Cebu') return false;
@@ -471,8 +516,7 @@ export function searchPhilippineLocations(query = '', regionFilter = 'All') {
     return (
       item.name.toLowerCase().includes(q) ||
       (item.province && item.province.toLowerCase().includes(q)) ||
-      (item.specialty && item.specialty.toLowerCase().includes(q)) ||
-      (item.palengkeItems && item.palengkeItems.toLowerCase().includes(q))
+      (item.specialty && item.specialty.toLowerCase().includes(q))
     );
   });
 

@@ -260,11 +260,6 @@ const getStyles = (theme, isDarkMode) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 3.5,
-      shadowColor: DEFAULT_ACTIVE_COLOR,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 6,
     },
     fabActive: {
       backgroundColor: '#059669',

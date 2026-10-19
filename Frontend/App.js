@@ -65,6 +65,30 @@ import API_URL from "./src/screens/config/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NotificationService } from "./src/services/NotificationService";
 import { Pedometer } from "expo-sensors";
+// Hide browser-native password reveal button (e.g. Edge/IE black eye icon) and focus outline
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const styleId = "hide-browser-password-reveal";
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      input::-ms-reveal,
+      input::-ms-clear,
+      input::-webkit-contacts-auto-fill-button,
+      input::-webkit-credentials-auto-fill-button {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+      input:focus {
+        outline: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 const normalizeGoalKey = (goalStr) => {
   if (!goalStr || typeof goalStr !== "string") return "maintain";

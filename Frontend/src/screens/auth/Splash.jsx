@@ -2,7 +2,6 @@
 import React, { useEffect, useRef } from "react";
 import {
   StyleSheet,
-  Text,
   View,
   StatusBar,
   Animated,
@@ -16,7 +15,6 @@ const LOGO_IMAGE = require("../../images/macrosync_logo.png");
 // Brand tokens
 const baseColor = "#F8FAFC";
 const logoGreen = "#10B981";
-const textSecondary = "#64748B";
 
 // Spinner config
 const TOTAL_SPINNER_DOTS = 8;
@@ -26,8 +24,6 @@ export default function SplashScreen({ onAppReady }) {
   // Entrance animations (GPU-driven native driver)
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.88)).current;
-  const taglineFade = useRef(new Animated.Value(0)).current;
-  const taglineSlide = useRef(new Animated.Value(12)).current;
 
   // 8 independent spinner dot timelines
   const dotTimelines = useRef(
@@ -51,25 +47,7 @@ export default function SplashScreen({ onAppReady }) {
       }),
     ]).start();
 
-    // Stage 2: Tagline slides up into view
-    Animated.parallel([
-      Animated.timing(taglineFade, {
-        toValue: 1,
-        duration: 500,
-        delay: 280,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(taglineSlide, {
-        toValue: 0,
-        duration: 450,
-        delay: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Stage 3: Spinner dots
+    // Stage 2: Spinner dots
     const activeAnimations = dotTimelines.map((timelineNode, dotIndex) => {
       const delayOffset = dotIndex * (BASE_SPEED_MS / TOTAL_SPINNER_DOTS);
       const anim = Animated.loop(
@@ -132,20 +110,6 @@ export default function SplashScreen({ onAppReady }) {
         />
       </Animated.View>
 
-      {/* Tagline only — no redundant app name text */}
-      <Animated.View
-        style={[
-          styles.brandTaglineGroup,
-          {
-            opacity: taglineFade,
-            transform: [{ translateY: taglineSlide }],
-          },
-        ]}
-      >
-        <Text style={styles.brandTagline}>SMART NUTRITION & MACRO TRACKING</Text>
-      </Animated.View>
-
-
       {/* Dot Spinner Hub */}
       <View style={styles.spinnerContainerHub}>
         {dotTimelines.map((timelineNode, index) => {
@@ -205,20 +169,6 @@ const styles = StyleSheet.create({
   logoImageLarge: {
     width: "100%",
     height: "100%",
-  },
-  // Only the tagline — no redundant app name
-  brandTaglineGroup: {
-    alignItems: "center",
-    marginTop: 16,
-    paddingHorizontal: 24,
-  },
-  brandTagline: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: textSecondary,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    textAlign: "center",
   },
 
   spinnerContainerHub: {

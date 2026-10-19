@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Platform } from "react-native";
 import { Eye, EyeOff, AlertCircle } from "lucide-react-native";
 
 export default function InputField({
@@ -33,7 +33,10 @@ export default function InputField({
       >
         {Icon ? <Icon color={iconColor} size={20} style={styles.leadingIcon} /> : null}
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            Platform.OS === "web" && { outlineStyle: "none", outline: "none" },
+          ]}
           placeholder={placeholder}
           placeholderTextColor={placeholderTextColor || "#94A3B8"}
           value={value}

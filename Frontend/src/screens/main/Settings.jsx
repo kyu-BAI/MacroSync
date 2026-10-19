@@ -1509,7 +1509,7 @@ const getStyles = (theme, isDarkMode = false) =>
     // Selected payment method option state
     paymentMethodActive: {
       borderColor: COLORS.logoGreen,
-      backgroundColor: COLORS.greenHighlight,
+      backgroundColor: isDarkMode ? "rgba(16, 185, 129, 0.16)" : COLORS.greenHighlight,
     },
     // Payment method label text
     paymentMethodText: {

@@ -231,18 +231,10 @@ const styles = StyleSheet.create({
       web: {
         cursor: "grab",
         userSelect: "none",
-        boxShadow:
-          "0 8px 20px rgba(16, 185, 129, 0.42), 0 2px 6px rgba(0, 0, 0, 0.16)",
         // Prevent touch scroll from interfering with drag on web
         touchAction: "none",
       },
-      default: {
-        shadowColor: "#10B981",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.45,
-        shadowRadius: 10,
-        elevation: 10,
-      },
+      default: {},
     }),
   },
   chatbotFloatingButtonGrabbing: {

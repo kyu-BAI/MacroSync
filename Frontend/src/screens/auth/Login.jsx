@@ -86,7 +86,7 @@ export default function LoginScreen({
 }) {
   // Theme & screen styling
   const { theme, isDarkMode } = useTheme();
-  const styles = useMemo(() => getStyles(theme), [theme]);
+  const styles = useMemo(() => getStyles(theme, isDarkMode), [theme, isDarkMode]);
   const [secureTextEntry, setSecureTextEntry] = useState(true);
 
   // Authentication hook: form state, handlers & modal visibility
@@ -123,7 +123,7 @@ export default function LoginScreen({
       {/* Top Status Bar */}
       <StatusBar
         barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor={theme?.background || baseColor}
+        backgroundColor={theme?.background || (isDarkMode ? "#0F172A" : baseColor)}
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -152,6 +152,7 @@ export default function LoginScreen({
               value={form.email}
               onChangeText={handleEmailChange}
               placeholder="Enter your email"
+              placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
               keyboardType="email-address"
               editable={!isLoading}
               styles={styles}
@@ -164,6 +165,7 @@ export default function LoginScreen({
               value={form.password}
               onChangeText={handlePasswordChange}
               placeholder="Enter your password"
+              placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
               isPassword
               isSecure={secureTextEntry}
               onToggleSecure={handleToggleSecureTextEntry}
@@ -250,13 +252,13 @@ export default function LoginScreen({
 const baseColor = "#F8FAFC"; // Fallback screen background color
 const logoGreen = "#10B981"; // Primary brand accent color (buttons, titles, links)
 
-const getStyles = (theme) =>
+const getStyles = (theme, isDarkMode) =>
   StyleSheet.create({
     // --- MAIN SCREEN LAYOUT ---
     // Entire full-screen background
     container: {
       flex: 1,
-      backgroundColor: theme?.background || baseColor,
+      backgroundColor: theme?.background || (isDarkMode ? "#0F172A" : baseColor),
     },
     // ScrollView inner padding & vertical centering
     scrollContainer: {
@@ -286,7 +288,7 @@ const getStyles = (theme) =>
     // Subtitle description below the title
     brandSubtitle: {
       fontSize: 14,
-      color: theme?.textSecondary || "#64748B",
+      color: isDarkMode ? "#94A3B8" : (theme?.textSecondary || "#64748B"),
       marginTop: 10,
       textAlign: "center",
       lineHeight: 22,
@@ -296,14 +298,19 @@ const getStyles = (theme) =>
     // --- FORM CONTAINER CARD ---
     // The rounded card containing all input fields and buttons
     formCard: {
-      backgroundColor: '#ffffff',
+      backgroundColor: isDarkMode ? (theme?.surface || "#1E293B") : (theme?.surface || "#FFFFFF"),
       borderRadius: 28,
       padding: 24,
       borderWidth: 1.5,
-      borderColor: theme?.border || "#E2E8F0",
+      borderColor: isDarkMode ? (theme?.border || "#334155") : (theme?.border || "#E2E8F0"),
       width: "100%",
       maxWidth: 480,
       alignSelf: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDarkMode ? 0.3 : 0.05,
+      shadowRadius: 12,
+      elevation: 3,
     },
 
     // --- INPUT FIELDS (EMAIL & PASSWORD) ---
@@ -313,7 +320,7 @@ const getStyles = (theme) =>
     },
     // Uppercase label above input ("EMAIL ADDRESS", "PASSWORD")
     inputLabel: {
-      color: theme?.textPrimary || "#64748B",
+      color: isDarkMode ? "#F8FAFC" : (theme?.textPrimary || "#0F172A"),
       fontSize: 11,
       fontWeight: "800",
       marginBottom: 8,
@@ -323,10 +330,10 @@ const getStyles = (theme) =>
     },
     // Input box container (background color and border outline)
     flatInputField: {
-      backgroundColor: theme?.inputBg || baseColor,
+      backgroundColor: isDarkMode ? (theme?.inputBg || "#334155") : (theme?.inputBg || baseColor),
       borderRadius: 12,
       borderWidth: 1.5,
-      borderColor: theme?.inputBorder || "#E2E8F0",
+      borderColor: isDarkMode ? (theme?.inputBorder || "#475569") : (theme?.inputBorder || "#E2E8F0"),
     },
     // Horizontal row layout for leading icon + text input + eye toggle
     fieldRow: {
@@ -341,7 +348,7 @@ const getStyles = (theme) =>
     // The actual text typed by user inside the input field
     input: {
       flex: 1,
-      color: theme?.textPrimary || "#0F172A",
+      color: isDarkMode ? "#F8FAFC" : (theme?.textPrimary || "#0F172A"),
       paddingVertical: 15,
       paddingHorizontal: 8,
       fontSize: 16,
@@ -375,7 +382,7 @@ const getStyles = (theme) =>
       height: 20,
       borderRadius: 6,
       borderWidth: 2,
-      borderColor: theme?.inputBorder || "#94A3B8",
+      borderColor: isDarkMode ? "#475569" : (theme?.inputBorder || "#94A3B8"),
       alignItems: "center",
       justifyContent: "center",
       marginRight: 8,
@@ -390,7 +397,7 @@ const getStyles = (theme) =>
     rememberMeText: {
       fontSize: 13,
       fontWeight: "700",
-      color: theme?.textSecondary || "#64748B",
+      color: isDarkMode ? "#94A3B8" : (theme?.textSecondary || "#64748B"),
     },
     // "Forgot Password?" touchable container
     forgotPassword: {
@@ -462,13 +469,13 @@ const getStyles = (theme) =>
     dividerLine: {
       flex: 1,
       height: 1.5,
-      backgroundColor: theme?.border || "#E2E8F0",
+      backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.12)" : (theme?.border || "#E2E8F0"),
     },
     // "Or" text between the divider lines
     dividerText: {
       fontSize: 12,
       fontWeight: "800",
-      color: theme?.textSecondary || "#94A3B8",
+      color: isDarkMode ? "#94A3B8" : (theme?.textSecondary || "#94A3B8"),
       paddingHorizontal: 12,
       textTransform: "uppercase",
       letterSpacing: 1,
@@ -481,16 +488,16 @@ const getStyles = (theme) =>
     },
     // Default Google button background & border
     googleButtonUnpressed: {
-      backgroundColor: theme?.surface || baseColor,
+      backgroundColor: isDarkMode ? (theme?.inputBg || "#334155") : (theme?.surface || baseColor),
       borderRadius: 20,
       borderWidth: 1.5,
-      borderColor: theme?.border || "#E2E8F0",
+      borderColor: isDarkMode ? (theme?.border || "#475569") : (theme?.border || "#E2E8F0"),
     },
     // Google button background & border when tapped
     googleButtonPressed: {
-      backgroundColor: theme?.cardBg || "#F1F5F9",
+      backgroundColor: isDarkMode ? "#1E293B" : (theme?.cardBg || "#F1F5F9"),
       borderWidth: 1.5,
-      borderColor: theme?.border || "#E2E8F0",
+      borderColor: isDarkMode ? (theme?.border || "#475569") : (theme?.border || "#E2E8F0"),
       opacity: 0.85,
     },
     // Row holding Google logo icon + text
@@ -507,14 +514,14 @@ const getStyles = (theme) =>
     },
     // "Sign in with Google" text color & font
     googleButtonText: {
-      color: theme?.textPrimary || "#64748B",
+      color: isDarkMode ? "#F8FAFC" : (theme?.textPrimary || "#0F172A"),
       fontSize: 15,
       fontWeight: "800",
       letterSpacing: 0.2,
     },
     // "Sign in with Google" text color when pressed
     googleButtonTextPressed: {
-      color: theme?.textPrimary || "#0F172A",
+      color: isDarkMode ? "#CBD5E1" : (theme?.textPrimary || "#0F172A"),
     },
 
     // --- FOOTER ("DON'T HAVE AN ACCOUNT? SIGN UP") ---
@@ -526,7 +533,7 @@ const getStyles = (theme) =>
     },
     // "Don't have an account?" text color
     footerText: {
-      color: theme?.textSecondary || "#64748B",
+      color: isDarkMode ? "#94A3B8" : (theme?.textSecondary || "#64748B"),
       fontSize: 14,
       fontWeight: "700",
     },

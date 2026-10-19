@@ -50,31 +50,6 @@ export default function RecipeModal({
           {displayTitle}
         </Text>
 
-        {/* Meta Row (Cooking Time & Estimated Budget) */}
-        <View style={styles.recipeModalMetaRow}>
-          <View style={styles.recipeModalMetaBadge}>
-            <Clock color={logoGreen} size={12} />
-            <Text style={styles.recipeModalMetaText}>
-              {recipe.time || '15 mins'}
-            </Text>
-          </View>
-          <View style={[styles.recipeModalMetaBadge, { marginLeft: 8 }]}>
-            <Text
-              style={{
-                color: logoGreen,
-                fontSize: 13,
-                fontWeight: '700',
-                marginRight: 3,
-              }}
-            >
-              ₱
-            </Text>
-            <Text style={styles.recipeModalMetaText}>
-              {recipe.budget || 'Under ₱100'}
-            </Text>
-          </View>
-        </View>
-
         {/* Macro Details Grid */}
         <View
           style={[
@@ -188,11 +163,40 @@ export default function RecipeModal({
               },
             ]}
           >
-            <Text style={styles.recipeModalSecTitle}>Instructions</Text>
+            <View style={styles.instructionsHeaderRow}>
+              <Text style={styles.recipeModalSecTitle}>Instructions</Text>
+              <View
+                style={[
+                  styles.instructionTimerBadge,
+                  {
+                    backgroundColor: theme?.inputBg || '#F1F5F9',
+                    borderColor: theme?.border || '#E2E8F0',
+                  },
+                ]}
+              >
+                <Clock color={logoGreen} size={12} style={{ marginRight: 5 }} />
+                <Text
+                  style={[
+                    styles.instructionTimerText,
+                    { color: theme?.textSecondary || '#64748B' },
+                  ]}
+                >
+                  {recipe.time || '20-25 mins'}
+                </Text>
+              </View>
+            </View>
+
             {(recipe.instructions || []).map((step, i) => (
               <View key={i} style={styles.recipeModalStepRow}>
                 <Text style={styles.recipeModalStepNum}>{i + 1}</Text>
-                <Text style={styles.recipeModalStepText}>{step}</Text>
+                <Text
+                  style={[
+                    styles.recipeModalStepText,
+                    { color: theme?.textPrimary || '#0F172A' },
+                  ]}
+                >
+                  {step}
+                </Text>
               </View>
             ))}
           </View>
@@ -223,26 +227,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
     marginBottom: 8,
-  },
-  recipeModalMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  recipeModalMetaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EBEBEB',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginHorizontal: 6,
-  },
-  recipeModalMetaText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    marginLeft: 4,
   },
   recipeModalMacrosGrid: {
     flexDirection: 'row',
@@ -309,13 +293,30 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
+  instructionsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  instructionTimerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  instructionTimerText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   recipeModalSecTitle: {
     fontSize: 12,
     fontWeight: '800',
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 10,
   },
   recipeModalListItem: {
     fontSize: 13,
@@ -345,7 +346,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: '#10B981',
     lineHeight: 18,
   },
   recipeModalCloseBtn: {

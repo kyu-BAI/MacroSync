@@ -51,9 +51,10 @@ export default function MapcnMap({
     typeof pinnedBarangay.lng === "number"
   );
 
-  const initialCenter = [resolvedLng, resolvedLat];
-  const initialZoom = hasPinnedCoords ? 14 : (typeof zoom === "number" ? zoom : 9);
-  const centerCoords = initialCenter;
+  // Cache initial center and zoom once on mount so WebView HTML NEVER reloads on coordinate changes
+  const initialCenterRef = useRef([resolvedLng, resolvedLat]);
+  const initialZoomRef = useRef(hasPinnedCoords ? 14 : (typeof zoom === "number" ? zoom : 9));
+  const centerCoords = [resolvedLng, resolvedLat];
 
   // Helper to execute script immediately if map is ready, or queue until MAP_READY
   const injectOrQueue = useCallback((script) => {
@@ -230,120 +231,37 @@ export default function MapcnMap({
 
         /* ── Modern MapPin Marker ── */
         .mapcn-mappin-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+          display: block;
           position: relative;
           cursor: pointer;
           user-select: none;
           z-index: 9999;
-          animation: pinDrop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          width: 36px;
+          height: 44px;
+          /* Important: MapLibre manages marker element transform directly; animation must be on inner child only */
+        }
+        .mapcn-mappin-pin {
+          width: 36px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          transform-origin: 50% 100%;
+          animation: pinDrop 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         @keyframes pinDrop {
           0% {
             opacity: 0;
-            transform: translateY(-22px) scale(0.6);
+            transform: translateY(-16px) scale(0.65);
           }
           100% {
             opacity: 1;
             transform: translateY(0) scale(1);
           }
         }
-        .mapcn-mappin-pin {
-          width: 42px;
-          height: 52px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .mapcn-mappin-pin:hover {
-          transform: scale(1.1);
-        }
 
-        /* ── EXACT RED PINPOINT DOT & PULSE AT THE BOTTOM OF THE PIN ── */
-        .mapcn-exact-pinpoint-red-dot {
-          position: absolute;
-          bottom: -6px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 14px;
-          height: 14px;
-          background-color: #DC2626;
-          border: 3px solid #FFFFFF;
-          border-radius: 50%;
-          box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.6), 0 3px 8px rgba(0, 0, 0, 0.6);
-          z-index: 10001;
-        }
-        .mapcn-exact-pinpoint-pulse {
-          position: absolute;
-          bottom: -16px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 34px;
-          height: 34px;
-          border: 2.5px solid #EF4444;
-          border-radius: 50%;
-          animation: redPinpointPulse 1.8s infinite ease-out;
-          pointer-events: none;
-          z-index: 10000;
-        }
-        @keyframes redPinpointPulse {
-          0% { transform: translateX(-50%) scale(0.3); opacity: 1; }
-          100% { transform: translateX(-50%) scale(1.6); opacity: 0; }
-        }
 
-        /* ── Municipality / Barangay Popup Badge ── */
-        .maplibregl-popup.mapcn-single-popup {
-          z-index: 10050;
-        }
-        .maplibregl-popup.mapcn-single-popup .maplibregl-popup-content {
-          background: transparent !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-          border: none !important;
-        }
-        .maplibregl-popup.mapcn-single-popup .maplibregl-popup-tip {
-          border-top-color: ${isDarkMode ? '#0F172A' : '#FFFFFF'} !important;
-          margin-bottom: -1px;
-        }
-        .mapcn-popup-card {
-          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)'};
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          border: 1.5px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'};
-          border-radius: 9999px;
-          padding: 6px 14px;
-          box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          white-space: nowrap;
-          animation: popupFade 0.25s ease-out;
-        }
-        @keyframes popupFade {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .mapcn-popup-name {
-          font-size: 13px;
-          font-weight: 800;
-          color: ${isDarkMode ? '#F8FAFC' : '#0F172A'};
-          letter-spacing: -0.2px;
-          line-height: 1.2;
-        }
-        .mapcn-popup-pinned {
-          border-left: 3px solid #EF4444 !important;
-        }
-        .mapcn-popup-pinned-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: #EF4444;
-          margin-right: 6px;
-          flex-shrink: 0;
-        }
 
         /* ── Hidden Attributions ── */
         .mapcn-watermark,
@@ -417,8 +335,8 @@ export default function MapcnMap({
         var mapStyle = ${isDarkMode ? "'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'" : "'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'"};
 
         var initialPinned = ${JSON.stringify(pinnedBarangay || null)};
-        var initialCenter = [${initialCenter[0]}, ${initialCenter[1]}];
-        var initialZoom = ${initialZoom};
+        var initialCenter = [${initialCenterRef.current[0]}, ${initialCenterRef.current[1]}];
+        var initialZoom = ${initialZoomRef.current};
 
         var map = new maplibregl.Map({
           container: 'map',
@@ -530,12 +448,14 @@ export default function MapcnMap({
           return t.indexOf('+') !== -1 || /^\d+(\.\d+)?[,\s]+\d+(\.\d+)?$/.test(t) || /^\d{3,6}$/.test(t) || (/^[A-Z0-9]{3,8}$/.test(t) && /\d/.test(t));
         }
 
+        var lastPinnedCoords = null;
+
         function showActivePin(title, lngLat) {
           if (!lngLat || typeof lngLat[0] !== 'number' || typeof lngLat[1] !== 'number') return;
 
-          var displayTitle = title || 'Pinned Barangay';
+          var displayTitle = title || 'Pinned Location';
           if (isCodeString(displayTitle)) {
-            displayTitle = 'Pinned Barangay';
+            displayTitle = 'Pinned Location';
           }
 
           if (activePinMarker) {
@@ -547,64 +467,34 @@ export default function MapcnMap({
           el.className = 'mapcn-mappin-wrapper';
           el.innerHTML = [
             '<div class="mapcn-mappin-pin">',
-              '<svg width="42" height="52" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg">',
+              '<svg width="36" height="44" viewBox="0 0 36 44" fill="none" xmlns="http://www.w3.org/2000/svg">',
                 '<defs>',
                   '<linearGradient id="activeRedPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">',
                     '<stop offset="0%" stop-color="#EF4444"/>',
                     '<stop offset="100%" stop-color="#B91C1C"/>',
                   '</linearGradient>',
-                  '<filter id="pinShadow" x="-30%" y="-15%" width="160%" height="160%">',
-                    '<feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="rgba(0,0,0,0.5)"/>',
+                  '<filter id="pinShadow" x="-20%" y="-10%" width="140%" height="130%">',
+                    '<feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.35"/>',
                   '</filter>',
                 '</defs>',
-                '<path d="M12 25C17.5 19.5 21 15 21 11a9 9 0 1 0-18 0c0 4 3.5 8.5 9 14z" fill="url(#activeRedPinGrad)" stroke="#FFFFFF" stroke-width="1.8" filter="url(#pinShadow)"/>',
-                '<circle cx="12" cy="11" r="5" fill="#FFFFFF"/>',
-                '<circle cx="12" cy="11" r="2.8" fill="#DC2626"/>',
+                '<path d="M18 44 C18 44, 34 26, 34 16 C34 7.163 26.837 0 18 0 C9.163 0 2 7.163 2 16 C2 26, 18 44, 18 44 Z" fill="url(#activeRedPinGrad)" stroke="#FFFFFF" stroke-width="2" stroke-linejoin="round" filter="url(#pinShadow)"/>',
+                '<circle cx="18" cy="16" r="7.5" fill="#FFFFFF"/>',
+                '<circle cx="18" cy="16" r="4.2" fill="#DC2626"/>',
+                '<circle cx="18" cy="16" r="1.5" fill="#FFFFFF"/>',
               '</svg>',
-            '</div>',
-            '<div class="mapcn-exact-pinpoint-pulse"></div>',
-            '<div class="mapcn-exact-pinpoint-red-dot"></div>'
-          ].join('');
-
-          var popupContent = [
-            '<div class="mapcn-popup-card mapcn-popup-pinned">',
-              '<div class="mapcn-popup-pinned-dot"></div>',
-              '<div class="mapcn-popup-name">' + displayTitle + '</div>',
             '</div>'
           ].join('');
-
-          var popup = new maplibregl.Popup({
-            anchor: 'bottom',
-            offset: [0, -52],
-            closeButton: false,
-            closeOnClick: false,
-            className: 'mapcn-single-popup'
-          }).setHTML(popupContent);
 
           activePinMarker = new maplibregl.Marker({ 
             element: el,
             anchor: 'bottom'
           })
             .setLngLat(lngLat)
-            .setPopup(popup)
             .addTo(map);
-
-          try {
-            if (!activePinMarker.getPopup().isOpen()) {
-              activePinMarker.togglePopup();
-            }
-          } catch(_) {}
-
-          el.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (activePinMarker && activePinMarker.getPopup() && !activePinMarker.getPopup().isOpen()) {
-              activePinMarker.togglePopup();
-            }
-          });
         }
         window.showActivePin = showActivePin;
 
-        function setPinnedBarangay(data) {
+        function setPinnedBarangay(data, shouldFly) {
           if (!data || typeof data.lat !== 'number' || typeof data.lng !== 'number') return;
           window.currentPinnedBarangay = data;
           isBarangayPinned = true;
@@ -613,30 +503,32 @@ export default function MapcnMap({
           clearCityHighlight();
 
           var title = '';
-          if (data.barangay && !isCodeString(data.barangay)) {
-            title = 'Brgy. ' + data.barangay + (data.city ? (', ' + data.city) : '');
-          } else if (data.formattedTitle && !isCodeString(data.formattedTitle)) {
-            title = data.formattedTitle;
+          if (data.city && !isCodeString(data.city)) {
+            title = data.city;
           } else if (data.name && !isCodeString(data.name)) {
             title = data.name;
+          } else if (data.formattedTitle && !isCodeString(data.formattedTitle)) {
+            title = data.formattedTitle;
+          } else if (data.barangay && !isCodeString(data.barangay)) {
+            title = data.barangay + (data.city ? (', ' + data.city) : '');
           } else {
-            title = 'Pinned Barangay';
+            title = 'Pinned Location';
           }
 
           showActivePin(title, [data.lng, data.lat]);
 
-          if (window.map) {
+          var isSameTapCoord = lastPinnedCoords && 
+            Math.abs(lastPinnedCoords[0] - data.lng) < 0.00001 && 
+            Math.abs(lastPinnedCoords[1] - data.lat) < 0.00001;
+
+          if (window.map && shouldFly !== false && !isSameTapCoord) {
             try { window.map.resize(); } catch(_) {}
-            var currentZ = window.map.getZoom() || 10;
-            var targetZoom = currentZ < 13 ? 13.8 : currentZ;
-            window.map.flyTo({
-              center: [data.lng, data.lat],
-              zoom: targetZoom,
-              offset: [0, 30],
-              duration: 650,
+            window.map.panTo([data.lng, data.lat], {
+              duration: 400,
               essential: true
             });
           }
+          lastPinnedCoords = [data.lng, data.lat];
         }
         window.setPinnedBarangay = setPinnedBarangay;
 
@@ -750,31 +642,8 @@ export default function MapcnMap({
               });
             }
 
-            map.on('click', function(e) {
-              var lng = e.lngLat.lng;
-              var lat = e.lngLat.lat;
-
-              // Immediately set pinned state and show red pinpoint right where tapped
-              isBarangayPinned = true;
-              window.isBarangayPinned = true;
-              clearCityHighlight();
-              showActivePin('📍 Pinning location...', [lng, lat]);
-
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'MAP_TAP_COORDS',
-                  lng: lng,
-                  lat: lat
-                }));
-              }
-            });
-
-            map.on('mouseenter', 'cebu-boundaries-all-fill', function() {
-              map.getCanvas().style.cursor = 'pointer';
-            });
-            map.on('mouseleave', 'cebu-boundaries-all-fill', function() {
-              map.getCanvas().style.cursor = '';
-            });
+            // Map tapping to place or change pin location is disabled
+            // Pin location can only be set from search bar or permanent location from Step 3
           } catch(err) {
             console.warn('Error initializing boundaries:', err);
           }
@@ -817,12 +686,6 @@ export default function MapcnMap({
     boundariesGeoJSON,
     interactive,
     showControls,
-    initialCenter[0],
-    initialCenter[1],
-    initialZoom,
-    pinnedBarangay?.lat,
-    pinnedBarangay?.lng,
-    pinnedBarangay?.formattedTitle,
   ]);
 
   const handleMessage = (event) => {

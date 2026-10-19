@@ -71,28 +71,9 @@ export default function PhilippineLocationModal({
     return searchPhilippineLocations(searchQuery, selectedRegion);
   }, [searchQuery, selectedRegion]);
 
-  // Instant barangay search when query >= 2 characters
+  // Search query matches municipalities and cities only
   useEffect(() => {
-    let isMounted = true;
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      setBarangaySearchResults([]);
-      return;
-    }
-
-    const cleanQ = searchQuery.trim();
-    searchPhilippineBarangays(cleanQ)
-      .then((results) => {
-        if (isMounted) {
-          setBarangaySearchResults(results || []);
-        }
-      })
-      .catch(() => {
-        if (isMounted) setBarangaySearchResults([]);
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    setBarangaySearchResults([]);
   }, [searchQuery]);
 
   // Popular barangays for currently selected city
@@ -125,13 +106,13 @@ export default function PhilippineLocationModal({
     async ({ lat, lng }) => {
       if (typeof lat !== 'number' || typeof lng !== 'number') return;
       setIsResolvingBarangay(true);
-      setStatusMessage('Resolving exact Barangay...');
+      setStatusMessage('Resolving exact municipality or city...');
 
       try {
         const resolved = await reverseGeocodeToBarangay(lat, lng);
         if (resolved) {
           setLocalPinnedBarangay(resolved);
-          setStatusMessage(`Pinned: ${resolved.formattedTitle}`);
+          setStatusMessage(`Pinned: ${resolved.city || resolved.formattedTitle || resolved.name}`);
 
           if (onPinBarangay) {
             onPinBarangay(resolved);
@@ -145,13 +126,11 @@ export default function PhilippineLocationModal({
             onSelectLocation(normalized);
           }
 
-          // Prompt the user choice whenever they pin a location
           setPromptCandidateLocation(resolved);
-          setShowDefaultPromptModal(true);
         }
       } catch (err) {
         if (__DEV__) console.warn('[PhilippineLocationModal] Pin error:', err);
-        setStatusMessage('Pin placed on Barangay');
+        setStatusMessage('Pin placed on map');
       } finally {
         setIsResolvingBarangay(false);
       }
@@ -297,11 +276,11 @@ export default function PhilippineLocationModal({
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Compass size={18} color={logoGreen} style={{ marginRight: 6 }} />
               <Text style={[styles.headerTitle, { color: textColor }]}>
-                Philippine Barangay & City Explorer
+                Philippine Cities & Municipalities Explorer
               </Text>
             </View>
             <Text style={[styles.headerSub, { color: textMuted }]}>
-              Pin your exact Barangay or search any location in the Philippines
+              Pin your exact municipality or city or search any location in the Philippines
             </Text>
           </View>
           <TouchableOpacity
@@ -319,7 +298,7 @@ export default function PhilippineLocationModal({
             <Search size={16} color={textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.textInput, { color: textColor }]}
-              placeholder="Search exact barangay, city, or local food..."
+              placeholder="Search municipality, city, or local food..."
               placeholderTextColor={textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -478,21 +457,21 @@ export default function PhilippineLocationModal({
                   <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
                     <ActivityIndicator size="small" color={logoGreen} style={{ marginRight: 6 }} />
                     <Text style={[styles.guideText, { color: logoGreen }]}>
-                      Resolving exact Barangay...
+                      Resolving exact municipality or city...
                     </Text>
                   </View>
                 ) : localPinnedBarangay ? (
                   <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor: logoGreen }]}>
                     <CheckCircle2 size={13} color={logoGreen} style={{ marginRight: 6 }} />
                     <Text style={[styles.guideText, { color: textColor }]}>
-                      📍 Pinned: <Text style={{ fontWeight: '800', color: logoGreen }}>{localPinnedBarangay.formattedTitle || `Brgy. ${localPinnedBarangay.barangay}`}</Text>
+                      📍 Pinned: <Text style={{ fontWeight: '800', color: logoGreen }}>{localPinnedBarangay.city || localPinnedBarangay.formattedTitle || localPinnedBarangay.name || "Pinned Location"}</Text>
                     </Text>
                   </View>
                 ) : (
                   <View style={[styles.guidePill, { backgroundColor: cardBg, borderColor }]}>
                     <Navigation size={12} color={logoGreen} style={{ marginRight: 6 }} />
                     <Text style={[styles.guideText, { color: textColor }]}>
-                      Tap anywhere on the map to pin your exact Barangay
+                      Search or select your municipality or city above
                     </Text>
                   </View>
                 )}
@@ -541,7 +520,7 @@ export default function PhilippineLocationModal({
                               </Text>
                               <View style={[styles.barangayBadge, { backgroundColor: `${logoGreen}20` }]}>
                                 <Text style={[styles.barangayBadgeText, { color: logoGreen }]}>
-                                  Exact Barangay
+                                  Exact Municipality / City
                                 </Text>
                               </View>
                             </View>
@@ -671,7 +650,7 @@ export default function PhilippineLocationModal({
             </View>
             <Text style={styles.bottomBarSub} numberOfLines={1}>
               {localPinnedBarangay
-                ? `Exact Barangay: Brgy. ${localPinnedBarangay.barangay || localPinnedBarangay.name}, ${localPinnedBarangay.city}`
+                ? `Exact Municipality / City: ${localPinnedBarangay.city || localPinnedBarangay.formattedTitle || localPinnedBarangay.name || "Pinned Location"}`
                 : (currentCityProfile?.specialty || 'Goal-aligned authentic Philippine meal suggestions')}
             </Text>
           </View>
